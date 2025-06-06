@@ -1,0 +1,9 @@
+software-deployment-method: conda
+executor: slurm
+default-resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+jobs: 30
+use-conda: True

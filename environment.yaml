@@ -1,0 +1,10 @@
+
+name: evalenv
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - snakemake
+  - snakefmt
+  - snakemake-executor-plugin-slurm
+
