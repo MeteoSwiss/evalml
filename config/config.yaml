@@ -1,0 +1,17 @@
+experiment:
+  run_id: 37a6d494e71941d59e5d63d0e2404e52
+  name: prova
+  lead_time: 120h
+
+default_config: config.yaml
+
+init_times: 
+  start: 2020-01-01T06:00
+  end: 2020-10-28T18:00
+  frequency: 6h
+
+locations:
+  mlflow_uri: https://servicedepl.meteoswiss.ch/mlstore
+  # mlflow_uri: https://mlflow.ecmwf.int
+  checkpoint_root: /scratch/mch/apennino/output/checkpoint
+

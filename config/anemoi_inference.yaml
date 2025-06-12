@@ -1,0 +1,24 @@
+input:
+  test:
+    use_original_paths: true
+
+allow_nans: true
+
+
+output:
+  tee:
+    outputs:
+    - extract_lam:
+        output: printer
+          # assign_mask: 
+            # mask: "source0/trimedge_mask"
+            # output: 
+              # grib:
+              #   path: grib/{dateTime}_{step:03}.grib
+              #   encoding:
+              #     typeOfGeneratingProcess: 2
+              #   templates:
+              #     samples: /users/fzanetta/projects/ml-pilot-anemoi/inference/configs/templates_index.yaml
+    - raw: raw/
+
+write_initial_state: true
