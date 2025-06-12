@@ -3,18 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - python=3.10
-  - pip
-  - pip:
-      - torch --index-url https://download.pytorch.org/whl/cu121
-      - torchvision --index-url https://download.pytorch.org/whl/cu121
-      - torchaudio --index-url https://download.pytorch.org/whl/cu121
-      - anemoi-datasets==0.5.23
-      - anemoi-graphs==0.5.0
-      - anemoi-inference==0.5.4
-      - anemoi-models==0.4.2
-      - anemoi-training==0.3.3
-      - anemoi-transform==0.1.10
-      - anemoi-utils==0.4.22
-      - eccodes-cosmo-resources-python
+  - uv
+  - mlflow
 variables:
   ECCODES_DEFINITION_PATH: $CONDA_PREFIX/share/eccodes-cosmo-resources/definitions
