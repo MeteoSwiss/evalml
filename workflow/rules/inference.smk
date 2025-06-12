@@ -68,8 +68,8 @@ rule run_inference:
         time="20m",
         gres="gpu:4",
     shell:
-        "uenv start [--view=modules mch/v8:rc4] {input.py_venv}:$PWD/.venv;"
-        ".venv/bin/activate;"
+        "uenv start {input.py_venv}:$PWD/.venv;"
+        ". .venv/bin/activate;"
         "export TZ=UTC;"
         "anemoi-inference run {input.config} "
         " checkpoint={input.checkpoint}"
