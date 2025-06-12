@@ -12,11 +12,9 @@ rule run_inference:
         / "{run_id}"
         / "inference-last.ckpt",
     output:
-        "resources/inference/output/{run_id}/prediction.nc",
-    params:
-        leadtime="120",  # lead time in hours
+        "resources/inference/output/{run_id}/{init_time}",
     log:
-        "logs/anemoi-inference-run-{run_id}.log",
+        "logs/anemoi-inference-run-{run_id}-{init_time}.log",
     conda:
         "../envs/anemoi-inference.yaml"
     resources:
@@ -28,5 +26,5 @@ rule run_inference:
         "export TZ=UTC;"
         "anemoi-inference run {input.config} "
         " checkpoint={input.checkpoint}"
-        " lead_time={params.leadtime}h"
+        " lead_time={config[experiment][lead_time]}"
         " > {log} 2>&1"
