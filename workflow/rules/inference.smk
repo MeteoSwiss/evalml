@@ -26,7 +26,7 @@ rule create_inference_venv:
     input:
         requirements=rules.set_inference_requirements.output.requirements,
     output:
-        venv=temp("resources/inference/{run_id}/.venv"),
+        venv=temp(directory("resources/inference/{run_id}/.venv")),
     localrule: True
     conda:
         "../envs/anemoi_inference.yaml"
@@ -45,7 +45,7 @@ rule create_inference_uenv:
     conda:
         "../envs/anemoi_inference.yaml"
     shell:
-        "mksquashfs resources/inference/{wildcards.run_id}/.venv $SCRATCH/{wildcards.run_id}.squashfs "
+        "mksquashfs resources/inference/{wildcards.run_id}/.venv $SCRATCH/tmp/{wildcards.run_id}.squashfs "
         "-no-recovery -noappend -Xcompression-level 3 "
 
 
