@@ -6,34 +6,37 @@ import os
 from pathlib import Path
 
 
-rule set_inference_requirements:
+rule create_inference_pyproject:
     input:
-        "workflow/envs/anemoi_inference.txt",
+        toml="workflow/envs/anemoi_inference.toml",
     output:
-        requirements="resources/inference/{run_id}/requirements.txt",
+        pyproject="resources/inference/{run_id}/pyproject.toml",
     log:
-        "logs/anemoi-inference-requirements-{run_id}.log",
+        "logs/create-inference-pyproject-{run_id}.log",
     conda:
         "../envs/anemoi_inference.yaml"
     localrule: True
     params:
         mlflow_uri="https://servicedepl.meteoswiss.ch/mlstore/",
     script:
-        "../scripts/set_inference_requirements.py"
+        "../scripts/set_inference_pyproject.py"
 
 
 rule create_inference_venv:
     input:
-        requirements=rules.set_inference_requirements.output.requirements,
+        pyproject="resources/inference/{run_id}/pyproject.toml",
     output:
         venv=temp(directory("resources/inference/{run_id}/.venv")),
+    log:
+        "logs/create-inference-venv-{run_id}.log",
     localrule: True
+    params:
+        py_version="3.10",  # TODO: parse this from mlflow too
     conda:
         "../envs/anemoi_inference.yaml"
     shell:
-        "uv venv -p python --relocatable --link-mode=copy resources/inference/{wildcards.run_id}/.venv;"
-        "resources/inference/{wildcards.run_id}/.venv/bin/python -m ensurepip --upgrade;"
-        "resources/inference/{wildcards.run_id}/.venv/bin/pip3 install -r {input.requirements}"
+        "uv venv -p python{params.py_version} --relocatable --link-mode=copy {output.venv};"
+        "cd $(dirname {input.pyproject}) && uv pip install ."
 
 
 rule create_inference_uenv:

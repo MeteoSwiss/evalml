@@ -13,6 +13,7 @@ import logging
 import shutil
 from pathlib import Path
 import requests
+import toml
 
 from mlflow.tracking import MlflowClient
 
@@ -140,9 +141,9 @@ def get_anemoi_versions(client: MlflowClient, run_id: str) -> dict:
     return versions
 
 
-def format_vcs_requirement(pkg: str, cfg: dict) -> str:
-    """Convert VCS dependency dictionary into a PEP 508–compliant string."""
-    git = cfg.get("git")
+def format_vcs_pep508(pkg: str, cfg: dict) -> str:
+    """Format a Git dependency as a valid PEP 508 string."""
+    git = cfg["git"]
     rev = cfg.get("rev", "main")
     subdir = cfg.get("subdirectory")
     url = f"git+{git}@{rev}"
@@ -150,75 +151,52 @@ def format_vcs_requirement(pkg: str, cfg: dict) -> str:
         url += f"#subdirectory={subdir}"
     return f"{pkg} @ {url}"
 
-def update_requirements_txt(
-    versions: dict,
-    requirements_path: Path,
-) -> None:
+
+def update_pyproject_toml(versions: dict, toml_path: Path) -> None:
     """
-    Update a requirements.txt file with specified package versions or VCS configs.
+    Update pyproject.toml [project.dependencies] with versions or Git references.
 
     Args:
-        versions (dict): Mapping of package names to version strings or VCS configs
-        requirements_path (Path): Path to requirements.txt file
-
-    Raises:
-        FileNotFoundError: If requirements.txt doesn't exist
-        RuntimeError: If reading or writing fails
+        versions (dict): Mapping of dependency names to version strings or VCS configs
+        toml_path (Path): Path to pyproject.toml
     """
-    if not requirements_path.exists():
-        raise FileNotFoundError(f"requirements.txt not found at {requirements_path}")
+    if not toml_path.exists():
+        raise FileNotFoundError(f"{toml_path} not found")
 
     try:
-        with open(requirements_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
+        with open(toml_path, "r", encoding="utf-8") as f:
+            config = toml.load(f)
     except Exception as e:
-        raise RuntimeError("Failed to read requirements.txt.") from e
+        raise RuntimeError("Failed to read pyproject.toml") from e
 
-    updated_lines = []
-    seen = set()
+    deps = config.get("project", {}).get("dependencies", [])
+    if not isinstance(deps, list):
+        raise ValueError("[project.dependencies] must be a list")
 
-    for line in lines:
-        original = line
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            updated_lines.append(original)
-            continue
-
-        pkg_name = stripped.split("==")[0].split(">=")[0].split("<=")[0].split("[")[0].split("@")[0].strip()
-
+    updated = []
+    for dep in deps:
+        pkg_name = dep.split("==")[0].split(">=")[0].split("@")[0].split()[0].strip()
         if pkg_name in versions:
             val = versions[pkg_name]
-            if isinstance(val, dict):
-                updated_lines.append(format_vcs_requirement(pkg_name, val) + "\n")
-            else:
-                updated_lines.append(f"{pkg_name}{val}\n")
-            seen.add(pkg_name)
+            new_dep = (
+                format_vcs_pep508(pkg_name, val)
+                if isinstance(val, dict) else f"{pkg_name}{val}"
+            )
+            updated.append(new_dep)
         else:
-            updated_lines.append(original)
+            updated.append(dep)
 
-    for pkg, val in versions.items():
-        if pkg in seen:
-            continue
-        if isinstance(val, dict):
-            updated_lines.append(format_vcs_requirement(pkg, val) + "\n")
-        else:
-            updated_lines.append(f"{pkg}{val}\n")
+    config["project"]["dependencies"] = updated
 
     try:
-        with open(requirements_path, "w", encoding="utf-8") as f:
-            f.writelines(updated_lines)
+        with open(toml_path, "w", encoding="utf-8") as f:
+            toml.dump(config, f)
     except Exception as e:
-        raise RuntimeError("Failed to write requirements.txt.") from e
+        raise RuntimeError("Failed to write pyproject.toml") from e
 
 
 def main(snakemake) -> None:
     """Main entry point for the script.
-
-    This function:
-    1. Creates backup of configuration files
-    2. Updates dependencies based on MLflow information
-    3. Runs poetry lock to update lock file
-    4. Removes backups on success or restores on failure
 
     Raises:
         Exception: If any step fails, original files are restored
@@ -233,8 +211,9 @@ def main(snakemake) -> None:
     logging.info("Using %s tracking URI", mlflow_uri)
     client = MlflowClient(tracking_uri=mlflow_uri)
     anemoi_versions = get_anemoi_versions(client, run_id)
+    # TODO: get python version
 
-    update_requirements_txt(anemoi_versions, requirement_path_out)
+    update_pyproject_toml(anemoi_versions, requirement_path_out)
 
     logger.info("Successfully updated dependencies in %s", requirement_path_out)
 
