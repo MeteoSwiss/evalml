@@ -27,34 +27,38 @@ rule create_inference_venv:
         pyproject="resources/inference/{run_id}/pyproject.toml",
     output:
         venv=temp(directory("resources/inference/{run_id}/.venv")),
-    log:
-        "logs/create-inference-venv-{run_id}.log",
     localrule: True
     params:
         py_version="3.10",  # TODO: parse this from mlflow too
     conda:
         "../envs/anemoi_inference.yaml"
     shell:
-        "uv venv -p python{params.py_version} --relocatable --link-mode=copy {output.venv};"
-        "cd $(dirname {input.pyproject}) && uv pip install ."
+        "uv venv -p {params.py_version} --relocatable --link-mode=copy {output.venv};"
+        "source {output.venv}/bin/activate;"
+        "cd $(dirname {input.pyproject}) && uv sync;"
+        "python -m compileall -j 8 -o 0 -o 1 -o 2 .venv/lib/python{params.py_version}/site-packages >/dev/null"
+        # optionally, precompile to bytecode to reduce the import times
+        # "find {output.venv} -exec stat --format='%i' {} + | sort -u | wc -l"  # optionally, how many files did I create?
 
 
-rule create_inference_uenv:
+rule make_squashfs_image:
     input:
-        rules.create_inference_venv.output.venv,
+        venv=rules.create_inference_venv.output.venv,
     output:
-        Path(os.environ.get("SCRATCH")) / "{run_id}.squashfs",
+        image=Path(os.environ.get("SCRATCH")) / "sqfs-images" / "{run_id}.squashfs",
     localrule: True
-    conda:
-        "../envs/anemoi_inference.yaml"
+    log:
+        "logs/make-squashfs-image-{run_id}.log",
     shell:
-        "mksquashfs resources/inference/{wildcards.run_id}/.venv $SCRATCH/tmp/{wildcards.run_id}.squashfs "
-        "-no-recovery -noappend -Xcompression-level 3 "
+        "mksquashfs {input.venv} {output.image}"
+        " -no-recovery -noappend -Xcompression-level 3"
+        " > {log} 2>/dev/null"
+        # we can safely ignore the many warnings "Unrecognised xattr prefix..."
 
 
 rule run_inference:
     input:
-        py_venv="$SCRATCH/{run_id}.squashfs",
+        image=rules.make_squashfs_image.output.image,
         config="config/anemoi_inference.yaml",
         checkpoint=Path(config["locations"]["checkpoint_root"])
         / "{run_id}"
@@ -71,8 +75,8 @@ rule run_inference:
         time="20m",
         gres="gpu:4",
     shell:
-        "uenv start {input.py_venv}:$PWD/.venv;"
-        ". .venv/bin/activate;"
+        "uenv start {input.image};"
+        "source /user-environment/bin/activate;"
         "export TZ=UTC;"
         "anemoi-inference run {input.config} "
         " checkpoint={input.checkpoint}"
