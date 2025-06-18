@@ -3,7 +3,7 @@
 # ----------------------------------------------------- #
 
 import os
-from pathlib import Pathsnake
+from pathlib import Path
 
 
 rule create_inference_pyproject:
