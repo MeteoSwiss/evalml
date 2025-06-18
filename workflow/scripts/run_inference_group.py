@@ -2,6 +2,7 @@ import subprocess
 import os
 from pathlib import Path
 
+config = snakemake.input.config
 run_id = snakemake.wildcards.run_id
 reftimes = snakemake.params.group_reftimes
 group_size = snakemake.params.group_size
@@ -13,14 +14,14 @@ for i, reftime in enumerate(reftimes):
     workdir = Path(f"resources/{run_id}/{reftime}")
     workdir.mkdir(parents=True, exist_ok=True)
     config_target = workdir / "config.yaml"
-    config_target.write_text(Path(input.config).read_text())
+    config_target.write_text(Path(config).read_text())
 
     print(f"Running inference for {reftime} on GPU {i}")
 
     cmd = [
         "source /user-environment/bin/activate;" "anemoi-inference",
         "run",
-        str(input.config),
+        str(config),
         f"date={reftime}",
         f"checkpoint={checkpoints_path}/inference-last.ckpt",
         f"lead_time={leadtime}h",
