@@ -171,6 +171,28 @@ def get_python_version(client: MlflowClient, run_id: str) -> str | None:
     return python_version
 
 
+def get_path_to_checkpoints(client: MlflowClient, run_id: str) -> str:
+    """Get the path to the checkpoints directory from MLflow run.
+
+    Args:
+        client (MlflowClient): MLflow client instance
+        run_id (str): ID of the MLflow run
+
+    Returns:
+        str: Path to the checkpoints directory, e.g. "/scratch/mch/user/outpu/checkpoint"
+
+    Raises:
+        ValueError: If no valid checkpoints path is found
+    """
+    run = client.get_run(run_id)
+    path = run.data.params.get("config.hardware.paths.checkpoints")
+
+    if not path:
+        raise ValueError("No valid checkpoints path found in MLflow run")
+
+    return path
+
+
 def format_vcs_pep508(pkg: str, cfg: dict) -> str:
     """Format a Git dependency as a valid PEP 508 string."""
     git = cfg["git"]
@@ -182,7 +204,9 @@ def format_vcs_pep508(pkg: str, cfg: dict) -> str:
     return f"{pkg} @ {url}"
 
 
-def update_pyproject_toml(versions: dict, toml_path: Path, python_version: str) -> None:
+def update_pyproject_toml(
+    versions: dict, toml_path: Path, python_version: str, checkpoints_path: str
+) -> None:
     """
     Update pyproject.toml [project.dependencies] with versions or Git references.
 
@@ -190,6 +214,7 @@ def update_pyproject_toml(versions: dict, toml_path: Path, python_version: str) 
         versions (dict): Mapping of dependency names to version strings or VCS configs
         toml_path (Path): Path to pyproject.toml
         python_version (str): Python version string, e.g. "3.10.14"
+        checkpoints_path (str): Path to the checkpoints directory
     """
     if not toml_path.exists():
         raise FileNotFoundError(f"{toml_path} not found")
@@ -221,6 +246,7 @@ def update_pyproject_toml(versions: dict, toml_path: Path, python_version: str) 
     config["project"]["dependencies"] = updated
     # Format as PEP 621 style version constraint, e.g., "==3.10.14"
     config["project"]["requires-python"] = f"=={python_version}"
+    config.setdefault("tool", {})["anemoi"] = {"checkpoints_path": checkpoints_path}
 
     try:
         with open(toml_path, "w", encoding="utf-8") as f:
@@ -246,8 +272,11 @@ def main(snakemake) -> None:
     client = MlflowClient(tracking_uri=mlflow_uri)
     anemoi_versions = get_anemoi_versions(client, run_id)
     python_version = get_python_version(client, run_id)
+    checkpoints_path = get_path_to_checkpoints(client, run_id)
 
-    update_pyproject_toml(anemoi_versions, toml_path_out, python_version)
+    update_pyproject_toml(
+        anemoi_versions, toml_path_out, python_version, checkpoints_path
+    )
 
     logger.info("Successfully updated dependencies in %s", toml_path_out)
 

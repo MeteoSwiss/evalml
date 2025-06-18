@@ -27,7 +27,6 @@ rule create_inference_venv:
         pyproject="resources/inference/{run_id}/pyproject.toml",
     output:
         venv=temp(directory("resources/inference/{run_id}/.venv")),
-    localrule: True
     params:
         py_version=parse_input(
             input.pyproject, parse_toml, key="project.requires-python"
@@ -48,7 +47,6 @@ rule make_squashfs_image:
         venv=rules.create_inference_venv.output.venv,
     output:
         image=Path(os.environ.get("SCRATCH")) / "sqfs-images" / "{run_id}.squashfs",
-    localrule: True
     log:
         "logs/make-squashfs-image-{run_id}.log",
     shell:
@@ -60,14 +58,16 @@ rule make_squashfs_image:
 
 rule run_inference:
     input:
+        pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
         config="config/anemoi_inference.yaml",
-        checkpoint=Path(config["locations"]["checkpoint_root"])
-        / "{run_id}"
-        / "inference-last.ckpt",
     output:
         "resources/inference/{run_id}/output/{init_time}/raw",
         "resources/inference/{run_id}/output/{init_time}/grib",
+    params:
+        checkpoint=parse_input(
+            input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
+        ),
     log:
         "logs/anemoi-inference-run-{run_id}-{init_time}.log",
     resources:
@@ -79,7 +79,7 @@ rule run_inference:
     shell:
         "source /user-environment/bin/activate;"
         "anemoi-inference run {input.config} "
-        " checkpoint={input.checkpoint}"
+        " checkpoint={params.checkpoint}/inference-last.ckpt"
         " date={wildcards.init_time}"
         " lead_time={config[experiment][lead_time]}"
         " > {log} 2>&1"

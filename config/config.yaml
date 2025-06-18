@@ -13,5 +13,3 @@ init_times:
 locations:
   mlflow_uri: https://servicedepl.meteoswiss.ch/mlstore
   # mlflow_uri: https://mlflow.ecmwf.int
-  checkpoint_root: /scratch/mch/apennino/output/checkpoint
-
