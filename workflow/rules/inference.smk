@@ -3,7 +3,7 @@
 # ----------------------------------------------------- #
 
 import os
-from pathlib import Path
+from pathlib import Pathsnake
 
 
 rule create_inference_pyproject:
@@ -29,7 +29,9 @@ rule create_inference_venv:
         venv=temp(directory("resources/inference/{run_id}/.venv")),
     localrule: True
     params:
-        py_version="3.10",  # TODO: parse this from mlflow too
+        py_version=parse_input(
+            input.pyproject, parse_toml, key="project.requires-python"
+        ),
     conda:
         "../envs/anemoi_inference.yaml"
     shell:
