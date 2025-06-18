@@ -17,27 +17,26 @@ import toml
 
 from mlflow.tracking import MlflowClient
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 _GIT_DEPENDENCIES_CONFIG = {
     "anemoi-models": {
         "meteoswiss": {
             "url": "https://github.com/MeteoSwiss/anemoi-core.git",
-            "subdirectory": "models"
+            "subdirectory": "models",
         },
         "ecmwf": {
             "url": "https://github.com/ecmwf/anemoi-core.git",
-            "subdirectory": "models"
-        }
+            "subdirectory": "models",
+        },
     },
     "anemoi-datasets": {
-        "ecmwf": {
-            "url": "https://github.com/ecmwf/anemoi-datasets.git"
-        }
+        "ecmwf": {"url": "https://github.com/ecmwf/anemoi-datasets.git"}
     },
 }
-
 
 
 def check_commit_exists(repo_url: str, commit_hash: str) -> bool:
@@ -66,7 +65,9 @@ def check_commit_exists(repo_url: str, commit_hash: str) -> bool:
         return False
 
 
-def get_version_and_commit_hash(client: MlflowClient, run_id: str, dependency: str) -> tuple[str, str]:
+def get_version_and_commit_hash(
+    client: MlflowClient, run_id: str, dependency: str
+) -> tuple[str, str]:
     """Get version and commit hash for a dependency from MLflow run.
 
     Args:
@@ -79,7 +80,9 @@ def get_version_and_commit_hash(client: MlflowClient, run_id: str, dependency: s
     """
     run = client.get_run(run_id)
     dependency = dependency.replace("-", ".")
-    commit_hash_param = f"metadata.provenance_training.git_versions.{dependency}.git.sha1"
+    commit_hash_param = (
+        f"metadata.provenance_training.git_versions.{dependency}.git.sha1"
+    )
     version_param = f"metadata.provenance_training.git_versions.{dependency}.version"
     return run.data.params.get(version_param), run.data.params.get(commit_hash_param)
 
@@ -108,7 +111,12 @@ def resolve_dependency_config(commit_hash: str, dependency_type: str) -> dict:
 
     for org, repo_config in repos.items():
         if check_commit_exists(repo_config["url"], commit_hash):
-            logger.info("Found %s commit in %s git repository: %s", dependency_type, org, commit_hash)
+            logger.info(
+                "Found %s commit in %s git repository: %s",
+                dependency_type,
+                org,
+                commit_hash,
+            )
             config["git"] = repo_config["url"]
             if "subdirectory" in repo_config:
                 config["subdirectory"] = repo_config["subdirectory"]
@@ -141,6 +149,28 @@ def get_anemoi_versions(client: MlflowClient, run_id: str) -> dict:
     return versions
 
 
+def get_python_version(client: MlflowClient, run_id: str) -> str | None:
+    """Extract the Python version used in the MLflow run.
+
+    Args:
+        client (MlflowClient): MLflow client instance
+        run_id (str): ID of the MLflow run
+
+    Returns:
+        str: Python version string, e.g. "3.10.14"
+
+    Raises:
+        ValueError: If no valid python version is found
+    """
+    run = client.get_run(run_id)
+    python_version = run.data.params.get("metadata.provenance_training.python")
+
+    if not python_version:
+        raise ValueError("No valid python version found in MLflow run")
+
+    return python_version
+
+
 def format_vcs_pep508(pkg: str, cfg: dict) -> str:
     """Format a Git dependency as a valid PEP 508 string."""
     git = cfg["git"]
@@ -152,13 +182,14 @@ def format_vcs_pep508(pkg: str, cfg: dict) -> str:
     return f"{pkg} @ {url}"
 
 
-def update_pyproject_toml(versions: dict, toml_path: Path) -> None:
+def update_pyproject_toml(versions: dict, toml_path: Path, python_version: str) -> None:
     """
     Update pyproject.toml [project.dependencies] with versions or Git references.
 
     Args:
         versions (dict): Mapping of dependency names to version strings or VCS configs
         toml_path (Path): Path to pyproject.toml
+        python_version (str): Python version string, e.g. "3.10.14"
     """
     if not toml_path.exists():
         raise FileNotFoundError(f"{toml_path} not found")
@@ -180,13 +211,16 @@ def update_pyproject_toml(versions: dict, toml_path: Path) -> None:
             val = versions[pkg_name]
             new_dep = (
                 format_vcs_pep508(pkg_name, val)
-                if isinstance(val, dict) else f"{pkg_name}{val}"
+                if isinstance(val, dict)
+                else f"{pkg_name}{val}"
             )
             updated.append(new_dep)
         else:
             updated.append(dep)
 
     config["project"]["dependencies"] = updated
+    # Format as PEP 621 style version constraint, e.g., "==3.10.14"
+    config["project"]["requires-python"] = f"=={python_version}"
 
     try:
         with open(toml_path, "w", encoding="utf-8") as f:
@@ -204,18 +238,18 @@ def main(snakemake) -> None:
     mlflow_uri = snakemake.params["mlflow_uri"]
     run_id = snakemake.wildcards["run_id"]
     requirements_path_in = Path(snakemake.input[0])
-    requirement_path_out = Path(snakemake.output[0])
+    toml_path_out = Path(snakemake.output[0])
 
-    shutil.copy2(requirements_path_in, requirement_path_out)
+    shutil.copy2(requirements_path_in, toml_path_out)
 
     logging.info("Using %s tracking URI", mlflow_uri)
     client = MlflowClient(tracking_uri=mlflow_uri)
     anemoi_versions = get_anemoi_versions(client, run_id)
-    # TODO: get python version
+    python_version = get_python_version(client, run_id)
 
-    update_pyproject_toml(anemoi_versions, requirement_path_out)
+    update_pyproject_toml(anemoi_versions, toml_path_out, python_version)
 
-    logger.info("Successfully updated dependencies in %s", requirement_path_out)
+    logger.info("Successfully updated dependencies in %s", toml_path_out)
 
 
 if __name__ == "__main__":
