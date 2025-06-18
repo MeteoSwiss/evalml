@@ -6,6 +6,7 @@ run_id = snakemake.wildcards.run_id
 reftimes = snakemake.params.group_reftimes
 group_size = snakemake.params.group_size
 leadtime = snakemake.params.leadtime
+checkpoints_path = snakemake.params.checkpoints_path
 okfile = snakemake.output.okfile
 
 for i, reftime in enumerate(reftimes):
@@ -17,12 +18,11 @@ for i, reftime in enumerate(reftimes):
     print(f"Running inference for {reftime} on GPU {i}")
 
     cmd = [
-        "source /user-environment/bin/activate;"
-        "anemoi-inference",
+        "source /user-environment/bin/activate;" "anemoi-inference",
         "run",
         str(input.config),
         f"date={reftime}",
-        f"checkpoint={input.checkpoint}",
+        f"checkpoint={checkpoints_path}/inference-last.ckpt",
         f"lead_time={leadtime}h",
     ]
 

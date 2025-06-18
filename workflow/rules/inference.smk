@@ -6,40 +6,6 @@ import os
 from pathlib import Path
 
 
-<<<<<<< MRB-324-pipeline-for-batch-inference
-
-rule run_inference_group:
-    input:
-        image=rules.make_squashfs_image.output.image,
-        config="config/anemoi_inference.yaml",
-        checkpoint=Path(config["locations"]["checkpoint_root"])
-        / {run_id}
-        / "inference-last.ckpt",
-    output:
-        okfile=temp("resources/inference/{run_id}/output/group-{group_index}.ok"),
-    params:
-        group_reftimes=lambda wc: REFTIMES_GROUPS[int(wc.group_index)],
-        group_size=config["execution"]["run_group_size"],
-        leadtime="120h",  # lead time in hours
-    log:
-        "logs/anemoi-inference-run-{run_id}-{group_index}.log",
-    conda:
-        "../envs/anemoi_inference.yaml"
-    resources:
-        slurm_partition="normal",
-        cpus_per_task=8,
-        runtime="20m",
-        gres="gpu:4",
-    script:
-        "../scripts/run_inference_group.py"
-
-
-rule map_init_time_to_inference_group:
-    input:
-        lambda wc: f"resources/inference/{run_id}/output/group-{REFTIME_TO_GROUP[wc.init_time]}.ok"
-    output:
-        "resources/inference/{run_id}/output/{init_time}/raw",
-=======
 rule create_inference_pyproject:
     input:
         toml="workflow/envs/anemoi_inference.toml",
@@ -90,31 +56,36 @@ rule make_squashfs_image:
         # we can safely ignore the many warnings "Unrecognised xattr prefix..."
 
 
-rule run_inference:
+rule run_inference_group:
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
         config="config/anemoi_inference.yaml",
     output:
-        "resources/inference/{run_id}/output/{init_time}/raw",
-        "resources/inference/{run_id}/output/{init_time}/grib",
+        okfile=temp("resources/inference/{run_id}/output/group-{group_index}.ok"),
     params:
-        checkpoint=parse_input(
+        checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
         ),
+        group_reftimes=lambda wc: REFTIMES_GROUPS[int(wc.group_index)],
+        group_size=config["execution"]["run_group_size"],
+        leadtime="120h",  # lead time in hours
     log:
-        "logs/anemoi-inference-run-{run_id}-{init_time}.log",
+        "logs/anemoi-inference-run-{run_id}-{group_index}.log",
+    conda:
+        "../envs/anemoi_inference.yaml"
     resources:
-        slurm_partition="debug",
-        cpus_per_task=2,
+        slurm_partition="normal",
+        cpus_per_task=8,
         runtime="20m",
-        gres="gpu:1",
+        gres="gpu:4",
         slurm_extra=lambda wc, input: f"--uenv={input.image}:/user-environment",
-    shell:
-        "source /user-environment/bin/activate;"
-        "anemoi-inference run {input.config} "
-        " checkpoint={params.checkpoint}/inference-last.ckpt"
-        " date={wildcards.init_time}"
-        " lead_time={config[experiment][lead_time]}"
-        " > {log} 2>&1"
->>>>>>> main
+    script:
+        "../scripts/run_inference_group.py"
+
+
+rule map_init_time_to_inference_group:
+    input:
+        lambda wc: f"resources/inference/{wc.run_id}/output/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
+    output:
+        "resources/inference/{run_id}/output/{init_time}/raw",
