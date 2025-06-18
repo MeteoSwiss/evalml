@@ -43,5 +43,5 @@ snakemake --dry-run
 To run the workflow using **conda** and **slurm** on Balfrin:
 
 ```bash
-snakemake --profile balfrin
+snakemake --profile workflow/profile/balfrin
 ```
