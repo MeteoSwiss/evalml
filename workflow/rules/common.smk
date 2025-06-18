@@ -7,7 +7,7 @@ configfile: "config/anemoi_inference.yaml"
 
 def _parse_timedelta(td):
     if not isinstance(td, str):
-        raise ValueError("Expected a string in the format 'Xh' or 'Xm'") 
+        raise ValueError("Expected a string in the format 'Xd' or 'Xh'") 
     magnitude, unit = int(td[:-1]), td[-1]
     match unit:
         case 'd':
@@ -30,7 +30,6 @@ def _reftimes():
     return times
 
 
-REFTIMES = _reftimes()
 
 
 def _reftimes_groups():
@@ -43,7 +42,5 @@ def _reftimes_groups():
     return groups
 
 
+REFTIMES = _reftimes()
 REFTIMES_GROUPS = _reftimes_groups()
-
-print(f"First group: {REFTIMES_GROUPS[0]}")
-print(f"Last group: {REFTIMES_GROUPS[-1]}")
