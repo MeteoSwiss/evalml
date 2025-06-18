@@ -1,3 +1,4 @@
+<<<<<<< MRB-324-pipeline-for-batch-inference
 from datetime import datetime, timedelta
 import yaml
 
@@ -50,3 +51,16 @@ REFTIME_TO_GROUP = {
     for group_index, group in enumerate(REFTIMES_GROUPS)
     for reftime in group
 }
+=======
+def parse_toml(toml_file, key):
+    """Parse a key (e.g. 'project.requires-python') from a TOML file handle."""
+    import toml
+
+    content = toml.load(toml_file)
+    # support dotted keys
+    for part in key.split("."):
+        content = content.get(part, {})
+    if isinstance(content, str):
+        return content.lstrip(">=< ").strip()
+    raise ValueError(f"Expected a string for key '{key}', got: {content}")
+>>>>>>> main

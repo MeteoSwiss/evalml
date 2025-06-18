@@ -1,5 +1,5 @@
 experiment:
-  run_id: 37a6d494e71941d59e5d63d0e2404e52
+  run_id: 7c58e59d24e949c9ade3df635bbd37e2
   name: prova
   lead_time: 120h
 
@@ -16,5 +16,3 @@ init_times:
 locations:
   mlflow_uri: https://servicedepl.meteoswiss.ch/mlstore
   # mlflow_uri: https://mlflow.ecmwf.int
-  checkpoint_root: /scratch/mch/apennino/output/checkpoint
-
