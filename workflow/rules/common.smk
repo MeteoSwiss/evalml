@@ -43,4 +43,10 @@ def _reftimes_groups():
 
 
 REFTIMES = _reftimes()
+
 REFTIMES_GROUPS = _reftimes_groups()
+REFTIME_TO_GROUP = {
+    reftime: group_index
+    for group_index, group in enumerate(REFTIMES_GROUPS)
+    for reftime in group
+}
