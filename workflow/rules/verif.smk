@@ -17,7 +17,7 @@ INIT_TIMES = pd.date_range(START, END, freq=FREQ, inclusive="left").strftime(
 rule run_verif:
     input:
         expand(
-            "resources/inference/output/{run_id}/{init_time}",
+            "resources/inference/{run_id}/output/{init_time}/raw",
             init_time=INIT_TIMES,
             allow_missing=True,
         ),

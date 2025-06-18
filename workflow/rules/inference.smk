@@ -66,21 +66,20 @@ rule run_inference:
         / "{run_id}"
         / "inference-last.ckpt",
     output:
-        "resources/inference/output/{run_id}/{init_time}",
+        "resources/inference/{run_id}/output/{init_time}/raw",
+        "resources/inference/{run_id}/output/{init_time}/grib",
     log:
         "logs/anemoi-inference-run-{run_id}-{init_time}.log",
-    conda:
-        "../envs/anemoi-inference.yaml"
     resources:
-        partition="normal",
-        cpus_per_task=8,
-        time="20m",
-        gres="gpu:4",
+        slurm_partition="debug",
+        cpus_per_task=2,
+        runtime="20m",
+        gres="gpu:1",
+        slurm_extra=lambda wc, input: f"--uenv={input.image}:/user-environment",
     shell:
-        "uenv start {input.image};"
         "source /user-environment/bin/activate;"
-        "export TZ=UTC;"
         "anemoi-inference run {input.config} "
         " checkpoint={input.checkpoint}"
+        " date={wildcards.init_time}"
         " lead_time={config[experiment][lead_time]}"
         " > {log} 2>&1"
