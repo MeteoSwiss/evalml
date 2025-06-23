@@ -14,5 +14,6 @@ init_times:
   frequency: 12h
 
 locations:
+  output_root: output
   mlflow_uri: https://servicedepl.meteoswiss.ch/mlstore
-  # mlflow_uri: https://mlflow.ecmwf.int
+  # mlflow_uri: https://mlflow.ecmwf.int 

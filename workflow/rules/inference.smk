@@ -4,6 +4,7 @@
 
 import os
 from pathlib import Path
+from datetime import datetime
 
 
 rule create_inference_pyproject:
@@ -55,37 +56,64 @@ rule make_squashfs_image:
         " > {log} 2>/dev/null"
         # we can safely ignore the many warnings "Unrecognised xattr prefix..."
 
+configfile: "config/config.yaml"
 
 rule run_inference_group:
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
-        config="config/anemoi_inference.yaml",
+        config=str(Path("config/anemoi_inference.yaml").resolve()),
     output:
-        okfile=temp("resources/inference/{run_id}/output/group-{group_index}.ok"),
+        okfile=temp("resources/inference/{run_id}/group-{group_index}.ok"),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
         ),
-        group_reftimes=lambda wc: REFTIMES_GROUPS[int(wc.group_index)],
-        group_size=config["execution"]["run_group_size"],
-        leadtime="120h",  # lead time in hours
+        reftimes=lambda wc: [t.strftime("%Y-%m-%dT%H:%M") for t in REFTIMES_GROUPS[int(wc.group_index)]],
+        lead_time=config["experiment"]["lead_time"],
+        output_root=str(Path(config["locations"]["output_root"]).resolve()),
     log:
         "logs/anemoi-inference-run-{run_id}-{group_index}.log",
-    conda:
-        "../envs/anemoi_inference.yaml"
     resources:
         slurm_partition="normal",
-        cpus_per_task=8,
+        cpus_per_task=32,
         runtime="20m",
         gres="gpu:4",
-        slurm_extra=lambda wc, input: f"--uenv={input.image}:/user-environment",
-    script:
-        "../scripts/run_inference_group.py"
+        slurm_extra=lambda wc, input: f"--uenv={input.image}:/user-environment --exclusive",
+    shell:
+        """
+        export TZ=UTC
+        source /user-environment/bin/activate
+        i=0
+        for reftime in {params.reftimes}; do
+            
+            # prepare the working directory
+            _reftime_str=$(date -d "$reftime" +%Y%m%d%H%M)
+            WORKDIR={params.output_root}/{wildcards.run_id}/$_reftime_str
+            mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw
+            cp {input.config} config.yaml
 
+            
+            CMD_ARGS=(
+                date=$reftime
+                checkpoint={params.checkpoints_path}/inference-last.ckpt
+                lead_time={params.lead_time}
+            )
+            
+            CUDA_VISIBLE_DEVICES=$i anemoi-inference run config.yaml "${{CMD_ARGS[@]}}" > inference.log 2>&1 &
+            echo "Started inference for reftime $reftime in $WORKDIR"
+            echo "CUDA_VISIBLE_DEVICES=$i"
+            i=$((i + 1))
+
+        done
+        wait
+        # touch {output.okfile}
+        """
+
+    
 
 rule map_init_time_to_inference_group:
     input:
-        lambda wc: f"resources/inference/{wc.run_id}/output/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
+        lambda wc: f"resources/inference/{wc.run_id}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
     output:
         "resources/inference/{run_id}/output/{init_time}/raw",

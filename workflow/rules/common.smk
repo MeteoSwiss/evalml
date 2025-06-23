@@ -41,7 +41,7 @@ def _reftimes():
     times = []
     t = start
     while t <= end:
-        times.append(t.strftime("%Y%m%d%H%M"))
+        times.append(t)
         t += freq
     return times
 
@@ -60,7 +60,7 @@ REFTIMES = _reftimes()
 
 REFTIMES_GROUPS = _reftimes_groups()
 REFTIME_TO_GROUP = {
-    reftime: group_index
+    reftime.strftime("%Y%m%d%H%M"): group_index
     for group_index, group in enumerate(REFTIMES_GROUPS)
     for reftime in group
 }
