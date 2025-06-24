@@ -6,6 +6,9 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+configfile: "config/config.yaml"
+
+OUT_ROOT = Path(config["locations"]["output_root"]).resolve()
 
 rule create_inference_pyproject:
     input:
@@ -56,7 +59,7 @@ rule make_squashfs_image:
         " > {log} 2>/dev/null"
         # we can safely ignore the many warnings "Unrecognised xattr prefix..."
 
-configfile: "config/config.yaml"
+
 
 rule run_inference_group:
     input:
@@ -64,26 +67,28 @@ rule run_inference_group:
         image=rules.make_squashfs_image.output.image,
         config=str(Path("config/anemoi_inference.yaml").resolve()),
     output:
-        okfile=temp("resources/inference/{run_id}/group-{group_index}.ok"),
+        okfile=temp(OUT_ROOT / "{run_id}/group-{group_index}.ok"),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
         ),
         reftimes=lambda wc: [t.strftime("%Y-%m-%dT%H:%M") for t in REFTIMES_GROUPS[int(wc.group_index)]],
         lead_time=config["experiment"]["lead_time"],
-        output_root=str(Path(config["locations"]["output_root"]).resolve()),
+        output_root=OUT_ROOT,
     log:
         "logs/anemoi-inference-run-{run_id}-{group_index}.log",
     resources:
-        slurm_partition="normal",
+        slurm_partition="debug",
         cpus_per_task=32,
+        mem_mb_per_cpu=8000,
         runtime="20m",
-        gres="gpu:4",
+        gres="gpu:1", # because we use --exclusive, this will be 1 GPU per run (--ntasks-per-gpus is automatically set to 1)
         slurm_extra=lambda wc, input: f"--uenv={input.image}:/user-environment --exclusive",
     shell:
         """
         export TZ=UTC
         source /user-environment/bin/activate
+        export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
         i=0
         for reftime in {params.reftimes}; do
             
@@ -107,13 +112,25 @@ rule run_inference_group:
 
         done
         wait
-        # touch {output.okfile}
+        touch {output.okfile}
         """
-
     
 
 rule map_init_time_to_inference_group:
     input:
-        lambda wc: f"resources/inference/{wc.run_id}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
+        lambda wc: OUT_ROOT / f"{wc.run_id}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
     output:
-        "resources/inference/{run_id}/output/{init_time}/raw",
+        directory(OUT_ROOT / "{run_id}/{init_time}/grib"),
+        directory(OUT_ROOT / "{run_id}/{init_time}/raw")
+
+
+rule run_inference_all:
+    input:
+        expand(
+            OUT_ROOT / "{{run_id}}/{init_time}/raw",
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES]
+        )
+    output:
+        temp(touch(OUT_ROOT / "{run_id}/output.ok"))
+
+

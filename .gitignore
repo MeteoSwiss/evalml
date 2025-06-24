@@ -11,3 +11,5 @@ workflow/notebooks/.ipynb_checkpoints/**
 **/.RData
 **/Rplots.pdf
 output/
+output
+output/**
