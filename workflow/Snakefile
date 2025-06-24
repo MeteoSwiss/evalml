@@ -37,3 +37,13 @@ rule all:
             "results/eval_report_{run_id}.html", run_id=config["experiment"]["run_id"]
         ),
     default_target: True
+
+
+
+rule run_inference_all:
+    input:
+        expand(
+            OUT_ROOT / "{run_id}/{init_time}/raw",
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            run_id=config["experiment"]["run_id"]
+        )

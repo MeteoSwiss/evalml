@@ -12,8 +12,8 @@ include: "common.smk"
 rule run_verif:
     input:
         expand(
-            "resources/inference/{run_id}/output/{init_time}/raw",
-            init_time=REFTIMES,
+            rules.map_init_time_to_inference_group.output,
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             allow_missing=True,
         ),
     output:

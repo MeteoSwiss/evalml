@@ -67,7 +67,7 @@ rule run_inference_group:
         image=rules.make_squashfs_image.output.image,
         config=str(Path("config/anemoi_inference.yaml").resolve()),
     output:
-        okfile=temp(OUT_ROOT / "{run_id}/group-{group_index}.ok"),
+        okfile=touch(OUT_ROOT / "{run_id}/group-{group_index}.ok"),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
@@ -83,6 +83,7 @@ rule run_inference_group:
         mem_mb_per_cpu=8000,
         runtime="20m",
         gres="gpu:1", # because we use --exclusive, this will be 1 GPU per run (--ntasks-per-gpus is automatically set to 1)
+                      # see https://github.com/MeteoSwiss/mch-anemoi-evaluation/pull/3#issuecomment-2998997104
         slurm_extra=lambda wc, input: f"--uenv={input.image}:/user-environment --exclusive",
     shell:
         """
@@ -112,11 +113,11 @@ rule run_inference_group:
 
         done
         wait
-        touch {output.okfile}
         """
     
 
 rule map_init_time_to_inference_group:
+    localrule: True
     input:
         lambda wc: OUT_ROOT / f"{wc.run_id}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
     output:
