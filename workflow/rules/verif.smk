@@ -1,13 +1,35 @@
 # ----------------------------------------------------- #
 # VERIFICATION WORKFLOW                                 #
 # ----------------------------------------------------- #
-
+from datetime import datetime
 
 import pandas as pd
 
 
 include: "common.smk"
 
+
+
+rule run_cosmoe_verif:
+    input:
+        script="workflow/scripts/verif_cosmoe_fct.py",
+        zarr_dataset="/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr",
+    output:
+        OUT_ROOT / "COSMO-E/{init_time}/verif.csv"
+    shell:
+        """
+        uv run {input.script} \
+            --zarr_dataset {input.zarr_dataset} \
+            --reftime {wildcards.init_time} \
+            --output {output}
+        """
+
+rule run_cosmoe_verif_all:
+    input:
+        expand(
+            rules.run_cosmoe_verif.output,
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES if t.hour in [0, 12]],
+        ),
 
 rule run_verif:
     input:

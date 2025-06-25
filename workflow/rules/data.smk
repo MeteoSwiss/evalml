@@ -14,7 +14,7 @@ rule extract_cosmoe_fcts:
     shell:
         """
         uv run --with earthkit-data --with xarray --with zarr --with eccodes-cosmo-resources-python \
-            python workflow/scripts/extract_cosmoe_fcts.py \
+            python workflow/scripts/extract_cosmoe_fct.py \
                 --archive_dir {input.archive}/{params.year_postfix} \
                 --output_store {output.fcts} \
                 --lead_time {params.lead_time} \
