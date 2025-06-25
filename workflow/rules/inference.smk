@@ -8,8 +8,6 @@ from datetime import datetime
 
 configfile: "config/config.yaml"
 
-OUT_ROOT = Path(config["locations"]["output_root"]).resolve()
-
 rule create_inference_pyproject:
     input:
         toml="workflow/envs/anemoi_inference.toml",
@@ -67,7 +65,7 @@ rule run_inference_group:
         image=rules.make_squashfs_image.output.image,
         config=str(Path("config/anemoi_inference.yaml").resolve()),
     output:
-        okfile=touch(OUT_ROOT / "{run_id}/group-{group_index}.ok"),
+        okfile=temp(touch(OUT_ROOT / "{run_id}/group-{group_index}.ok")),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
@@ -123,15 +121,4 @@ rule map_init_time_to_inference_group:
     output:
         directory(OUT_ROOT / "{run_id}/{init_time}/grib"),
         directory(OUT_ROOT / "{run_id}/{init_time}/raw")
-
-
-rule run_inference_all:
-    input:
-        expand(
-            OUT_ROOT / "{{run_id}}/{init_time}/raw",
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES]
-        )
-    output:
-        temp(touch(OUT_ROOT / "{run_id}/output.ok"))
-
 
