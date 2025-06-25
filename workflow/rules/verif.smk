@@ -16,12 +16,14 @@ rule run_cosmoe_verif:
         zarr_dataset="/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr",
     output:
         OUT_ROOT / "COSMO-E/{init_time}/verif.csv"
+    log:
+        "logs/verif_cosmoe-{init_time}.log",
     shell:
         """
         uv run {input.script} \
             --zarr_dataset {input.zarr_dataset} \
             --reftime {wildcards.init_time} \
-            --output {output}
+            --output {output} > {log} 2>&1
         """
 
 rule run_cosmoe_verif_all:
