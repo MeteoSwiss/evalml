@@ -11,8 +11,7 @@ from argparse import ArgumentParser, Namespace
 import logging
 import sys
 import os
-from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from typing import Iterable
 
 eccodes_definition_path = Path(sys.prefix) / "share/eccodes-cosmo-resources/definitions"
@@ -194,7 +193,7 @@ def main(args: ScriptConfig):
     results["corr"] = (corr := xr.Dataset({k: xr.corr(fct[k], kenda[k], dim=["y", "x"]) for k in fct.data_vars}))
     results["r2"] = corr ** 2
     results = xr.Dataset({k: v.to_array("param") for k, v in results.items()})
-    results = results.to_array("metric").to_dataframe(name="results").reset_index()
+    results = results.to_array("metric").to_dataframe(name="value").reset_index()
 
     # # save results to CSV
     args.output.parent.mkdir(parents=True, exist_ok=True)

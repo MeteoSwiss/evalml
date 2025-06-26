@@ -7,6 +7,7 @@
 # ///
 # TODO: duplicated code from workflow/scripts/verify_cosmoe_fct.py
 from pathlib import Path
+import itertools
 from argparse import ArgumentParser, Namespace
 import logging
 
@@ -44,15 +45,38 @@ def read_verif_file(Path: str) -> pd.DataFrame:
 
 
 def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute results from the DataFrame."""
+    """Compute mean metric values aggregated by all combinations of hour, season, and init_hour."""
     
-    df["season"] = df["valid_time"].apply(get_season)
-    df["hour_of_day"] = df["valid_time"].dt.hour
-    df["init_hour_of_day"] = df["ref_time"].dt.hour
 
-    results = df.groupby(["metric", "lead_time", "param", "hour_of_day", "season", "init_hour_of_day"]).mean("ref_time").reset_index()
-    
-    return results
+    # extract features
+    df = df.copy()
+    df["hour"] = df["time"].dt.hour
+    df["init_hour"] = df["ref_time"].dt.hour
+    df["season"] = df["time"].apply(get_season)
+
+    # generate all combinations of original and "all" for ["hour", "season", "init_hour"]
+    features = ["hour", "season", "init_hour"]
+    groupings = []
+
+    for combination in itertools.product([True, False], repeat=3):
+        modified_df = df.copy()
+        for include_original, col in zip(combination, features):
+            if not include_original:
+                modified_df[col] = "all"
+        groupings.append(modified_df)
+
+    # concatenate all versions
+    df_extended = pd.concat(groupings, ignore_index=True)
+
+    # group and compute mean
+    mean_scores = (
+        df_extended
+        .groupby(["metric", "lead_time", "param", "hour", "season", "init_hour"], dropna=False)["value"]
+        .mean()
+        .reset_index()
+    )
+
+    return mean_scores
 
 def main(args: Namespace) -> None:
     """Main function to verify results from KENDA-1 data."""

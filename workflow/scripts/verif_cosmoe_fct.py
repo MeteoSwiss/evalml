@@ -137,8 +137,9 @@ def main(args: ScriptConfig):
     
     # get COSMO-E forecast data
     coe = xr.open_zarr(args.cosmoe_zarr, consolidated=True, decode_timedelta=True)
-    coe = coe[args.params].sel(forecast_reference_time=args.reftime, step=np.array(args.lead_time, dtype="timedelta64[h]"))
-    coe = coe.assign_coords(valid_time = coe.forecast_reference_time + coe.step)
+    coe = coe.rename({"forecast_reference_time": "ref_time", "step": "lead_time"})
+    coe = coe[args.params].sel(ref_time=args.reftime, lead_time=np.array(args.lead_time, dtype="timedelta64[h]"))
+    coe = coe.assign_coords(valid_time = coe.ref_time + coe.lead_time)
 
 
     # get truth data (COSMO-2 analysis aka KENDA-1)
@@ -168,7 +169,7 @@ def main(args: ScriptConfig):
     results["corr"] = (corr := xr.Dataset({k: xr.corr(coe[k], kenda[k], dim=["y", "x"]) for k in coe.data_vars}))
     results["r2"] = corr ** 2
     results = xr.Dataset({k: v.to_array("param") for k, v in results.items()})
-    results = results.to_array("metric").to_dataframe(name="results").reset_index()
+    results = results.to_array("metric").to_dataframe(name="value").reset_index()
 
     # save results to CSV
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -185,7 +186,7 @@ if __name__ == "__main__":
                         help="Path to the Zarr dataset containing COSMOe data.")
     
     parser.add_argument("--cosmoe_zarr", type=Path,
-                        default="/scratch/mch/fzanetta/data/COSMO-E/2020.zarr",
+                        default="/scratch/mch/fzanetta/data/COSMO-E/FCST20.zarr",
                         help="Path to the Zarr dataset containing COSMO-E forecast data.")
     
     parser.add_argument("--reftime", type=lambda s: datetime.strptime(s, "%Y%m%d%H%M"),
