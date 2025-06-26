@@ -55,7 +55,7 @@ rule run_inference_all:
 rule run_verif_from_grib_all:
     input:
         expand(
-            rules.run_verif_from_grib.output,
+            rules.run_verif_fct.output,
             run_id=config["experiment"]["run_id"],
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
         ),
