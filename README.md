@@ -13,6 +13,27 @@ This project uses `conda`, download and install it through
     curl -L -O https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
     bash Miniforge3-Linux-x86_64.sh
 
+Some experiments are stored on the ECMWF-hosted MLflow server:
+[https://mlflow.ecmwf.int](https://mlflow.ecmwf.int). To access these runs in the
+evaluation workflow, you need to authenticate using a valid token. Run the following
+command **once** to log in and obtain a token:
+
+```bash
+anemoi-training mlflow login --url https://mlflow.ecmwf.int
+```
+
+You will be prompted to paste a seed token obtained from https://mlflow.ecmwf.int/seed.
+After this step, your token is stored locally. For future sessions, simply run:
+
+```bash
+anemoi-training mlflow login
+```
+
+This will reuse the previously stored URL and token. Tokens are valid for 30 days.
+Every training or evaluation run within this period automatically extends the token by
+another 30 days. It’s good practice to run the login command before executing the
+workflow to ensure your token is still valid.
+
 ## Installation
 
 Clone the `mch-anemoi-evaluation` repository and navigate to the project root directory:
