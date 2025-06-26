@@ -20,8 +20,6 @@ rule create_inference_pyproject:
     conda:
         "../envs/anemoi_inference.yaml"
     localrule: True
-    params:
-        mlflow_uri="https://servicedepl.meteoswiss.ch/mlstore/",
     script:
         "../scripts/set_inference_pyproject.py"
 

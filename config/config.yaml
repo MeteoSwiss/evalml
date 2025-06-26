@@ -15,5 +15,6 @@ init_times:
 
 locations:
   output_root: output
-  mlflow_uri: https://servicedepl.meteoswiss.ch/mlstore
-  # mlflow_uri: https://mlflow.ecmwf.int 
+  mlflow_uri: 
+    - https://servicedepl.meteoswiss.ch/mlstore
+    - https://mlflow.ecmwf.int
