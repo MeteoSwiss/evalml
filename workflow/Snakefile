@@ -52,6 +52,14 @@ rule run_inference_all:
         )
 
 
+rule run_verif_from_grib_all:
+    input:
+        expand(
+            rules.run_verif_from_grib.output,
+            run_id=config["experiment"]["run_id"],
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+        ),
+
 rule extract_cosmoe_fcts_all:
     """Extract COSMO-E forecasts for the year 2020."""
     input:

@@ -73,6 +73,7 @@ rule run_inference_group:
         reftimes=lambda wc: [t.strftime("%Y-%m-%dT%H:%M") for t in REFTIMES_GROUPS[int(wc.group_index)]],
         lead_time=config["experiment"]["lead_time"],
         output_root=OUT_ROOT,
+    # TODO: we can have named logs for each reftime
     log:
         "logs/anemoi-inference-run-{run_id}-{group_index}.log",
     resources:
