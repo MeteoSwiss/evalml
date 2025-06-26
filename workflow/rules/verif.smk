@@ -9,7 +9,7 @@ import pandas as pd
 include: "common.smk"
 
 
-
+# TODO: make sure the boundaries aren't used
 rule run_cosmoe_verif:
     input:
         script="workflow/scripts/verif_cosmoe_fct.py",
@@ -33,14 +33,16 @@ rule run_cosmoe_verif_all:
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES if t.hour in [0, 12]],
         ),
 
-rule run_verif:
+rule run_verif_from_grib:
     input:
-        expand(
-            rules.map_init_time_to_inference_group.output,
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            allow_missing=True,
-        ),
+        script="workflow/scripts/verif_from_grib.py",
+        grib_output=rules.map_init_time_to_inference_group.output[0],
     output:
         "results/eval_report_{run_id}.html",
     shell:
-        ""
+        """
+        uv run {input.script} \
+            --grib_output_dir {input.grib_output} \
+            --run_id {wildcards.run_id} \
+            --output {output}
+        """"""
