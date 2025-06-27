@@ -3,9 +3,11 @@ from pathlib import Path
 
 rule extract_cosmoe_fcts:
     input:
-        archive=Path("/archive/mch/msopr/osm/COSMO-E")
+        archive=Path("/archive/mch/msopr/osm/COSMO-E"),
     output:
-        fcts=protected(directory(Path("/scratch/mch/fzanetta/data/COSMO-E/FCST{year}.zarr"))),
+        fcts=protected(
+            directory(Path("/scratch/mch/fzanetta/data/COSMO-E/FCST{year}.zarr"))
+        ),
     params:
         year_postfix=lambda wc: f"FCST{wc.year}",
         lead_time="0/126/6",
@@ -42,13 +44,14 @@ rule generate_references:
                     --output {output} 2> {log}
         """
 
+
 rule combine_references:
     localrule: True
     input:
         expand(
             OUT_ROOT / "{{run_id}}/{init_time}/references.json",
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES]
-        )
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+        ),
     output:
         directory(OUT_ROOT / "{run_id}/output.vzarr"),
     params:
@@ -64,5 +67,3 @@ rule combine_references:
             workflow/scripts/vzarr_references.py combine {params.experiment_root} \
             --output {output} --start {params.start} --end {params.end} --step {params.step} 2> {log}
         """
-
-

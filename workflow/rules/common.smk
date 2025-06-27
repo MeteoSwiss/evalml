@@ -4,6 +4,7 @@ import yaml
 
 configfile: "config/anemoi_inference.yaml"
 
+
 OUT_ROOT = Path(config["locations"]["output_root"]).resolve()
 
 

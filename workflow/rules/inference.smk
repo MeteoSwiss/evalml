@@ -6,7 +6,9 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+
 configfile: "config/config.yaml"
+
 
 rule create_inference_pyproject:
     input:
@@ -58,7 +60,6 @@ rule make_squashfs_image:
         # we can safely ignore the many warnings "Unrecognised xattr prefix..."
 
 
-
 rule run_inference_group:
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
@@ -70,19 +71,21 @@ rule run_inference_group:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
         ),
-        reftimes=lambda wc: [t.strftime("%Y-%m-%dT%H:%M") for t in REFTIMES_GROUPS[int(wc.group_index)]],
+        reftimes=lambda wc: [
+            t.strftime("%Y-%m-%dT%H:%M") for t in REFTIMES_GROUPS[int(wc.group_index)]
+        ],
         lead_time=config["experiment"]["lead_time"],
         output_root=OUT_ROOT,
     # TODO: we can have named logs for each reftime
     log:
         "logs/anemoi-inference-run-{run_id}-{group_index}.log",
     resources:
-        slurm_partition="debug",
+        slurm_partition="short",
         cpus_per_task=32,
         mem_mb_per_cpu=8000,
         runtime="20m",
-        gres="gpu:1", # because we use --exclusive, this will be 1 GPU per run (--ntasks-per-gpus is automatically set to 1)
-                      # see https://github.com/MeteoSwiss/mch-anemoi-evaluation/pull/3#issuecomment-2998997104
+        gres="gpu:1",  # because we use --exclusive, this will be 1 GPU per run (--ntasks-per-gpus is automatically set to 1)
+        # see https://github.com/MeteoSwiss/mch-anemoi-evaluation/pull/3#issuecomment-2998997104
         slurm_extra=lambda wc, input: f"--uenv={input.image}:/user-environment --exclusive",
     shell:
         """
@@ -113,7 +116,7 @@ rule run_inference_group:
         done
         wait
         """
-    
+
 
 rule map_init_time_to_inference_group:
     localrule: True
@@ -121,5 +124,4 @@ rule map_init_time_to_inference_group:
         lambda wc: OUT_ROOT / f"{wc.run_id}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
     output:
         directory(OUT_ROOT / "{run_id}/{init_time}/grib"),
-        directory(OUT_ROOT / "{run_id}/{init_time}/raw")
-
+        directory(OUT_ROOT / "{run_id}/{init_time}/raw"),
