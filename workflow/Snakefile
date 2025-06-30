@@ -6,7 +6,8 @@
 # load configuration
 # -----------------------------------------------------
 configfile: "config/config.yaml"
-
+configfile: "config/studies.yaml"
+configfile: "config/experiments.yaml"
 
 # load rules
 # -----------------------------------------------------
@@ -36,31 +37,31 @@ rule all:
     """Final target rule to run all necessary steps."""
     input:
         expand(
-            "results/eval_report_{run_id}.html", run_id=config["experiment"]["run_id"]
+            "results/studies/{study}/eval_report.html", study=[s for s in config["studies"]]
         ),
     default_target: True
 
 
 
-rule run_inference_all:
-    """Run inference for all reference times as defined in the configuration."""
-    input:
-        expand(
-            OUT_ROOT / "{run_id}/{init_time}/raw",
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=config["experiment"]["run_id"]
-        )
+# rule run_inference_all:
+#     """Run inference for all reference times as defined in the configuration."""
+#     input:
+#         expand(
+#             OUT_ROOT / "{run_id}/{init_time}/raw",
+#             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+#             run_id=config["experiment"]["run_id"]
+#         )
 
 
-rule run_verif_from_grib_all:
-    input:
-        expand(
-            rules.run_verif_fct.output,
-            run_id=config["experiment"]["run_id"],
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-        ),
+# rule run_verif_from_grib_all:
+#     input:
+#         expand(
+#             rules.run_verif_fct.output,
+#             run_id=config["experiment"]["run_id"],
+#             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+#         ),
 
-rule extract_cosmoe_fcts_all:
-    """Extract COSMO-E forecasts for the year 2020."""
-    input:
-        expand(rules.extract_cosmoe_fcts.output.fcts, year=[str(y)[-2:] for y in range(2020, 2021)])
+# rule extract_cosmoe_fcts_all:
+#     """Extract COSMO-E forecasts for the year 2020."""
+#     input:
+#         expand(rules.extract_cosmoe_fcts.output.fcts, year=[str(y)[-2:] for y in range(2020, 2021)])

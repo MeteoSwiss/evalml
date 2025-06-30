@@ -17,7 +17,7 @@ rule run_verif_cosmoe:
         cosmoe_zarr=expand(rules.extract_cosmoe_fcts.output, year=20),
         zarr_dataset="/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr",
     output:
-        OUT_ROOT / "COSMO-E/{init_time}/verif.csv",
+        OUT_ROOT / "baselines/COSMO-E/{init_time}/verif.csv",
     log:
         "logs/verif_cosmoe/{init_time}.log",
     shell:
@@ -36,12 +36,12 @@ rule run_verif_fct:
         grib_output=rules.map_init_time_to_inference_group.output[0],
         zarr_dataset="/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr",
     output:
-        OUT_ROOT / "{run_id}/{init_time}/verif.csv",
-    wildcard_constraints:
-        run_id="[a-zA-Z0-9]{32}" # to avoid ambiguitiy with run_cosmoe_verif
+        OUT_ROOT / "experiments/{experiment}/{init_time}/verif.csv",
+    # wildcard_constraints:
+        # run_id="^" # to avoid ambiguitiy with run_cosmoe_verif
         # TODO: implement logic to use experiment name instead of run_id as wildcard
     log:
-        "logs/verif_from_grib/{run_id}-{init_time}.log",
+        "logs/verif_from_grib/{experiment}-{init_time}.log",
     shell:
         """
         uv run {input.script} \
@@ -64,18 +64,14 @@ rule run_verif_aggregation:
     input:
         script="workflow/scripts/verif_aggregation.py",
         verif_csv=lambda wc: expand(
-            rules.run_verif_fct.output,
-            init_time=_restrict_reftimes_to_hours(
-                REFTIMES, [0, 12] if wc.run_id == "COSMO-E" else None
-            ),
-            allow_missing=True,
+            rules.run_verif_fct.output, init_time=_restrict_reftimes_to_hours(REFTIMES), allow_missing=True,
         ),
     output:
-        OUT_ROOT / "{run_id}/verif_aggregated.csv",
+        OUT_ROOT / "experiments/{experiment}/verif_aggregated.csv",
     params:
-        verif_files_glob=lambda wc: OUT_ROOT / f"{wc.run_id}/*/verif.csv",
+        verif_files_glob=lambda wc: OUT_ROOT / f"experiments/{wc.experiment}/*/verif.csv",
     log:
-        "logs/verif_aggregation/{run_id}.log",
+        "logs/verif_aggregation/{experiment}.log",
     shell:
         """
         uv run {input.script} {params.verif_files_glob} \
@@ -83,20 +79,53 @@ rule run_verif_aggregation:
         """
 
 
+rule run_verif_aggregation_cosmoe:
+    localrule: True
+    input:
+        script="workflow/scripts/verif_aggregation.py",
+        verif_csv=lambda wc: expand(
+            rules.run_verif_cosmoe.output,
+            init_time=_restrict_reftimes_to_hours(REFTIMES, [0, 12]),
+            allow_missing=True,
+        ),
+    output:
+        OUT_ROOT / "baselines/COSMO-E/verif_aggregated.csv",
+    params:
+        verif_files_glob=lambda wc: OUT_ROOT / f"COSMO-E/*/verif.csv",
+    log:
+        "logs/verif_aggregation/COSMO-E.log",
+    shell:
+        """
+        uv run {input.script} {params.verif_files_glob} \
+            --output {output} > {log} 2>&1
+        """
+
+
+
+def _collect_study_participants(wc):
+    study = config["studies"][wc.study]
+    baselines = study.get("baselines", [])
+    experiments = study.get("experiments", [])
+    if not baselines and not experiments:
+        raise ValueError(f"Study '{wc.study}' has no baselines or experiments defined.")
+    participants = []
+    for baseline in baselines:
+        participants.append(OUT_ROOT / f"baselines/{baseline}/verif_aggregated.csv")
+    for experiment in experiments:
+        participants.append(OUT_ROOT / f"experiments/{experiment}/verif_aggregated.csv")
+    return participants
+
 rule run_verif_plot_metrics:
     localrule: True
     input:
         script="workflow/scripts/verif_plot_metrics.py",
-        verif_csv=expand(
-            rules.run_verif_aggregation.output,
-            run_id=["COSMO-E", config["experiment"]["run_id"]],
-        ),
+        verif=_collect_study_participants,
     output:
-        directory("results/{run_id}/verif/plot_metrics"),
+        directory("results/studies/{study}/plot_metrics"),
     log:
-        "logs/verif_plot_metrics/{run_id}.log",
+        "logs/verif_plot_metrics/{study}.log",
     shell:
         """
-        uv run {input.script} {input.verif_csv} \
+        uv run {input.script} {input.verif} \
             --output_dir {output} > {log} 2>&1
         """

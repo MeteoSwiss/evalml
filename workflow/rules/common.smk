@@ -67,3 +67,35 @@ REFTIME_TO_GROUP = {
     for group_index, group in enumerate(REFTIMES_GROUPS)
     for reftime in group
 }
+
+
+# def study_reftimes(study):
+#     cfg = config["studies"][study]["init_times"]
+#     start = datetime.strptime(cfg["start"], "%Y-%m-%dT%H:%M")
+#     end = datetime.strptime(cfg["end"], "%Y-%m-%dT%H:%M")
+#     freq = _parse_timedelta(cfg["frequency"])
+#     times = []
+#     t = start
+#     while t <= end:
+#         times.append(t)
+#         t += freq
+#     return times
+
+
+# def study_reftimes_groups(study):
+#     cfg = config["studies"][study]["init_times"]
+#     reftimes = study_reftimes(study)
+#     group_size = config["execution"]["run_group_size"]
+#     groups = []
+#     for i in range(0, len(reftimes), group_size):
+#         group = reftimes[i : i + group_size]
+#         groups.append(group)
+#     return groups
+
+# def reftimes_to_group(reftimes_groups):
+#     """Convert a list of reference times to a list of groups."""
+#     group_size = config["execution"]["run_group_size"]
+#     return [
+#         reftimes[i : i + group_size] for i in range(0, len(reftimes), group_size)
+#     ]
+

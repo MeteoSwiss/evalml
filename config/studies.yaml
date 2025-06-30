@@ -1,0 +1,14 @@
+studies:
+  cosmo2_emulator_bestmodel:
+    description: |
+      This study contains the best models for the COSMO-2 deterministic emulator.
+      The baseline model is the COSMO-E control run.
+    init_times: 
+      start: 2020-01-01T12:00
+      end: 2020-01-10T00:00
+      frequency: 18h
+    baselines:
+      - COSMO-E
+    experiments:
+      - some_experiment
+      # - some_other_experiment

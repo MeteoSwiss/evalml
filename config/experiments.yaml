@@ -1,0 +1,9 @@
+experiments:
+  some_experiment:
+    run_id: 7c58e59d24e949c9ade3df635bbd37e2
+    description: |
+      This is a test experiment configuration.
+      This description contains the details of the experiment.
+inference_config: anemoi_inference.yaml
+
+
