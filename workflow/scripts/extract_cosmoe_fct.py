@@ -116,7 +116,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--output_store",
                         type=Path,
-                        default="/scratch/mch/fzanetta/data/COSMO-E/2020.zarr")
+                        help="Path to the output zarr store.",)
 
     parser.add_argument("--lead_time",
                         type=_parse_lead_time,

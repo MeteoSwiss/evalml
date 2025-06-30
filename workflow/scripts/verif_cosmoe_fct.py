@@ -126,7 +126,7 @@ class ScriptConfig(Namespace):
     
     archive_root: Path = None
     zarr_dataset: Path = None
-    cosmoe_zarr: Path = Path("/scratch/mch/fzanetta/data/COSMO-E/2020.zarr")
+    cosmoe_zarr: Path = None
     reftime: datetime = None
     params: list[str] = ["T_2M", "TD_2M", "U_10M", "V_10M"]
     lead_time: list[int] = _parse_lead_time("0/126/6")
@@ -185,8 +185,7 @@ if __name__ == "__main__":
     truth_group.add_argument("--zarr_dataset", type=Path, required=False,
                         help="Path to the Zarr dataset containing COSMOe data.")
     
-    parser.add_argument("--cosmoe_zarr", type=Path,
-                        default="/scratch/mch/fzanetta/data/COSMO-E/FCST20.zarr",
+    parser.add_argument("--cosmoe_zarr", type=Path, required=True,
                         help="Path to the Zarr dataset containing COSMO-E forecast data.")
     
     parser.add_argument("--reftime", type=lambda s: datetime.strptime(s, "%Y%m%d%H%M"),
