@@ -262,7 +262,7 @@ def main(snakemake) -> None:
         Exception: If any step fails, original files are restored
     """
     mlflow_uri = snakemake.params["mlflow_uri"]
-    run_id = snakemake.wildcards["run_id"]
+    run_id = snakemake.params["run_id"]
     requirements_path_in = Path(snakemake.input[0])
     toml_path_out = Path(snakemake.output[0])
 

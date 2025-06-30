@@ -14,27 +14,29 @@ rule create_inference_pyproject:
     input:
         toml="workflow/envs/anemoi_inference.toml",
     output:
-        pyproject="resources/inference/{run_id}/pyproject.toml",
+        pyproject="resources/inference/{experiment}/pyproject.toml",
+    params:
+        run_id=lambda wc: config["experiments"][wc.experiment]["run_id"],
+        mlflow_uri="https://servicedepl.meteoswiss.ch/mlstore/",
     log:
-        "logs/create-inference-pyproject-{run_id}.log",
+        "logs/create-inference-pyproject-{experiment}.log",
     conda:
         "../envs/anemoi_inference.yaml"
     localrule: True
-    params:
-        mlflow_uri="https://servicedepl.meteoswiss.ch/mlstore/",
     script:
         "../scripts/set_inference_pyproject.py"
 
 
 rule create_inference_venv:
     input:
-        pyproject="resources/inference/{run_id}/pyproject.toml",
+        pyproject="resources/inference/{experiment}/pyproject.toml",
     output:
-        venv=temp(directory("resources/inference/{run_id}/.venv")),
+        venv=temp(directory("resources/inference/{experiment}/.venv")),
     params:
         py_version=parse_input(
             input.pyproject, parse_toml, key="project.requires-python"
         ),
+    localrule: True
     conda:
         "../envs/anemoi_inference.yaml"
     shell:
@@ -50,9 +52,10 @@ rule make_squashfs_image:
     input:
         venv=rules.create_inference_venv.output.venv,
     output:
-        image=Path(os.environ.get("SCRATCH")) / "sqfs-images" / "{run_id}.squashfs",
+        image=Path(os.environ.get("SCRATCH")) / "sqfs-images" / "{experiment}.squashfs",
     log:
-        "logs/make-squashfs-image-{run_id}.log",
+        "logs/make-squashfs-image-{experiment}.log",
+    localrule: True
     shell:
         "mksquashfs {input.venv} {output.image}"
         " -no-recovery -noappend -Xcompression-level 3"
@@ -66,7 +69,7 @@ rule run_inference_group:
         image=rules.make_squashfs_image.output.image,
         config=str(Path("config/anemoi_inference.yaml").resolve()),
     output:
-        okfile=temp(touch(OUT_ROOT / "{run_id}/group-{group_index}.ok")),
+        okfile=temp(touch(OUT_ROOT / "experiments/{experiment}/group-{group_index}.ok")),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
@@ -74,11 +77,11 @@ rule run_inference_group:
         reftimes=lambda wc: [
             t.strftime("%Y-%m-%dT%H:%M") for t in REFTIMES_GROUPS[int(wc.group_index)]
         ],
-        lead_time=config["experiment"]["lead_time"],
+        lead_time=config["lead_time"],
         output_root=OUT_ROOT,
     # TODO: we can have named logs for each reftime
     log:
-        "logs/anemoi-inference-run-{run_id}-{group_index}.log",
+        "logs/inference_run/{experiment}-{group_index}.log",
     resources:
         slurm_partition="short",
         cpus_per_task=32,
@@ -97,7 +100,7 @@ rule run_inference_group:
             
             # prepare the working directory
             _reftime_str=$(date -d "$reftime" +%Y%m%d%H%M)
-            WORKDIR={params.output_root}/{wildcards.run_id}/$_reftime_str
+            WORKDIR={params.output_root}/experiments/{wildcards.experiment}/$_reftime_str
             mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw
             cp {input.config} config.yaml
 
@@ -121,7 +124,7 @@ rule run_inference_group:
 rule map_init_time_to_inference_group:
     localrule: True
     input:
-        lambda wc: OUT_ROOT / f"{wc.run_id}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
+        lambda wc: OUT_ROOT / f"experiments/{wc.experiment}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
     output:
-        directory(OUT_ROOT / "{run_id}/{init_time}/grib"),
-        directory(OUT_ROOT / "{run_id}/{init_time}/raw"),
+        directory(OUT_ROOT / "experiments/{experiment}/{init_time}/grib"),
+        directory(OUT_ROOT / "experiments/{experiment}/{init_time}/raw"),

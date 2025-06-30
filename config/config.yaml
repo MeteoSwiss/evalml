@@ -1,7 +1,7 @@
 experiment:
   run_id: 7c58e59d24e949c9ade3df635bbd37e2
   name: prova
-  lead_time: 120h
+lead_time: 120h
 
 default_config: config.yaml
 
@@ -10,7 +10,7 @@ execution:
 
 init_times: 
   start: 2020-01-01T12:00
-  end: 2020-01-30T00:00
+  end: 2020-01-10T00:00
   frequency: 18h
 
 locations:
