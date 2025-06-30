@@ -10,7 +10,7 @@ execution:
 
 init_times: 
   start: 2020-01-01T12:00
-  end: 2020-01-10T00:00
+  end: 2020-01-30T00:00
   frequency: 18h
 
 locations:

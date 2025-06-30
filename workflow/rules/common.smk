@@ -5,6 +5,9 @@ import yaml
 configfile: "config/anemoi_inference.yaml"
 
 
+OUT_ROOT = Path(config["locations"]["output_root"]).resolve()
+
+
 def parse_toml(toml_file, key):
     """Parse a key (e.g. 'project.requires-python') from a TOML file handle."""
     import toml

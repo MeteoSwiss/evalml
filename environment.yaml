@@ -7,4 +7,4 @@ dependencies:
   - snakemake
   - snakefmt
   - snakemake-executor-plugin-slurm
-
+  - uv
