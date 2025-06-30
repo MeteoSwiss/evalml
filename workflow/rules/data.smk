@@ -8,6 +8,9 @@ rule extract_cosmoe_fcts:
         fcts=protected(
             directory(Path("/scratch/mch/fzanetta/data/COSMO-E/FCST{year}.zarr"))
         ),
+    resources:
+        cpus_per_task=4,
+        runtime="24h"
     params:
         year_postfix=lambda wc: f"FCST{wc.year}",
         lead_time="0/126/6",
