@@ -6,12 +6,11 @@ from datetime import datetime
 include: "common.smk"
 
 
-# TODO: not have zarr_dataset hardcoded
-rule report_study_dashboard:
+rule report_study:
     input:
-        verif=lambda wc: expand(rules.run_verif_aggregation.output, experiment=[e for e in config["studies"][wc.study]["experiments"]])
+        verif=collect_study_participants
     output:
-        touch("results/eval_report_{study}.html")
+        touch("results/studies/{study}/eval_report.html")
     log:
         "logs/report_study_dashboard/{study}.log",
 

@@ -24,6 +24,7 @@ rule run_verif_cosmoe:
         """
         uv run {input.script} \
             --zarr_dataset {input.zarr_dataset} \
+            --cosmoe_zarr {input.cosmoe_zarr} \
             --reftime {wildcards.init_time} \
             --output {output} > {log} 2>&1
         """
@@ -102,24 +103,12 @@ rule run_verif_aggregation_cosmoe:
 
 
 
-def _collect_study_participants(wc):
-    study = config["studies"][wc.study]
-    baselines = study.get("baselines", [])
-    experiments = study.get("experiments", [])
-    if not baselines and not experiments:
-        raise ValueError(f"Study '{wc.study}' has no baselines or experiments defined.")
-    participants = []
-    for baseline in baselines:
-        participants.append(OUT_ROOT / f"baselines/{baseline}/verif_aggregated.csv")
-    for experiment in experiments:
-        participants.append(OUT_ROOT / f"experiments/{experiment}/verif_aggregated.csv")
-    return participants
 
 rule run_verif_plot_metrics:
     localrule: True
     input:
         script="workflow/scripts/verif_plot_metrics.py",
-        verif=_collect_study_participants,
+        verif=collect_study_participants,
     output:
         directory("results/studies/{study}/plot_metrics"),
     log:

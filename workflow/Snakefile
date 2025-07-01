@@ -15,7 +15,7 @@ include: "rules/common.smk"
 include: "rules/data.smk"
 include: "rules/inference.smk"
 include: "rules/verif.smk"
-
+include: "rules/report.smk"
 
 # optional messages, log and error handling
 # -----------------------------------------------------

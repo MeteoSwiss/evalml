@@ -9,7 +9,12 @@ from datetime import datetime
 
 configfile: "config/config.yaml"
 
+def get_run_id(experiment):
+    """Get the run_id from the experiment configuration."""
+    with open(CONFIG_ROOT / f"experiments/{experiment}.yaml", "r") as f:
+        return yaml.safe_load(f)["run_id"]
 
+        
 rule create_inference_pyproject:
     input:
         toml="workflow/envs/anemoi_inference.toml",
