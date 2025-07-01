@@ -17,7 +17,6 @@ rule create_inference_pyproject:
         pyproject="resources/inference/{experiment}/pyproject.toml",
     params:
         run_id=lambda wc: config["experiments"][wc.experiment]["run_id"],
-        mlflow_uri="https://servicedepl.meteoswiss.ch/mlstore/",
     log:
         "logs/create-inference-pyproject-{experiment}.log",
     conda:

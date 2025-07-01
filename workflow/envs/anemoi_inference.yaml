@@ -2,9 +2,11 @@ name: anemoi_inference
 channels:
   - conda-forge
 dependencies:
-  - python=3.10
+  - python=3.12
   - toml
   - uv
   - mlflow
-variables:
-  ECCODES_DEFINITION_PATH: $CONDA_PREFIX/share/eccodes-cosmo-resources/definitions
+  - pip
+  - pip:
+      - anemoi-utils
+      - anemoi-training --no-deps

@@ -16,6 +16,9 @@ import requests
 import toml
 
 from mlflow.tracking import MlflowClient
+from mlflow.exceptions import RestException
+
+from anemoi.training.diagnostics.mlflow.client import AnemoiMlflowClient
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -37,6 +40,37 @@ _GIT_DEPENDENCIES_CONFIG = {
         "ecmwf": {"url": "https://github.com/ecmwf/anemoi-datasets.git"}
     },
 }
+
+
+def get_mlflow_client_given_runid(
+    mlflow_uri: str | list[str], run_id: str
+) -> MlflowClient:
+    """Get an MLflow client for a given run ID.
+
+    Parameters:
+        mlflow_uri (str | list[str]): One or more MLflow tracking URIs to search.
+        run_id (str): The MLflow run ID to look up.
+
+    Returns:
+        MlflowClient: A client configured for the server where the run was found.
+
+    Raises:
+        ValueError: If the run ID is not found in any of the provided URIs.
+    """
+    uris = [mlflow_uri] if isinstance(mlflow_uri, str) else mlflow_uri
+    for uri in uris:
+        if "ecmwf.int" in uri:
+            client = AnemoiMlflowClient(uri, authentication=True)
+        else:
+            client = MlflowClient(tracking_uri=uri)
+        try:
+            client.get_run(run_id)
+            return client
+        except RestException:
+            continue
+    raise ValueError(
+        f"Run ID {run_id} not found in any of the provided MLflow URIs: {uris}"
+    )
 
 
 def check_commit_exists(repo_url: str, commit_hash: str) -> bool:
@@ -261,15 +295,14 @@ def main(snakemake) -> None:
     Raises:
         Exception: If any step fails, original files are restored
     """
-    mlflow_uri = snakemake.params["mlflow_uri"]
     run_id = snakemake.params["run_id"]
+    mlflow_uri = snakemake.config.locations.mlflow_uri
     requirements_path_in = Path(snakemake.input[0])
     toml_path_out = Path(snakemake.output[0])
 
     shutil.copy2(requirements_path_in, toml_path_out)
 
-    logging.info("Using %s tracking URI", mlflow_uri)
-    client = MlflowClient(tracking_uri=mlflow_uri)
+    client = get_mlflow_client_given_runid(mlflow_uri, run_id)
     anemoi_versions = get_anemoi_versions(client, run_id)
     python_version = get_python_version(client, run_id)
     checkpoints_path = get_path_to_checkpoints(client, run_id)

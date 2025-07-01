@@ -10,10 +10,11 @@ execution:
 
 init_times: 
   start: 2020-01-01T12:00
-  end: 2020-01-10T00:00
+  end: 2020-01-30T00:00
   frequency: 18h
 
 locations:
   output_root: output
-  mlflow_uri: https://servicedepl.meteoswiss.ch/mlstore
-  # mlflow_uri: https://mlflow.ecmwf.int 
+  mlflow_uri: 
+    - https://servicedepl.meteoswiss.ch/mlstore
+    - https://mlflow.ecmwf.int
