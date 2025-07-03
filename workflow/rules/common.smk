@@ -83,3 +83,14 @@ def collect_study_participants(wc):
     for experiment in experiments:
         participants.append(OUT_ROOT / f"experiments/{experiment}/verif_aggregated.csv")
     return participants
+
+def collect_all_experiments():
+    """Collect all experiments defined in the configuration."""
+    for study in config["studies"]:
+        with open(CONFIG_ROOT / f"studies/{study}.yaml", "r") as f:
+            study_cfg = yaml.safe_load(f)
+        experiments = study_cfg.get("experiments", [])
+        for experiment in experiments:
+            yield experiment
+
+EXPERIMENTS = list(collect_all_experiments())

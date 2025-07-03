@@ -6,8 +6,6 @@
 # load configuration
 # -----------------------------------------------------
 configfile: "config/config.yaml"
-configfile: "config/studies.yaml"
-configfile: "config/experiments.yaml"
 
 # load rules
 # -----------------------------------------------------
@@ -42,26 +40,33 @@ rule all:
     default_target: True
 
 
+rule run_inference_all:
+    """Run inference for all reference times as defined in the configuration."""
+    input:
+        expand(
+            OUT_ROOT / "experiments/{experiment}/{init_time}/raw",
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            experiment=EXPERIMENTS
+        )
 
-# rule run_inference_all:
-#     """Run inference for all reference times as defined in the configuration."""
-#     input:
-#         expand(
-#             OUT_ROOT / "{run_id}/{init_time}/raw",
-#             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-#             run_id=config["experiment"]["run_id"]
-#         )
 
+rule run_verif_from_grib_all:
+    input:
+        expand(
+            rules.run_verif_fct.output,
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            experiment=EXPERIMENTS
+        ),
 
-# rule run_verif_from_grib_all:
-#     input:
-#         expand(
-#             rules.run_verif_fct.output,
-#             run_id=config["experiment"]["run_id"],
-#             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-#         ),
+rule extract_cosmoe_fcts_all:
+    """Extract COSMO-E forecasts for the year 2020."""
+    input:
+        expand(rules.extract_cosmoe_fcts.output.fcts, year=[str(y)[-2:] for y in range(2020, 2021)])
 
-# rule extract_cosmoe_fcts_all:
-#     """Extract COSMO-E forecasts for the year 2020."""
-#     input:
-#         expand(rules.extract_cosmoe_fcts.output.fcts, year=[str(y)[-2:] for y in range(2020, 2021)])
+rule run_verif_plot_metrics_all:
+    """Run verification plot metrics for all studies."""
+    input:
+        expand(
+            rules.run_verif_plot_metrics.output,
+            study=[s for s in config["studies"]],
+        )

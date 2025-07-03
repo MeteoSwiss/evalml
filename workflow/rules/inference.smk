@@ -21,7 +21,7 @@ rule create_inference_pyproject:
     output:
         pyproject="resources/inference/{experiment}/pyproject.toml",
     params:
-        run_id=lambda wc: config["experiments"][wc.experiment]["run_id"],
+        run_id=lambda wc: get_run_id(wc.experiment),
     log:
         "logs/create-inference-pyproject-{experiment}.log",
     conda:
