@@ -1,12 +1,19 @@
 from datetime import datetime, timedelta
 import yaml
-
+import hashlib
+import json
 
 configfile: "config/anemoi_inference.yaml"
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"]).resolve()
 
+def short_hash_config():
+    """Generate a short hash of the configuration file."""
+    with open(CONFIG_ROOT / "anemoi_inference.yaml", "r") as f:
+        cfg = yaml.safe_load(f)
+    cfg_str = json.dumps(cfg, sort_keys=True)
+    return hashlib.sha256(cfg_str.encode()).hexdigest()[:8]
 
 def parse_toml(toml_file, key):
     """Parse a key (e.g. 'project.requires-python') from a TOML file handle."""
@@ -67,30 +74,26 @@ REFTIME_TO_GROUP = {
     for reftime in group
 }
 
+def collect_all_runs():
+    """Collect all runs defined in the configuration."""
+    return [cfg["run_id"] for cfg in config["runs"].values()]
 
-def collect_study_participants(wc):
+def collect_all_baselines():
+    """Collect all baselines defined in the configuration."""
+    baselines = config.get("baselines", {})
+    if isinstance(baselines, list):
+        return baselines
+    elif isinstance(baselines, dict):
+        return list(baselines.keys())
+    elif isinstance(baselines, str):
+        return [baselines]
+    else:
+        raise ValueError("Baselines should be a list, dict, or string.")
 
-    with open(CONFIG_ROOT / f"studies/{wc.study}.yaml", "r") as f:
-        study = yaml.safe_load(f)
-    
-    baselines = study.get("baselines", [])
-    experiments = study.get("experiments", [])
-    if not baselines and not experiments:
-        raise ValueError(f"Study '{wc.study}' has no baselines or experiments defined.")
+def collect_experiment_participants(wc):
     participants = []
-    for baseline in baselines:
+    for baseline in collect_all_baselines():
         participants.append(OUT_ROOT / f"baselines/{baseline}/verif_aggregated.csv")
-    for experiment in experiments:
-        participants.append(OUT_ROOT / f"experiments/{experiment}/verif_aggregated.csv")
+    for run_id in collect_all_runs():
+        participants.append(OUT_ROOT / f"runs/{run_id}/verif_aggregated.csv")
     return participants
-
-def collect_all_experiments():
-    """Collect all experiments defined in the configuration."""
-    for study in config["studies"]:
-        with open(CONFIG_ROOT / f"studies/{study}.yaml", "r") as f:
-            study_cfg = yaml.safe_load(f)
-        experiments = study_cfg.get("experiments", [])
-        for experiment in experiments:
-            yield experiment
-
-EXPERIMENTS = list(collect_all_experiments())

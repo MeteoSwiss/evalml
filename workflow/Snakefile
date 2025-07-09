@@ -31,12 +31,12 @@ onerror:
 
 # target rules
 # -----------------------------------------------------
+EXPERIMENT_HASH = short_hash_config()
+
 rule all:
     """Final target rule to run all necessary steps."""
     input:
-        expand(
-            "results/studies/{study}/eval_report.html", study=[s for s in config["studies"]]
-        ),
+        f"results/{EXPERIMENT_HASH}/report.html",
     default_target: True
 
 
@@ -44,9 +44,9 @@ rule run_inference_all:
     """Run inference for all reference times as defined in the configuration."""
     input:
         expand(
-            OUT_ROOT / "experiments/{experiment}/{init_time}/raw",
+            OUT_ROOT / "runs/{run_id}/{init_time}/raw",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            experiment=EXPERIMENTS
+            run_id=collect_all_runs()
         )
 
 
@@ -55,7 +55,7 @@ rule run_verif_from_grib_all:
         expand(
             rules.run_verif_fct.output,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            experiment=EXPERIMENTS
+            run_id=collect_all_runs()
         ),
 
 rule extract_cosmoe_fcts_all:
@@ -68,5 +68,5 @@ rule run_verif_plot_metrics_all:
     input:
         expand(
             rules.run_verif_plot_metrics.output,
-            study=[s for s in config["studies"]],
+            experiment=EXPERIMENT_HASH,
         )
