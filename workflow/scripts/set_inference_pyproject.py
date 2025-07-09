@@ -117,8 +117,10 @@ def get_version_and_commit_hash(
     commit_hash_param = (
         f"metadata.provenance_training.git_versions.{dependency}.git.sha1"
     )
-    version_param = f"metadata.provenance_training.git_versions.{dependency}.version"
-    return run.data.params.get(version_param), run.data.params.get(commit_hash_param)
+    version_param = f"metadata.provenance_training.module_versions.{dependency}.version"
+    version_param_alt = f"metadata.provenance_training.module_versions.{dependency}"
+    version = run.data.params.get(version_param) or run.data.params.get(version_param_alt)
+    return version, run.data.params.get(commit_hash_param)
 
 
 def resolve_dependency_config(commit_hash: str, dependency_type: str) -> dict:
@@ -174,8 +176,9 @@ def get_anemoi_versions(client: MlflowClient, run_id: str) -> dict:
     """
     versions = {}
     for dep_type in _GIT_DEPENDENCIES_CONFIG:
-        _, commit_hash = get_version_and_commit_hash(client, run_id, dep_type)
-        versions[f"{dep_type}"] = resolve_dependency_config(commit_hash, dep_type)
+        version, commit_hash = get_version_and_commit_hash(client, run_id, dep_type)
+        breakpoint()
+        versions[f"{dep_type}"] = resolve_dependency_config(commit_hash, dep_type) if commit_hash else version
 
     if not versions:
         raise ValueError("No valid dependencies found in MLflow run")
@@ -271,7 +274,7 @@ def update_pyproject_toml(
             new_dep = (
                 format_vcs_pep508(pkg_name, val)
                 if isinstance(val, dict)
-                else f"{pkg_name}{val}"
+                else f"{pkg_name}=={val}"
             )
             updated.append(new_dep)
         else:
