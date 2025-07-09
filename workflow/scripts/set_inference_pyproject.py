@@ -177,7 +177,6 @@ def get_anemoi_versions(client: MlflowClient, run_id: str) -> dict:
     versions = {}
     for dep_type in _GIT_DEPENDENCIES_CONFIG:
         version, commit_hash = get_version_and_commit_hash(client, run_id, dep_type)
-        breakpoint()
         versions[f"{dep_type}"] = resolve_dependency_config(commit_hash, dep_type) if commit_hash else version
 
     if not versions:
@@ -282,7 +281,7 @@ def update_pyproject_toml(
 
     config["project"]["dependencies"] = updated
     # Format as PEP 621 style version constraint, e.g., "==3.10.14"
-    config["project"]["requires-python"] = f"=={python_version}"
+    config["project"]["requires-python"] = f">={python_version}"
     config.setdefault("tool", {})["anemoi"] = {"checkpoints_path": checkpoints_path}
 
     try:

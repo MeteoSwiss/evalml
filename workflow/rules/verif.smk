@@ -32,6 +32,7 @@ rule run_verif_cosmoe:
 
 # TODO: not have zarr_dataset hardcoded
 rule run_verif_fct:
+    localrule: True
     input:
         script="workflow/scripts/verif_from_grib.py",
         grib_output=rules.map_init_time_to_inference_group.output[0],

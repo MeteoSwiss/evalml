@@ -148,7 +148,7 @@ def main(args: ScriptConfig):
             zarr_dataset=args.zarr_dataset,
             valid_times=coe.valid_time,
             params=args.params
-        )
+        ).compute().chunk({"y": -1, "x": -1})
     elif args.archive_root:
         kenda = load_kenda1_data_from_grib(
             archive_root=args.archive_root,
@@ -162,12 +162,12 @@ def main(args: ScriptConfig):
     # compute metrics and statistics
     error = coe - kenda
     results = {}
-    results["bias"] = error.mean(["y", "x"])
-    results["rmse"] = np.sqrt((error ** 2).mean(["y", "x"]))
-    results["mae"] = abs(error).mean(["y", "x"])
-    results["std"] = error.std(["y", "x"])
-    results["corr"] = (corr := xr.Dataset({k: xr.corr(coe[k], kenda[k], dim=["y", "x"]) for k in coe.data_vars}))
-    results["r2"] = corr ** 2
+    results["BIAS"] = error.mean(["y", "x"])
+    results["RMSE"] = np.sqrt((error ** 2).mean(["y", "x"]))
+    results["MAE"] = abs(error).mean(["y", "x"])
+    results["STD"] = error.std(["y", "x"])
+    results["CORR"] = (corr := xr.Dataset({k: xr.corr(coe[k], kenda[k], dim=["y", "x"]) for k in coe.data_vars}))
+    results["R2"] = corr ** 2
     results = xr.Dataset({k: v.to_array("param") for k, v in results.items()})
     results = results.to_array("metric").to_dataframe(name="value").reset_index()
 

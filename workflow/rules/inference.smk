@@ -16,7 +16,7 @@ rule create_inference_pyproject:
     output:
         pyproject="resources/inference/{run_id}/pyproject.toml",
     log:
-        "logs/create-inference-pyproject-{run_id}.log",
+        "logs/create_inference_pyproject/{run_id}.log",
     conda:
         "../envs/anemoi_inference.yaml"
     localrule: True
@@ -34,15 +34,23 @@ rule create_inference_venv:
             input.pyproject, parse_toml, key="project.requires-python"
         ),
     localrule: True
+    log:
+        "logs/create_inference_venv/{run_id}.log",
     conda:
         "../envs/anemoi_inference.yaml"
     shell:
-        "uv venv -p {params.py_version} --relocatable --link-mode=copy {output.venv};"
-        "source {output.venv}/bin/activate;"
-        "cd $(dirname {input.pyproject}) && uv sync;"
-        "python -m compileall -j 8 -o 0 -o 1 -o 2 .venv/lib/python{params.py_version}/site-packages >/dev/null"
+        """(
+        PROJECT_ROOT=$(dirname {input.pyproject})
+        uv venv --project $PROJECT_ROOT --relocatable --link-mode=copy {output.venv}
+        source {output.venv}/bin/activate
+        cd $(dirname {input.pyproject})
+        uv sync
+        python -m compileall -j 8 -o 0 -o 1 -o 2 .venv/lib/python*/site-packages
+        echo 'Inference virutal environment successfully created at {output.venv}'
+        ) > {log} 2>&1
+        """
         # optionally, precompile to bytecode to reduce the import times
-        # "find {output.venv} -exec stat --format='%i' {} + | sort -u | wc -l"  # optionally, how many files did I create?
+        # find {output.venv} -exec stat --format='%i' {} + | sort -u | wc -l  # optionally, how many files did I create?
 
 
 rule make_squashfs_image:
@@ -51,7 +59,7 @@ rule make_squashfs_image:
     output:
         image=Path(os.environ.get("SCRATCH")) / "sqfs-images" / "{run_id}.squashfs",
     log:
-        "logs/make-squashfs-image-{run_id}.log",
+        "logs/make_squashfs_image/{run_id}.log",
     localrule: True
     shell:
         "mksquashfs {input.venv} {output.image}"
