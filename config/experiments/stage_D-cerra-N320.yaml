@@ -1,5 +1,0 @@
-run_id: 2f962c89ff644ca7940072fa9cd088ec
-from: stage_C-cerra-n320
-description: |
-  Training data: ERA5 for global, COSMO-2 analysis (KENDA) for regional.
-inference_config: anemoi_inference.yaml

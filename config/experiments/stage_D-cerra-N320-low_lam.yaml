@@ -1,7 +1,0 @@
-run_id: d0846032fc7248a58b089cbe8fa4c511
-from: stage_C-cerra-n320-low_lam
-description: |
-  Decreased the weight of the LAM region in the loss from 10% to 5%.
-
-  Training data: ERA5 for global, COSMO-2 analysis (KENDA) for regional.
-inference_config: anemoi_inference.yaml
