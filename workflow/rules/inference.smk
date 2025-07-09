@@ -45,10 +45,16 @@ rule create_inference_venv:
         source {output.venv}/bin/activate
         cd $(dirname {input.pyproject})
         uv sync
-        python -m compileall -j 8 -o 0 -o 1 -o 2 .venv/lib/python*/site-packages
+        echo 'Testing that eccodes is working...'
+        if ! python -c "import eccodes" &>/dev/null; then
+            echo 'ERROR: eccodes is not installed correctly in the virtual environment.'
+            echo 'Please check the installation and try again.'
+            exit 1
+        fi
         echo 'Inference virutal environment successfully created at {output.venv}'
         ) > {log} 2>&1
         """
+        # python -m compileall -j 8 -o 0 -o 1 -o 2 .venv/lib/python*/site-packages
         # optionally, precompile to bytecode to reduce the import times
         # find {output.venv} -exec stat --format='%i' {} + | sort -u | wc -l  # optionally, how many files did I create?
 

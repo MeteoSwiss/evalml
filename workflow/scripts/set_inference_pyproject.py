@@ -240,6 +240,15 @@ def format_vcs_pep508(pkg: str, cfg: dict) -> str:
     return f"{pkg} @ {url}"
 
 
+def version_to_pep440_range(version: str) -> str:
+    """Convert a Python version like '3.10.6' into a PEP 440 range like '>=3.10,<3.11'."""
+    parts = version.split(".")
+    if len(parts) < 2:
+        raise ValueError("Version must have at least major and minor parts")
+
+    major, minor = int(parts[0]), int(parts[1])
+    return f">={major}.{minor},<{major}.{minor + 1}"
+
 def update_pyproject_toml(
     versions: dict, toml_path: Path, python_version: str, checkpoints_path: str
 ) -> None:
@@ -280,8 +289,7 @@ def update_pyproject_toml(
             updated.append(dep)
 
     config["project"]["dependencies"] = updated
-    # Format as PEP 621 style version constraint, e.g., "==3.10.14"
-    config["project"]["requires-python"] = f">={python_version}"
+    config["project"]["requires-python"] = version_to_pep440_range(python_version)
     config.setdefault("tool", {})["anemoi"] = {"checkpoints_path": checkpoints_path}
 
     try:

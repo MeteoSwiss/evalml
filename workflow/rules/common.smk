@@ -12,7 +12,7 @@ def short_hash_config():
     """Generate a short hash of the configuration file."""
     with open(CONFIG_ROOT / "anemoi_inference.yaml", "r") as f:
         cfg = yaml.safe_load(f)
-    cfg_str = json.dumps(cfg, sort_keys=True)
+    cfg_str = json.dumps([config, cfg], sort_keys=True)
     return hashlib.sha256(cfg_str.encode()).hexdigest()[:8]
 
 def parse_toml(toml_file, key):
