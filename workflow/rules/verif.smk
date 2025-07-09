@@ -92,7 +92,7 @@ rule run_verif_aggregation_cosmoe:
     output:
         OUT_ROOT / "baselines/COSMO-E/verif_aggregated.csv",
     params:
-        verif_files_glob=lambda wc: OUT_ROOT / f"COSMO-E/*/verif.csv",
+        verif_files_glob=lambda wc: OUT_ROOT / "baselines/COSMO-E/*/verif.csv",
     log:
         "logs/verif_aggregation/COSMO-E.log",
     shell:
@@ -103,18 +103,22 @@ rule run_verif_aggregation_cosmoe:
 
 
 
+EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
 
 rule run_verif_plot_metrics:
     localrule: True
     input:
         script="workflow/scripts/verif_plot_metrics.py",
-        verif=collect_experiment_participants,
+        verif=list(EXPERIMENT_PARTICIPANTS.values()),
     output:
         directory("results/{experiment}/plot_metrics"),
+    params:
+        labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
     log:
         "logs/verif_plot_metrics/{experiment}.log",
     shell:
         """
         uv run {input.script} {input.verif} \
+            --labels '{params.labels}' \
             --output_dir {output} > {log} 2>&1
         """

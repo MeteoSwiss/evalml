@@ -80,7 +80,7 @@ def collect_all_runs():
 
 def collect_all_baselines():
     """Collect all baselines defined in the configuration."""
-    baselines = config.get("baselines", {})
+    baselines = config.get("baseline", {})
     if isinstance(baselines, list):
         return baselines
     elif isinstance(baselines, dict):
@@ -90,10 +90,11 @@ def collect_all_baselines():
     else:
         raise ValueError("Baselines should be a list, dict, or string.")
 
-def collect_experiment_participants(wc):
-    participants = []
+def collect_experiment_participants():
+    participants = {}
     for baseline in collect_all_baselines():
-        participants.append(OUT_ROOT / f"baselines/{baseline}/verif_aggregated.csv")
-    for run_id in collect_all_runs():
-        participants.append(OUT_ROOT / f"runs/{run_id}/verif_aggregated.csv")
+        participants[baseline] = OUT_ROOT / f"baselines/{baseline}/verif_aggregated.csv"
+    for name, run in config["runs"].items():
+        label = run.get("label", name)
+        participants[label] = OUT_ROOT / f"runs/{run['run_id']}/verif_aggregated.csv"
     return participants
