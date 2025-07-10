@@ -7,14 +7,13 @@
 # -----------------------------------------------------
 configfile: "config/config.yaml"
 
-
 # load rules
 # -----------------------------------------------------
 include: "rules/common.smk"
 include: "rules/data.smk"
 include: "rules/inference.smk"
 include: "rules/verif.smk"
-
+include: "rules/report.smk"
 
 # optional messages, log and error handling
 # -----------------------------------------------------
@@ -32,35 +31,43 @@ onerror:
 
 # target rules
 # -----------------------------------------------------
+EXPERIMENT_HASH = short_hash_config()
+
 rule all:
     """Final target rule to run all necessary steps."""
     input:
-        expand(
-            "results/eval_report_{run_id}.html", run_id=config["experiment"]["run_id"]
-        ),
+        f"results/{EXPERIMENT_HASH}/report.html",
+        expand(rules.run_verif_plot_metrics.output, experiment=EXPERIMENT_HASH)
     default_target: True
-
 
 
 rule run_inference_all:
     """Run inference for all reference times as defined in the configuration."""
     input:
         expand(
-            OUT_ROOT / "{run_id}/{init_time}/raw",
+            OUT_ROOT / "runs/{run_id}/{init_time}/raw",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=config["experiment"]["run_id"]
-        )
+            run_id=collect_all_runs()
+        ),
 
 
 rule run_verif_from_grib_all:
     input:
         expand(
             rules.run_verif_fct.output,
-            run_id=config["experiment"]["run_id"],
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            run_id=collect_all_runs()
         ),
 
-rule extract_cosmoe_fcts_all:
-    """Extract COSMO-E forecasts for the year 2020."""
+# rule extract_cosmoe_fcts_all:
+#     """Extract COSMO-E forecasts for the year 2020."""
+#     input:
+#         expand(rules.extract_cosmoe_fcts.output.fcts, year=[str(y)[-2:] for y in range(2020, 2021)])
+
+rule run_verif_plot_metrics_all:
+    """Run verification plot metrics for all studies."""
     input:
-        expand(rules.extract_cosmoe_fcts.output.fcts, year=[str(y)[-2:] for y in range(2020, 2021)])
+        expand(
+            rules.run_verif_plot_metrics.output,
+            experiment=EXPERIMENT_HASH,
+        )

@@ -63,6 +63,14 @@ def _check_same_column_values(dfs: list[pd.DataFrame], column: str) -> None:
 def main(args: Namespace) -> None:
     """Main function to verify results from KENDA-1 data."""
     
+    if args.labels is not None:
+        if len(args.labels) != len(args.verif_files):
+            raise ValueError("Number of labels must match the number of verification files."
+                            f" Got {len(args.labels)} labels for {len(args.verif_files)} files.")
+        labels = args.labels
+    else:
+        labels = [file.parent.name for file in args.verif_files]
+
     dfs = [read_verif_file(file) for file in args.verif_files]
 
     _check_same_columns(dfs)
@@ -76,7 +84,8 @@ def main(args: Namespace) -> None:
 
     for metric, param, hour, season, init_hour in itertools.product(
         metrics, params, hours, seasons, init_hours
-    ):
+    ):  
+        
         LOG.info(f"Processing metric: {metric}, param: {param}, hour: {hour}, "
                  f"season: {season}, init_hour: {init_hour}")
         
@@ -87,18 +96,24 @@ def main(args: Namespace) -> None:
         subsets_dfs = [_subset_df(df) for df in dfs]
         # breakpoint()
         fig, ax = plt.subplots(figsize=(10, 6))
+
+        title = f"{metric} - {param}"
+        title += f"- {hour} - {season} - {init_hour}" if args.stratify else ""
         for i, df in enumerate(subsets_dfs):
+            # convert lead time to integer hours
+            df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
             df.plot(
                 x="lead_time", y="value", kind="line",
-                title=f"{metric} - {param} - {hour} - {season} - {init_hour}",
+                title=title,
                 xlabel="Lead Time", ylabel=metric,
-                label=i,
+                label=labels[i],
                 ax=ax
             )
+
         args.output_dir.mkdir(parents=True, exist_ok=True)
-        plt.savefig(
-            args.output_dir / f"{metric}_{param}_{hour}_{season}_{init_hour}.png"
-        )
+        fn = f"{metric}_{param}"
+        fn += f"_{hour}_{season}_{init_hour}.png" if args.stratify else ".png"
+        plt.savefig(args.output_dir / fn)
         plt.close(fig)
 
 if __name__ == "__main__":
@@ -107,6 +122,9 @@ if __name__ == "__main__":
                         help="Paths to verification files.")
     parser.add_argument("--stratify", action="store_true",
                         help="Stratify results by hour, season, and init_hour.")
+    parser.add_argument("--labels", type=lambda s: s.split(","),
+                        default=None,
+                        help="Labels for the runs, if not provided, will use run_id.")
     parser.add_argument("--output_dir", type=Path, default="plots",
                         help="Path to save the aggregated results."),
     args = parser.parse_args()

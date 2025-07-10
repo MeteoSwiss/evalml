@@ -1,20 +1,34 @@
-experiment:
-  run_id: 7c58e59d24e949c9ade3df635bbd37e2
-  name: prova
-  lead_time: 120h
 
-default_config: config.yaml
+description: |
+  This is an experiment to do blabla.
+
+init_times: 
+  start: 2020-01-01T12:00
+  end: 2020-01-10T00:00
+  # end: 2020-03-30T00:00
+  frequency: 18h
+
+lead_time: 120h
+
+runs:
+  # stage_C_transfer-cerra-N320_rollout-low_lam:
+  #   run_id: 1054752f57694b53962bc28de7507dff
+  #   label: Stage C - N320 global grid with CERRA-rollout finetuning - low LAM weight
+  stage_D-cerra-N320:
+    run_id: 2f962c89ff644ca7940072fa9cd088ec
+    label: Stage D - N320 global grid with CERRA finetuning
+  stage_D-cerra-N320-low_lam:
+    run_id: d0846032fc7248a58b089cbe8fa4c511
+    label: Stage D - N320 global grid with CERRA finetuning - low LAM weight
+
+baseline: COSMO-E
+
 
 execution:
   run_group_size: 4
 
-init_times: 
-  start: 2020-01-01T12:00
-  end: 2020-01-30T00:00
-  frequency: 18h
-
 locations:
-  output_root: output
+  output_root: output/
   mlflow_uri: 
     - https://servicedepl.meteoswiss.ch/mlstore
     - https://mlflow.ecmwf.int

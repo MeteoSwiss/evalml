@@ -1,7 +1,7 @@
 [project]
 name = "anemoi-inference-env"
 version = "0.1.0"
-requires-python = "==3.10.*"
+requires-python = "==3.12.*"
 dependencies = [
   "torch",
   "torchvision",
@@ -13,6 +13,7 @@ dependencies = [
   "anemoi-training==0.3.3",
   "anemoi-transform==0.1.10",
   "anemoi-utils==0.4.22",
+  "eccodes==2.38.3",
   "eccodes-cosmo-resources-python"
 ]
 

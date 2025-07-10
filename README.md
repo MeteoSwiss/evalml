@@ -30,6 +30,16 @@ Every training or evaluation run within this period automatically extends the to
 another 30 days. It’s good practice to run the login command before executing the
 workflow to ensure your token is still valid.
 
+By default, data produced by the workflow will be stored under `output/` in your working directory.
+We suggest that you set up a symlink to a directory on your scratch:
+
+```bash
+mkdir -p $SCRATCH/mch-anemoi-evaluation/output
+ln -s $SCRATCH/mch-anemoi-evaluation/output output
+```
+
+This way data will be written to your scratch, but you will still be able to browse it with your IDE.
+
 ## Installation
 
 Clone the `mch-anemoi-evaluation` repository and navigate to the project root directory:

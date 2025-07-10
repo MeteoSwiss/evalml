@@ -119,8 +119,10 @@ def get_version_and_commit_hash(
     commit_hash_param = (
         f"metadata.provenance_training.git_versions.{dependency}.git.sha1"
     )
-    version_param = f"metadata.provenance_training.git_versions.{dependency}.version"
-    return run.data.params.get(version_param), run.data.params.get(commit_hash_param)
+    version_param = f"metadata.provenance_training.module_versions.{dependency}.version"
+    version_param_alt = f"metadata.provenance_training.module_versions.{dependency}"
+    version = run.data.params.get(version_param) or run.data.params.get(version_param_alt)
+    return version, run.data.params.get(commit_hash_param)
 
 
 def resolve_dependency_config(commit_hash: str, dependency_type: str) -> dict:
@@ -176,8 +178,8 @@ def get_anemoi_versions(client: MlflowClient, run_id: str) -> dict:
     """
     versions = {}
     for dep_type in _GIT_DEPENDENCIES_CONFIG:
-        _, commit_hash = get_version_and_commit_hash(client, run_id, dep_type)
-        versions[f"{dep_type}"] = resolve_dependency_config(commit_hash, dep_type)
+        version, commit_hash = get_version_and_commit_hash(client, run_id, dep_type)
+        versions[f"{dep_type}"] = resolve_dependency_config(commit_hash, dep_type) if commit_hash else version
 
     if not versions:
         raise ValueError("No valid dependencies found in MLflow run")
@@ -240,6 +242,15 @@ def format_vcs_pep508(pkg: str, cfg: dict) -> str:
     return f"{pkg} @ {url}"
 
 
+def version_to_pep440_range(version: str) -> str:
+    """Convert a Python version like '3.10.6' into a PEP 440 range like '>=3.10,<3.11'."""
+    parts = version.split(".")
+    if len(parts) < 2:
+        raise ValueError("Version must have at least major and minor parts")
+
+    major, minor = int(parts[0]), int(parts[1])
+    return f">={major}.{minor},<{major}.{minor + 1}"
+
 def update_pyproject_toml(
     versions: dict, toml_path: Path, python_version: str, checkpoints_path: str
 ) -> None:
@@ -273,15 +284,14 @@ def update_pyproject_toml(
             new_dep = (
                 format_vcs_pep508(pkg_name, val)
                 if isinstance(val, dict)
-                else f"{pkg_name}{val}"
+                else f"{pkg_name}=={val}"
             )
             updated.append(new_dep)
         else:
             updated.append(dep)
 
     config["project"]["dependencies"] = updated
-    # Format as PEP 621 style version constraint, e.g., "==3.10.14"
-    config["project"]["requires-python"] = f"=={python_version}"
+    config["project"]["requires-python"] = version_to_pep440_range(python_version)
     config.setdefault("tool", {})["anemoi"] = {"checkpoints_path": checkpoints_path}
 
     try:
@@ -297,7 +307,7 @@ def main(snakemake) -> None:
     Raises:
         Exception: If any step fails, original files are restored
     """
-    mlflow_uri = snakemake.config.locations.mlflow_uri
+    mlflow_uri = snakemake.config["locations"]["mlflow_uri"]
     run_id = snakemake.wildcards["run_id"]
     requirements_path_in = Path(snakemake.input[0])
     toml_path_out = Path(snakemake.output[0])

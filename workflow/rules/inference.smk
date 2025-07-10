@@ -9,14 +9,14 @@ from datetime import datetime
 
 configfile: "config/config.yaml"
 
-
+        
 rule create_inference_pyproject:
     input:
         toml="workflow/envs/anemoi_inference.toml",
     output:
         pyproject="resources/inference/{run_id}/pyproject.toml",
     log:
-        "logs/create-inference-pyproject-{run_id}.log",
+        "logs/create_inference_pyproject/{run_id}.log",
     conda:
         "../envs/anemoi_inference.yaml"
     localrule: True
@@ -33,15 +33,30 @@ rule create_inference_venv:
         py_version=parse_input(
             input.pyproject, parse_toml, key="project.requires-python"
         ),
+    localrule: True
+    log:
+        "logs/create_inference_venv/{run_id}.log",
     conda:
         "../envs/anemoi_inference.yaml"
     shell:
-        "uv venv -p {params.py_version} --relocatable --link-mode=copy {output.venv};"
-        "source {output.venv}/bin/activate;"
-        "cd $(dirname {input.pyproject}) && uv sync;"
-        "python -m compileall -j 8 -o 0 -o 1 -o 2 .venv/lib/python{params.py_version}/site-packages >/dev/null"
+        """(
+        PROJECT_ROOT=$(dirname {input.pyproject})
+        uv venv --project $PROJECT_ROOT --relocatable --link-mode=copy {output.venv}
+        source {output.venv}/bin/activate
+        cd $(dirname {input.pyproject})
+        uv sync
+        python -m compileall -j 8 -o 0 -o 1 -o 2 .venv/lib/python*/site-packages
+        echo 'Testing that eccodes is working...'
+        if ! python -c "import eccodes" &>/dev/null; then
+            echo 'ERROR: eccodes is not installed correctly in the virtual environment.'
+            echo 'Please check the installation and try again.'
+            exit 1
+        fi
+        echo 'Inference virutal environment successfully created at {output.venv}'
+        ) > {log} 2>&1
+        """
         # optionally, precompile to bytecode to reduce the import times
-        # "find {output.venv} -exec stat --format='%i' {} + | sort -u | wc -l"  # optionally, how many files did I create?
+        # find {output.venv} -exec stat --format='%i' {} + | sort -u | wc -l  # optionally, how many files did I create?
 
 
 rule make_squashfs_image:
@@ -50,7 +65,8 @@ rule make_squashfs_image:
     output:
         image=Path(os.environ.get("SCRATCH")) / "sqfs-images" / "{run_id}.squashfs",
     log:
-        "logs/make-squashfs-image-{run_id}.log",
+        "logs/make_squashfs_image/{run_id}.log",
+    localrule: True
     shell:
         "mksquashfs {input.venv} {output.image}"
         " -no-recovery -noappend -Xcompression-level 3"
@@ -64,7 +80,7 @@ rule run_inference_group:
         image=rules.make_squashfs_image.output.image,
         config=str(Path("config/anemoi_inference.yaml").resolve()),
     output:
-        okfile=temp(touch(OUT_ROOT / "{run_id}/group-{group_index}.ok")),
+        okfile=temp(touch(OUT_ROOT / "runs/{run_id}/group-{group_index}.ok")),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
@@ -72,11 +88,11 @@ rule run_inference_group:
         reftimes=lambda wc: [
             t.strftime("%Y-%m-%dT%H:%M") for t in REFTIMES_GROUPS[int(wc.group_index)]
         ],
-        lead_time=config["experiment"]["lead_time"],
+        lead_time=config["lead_time"],
         output_root=OUT_ROOT,
     # TODO: we can have named logs for each reftime
     log:
-        "logs/anemoi-inference-run-{run_id}-{group_index}.log",
+        "logs/inference_run/{run_id}-{group_index}.log",
     resources:
         slurm_partition="short",
         cpus_per_task=32,
@@ -95,7 +111,7 @@ rule run_inference_group:
             
             # prepare the working directory
             _reftime_str=$(date -d "$reftime" +%Y%m%d%H%M)
-            WORKDIR={params.output_root}/{wildcards.run_id}/$_reftime_str
+            WORKDIR={params.output_root}/runs/{wildcards.run_id}/$_reftime_str
             mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw
             cp {input.config} config.yaml
 
@@ -119,7 +135,7 @@ rule run_inference_group:
 rule map_init_time_to_inference_group:
     localrule: True
     input:
-        lambda wc: OUT_ROOT / f"{wc.run_id}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
+        lambda wc: OUT_ROOT / f"runs/{wc.run_id}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
     output:
-        directory(OUT_ROOT / "{run_id}/{init_time}/grib"),
-        directory(OUT_ROOT / "{run_id}/{init_time}/raw"),
+        directory(OUT_ROOT / "runs/{run_id}/{init_time}/grib"),
+        directory(OUT_ROOT / "runs/{run_id}/{init_time}/raw"),

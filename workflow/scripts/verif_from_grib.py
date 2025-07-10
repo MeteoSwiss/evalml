@@ -159,20 +159,24 @@ def main(args: ScriptConfig):
     
     
     # get forecast data
+    start = datetime.now()
     fct = load_fct_data_from_grib(
         grib_output_dir=args.grib_output_dir,
         params=args.params,
         step=args.lead_time
     )
+    LOG.info("Loaded forecast data from GRIB files in %.2f seconds", (datetime.now() - start).total_seconds())
 
 
     # get truth data (COSMO-2 analysis aka KENDA-1)
     if args.zarr_dataset:
+        start = datetime.now()
         kenda = load_kenda1_data_from_zarr(
             zarr_dataset=args.zarr_dataset,
             valid_times=fct.valid_time,
             params=args.params
-        )
+        ).compute().chunk({"y": -1, "x": -1})
+        LOG.info("Loaded KENDA-1 data from Zarr dataset in %.2f seconds", (datetime.now() - start).total_seconds())
     elif args.archive_root:
         # kenda = load_kenda1_data_from_grib(
         #     archive_root=args.archive_root,
@@ -184,20 +188,24 @@ def main(args: ScriptConfig):
         raise ValueError("Either --archive_root or --zarr_dataset must be provided.")
 
     # compute metrics and statistics
+    start = datetime.now()
     error = fct - kenda
     results = {}
-    results["bias"] = error.mean(["y", "x"])
-    results["rmse"] = np.sqrt((error ** 2).mean(["y", "x"]))
-    results["mae"] = abs(error).mean(["y", "x"])
-    results["std"] = error.std(["y", "x"])
-    results["corr"] = (corr := xr.Dataset({k: xr.corr(fct[k], kenda[k], dim=["y", "x"]) for k in fct.data_vars}))
-    results["r2"] = corr ** 2
+    results["BIAS"] = error.mean(["y", "x"])
+    results["RMSE"] = np.sqrt((error ** 2).mean(["y", "x"]))
+    results["MAE"] = abs(error).mean(["y", "x"])
+    results["STD"] = error.std(["y", "x"])
+    results["CORR"] = (corr := xr.Dataset({k: xr.corr(fct[k], kenda[k], dim=["y", "x"]) for k in fct.data_vars}))
+    results["R2"] = corr ** 2
     results = xr.Dataset({k: v.to_array("param") for k, v in results.items()})
     results = results.to_array("metric").to_dataframe(name="value").reset_index()
+    LOG.info("Computed metrics in %.2f seconds", (datetime.now() - start).total_seconds())
 
     # # save results to CSV
     args.output.parent.mkdir(parents=True, exist_ok=True)
     results.to_csv(args.output)
+    LOG.info("Saved results to %s", args.output)
+    LOG.info("Verification completed successfully.")
 
 if __name__ == "__main__":
 
