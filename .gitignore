@@ -1,5 +1,3 @@
-results/**
-resources/**
 logs/**
 .snakemake
 .snakemake/**
@@ -15,3 +13,4 @@ output
 output/**
 _dev/
 _dev
+.vscode/
