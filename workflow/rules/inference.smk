@@ -14,7 +14,7 @@ rule create_inference_pyproject:
     input:
         toml="workflow/envs/anemoi_inference.toml",
     output:
-        pyproject="resources/inference/{run_id}/pyproject.toml",
+        pyproject="data/runs/{run_id}/pyproject.toml",
     log:
         "logs/create_inference_pyproject/{run_id}.log",
     conda:
@@ -26,9 +26,9 @@ rule create_inference_pyproject:
 
 rule create_inference_venv:
     input:
-        pyproject="resources/inference/{run_id}/pyproject.toml",
+        pyproject=rules.create_inference_pyproject.output.pyproject,
     output:
-        venv=temp(directory("resources/inference/{run_id}/.venv")),
+        venv=temp(directory("data/runs/{run_id}/.venv")),
     params:
         py_version=parse_input(
             input.pyproject, parse_toml, key="project.requires-python"
@@ -63,7 +63,7 @@ rule make_squashfs_image:
     input:
         venv=rules.create_inference_venv.output.venv,
     output:
-        image=Path(os.environ.get("SCRATCH")) / "sqfs-images" / "{run_id}.squashfs",
+        image="data/runs/{run_id}/venv.squashfs",
     log:
         "logs/make_squashfs_image/{run_id}.log",
     localrule: True
