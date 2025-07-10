@@ -18,7 +18,8 @@ import toml
 from mlflow.tracking import MlflowClient
 from mlflow.exceptions import RestException
 
-from anemoi.training.diagnostics.mlflow.client import AnemoiMlflowClient
+from anemoi.utils.mlflow.auth import TokenAuth
+from anemoi.utils.mlflow.client import AnemoiMlflowClient
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -60,6 +61,7 @@ def get_mlflow_client_given_runid(
     uris = [mlflow_uri] if isinstance(mlflow_uri, str) else mlflow_uri
     for uri in uris:
         if "ecmwf.int" in uri:
+            TokenAuth(url=uri).login()
             client = AnemoiMlflowClient(uri, authentication=True)
         else:
             client = MlflowClient(tracking_uri=uri)

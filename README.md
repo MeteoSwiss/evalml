@@ -19,15 +19,11 @@ evaluation workflow, you need to authenticate using a valid token. Run the follo
 command **once** to log in and obtain a token:
 
 ```bash
-anemoi-training mlflow login --url https://mlflow.ecmwf.int
+uv run --with 'anemoi-training' anemoi-training mlflow login --url https://mlflow.ecmwf.int
 ```
 
 You will be prompted to paste a seed token obtained from https://mlflow.ecmwf.int/seed.
-After this step, your token is stored locally. For future sessions, simply run:
-
-```bash
-anemoi-training mlflow login
-```
+After this step, your token is stored locally and used for subsequent runs.
 
 This will reuse the previously stored URL and token. Tokens are valid for 30 days.
 Every training or evaluation run within this period automatically extends the token by
