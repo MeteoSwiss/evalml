@@ -14,7 +14,8 @@ rule run_verif_cosmoe:
     localrule: True
     input:
         script="workflow/scripts/verif_cosmoe_fct.py",
-        cosmoe_zarr=lambda wc: expand(rules.extract_cosmoe_fcts.output, year=wc.init_time[2:4]),
+        # cosmoe_zarr=lambda wc: expand(rules.extract_cosmoe_fcts.output, year=wc.init_time[2:4]),
+        cosmoe_zarr="/scratch/mch/fzanetta/data/COSMO-E/FCST{year}.zarr",
         zarr_dataset="/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr",
     output:
         OUT_ROOT / "baselines/COSMO-E/{init_time}/verif.csv",
@@ -104,7 +105,7 @@ rule run_verif_aggregation_cosmoe:
 
 
 
-EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
+
 
 rule run_verif_plot_metrics:
     localrule: True

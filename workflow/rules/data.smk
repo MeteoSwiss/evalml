@@ -1,30 +1,30 @@
 from pathlib import Path
 
 
-rule extract_cosmoe_fcts:
-    input:
-        archive=Path("/archive/mch/msopr/osm/COSMO-E"),
-    output:
-        fcts=protected(
-            directory(Path("/scratch/mch/fzanetta/data/COSMO-E/FCST{year}.zarr"))
-        ),
-    resources:
-        cpus_per_task=4,
-        runtime="24h"
-    params:
-        year_postfix=lambda wc: f"FCST{wc.year}",
-        lead_time="0/126/6",
-    log:
-        "logs/extract-cosmoe-fcts-{year}.log",
-    shell:
-        """
-        uv run --with earthkit-data --with xarray --with zarr --with eccodes-cosmo-resources-python \
-            python workflow/scripts/extract_cosmoe_fct.py \
-                --archive_dir {input.archive}/{params.year_postfix} \
-                --output_store {output.fcts} \
-                --lead_time {params.lead_time} \
-                    > {log} 2>&1
-        """
+# rule extract_cosmoe_fcts:
+#     input:
+#         archive=Path("/archive/mch/msopr/osm/COSMO-E"),
+#     output:
+#         fcts=protected(
+#             directory(Path("/scratch/mch/fzanetta/data/COSMO-E/FCST{year}.zarr"))
+#         ),
+#     resources:
+#         cpus_per_task=4,
+#         runtime="24h"
+#     params:
+#         year_postfix=lambda wc: f"FCST{wc.year}",
+#         lead_time="0/126/6",
+#     log:
+#         "logs/extract-cosmoe-fcts-{year}.log",
+#     shell:
+#         """
+#         uv run --with earthkit-data --with xarray --with zarr --with eccodes-cosmo-resources-python \
+#             python workflow/scripts/extract_cosmoe_fct.py \
+#                 --archive_dir {input.archive}/{params.year_postfix} \
+#                 --output_store {output.fcts} \
+#                 --lead_time {params.lead_time} \
+#                     > {log} 2>&1
+#         """
 
 
 # rule generate_references:

@@ -37,6 +37,7 @@ rule all:
     """Final target rule to run all necessary steps."""
     input:
         f"results/{EXPERIMENT_HASH}/report.html",
+        expand(rules.run_verif_plot_metrics.output, experiment=EXPERIMENT_HASH)
     default_target: True
 
 
@@ -47,7 +48,7 @@ rule run_inference_all:
             OUT_ROOT / "runs/{run_id}/{init_time}/raw",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=collect_all_runs()
-        )
+        ),
 
 
 rule run_verif_from_grib_all:
@@ -58,10 +59,10 @@ rule run_verif_from_grib_all:
             run_id=collect_all_runs()
         ),
 
-rule extract_cosmoe_fcts_all:
-    """Extract COSMO-E forecasts for the year 2020."""
-    input:
-        expand(rules.extract_cosmoe_fcts.output.fcts, year=[str(y)[-2:] for y in range(2020, 2021)])
+# rule extract_cosmoe_fcts_all:
+#     """Extract COSMO-E forecasts for the year 2020."""
+#     input:
+#         expand(rules.extract_cosmoe_fcts.output.fcts, year=[str(y)[-2:] for y in range(2020, 2021)])
 
 rule run_verif_plot_metrics_all:
     """Run verification plot metrics for all studies."""

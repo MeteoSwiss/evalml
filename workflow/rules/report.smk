@@ -8,7 +8,7 @@ include: "common.smk"
 
 rule report_experiment_dashboard:
     input:
-        verif=collect_experiment_participants
+        verif=EXPERIMENT_PARTICIPANTS.values()
     output:
         touch("results/{experiment}/report.html")
     log:

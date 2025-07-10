@@ -98,3 +98,6 @@ def collect_experiment_participants():
         label = run.get("label", name)
         participants[label] = OUT_ROOT / f"runs/{run['run_id']}/verif_aggregated.csv"
     return participants
+
+
+EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
