@@ -93,10 +93,10 @@ def collect_all_baselines():
 def collect_experiment_participants():
     participants = {}
     for baseline in collect_all_baselines():
-        participants[baseline] = OUT_ROOT / f"baselines/{baseline}/verif_aggregated.csv"
+        participants[baseline] = OUT_ROOT / f"data/baselines/{baseline}/verif_aggregated.csv"
     for name, run in config["runs"].items():
         label = run.get("label", name)
-        participants[label] = OUT_ROOT / f"runs/{run['run_id']}/verif_aggregated.csv"
+        participants[label] = OUT_ROOT / f"data/runs/{run['run_id']}/verif_aggregated.csv"
     return participants
 
 

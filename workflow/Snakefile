@@ -36,8 +36,8 @@ EXPERIMENT_HASH = short_hash_config()
 rule all:
     """Final target rule to run all necessary steps."""
     input:
-        f"results/{EXPERIMENT_HASH}/report.html",
-        expand(rules.run_verif_plot_metrics.output, experiment=EXPERIMENT_HASH)
+        OUT_ROOT / f"results/{EXPERIMENT_HASH}/report.html",
+        OUT_ROOT / f"results/{EXPERIMENT_HASH}/plot_metrics"
     default_target: True
 
 
@@ -45,7 +45,7 @@ rule run_inference_all:
     """Run inference for all reference times as defined in the configuration."""
     input:
         expand(
-            OUT_ROOT / "runs/{run_id}/{init_time}/raw",
+            OUT_ROOT / "data/runs/{run_id}/{init_time}/raw",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=collect_all_runs()
         ),

@@ -1,5 +1,6 @@
 from pathlib import Path
 
+include: "common.smk"
 
 # rule extract_cosmoe_fcts:
 #     input:
@@ -15,7 +16,7 @@ from pathlib import Path
 #         year_postfix=lambda wc: f"FCST{wc.year}",
 #         lead_time="0/126/6",
 #     log:
-#         "logs/extract-cosmoe-fcts-{year}.log",
+#         OUT_ROOT / "logs/extract-cosmoe-fcts-{year}.log",
 #     shell:
 #         """
 #         uv run --with earthkit-data --with xarray --with zarr --with eccodes-cosmo-resources-python \
