@@ -8,5 +8,4 @@ dependencies:
   - mlflow
   - pip
   - pip:
-      - anemoi-utils
-      - anemoi-training --no-deps
+      - anemoi-utils[mlflow]>=0.4.28
