@@ -70,7 +70,7 @@ if __name__ == "__main__":
     parser.add_argument("--verif_files", type=Path, nargs="+",
                         default=[],
                         help="Paths to verification data files (not used in this mock).")
-    parser.add_argument("--labels", type=str, nargs="+",
+    parser.add_argument("--labels", type=lambda s: s.split(","),
                         default=None,
                         help="Labels for the verification data files. If not provided, labels will be derived from the file paths.")
     parser.add_argument("--template", type=Path, required=True,

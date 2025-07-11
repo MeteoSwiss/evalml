@@ -56,7 +56,7 @@ var spec = {
     "encoding": {
       "x": { "field": "lead_time", "type": "ordinal" },
       "y": { "field": "value_mean", "type": "quantitative" },
-      "color": { "field": "model", "legend": { "orient": "top" } }
+      "color": { "field": "model", "legend": { "orient": "top", "labelLimit": 1000, "symbolSize": 1000 } }
     }
   },
   "resolve": {

@@ -15,12 +15,15 @@ rule report_experiment_dashboard:
         js_script="resources/report/dashboard/script.js",
     output:
         OUT_ROOT / "results/{experiment}/dashboard.html"
+    params:
+        labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys()))
     log:
         OUT_ROOT / "logs/report_experiment_dashboard/{experiment}.log",
     shell:
         """
         python {input.script} \
             --verif_files {input.verif} \
+            --labels '{params.labels}' \
             --template {input.template} \
             --script {input.js_script} \
             --output {output} > {log} 2>&1
