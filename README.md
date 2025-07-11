@@ -50,25 +50,65 @@ Clone the `mch-anemoi-evaluation` repository and navigate to the project root di
 Create and activate the conda environment for Snakemake with:
 
     mamba env create -f environment.yaml
-    conda activate evalenv
+    conda activate evalml
+
+Install the project CLI with:
+
+    pip install -e .
+
+To see available commands, use:
+
+    evalml --help
 
 ## Execution
 
-To run the workflow from command line, change the working directory.
+To launch an experiment, prepare a config file defining your experiment, e.g.
 
-```bash
-cd path/to/mch-anemoi-evaluation
+```yaml
+description: |
+  This is an experiment to do blabla.
+
+init_times: 
+  start: 2020-01-01T12:00
+  end: 2020-01-10T00:00
+  frequency: 54h
+
+lead_time: 120h
+
+runs:
+  stage_D-cerra-N320:
+    run_id: 2f962c89ff644ca7940072fa9cd088ec
+    label: Stage D - N320 global grid with CERRA finetuning
+  stage_D-cerra-N320-low_lam:
+    run_id: d0846032fc7248a58b089cbe8fa4c511
+    label: Stage D - N320 global grid with CERRA finetuning - low LAM weight
+
+baseline: COSMO-E
+
+execution:
+  run_group_size: 4
+
+locations:
+  output_root: output/
+  mlflow_uri: 
+    - https://servicedepl.meteoswiss.ch/mlstore
+    - https://mlflow.ecmwf.int
+
+profile:
+  software-deployment-method: conda
+  executor: slurm
+  default-resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+  jobs: 30
+  use-conda: true
+
 ```
 
-Adjust options in the default config file `config/config.yaml`.
-Before running the complete workflow, you can perform a dry run using:
+You can then run it with:
 
 ```bash
-snakemake --dry-run
-```
-
-To run the workflow using **conda** and **slurm** on Balfrin:
-
-```bash
-snakemake --profile workflow/profile/balfrin
+evalml launch experiment path/to/experiment/config.yaml
 ```
