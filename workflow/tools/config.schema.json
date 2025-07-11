@@ -110,11 +110,6 @@
     "Profile": {
       "description": "Workflow execution profile.",
       "properties": {
-        "software_deployment_method": {
-          "description": "Software deployment method, e.g. 'conda'.",
-          "title": "Software Deployment Method",
-          "type": "string"
-        },
         "executor": {
           "description": "Job executor, e.g. 'slurm'.",
           "title": "Executor",
@@ -128,19 +123,12 @@
           "minimum": 1,
           "title": "Jobs",
           "type": "integer"
-        },
-        "use-conda": {
-          "description": "Whether to use conda environments.",
-          "title": "Use-Conda",
-          "type": "boolean"
         }
       },
       "required": [
-        "software_deployment_method",
         "executor",
         "default_resources",
-        "jobs",
-        "use-conda"
+        "jobs"
       ],
       "title": "Profile",
       "type": "object"

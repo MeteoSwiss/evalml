@@ -1,18 +1,43 @@
-logs/**
-.snakemake
-.snakemake/**
-.test/results/*
-workflow/notebooks/.ipynb_checkpoints/**
-**/__pycache__/**
-**/.Rhistory
-**/*.Rproj
-**/.Rproj.user/**
-**/.RData
-**/Rplots.pdf
-output/
-output
-output/**
-_dev/
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Workspace files
 _dev
-.vscode/
-**/__pycache__
+.vscode
+.idea
+.snakemake
+output
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# Coverage reports
+.coverage
+.coverage.*
+htmlcov/
+
+# Test results
+nosetests.xml
+*.cover
+*.py,cover
+
+# Pytest cache
+.pytest_cache/
+
+# MyPy cache
+.mypy_cache/
+
+# Sphinx documentation
+docs/_build/
+

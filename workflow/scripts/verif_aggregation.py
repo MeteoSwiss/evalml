@@ -1,11 +1,3 @@
-# /// script
-# dependencies = [
-#   "pandas",
-#   "zarr",
-#   "meteodata-lab",
-# ]
-# ///
-# TODO: duplicated code from workflow/scripts/verify_cosmoe_fct.py
 from pathlib import Path
 import itertools
 from argparse import ArgumentParser, Namespace

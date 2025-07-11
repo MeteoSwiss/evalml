@@ -45,21 +45,16 @@ class DefaultResources(BaseModel):
     
 class Profile(BaseModel):
     """Workflow execution profile."""
-    software_deployment_method: str = Field(..., description="Software deployment method, e.g. 'conda'.")
     executor: str = Field(..., description="Job executor, e.g. 'slurm'.")
     default_resources: DefaultResources
     jobs: int = Field(..., ge=1, description="Maximum number of parallel jobs.")
-    use_conda: bool = Field(..., alias="use-conda", description="Whether to use conda environments.")
 
     def parsable(self) -> Dict[str, str]:
         """Convert the profile to a dictionary of command-line arguments."""
         out = []
-        out += ["--software-deployment-method", self.software_deployment_method]
         out += ["--executor", self.executor]
         out += ["--default-resources"] + self.default_resources.parsable()
         out += ["--jobs", str(self.jobs)]
-        if self.use_conda:
-            out.append("--use-conda")
         return out
 
 class ExperimentConfig(BaseModel):
@@ -71,7 +66,7 @@ class ExperimentConfig(BaseModel):
     baseline: str = Field(..., description="The label of the NWP baseline run to compare against.")
     execution: Execution
     locations: Locations
-    profile: Profile  # <-- add this line
+    profile: Profile
 
     model_config = {
         "extra": "forbid",  # fail on misspelled keys

@@ -33,7 +33,6 @@ locations:
     - https://mlflow.ecmwf.int
   
 profile:
-  software_deployment_method: conda
   executor: slurm
   default_resources:
       slurm_partition: "postproc"
@@ -41,4 +40,3 @@ profile:
       mem_mb_per_cpu: 1800
       runtime: "1h"
   jobs: 30
-  use-conda: True
