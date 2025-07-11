@@ -1,12 +1,9 @@
 
-name: evalenv
+name: evalml
 channels:
   - conda-forge
-  - bioconda
 dependencies:
-  - snakemake
-  - snakefmt
-  - snakemake-executor-plugin-slurm
+  - python=3.12
   - uv
   - pydantic
   - pre-commit

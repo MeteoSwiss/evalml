@@ -43,7 +43,7 @@ def _parse_timedelta(td):
 
 
 def _reftimes():
-    cfg = config["init_times"]
+    cfg = config["dates"]
     start = datetime.strptime(cfg["start"], "%Y-%m-%dT%H:%M")
     end = datetime.strptime(cfg["end"], "%Y-%m-%dT%H:%M")
     freq = _parse_timedelta(cfg["frequency"])
@@ -56,7 +56,7 @@ def _reftimes():
 
 
 def _reftimes_groups():
-    cfg = config["init_times"]
+    cfg = config["dates"]
     group_size = config["execution"]["run_group_size"]
     groups = []
     for i in range(0, len(REFTIMES), group_size):

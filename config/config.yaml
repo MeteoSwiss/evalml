@@ -6,7 +6,7 @@ dates:
   start: 2020-01-01T12:00
   end: 2020-01-10T00:00
   # end: 2020-03-30T00:00
-  frequency: 18h
+  frequency: 54h
 
 lead_time: 120h
 
@@ -23,7 +23,6 @@ runs:
 
 baseline: COSMO-E
 
-
 execution:
   run_group_size: 4
 
@@ -32,3 +31,14 @@ locations:
   mlflow_uri: 
     - https://servicedepl.meteoswiss.ch/mlstore
     - https://mlflow.ecmwf.int
+  
+profile:
+  software_deployment_method: conda
+  executor: slurm
+  default_resources:
+      slurm_partition: "postproc"
+      cpus_per_task: 1
+      mem_mb_per_cpu: 1800
+      runtime: "1h"
+  jobs: 30
+  use-conda: True

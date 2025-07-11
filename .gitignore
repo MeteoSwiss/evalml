@@ -3,6 +3,7 @@ logs/**
 .snakemake/**
 .test/results/*
 workflow/notebooks/.ipynb_checkpoints/**
+**/__pycache__/**
 **/.Rhistory
 **/*.Rproj
 **/.Rproj.user/**

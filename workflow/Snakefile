@@ -2,14 +2,14 @@
 # Please follow the best practices:
 # https://snakemake.readthedocs.io/en/stable/snakefiles/best_practices.html,
 
-from tools.config_schema import ExperimentConfig
+# from tools.config_schema import ExperimentConfig
 
 # load configuration
 # -----------------------------------------------------
-configfile: "config/config.yaml"
+# configfile: "config/config.yaml"
 
 # validate configuration
-ExperimentConfig.validate(dict(config))
+# ExperimentConfig.validate(dict(config))
 
 # load rules
 # -----------------------------------------------------
