@@ -1,12 +1,9 @@
 from pathlib import Path
-from itertools import product
-import random
 import argparse
 import logging
 
 import pandas as pd
 import jinja2
-
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO,
@@ -38,12 +35,31 @@ def combine_verif_files(verif_files: Path, labels: list[str] | None = None) -> p
     return df
 
 
+def program_summary_log(args):
+    """Log a welcome message with the script and template information."""
+    LOG.info("=" * 80)
+    LOG.info("Generating experiment verification dashboard")
+    LOG.info("=" * 80)
+    LOG.info("Verification files: \n%s", "\n".join(str(f) for f in args.verif_files))
+    if args.labels:
+        LOG.info("Labels for verification files: \n%s", "\n".join(args.labels))
+    else:
+        LOG.info("No labels provided, using file names as labels.")
+    LOG.info("Template: %s", args.template)
+    LOG.info("Script: %s", args.script)
+    LOG.info("Output: %s", args.output)
+    LOG.info("=" * 80)
+
 def main(args):
+
+    program_summary_log(args)
 
     # load and combine verification data
     df = combine_verif_files(args.verif_files, args.labels)
+
+    # TODO: remove this when we have the logic to handle these groups
     df = df[(df["hour"] == "all") & (df["season"] == "all") & (df["init_hour"] == "all")]
-    print(df.head())
+    LOG.info("Loaded verification data: \n%s", df)
 
     # get unique models and params
     models = df["model"].unique()
@@ -51,6 +67,10 @@ def main(args):
 
     # get json string to embed in the HTML
     df_json = df.to_json(orient="records", lines=False)
+
+    # compute number of bytes in the JSON string
+    json_size = len(df_json.encode('utf-8'))
+    LOG.info("Size of embedded JSON data: %d bytes", json_size)
     
     # read script
     with open(args.script, "r") as f:
@@ -60,9 +80,12 @@ def main(args):
     environment = jinja2.Environment(loader = jinja2.FileSystemLoader(args.template.parent))
     template = environment.get_template(args.template.name)
     html = template.render(verif_data=df_json, js_src = js_src, models=models, params=params)
-
+    LOG.info("Size of generated HTML: %d bytes", len(html.encode('utf-8')))
+    
     with open(args.output, "w") as f:
         f.write(html)
+    
+    LOG.info("Dashboard generated and saved to %s", args.output)
 
 
 if __name__ == "__main__":
