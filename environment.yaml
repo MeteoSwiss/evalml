@@ -1,5 +1,5 @@
 
-name: evalenv
+name: evalml
 channels:
   - conda-forge
   - bioconda

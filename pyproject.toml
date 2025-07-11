@@ -1,0 +1,18 @@
+[project]
+name = "evalml"
+version = "0.1.0"
+description = "Evaluation CLI for ML models"
+readme = "README.md"
+authors = [
+    { name = "Francesco Zanetta", email = "francesco.zanetta@meteoswiss.ch" },
+    { name = "Daniele Nerini", email = "daniele.nerini@meteoswiss.ch" },
+]
+requires-python = ">=3.10"
+dependencies = ["snakemake", "snakemake-executor-plugin-slurm", "click"]
+
+[project.scripts]
+evalml = "evalml:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
