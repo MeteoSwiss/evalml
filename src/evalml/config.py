@@ -39,6 +39,10 @@ class DefaultResources(BaseModel):
     mem_mb_per_cpu: int = Field(..., ge=1, description="Memory per CPU in MB.")
     runtime: str = Field(..., description="Maximum runtime, e.g. '1h'.")
 
+    def parsable(self) -> str:
+        """Convert the default resources to a string of key=value pairs."""
+        return [f"{key}={value}" for key, value in self.model_dump().items()]
+    
 class Profile(BaseModel):
     """Workflow execution profile."""
     software_deployment_method: str = Field(..., description="Software deployment method, e.g. 'conda'.")
@@ -46,6 +50,17 @@ class Profile(BaseModel):
     default_resources: DefaultResources
     jobs: int = Field(..., ge=1, description="Maximum number of parallel jobs.")
     use_conda: bool = Field(..., alias="use-conda", description="Whether to use conda environments.")
+
+    def parsable(self) -> Dict[str, str]:
+        """Convert the profile to a dictionary of command-line arguments."""
+        out = []
+        out += ["--software-deployment-method", self.software_deployment_method]
+        out += ["--executor", self.executor]
+        out += ["--default-resources"] + self.default_resources.parsable()
+        out += ["--jobs", str(self.jobs)]
+        if self.use_conda:
+            out.append("--use-conda")
+        return out
 
 class ExperimentConfig(BaseModel):
     """Top-level configuration."""
@@ -70,7 +85,12 @@ def generate_config_schema() -> str:
 
 
 if __name__ == "__main__":
+    import argparse
     import json
+
+    parser = argparse.ArgumentParser(description="Generate the JSON schema for the experiment configuration.")
+    parser.add_argument("output", type=str, help="Path to save the generated JSON schema.")
+    args = parser.parse_args()
     
-    with open(Path(__file__).parent / "config.schema.json", "w") as f:
+    with open(args.output, "w") as f:
         json.dump(generate_config_schema(), f, indent=2)

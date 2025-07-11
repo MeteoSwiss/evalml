@@ -60,9 +60,9 @@ include: "common.smk"
 #         directory(OUT_ROOT / "{experiment}/output.vzarr"),
 #     params:
 #         experiment_root=lambda wc: OUT_ROOT / f"{wc.experiment}/",
-#         start=config["init_times"]["start"],
-#         end=config["init_times"]["end"],
-#         step=config["init_times"]["frequency"][:-1],  # remove the trailing unit (e.g., '6h' -> '6')
+#         start=config["dates"]["start"],
+#         end=config["dates"]["end"],
+#         step=config["dates"]["frequency"][:-1],  # remove the trailing unit (e.g., '6h' -> '6')
 #     log:
 #         "logs/combine-references-{experiment}.log",
 #     shell:

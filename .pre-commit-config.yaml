@@ -3,5 +3,7 @@ repos:
     hooks:
       - id: pydantic-schema
         name: Generate & check Pydantic JSON Schema
-        entry: python workflow/tools/config_schema.py
+        entry: python
         language: system
+        pass_filenames: false
+        args: [src/evalml/config.py, workflow/tools/config.schema.json]

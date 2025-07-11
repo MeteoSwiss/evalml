@@ -6,6 +6,7 @@ from typing import Any
 import yaml
 import click
 
+from evalml.config import ExperimentConfig
 
 def run_command(command: list[str], dry_run: bool = False) -> int:
     """Execute a shell command, optionally as dry-run."""
@@ -21,40 +22,35 @@ def load_yaml(path: Path) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def common_options(func):
+    func = click.option("--dry-run", "-n", is_flag=True, help="Only print the Snakemake command.")(func)
+    func = click.option("--verbose", "-v", is_flag=True, help="Enable verbose output.")(func)
+    return func
+
 @click.group(help="Evaluation workflows for ML experiments.")
-@click.option("--dry-run", "-n", is_flag=True, help="Only print the Snakemake command.")
-@click.option("--cores", "-c", type=int, help="Number of cores to use for local execution.")
-@click.option("--verbose", "-v", is_flag=True, help="Enable verbose output.")
-@click.pass_context
-def cli(ctx, dry_run, cores, verbose):
-    ctx.ensure_object(dict)
-    ctx.obj["dry_run"] = dry_run
-    ctx.obj["cores"] = cores
-    ctx.obj["verbose"] = verbose
-
-
-@cli.group(help="Launch experiment pipelines.")
-@click.pass_context
-def launch(ctx):
+def cli():
     pass
 
 
-@launch.command(help="Launch an experiment defined by a config YAML file.")
-@click.argument("config", type=click.Path(exists=True, dir_okay=False, path_type=Path))
-@click.pass_context
-def experiment(ctx, config: Path):
+
+@cli.command(help="Launch an experiment defined by a config YAML file.")
+@click.argument("configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--cores", "-c", default=4, type=int, help="Number of cores to use for local execution.")
+@common_options
+def experiment(configfile: Path, cores: int | None = None, verbose: bool = False, dry_run: bool = False):
     """Run an ML experiment defined in the given config file."""
-    config_data = load_yaml(config)
-    profile_config = config_data.get("profile", {})
+    config = load_yaml(configfile)
     
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as temp_profile:
-        yaml.safe_dump(profile_config, temp_profile)
-        temp_profile_path = temp_profile.name
-    
-    command = ["snakemake", "--configfile", str(config), "--profile", temp_profile_path]
+    # Validate the config against the ExperimentConfig model
+    config = ExperimentConfig.model_validate(config)
+
+    command = ["snakemake"]
+    command += config.profile.parsable()
+    command += ["--configfile", str(configfile)]
+    command += ["--cores", str(cores)]
 
     # Add global options if set
-    if ctx.obj["verbose"]:
-        command += ["--printshellcmds", "--reason"]
+    if verbose:
+        command += ["--printshellcmds"]
 
-    raise SystemExit(run_command(command, dry_run=ctx.obj["dry_run"]))
+    raise SystemExit(run_command(command, dry_run=dry_run))

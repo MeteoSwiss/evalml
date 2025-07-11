@@ -28,6 +28,41 @@
       "title": "Dates",
       "type": "object"
     },
+    "DefaultResources": {
+      "description": "Default resource settings for job execution.",
+      "properties": {
+        "slurm_partition": {
+          "description": "SLURM partition to use.",
+          "title": "Slurm Partition",
+          "type": "string"
+        },
+        "cpus_per_task": {
+          "description": "Number of CPUs per task.",
+          "minimum": 1,
+          "title": "Cpus Per Task",
+          "type": "integer"
+        },
+        "mem_mb_per_cpu": {
+          "description": "Memory per CPU in MB.",
+          "minimum": 1,
+          "title": "Mem Mb Per Cpu",
+          "type": "integer"
+        },
+        "runtime": {
+          "description": "Maximum runtime, e.g. '1h'.",
+          "title": "Runtime",
+          "type": "string"
+        }
+      },
+      "required": [
+        "slurm_partition",
+        "cpus_per_task",
+        "mem_mb_per_cpu",
+        "runtime"
+      ],
+      "title": "DefaultResources",
+      "type": "object"
+    },
     "Execution": {
       "description": "Configuration for the execution of the experiment.",
       "properties": {
@@ -70,6 +105,44 @@
         "mlflow_uri"
       ],
       "title": "Locations",
+      "type": "object"
+    },
+    "Profile": {
+      "description": "Workflow execution profile.",
+      "properties": {
+        "software_deployment_method": {
+          "description": "Software deployment method, e.g. 'conda'.",
+          "title": "Software Deployment Method",
+          "type": "string"
+        },
+        "executor": {
+          "description": "Job executor, e.g. 'slurm'.",
+          "title": "Executor",
+          "type": "string"
+        },
+        "default_resources": {
+          "$ref": "#/$defs/DefaultResources"
+        },
+        "jobs": {
+          "description": "Maximum number of parallel jobs.",
+          "minimum": 1,
+          "title": "Jobs",
+          "type": "integer"
+        },
+        "use-conda": {
+          "description": "Whether to use conda environments.",
+          "title": "Use-Conda",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "software_deployment_method",
+        "executor",
+        "default_resources",
+        "jobs",
+        "use-conda"
+      ],
+      "title": "Profile",
       "type": "object"
     },
     "RunConfig": {
@@ -130,6 +203,9 @@
     },
     "locations": {
       "$ref": "#/$defs/Locations"
+    },
+    "profile": {
+      "$ref": "#/$defs/Profile"
     }
   },
   "required": [
@@ -139,7 +215,8 @@
     "runs",
     "baseline",
     "execution",
-    "locations"
+    "locations",
+    "profile"
   ],
   "title": "ExperimentConfig",
   "type": "object"

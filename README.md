@@ -69,7 +69,7 @@ To launch an experiment, prepare a config file defining your experiment, e.g.
 description: |
   This is an experiment to do blabla.
 
-init_times: 
+dates: 
   start: 2020-01-01T12:00
   end: 2020-01-10T00:00
   frequency: 54h
