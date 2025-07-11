@@ -1,22 +1,6 @@
 {
   "$defs": {
-    "Execution": {
-      "description": "Configuration for the execution of the experiment.",
-      "properties": {
-        "run_group_size": {
-          "description": "Number of runs to execute in the same SLURM job.",
-          "minimum": 1,
-          "title": "Run Group Size",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "run_group_size"
-      ],
-      "title": "Execution",
-      "type": "object"
-    },
-    "InitTimes": {
+    "Dates": {
       "description": "Start/stop of the hindcast period and the launch frequency.",
       "properties": {
         "start": {
@@ -41,7 +25,23 @@
         "end",
         "frequency"
       ],
-      "title": "InitTimes",
+      "title": "Dates",
+      "type": "object"
+    },
+    "Execution": {
+      "description": "Configuration for the execution of the experiment.",
+      "properties": {
+        "run_group_size": {
+          "description": "Number of runs to execute in the same SLURM job.",
+          "minimum": 1,
+          "title": "Run Group Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "run_group_size"
+      ],
+      "title": "Execution",
       "type": "object"
     },
     "Locations": {
@@ -104,8 +104,8 @@
       "title": "Description",
       "type": "string"
     },
-    "init_times": {
-      "$ref": "#/$defs/InitTimes"
+    "dates": {
+      "$ref": "#/$defs/Dates"
     },
     "lead_time": {
       "description": "Forecast length, e.g. '120h'",
@@ -134,7 +134,7 @@
   },
   "required": [
     "description",
-    "init_times",
+    "dates",
     "lead_time",
     "runs",
     "baseline",

@@ -4,7 +4,7 @@ from typing import Dict, List
 from pydantic import BaseModel, Field, HttpUrl
 
 
-class InitTimes(BaseModel):
+class Dates(BaseModel):
     """Start/stop of the hindcast period and the launch frequency."""
     start: str = Field(..., description="First forecast initialisation as an ISO-8601 formatted string.",)
     end: str = Field(..., description="Last forecast initialisation as an ISO-8601 formatted string.",)
@@ -35,7 +35,7 @@ class Locations(BaseModel):
 class ExperimentConfig(BaseModel):
     """Top-level configuration."""
     description: str = Field(..., description="Description of the experiment, e.g. 'Hindcast of the 2023 season.'")
-    init_times: InitTimes
+    dates: Dates
     lead_time: str = Field(..., description="Forecast length, e.g. '120h'", pattern=r"^\d+[hmd]$")
     runs: Dict[str, RunConfig]
     baseline: str = Field(..., description="The label of the NWP baseline run to compare against.")
