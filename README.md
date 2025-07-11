@@ -54,7 +54,7 @@ Create and activate the conda environment for Snakemake with:
 
 Install the project CLI with:
 
-    pip install -e .
+    uv pip install -e .
 
 To see available commands, use:
 
