@@ -17,8 +17,6 @@ rule create_inference_pyproject:
         pyproject=OUT_ROOT / "data/runs/{run_id}/pyproject.toml",
     log:
         OUT_ROOT / "logs/create_inference_pyproject/{run_id}.log",
-    conda:
-        "../envs/anemoi_inference.yaml"
     localrule: True
     script:
         "../scripts/set_inference_pyproject.py"
@@ -36,8 +34,6 @@ rule create_inference_venv:
     localrule: True
     log:
         OUT_ROOT / "logs/create_inference_venv/{run_id}.log",
-    conda:
-        "../envs/anemoi_inference.yaml"
     shell:
         """(
         PROJECT_ROOT=$(dirname {input.pyproject})

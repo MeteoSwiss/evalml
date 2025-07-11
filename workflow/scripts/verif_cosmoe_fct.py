@@ -1,10 +1,3 @@
-# /// script
-# dependencies = [
-#   "xarray",
-#   "zarr",
-#   "meteodata-lab",
-# ]
-# ///
 from pathlib import Path
 from argparse import ArgumentParser, Namespace
 import logging

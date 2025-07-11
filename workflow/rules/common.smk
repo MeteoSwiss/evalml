@@ -3,8 +3,6 @@ import yaml
 import hashlib
 import json
 
-configfile: "config/anemoi_inference.yaml"
-
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"]).resolve()
 

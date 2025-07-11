@@ -38,8 +38,6 @@ include: "common.smk"
 #         step="0/126/6",
 #     log:
 #         "logs/generate-references-{experiment}-{init_time}.log",
-#     conda:
-#         "../envs/anemoi_inference.yaml"
 #     shell:
 #         """
 #         uv run --with kerchunk --with xarray --with eccodes --with meteodata-lab \

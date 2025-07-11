@@ -1,10 +1,3 @@
-# /// script
-# dependencies = [
-#   "pandas",
-#   "matplotlib",
-# ]
-# ///
-# TODO: duplicated code from workflow/scripts/verify_cosmoe_fct.py
 from pathlib import Path
 import itertools
 from argparse import ArgumentParser, Namespace
