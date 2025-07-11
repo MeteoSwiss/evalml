@@ -8,3 +8,5 @@ dependencies:
   - snakefmt
   - snakemake-executor-plugin-slurm
   - uv
+  - pydantic
+  - pre-commit
