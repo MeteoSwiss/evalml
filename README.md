@@ -1,9 +1,9 @@
-# Model Evaluation Pipeline
+# EvalML
 
 [![Snakemake](https://img.shields.io/badge/snakemake-≥8.0.0-brightgreen.svg)](https://snakemake.github.io)
 [![run with conda](http://img.shields.io/badge/run%20with-conda-3EB049?labelColor=000000&logo=anaconda)](https://docs.conda.io/en/latest/)
 
-A Snakemake workflow for anemoi models verification and performance auditing.
+Run evaluation pipelines for anemoi models.
 
 ## Before you start
 
