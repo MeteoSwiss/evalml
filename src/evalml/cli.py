@@ -33,7 +33,7 @@ def cli(ctx, dry_run, cores, verbose):
     ctx.obj["verbose"] = verbose
 
 
-@cli.group(help="Launch experiments and pipelines.")
+@cli.group(help="Launch experiment pipelines.")
 @click.pass_context
 def launch(ctx):
     pass
