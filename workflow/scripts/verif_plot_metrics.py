@@ -103,7 +103,7 @@ def main(args: Namespace) -> None:
             # convert lead time to integer hours
             df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
             df.plot(
-                x="lead_time", y="value", kind="line",
+                x="lead_time", y="value_mean", kind="line",
                 title=title,
                 xlabel="Lead Time", ylabel=metric,
                 label=labels[i],
