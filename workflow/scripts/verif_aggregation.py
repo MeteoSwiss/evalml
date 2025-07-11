@@ -68,15 +68,13 @@ def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
     # concatenate all versions
     df_extended = pd.concat(groupings, ignore_index=True)
 
-    # group and compute mean
-    mean_scores = (
-        df_extended
-        .groupby(["metric", "lead_time", "param", "hour", "season", "init_hour"], dropna=False)["value"]
-        .mean()
-        .reset_index()
-    )
-
-    return mean_scores
+    # aggregate
+    aggregated = df_extended.groupby(
+        ["metric", "lead_time", "param", "hour", "season", "init_hour"],
+        dropna=False  # optional, ensures NaN values are not dropped
+    ).agg(value_mean=("value", "mean"), value_count=("value", "count"), value_sum=("value","sum")).reset_index()
+    
+    return aggregated
 
 def main(args: Namespace) -> None:
     """Main function to verify results from KENDA-1 data."""

@@ -1,0 +1,7 @@
+repos:
+  - repo: local
+    hooks:
+      - id: pydantic-schema
+        name: Generate & check Pydantic JSON Schema
+        entry: python workflow/tools/config_schema.py
+        language: system

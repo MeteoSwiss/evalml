@@ -5,3 +5,5 @@ channels:
 dependencies:
   - python=3.12
   - uv
+  - pydantic
+  - pre-commit

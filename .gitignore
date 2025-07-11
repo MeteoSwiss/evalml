@@ -15,3 +15,4 @@ output/**
 _dev/
 _dev
 .vscode/
+**/__pycache__
