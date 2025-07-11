@@ -1,0 +1,146 @@
+{
+  "$defs": {
+    "Execution": {
+      "description": "Configuration for the execution of the experiment.",
+      "properties": {
+        "run_group_size": {
+          "description": "Number of runs to execute in the same SLURM job.",
+          "minimum": 1,
+          "title": "Run Group Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "run_group_size"
+      ],
+      "title": "Execution",
+      "type": "object"
+    },
+    "InitTimes": {
+      "description": "Start/stop of the hindcast period and the launch frequency.",
+      "properties": {
+        "start": {
+          "description": "First forecast initialisation as an ISO-8601 formatted string.",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "description": "Last forecast initialisation as an ISO-8601 formatted string.",
+          "title": "End",
+          "type": "string"
+        },
+        "frequency": {
+          "description": "Time between initialisations. Must be a combination of a number and a time unit (h or d).",
+          "pattern": "^\\d+[hd]$",
+          "title": "Frequency",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "frequency"
+      ],
+      "title": "InitTimes",
+      "type": "object"
+    },
+    "Locations": {
+      "description": "Locations of data and services used in the workflow.",
+      "properties": {
+        "output_root": {
+          "description": "Root directory for all output files.",
+          "format": "path",
+          "title": "Output Root",
+          "type": "string"
+        },
+        "mlflow_uri": {
+          "description": "MLflow tracking URI(s) for the experiment. Can be a list of URIs if using multiple tracking servers.",
+          "items": {
+            "format": "uri",
+            "maxLength": 2083,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Mlflow Uri",
+          "type": "array"
+        }
+      },
+      "required": [
+        "output_root",
+        "mlflow_uri"
+      ],
+      "title": "Locations",
+      "type": "object"
+    },
+    "RunConfig": {
+      "description": "Single training run stored in MLflow.",
+      "properties": {
+        "run_id": {
+          "description": "The mlflow run ID, as a 32-character hexadecimal string.",
+          "maxLength": 32,
+          "minLength": 32,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "label": {
+          "description": "The label for the run that will be used in experiment results such as reports and figures.",
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "label"
+      ],
+      "title": "RunConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Top-level configuration.",
+  "properties": {
+    "description": {
+      "description": "Description of the experiment, e.g. 'Hindcast of the 2023 season.'",
+      "title": "Description",
+      "type": "string"
+    },
+    "init_times": {
+      "$ref": "#/$defs/InitTimes"
+    },
+    "lead_time": {
+      "description": "Forecast length, e.g. '120h'",
+      "pattern": "^\\d+[hmd]$",
+      "title": "Lead Time",
+      "type": "string"
+    },
+    "runs": {
+      "additionalProperties": {
+        "$ref": "#/$defs/RunConfig"
+      },
+      "title": "Runs",
+      "type": "object"
+    },
+    "baseline": {
+      "description": "The label of the NWP baseline run to compare against.",
+      "title": "Baseline",
+      "type": "string"
+    },
+    "execution": {
+      "$ref": "#/$defs/Execution"
+    },
+    "locations": {
+      "$ref": "#/$defs/Locations"
+    }
+  },
+  "required": [
+    "description",
+    "init_times",
+    "lead_time",
+    "runs",
+    "baseline",
+    "execution",
+    "locations"
+  ],
+  "title": "ExperimentConfig",
+  "type": "object"
+}

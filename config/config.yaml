@@ -1,4 +1,4 @@
-
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
   This is an experiment to do blabla.
 
