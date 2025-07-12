@@ -242,7 +242,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args)
-
     # run examples
     # uv run workflow/scripts/verif_cosmoe_fcst.py --zarr_dataset /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr --reftime 202006011200 --output debug_verif_zarr.csv
     # uv run workflow/scripts/verif_cosmoe_fcst.py --archive_root /scratch/mch/fzanetta/data/KENDA-1 --reftime 2020-06-01T12:00 --output debug_verif_grib.csv

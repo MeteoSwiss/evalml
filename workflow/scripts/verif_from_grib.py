@@ -295,8 +295,6 @@ if __name__ == "__main__":
 #     --reftime 202006011200 \
 #     --output debug_verif_grib.csv
 #     --params T_2M,TD_2M,U_10M,V_10M,PS,PMSL,TOT_PREC
-
-
 # uv run workflow/scripts/verif_from_grib.py \
 #     --grib_output_dir /users/fzanetta/projects/mch-anemoi-evaluation/output/7c58e59d24e949c9ade3df635bbd37e2/202001050600/grib \
 #     --zarr_dataset /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr \

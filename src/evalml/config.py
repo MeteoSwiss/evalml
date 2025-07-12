@@ -128,3 +128,4 @@ if __name__ == "__main__":
 
     with open(args.output, "w") as f:
         json.dump(generate_config_schema(), f, indent=2)
+        f.write("\n")
