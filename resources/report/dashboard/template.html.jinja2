@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Verification dashboard</title>
+
+    <!-- Vega-Lite plotting -->
+    <script src="https://cdn.jsdelivr.net/npm/vega@6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-lite@6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+
+    <!-- Choices.js widgets -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/choices.js@9.0.1/public/assets/scripts/choices.min.js"></script>
+
+
+    <!-- Styles -->
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background: white;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .tab-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .tab-buttons button {
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+            cursor: pointer;
+            color: #333;
+        }
+
+        .tab-buttons button.active {
+            border-bottom: 2px solid #007acc;
+            font-weight: bold;
+            color: #007acc;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1.5rem;
+        }
+
+        .control-group {
+            flex: 1 1 250px;
+            min-width: 200px;
+        }
+
+        .choices__inner {
+            min-height: 100px;
+        }
+
+        /* .choices__list--multiple .choices__item { */
+        /* background-color:  */
+        /* } */
+
+        label {
+            font-weight: bold;
+            display: block;
+        }
+    </style>
+
+
+</head>
+
+<body>
+
+    <div class="header">
+        <div class="tab-buttons">
+            <button class="tab-link active" data-tab="tab1">Standard verification</button>
+            <button class="tab-link" data-tab="tab2">Diagnostic verification</button>
+        </div>
+    </div>
+
+    <!-- First tab -->
+    <div id="tab1" class="tab-content active">
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Model(s)</label>
+                <select id="model-select" multiple>
+                    {% for model in models %}
+                    <option value="{{model}}" selected>{{model}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Metric(s)</label>
+                <select id="metric-select" multiple>
+                    <option value="RMSE" selected>RMSE</option>
+                    <option value="BIAS" selected>BIAS</option>
+                    <option value="MAE" selected>MAE</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Param(s)</label>
+                <select id="param-select" multiple>
+                    {% for var in params %}
+                    <option value="{{var}}" selected>{{var}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div id="vis"></div>
+    </div>
+
+
+    <!-- Second tab -->
+    <div id="tab2" class="tab-content">Coming soon...</div>
+
+
+    <script id="verif-data" type="application/json">
+        {{ verif_data | safe | indent(8, false)}}
+    </script>
+
+    <script>
+        {{ js_src | indent(8, true) }}
+    </script>
+</body>
+
+</html>
