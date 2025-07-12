@@ -15,7 +15,10 @@ rule run_verif_cosmoe:
     input:
         script="workflow/scripts/verif_cosmoe_fct.py",
         # cosmoe_zarr=lambda wc: expand(rules.extract_cosmoe_fcts.output, year=wc.init_time[2:4]),
-        cosmoe_zarr=lambda wc: expand("/scratch/mch/fzanetta/data/COSMO-E/FCST{year}.zarr", year=wc.init_time[2:4]),
+        cosmoe_zarr=lambda wc: expand(
+            "/scratch/mch/fzanetta/data/COSMO-E/FCST{year}.zarr",
+            year=wc.init_time[2:4],
+        ),
         zarr_dataset="/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr",
     output:
         OUT_ROOT / "data/baselines/COSMO-E/{init_time}/verif.csv",
@@ -41,8 +44,8 @@ rule run_verif_fct:
     output:
         OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.csv",
     # wildcard_constraints:
-        # run_id="^" # to avoid ambiguitiy with run_cosmoe_verif
-        # TODO: implement logic to use experiment name instead of run_id as wildcard
+    # run_id="^" # to avoid ambiguitiy with run_cosmoe_verif
+    # TODO: implement logic to use experiment name instead of run_id as wildcard
     log:
         OUT_ROOT / "logs/verif_from_grib/{run_id}-{init_time}.log",
     shell:
@@ -67,7 +70,9 @@ rule run_verif_aggregation:
     input:
         script="workflow/scripts/verif_aggregation.py",
         verif_csv=lambda wc: expand(
-            rules.run_verif_fct.output, init_time=_restrict_reftimes_to_hours(REFTIMES), allow_missing=True,
+            rules.run_verif_fct.output,
+            init_time=_restrict_reftimes_to_hours(REFTIMES),
+            allow_missing=True,
         ),
     output:
         OUT_ROOT / "data/runs/{run_id}/verif_aggregated.csv",
@@ -102,9 +107,6 @@ rule run_verif_aggregation_cosmoe:
         uv run {input.script} {params.verif_files_glob} \
             --output {output} > {log} 2>&1
         """
-
-
-
 
 
 rule run_verif_plot_metrics:

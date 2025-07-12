@@ -1,6 +1,8 @@
 from pathlib import Path
 
+
 include: "common.smk"
+
 
 # rule extract_cosmoe_fcts:
 #     input:
@@ -26,8 +28,6 @@ include: "common.smk"
 #                 --lead_time {params.lead_time} \
 #                     > {log} 2>&1
 #         """
-
-
 # rule generate_references:
 #     localrule: True
 #     input:
@@ -45,8 +45,6 @@ include: "common.smk"
 #                 {input}/{wildcards.init_time}_{{step:03}}.grib step={params.step} \
 #                     --output {output} 2> {log}
 #         """
-
-
 # rule combine_references:
 #     localrule: True
 #     input:

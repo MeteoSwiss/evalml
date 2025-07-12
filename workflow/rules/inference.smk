@@ -51,8 +51,10 @@ rule create_inference_venv:
         echo 'Inference virutal environment successfully created at {output.venv}'
         ) > {log} 2>&1
         """
-        # optionally, precompile to bytecode to reduce the import times
-        # find {output.venv} -exec stat --format='%i' {} + | sort -u | wc -l  # optionally, how many files did I create?
+
+
+# optionally, precompile to bytecode to reduce the import times
+# find {output.venv} -exec stat --format='%i' {} + | sort -u | wc -l  # optionally, how many files did I create?
 
 
 rule make_squashfs_image:
@@ -64,10 +66,10 @@ rule make_squashfs_image:
         OUT_ROOT / "logs/make_squashfs_image/{run_id}.log",
     localrule: True
     shell:
+        # we can safely ignore the many warnings "Unrecognised xattr prefix..."
         "mksquashfs {input.venv} {output.image}"
         " -no-recovery -noappend -Xcompression-level 3"
         " > {log} 2>/dev/null"
-        # we can safely ignore the many warnings "Unrecognised xattr prefix..."
 
 
 rule run_inference_group:
@@ -131,7 +133,8 @@ rule run_inference_group:
 rule map_init_time_to_inference_group:
     localrule: True
     input:
-        lambda wc: OUT_ROOT / f"data/runs/{wc.run_id}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
+        lambda wc: OUT_ROOT
+        / f"data/runs/{wc.run_id}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
     output:
         directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
         directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/raw"),

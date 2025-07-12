@@ -28,6 +28,16 @@ repos:
       - id: ruff-format
         name: Run ruff format
 
+  # snakemake linting and formatting
+  - repo: local
+    hooks:
+      - id: snakemake-lint
+        name: Snakemake linting and formatting
+        entry: snakefmt
+        language: system
+        pass_filenames: false
+        args: [workflow/]
+
   # check that json schema is consistent with Pydantic models
   - repo: local
     hooks:
