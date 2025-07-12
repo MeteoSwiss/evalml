@@ -1,4 +1,44 @@
+# install pre-commit hooks with
+# `pre-commit install`
+
+# auto-update pre-commit hooks
+# `pre-commit autoupdate`
+
+# run pre-commit hooks on all files
+# `pre-commit run --all-files`
+
 repos:
+
+  # common linting and formatting hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: Remove trailing whitespace
+      - id: end-of-file-fixer
+        name: Ensure files end with a newline
+
+  # ruff linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.12
+    hooks:
+      - id: ruff
+        args: [ --fix ]
+        name: Run ruff with auto-fix
+      - id: ruff-format
+        name: Run ruff format
+
+  # snakemake linting and formatting
+  - repo: local
+    hooks:
+      - id: snakemake-lint
+        name: Snakemake linting and formatting
+        entry: snakefmt
+        language: system
+        pass_filenames: false
+        args: [workflow/]
+
+  # check that json schema is consistent with Pydantic models
   - repo: local
     hooks:
       - id: pydantic-schema

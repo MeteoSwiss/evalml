@@ -11,6 +11,7 @@
 # validate configuration
 # ExperimentConfig.validate(dict(config))
 
+
 # load rules
 # -----------------------------------------------------
 include: "rules/common.smk"
@@ -18,6 +19,7 @@ include: "rules/data.smk"
 include: "rules/inference.smk"
 include: "rules/verif.smk"
 include: "rules/report.smk"
+
 
 # optional messages, log and error handling
 # -----------------------------------------------------
@@ -37,6 +39,7 @@ onerror:
 # -----------------------------------------------------
 EXPERIMENT_HASH = short_hash_config()
 
+
 rule all:
     """Final target rule to run all necessary steps."""
     input:
@@ -51,7 +54,7 @@ rule run_inference_all:
         expand(
             OUT_ROOT / "data/runs/{run_id}/{init_time}/raw",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=collect_all_runs()
+            run_id=collect_all_runs(),
         ),
 
 
@@ -60,13 +63,15 @@ rule run_verif_from_grib_all:
         expand(
             rules.run_verif_fct.output,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=collect_all_runs()
+            run_id=collect_all_runs(),
         ),
+
 
 # rule extract_cosmoe_fcts_all:
 #     """Extract COSMO-E forecasts for the year 2020."""
 #     input:
 #         expand(rules.extract_cosmoe_fcts.output.fcts, year=[str(y)[-2:] for y in range(2020, 2021)])
+
 
 rule run_verif_plot_metrics_all:
     """Run verification plot metrics for all studies."""
@@ -74,4 +79,4 @@ rule run_verif_plot_metrics_all:
         expand(
             rules.run_verif_plot_metrics.output,
             experiment=EXPERIMENT_HASH,
-        )
+        ),

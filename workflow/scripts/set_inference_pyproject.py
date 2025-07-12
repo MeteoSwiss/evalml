@@ -121,7 +121,9 @@ def get_version_and_commit_hash(
     )
     version_param = f"metadata.provenance_training.module_versions.{dependency}.version"
     version_param_alt = f"metadata.provenance_training.module_versions.{dependency}"
-    version = run.data.params.get(version_param) or run.data.params.get(version_param_alt)
+    version = run.data.params.get(version_param) or run.data.params.get(
+        version_param_alt
+    )
     return version, run.data.params.get(commit_hash_param)
 
 
@@ -179,7 +181,9 @@ def get_anemoi_versions(client: MlflowClient, run_id: str) -> dict:
     versions = {}
     for dep_type in _GIT_DEPENDENCIES_CONFIG:
         version, commit_hash = get_version_and_commit_hash(client, run_id, dep_type)
-        versions[f"{dep_type}"] = resolve_dependency_config(commit_hash, dep_type) if commit_hash else version
+        versions[f"{dep_type}"] = (
+            resolve_dependency_config(commit_hash, dep_type) if commit_hash else version
+        )
 
     if not versions:
         raise ValueError("No valid dependencies found in MLflow run")
@@ -250,6 +254,7 @@ def version_to_pep440_range(version: str) -> str:
 
     major, minor = int(parts[0]), int(parts[1])
     return f">={major}.{minor},<{major}.{minor + 1}"
+
 
 def update_pyproject_toml(
     versions: dict, toml_path: Path, python_version: str, checkpoints_path: str
@@ -327,7 +332,6 @@ def main(snakemake) -> None:
 
 
 if __name__ == "__main__":
-
-    snakemake = snakemake  # type: ignore
+    snakemake = snakemake  # type: ignore # noqa: F821
 
     raise SystemExit(main(snakemake))

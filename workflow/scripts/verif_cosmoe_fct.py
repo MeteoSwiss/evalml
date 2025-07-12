@@ -3,26 +3,28 @@ from argparse import ArgumentParser, Namespace
 import logging
 import sys
 import os
-from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from typing import Iterable
 
 eccodes_definition_path = Path(sys.prefix) / "share/eccodes-cosmo-resources/definitions"
 os.environ["ECCODES_DEFINITION_PATH"] = str(eccodes_definition_path)
 
-from meteodatalab import data_source, grib_decoder
-import numpy as np
-import xarray as xr
+from meteodatalab import data_source, grib_decoder  # noqa: E402
+import numpy as np  # noqa: E402
+import xarray as xr  # noqa: E402
 
 LOG = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 
-def load_kenda1_data_from_zarr(zarr_dataset: Path, valid_times: Iterable[datetime], params: list[str]) -> xr.Dataset:
+def load_kenda1_data_from_zarr(
+    zarr_dataset: Path, valid_times: Iterable[datetime], params: list[str]
+) -> xr.Dataset:
     """Load KENDA-1 data from an anemoi-generated Zarr dataset
 
-    This function loads KENDA-1 data from a Zarr dataset, processing it to make it more 
+    This function loads KENDA-1 data from a Zarr dataset, processing it to make it more
     xarray-friendly. It renames variables, sets the time index, and pivots the dataset.
     """
     PARAMS_MAP = {
@@ -58,16 +60,21 @@ def load_kenda1_data_from_zarr(zarr_dataset: Path, valid_times: Iterable[datetim
     ds = ds.set_coords(["latitudes", "longitudes"])
 
     # pivot (use inverse of PARAMS_MAP)
-    ds = ds["data"].to_dataset("variable").rename(
-        {v: k for k, v in PARAMS_MAP.items() if v in ds["variable"].values}
+    ds = (
+        ds["data"]
+        .to_dataset("variable")
+        .rename({v: k for k, v in PARAMS_MAP.items() if v in ds["variable"].values})
     )
 
     # select valid times
     ds = ds.sel(time=valid_times)
-    
+
     return ds
 
-def load_kenda1_data_from_grib(archive_root: Path, valid_time: datetime, params: list[str]) -> xr.Dataset:
+
+def load_kenda1_data_from_grib(
+    archive_root: Path, valid_time: datetime, params: list[str]
+) -> xr.Dataset:
     """Load KENDA1 data from GRIB files for a specific valid time."""
 
     ACCUM_PARAMS = [
@@ -76,8 +83,8 @@ def load_kenda1_data_from_grib(archive_root: Path, valid_time: datetime, params:
 
     archive_year = archive_root / str(valid_time.year)
     files = [
-        archive_year / f"laf_sfc_{valid_time:%Y%m%d%H}.grib2", 
-        archive_year / f"lff_sfc_{valid_time:%Y%m%d%H}.grib2"
+        archive_year / f"laf_sfc_{valid_time:%Y%m%d%H}.grib2",
+        archive_year / f"lff_sfc_{valid_time:%Y%m%d%H}.grib2",
     ]
     accum_file = archive_year / f"lff_sfc_6haccum_{valid_time:%Y%m%d%H}.grib2"
 
@@ -107,16 +114,20 @@ def load_kenda1_data_from_grib(archive_root: Path, valid_time: datetime, params:
 def _parse_lead_time(lead_time: str) -> int:
     # check that lead_time is in the format "start/stop/step"
     if "/" not in lead_time:
-        raise ValueError(f"Expected lead_time in format 'start/stop/step', got '{lead_time}'")
+        raise ValueError(
+            f"Expected lead_time in format 'start/stop/step', got '{lead_time}'"
+        )
     if len(lead_time.split("/")) != 3:
-        raise ValueError(f"Expected lead_time in format 'start/stop/step', got '{lead_time}'")
-    
+        raise ValueError(
+            f"Expected lead_time in format 'start/stop/step', got '{lead_time}'"
+        )
+
     return list(range(*map(int, lead_time.split("/"))))
 
 
 class ScriptConfig(Namespace):
     """Configuration for the script to verify COSMOe forecast data."""
-    
+
     archive_root: Path = None
     zarr_dataset: Path = None
     cosmoe_zarr: Path = None
@@ -124,43 +135,52 @@ class ScriptConfig(Namespace):
     params: list[str] = ["T_2M", "TD_2M", "U_10M", "V_10M"]
     lead_time: list[int] = _parse_lead_time("0/126/6")
 
+
 def main(args: ScriptConfig):
     """Main function to verify COSMOe forecast data."""
-    
-    
+
     # get COSMO-E forecast data
     coe = xr.open_zarr(args.cosmoe_zarr, consolidated=True, decode_timedelta=True)
     coe = coe.rename({"forecast_reference_time": "ref_time", "step": "lead_time"})
-    coe = coe[args.params].sel(ref_time=args.reftime, lead_time=np.array(args.lead_time, dtype="timedelta64[h]"))
-    coe = coe.assign_coords(valid_time = coe.ref_time + coe.lead_time)
-
+    coe = coe[args.params].sel(
+        ref_time=args.reftime,
+        lead_time=np.array(args.lead_time, dtype="timedelta64[h]"),
+    )
+    coe = coe.assign_coords(valid_time=coe.ref_time + coe.lead_time)
 
     # get truth data (COSMO-2 analysis aka KENDA-1)
     if args.zarr_dataset:
-        kenda = load_kenda1_data_from_zarr(
-            zarr_dataset=args.zarr_dataset,
-            valid_times=coe.valid_time,
-            params=args.params
-        ).compute().chunk({"y": -1, "x": -1})
+        kenda = (
+            load_kenda1_data_from_zarr(
+                zarr_dataset=args.zarr_dataset,
+                valid_times=coe.valid_time,
+                params=args.params,
+            )
+            .compute()
+            .chunk({"y": -1, "x": -1})
+        )
     elif args.archive_root:
         kenda = load_kenda1_data_from_grib(
             archive_root=args.archive_root,
             valid_times=coe.valid_time,
-            params=args.params
+            params=args.params,
         )
     else:
         raise ValueError("Either --archive_root or --zarr_dataset must be provided.")
-
 
     # compute metrics and statistics
     error = coe - kenda
     results = {}
     results["BIAS"] = error.mean(["y", "x"])
-    results["RMSE"] = np.sqrt((error ** 2).mean(["y", "x"]))
+    results["RMSE"] = np.sqrt((error**2).mean(["y", "x"]))
     results["MAE"] = abs(error).mean(["y", "x"])
     results["STD"] = error.std(["y", "x"])
-    results["CORR"] = (corr := xr.Dataset({k: xr.corr(coe[k], kenda[k], dim=["y", "x"]) for k in coe.data_vars}))
-    results["R2"] = corr ** 2
+    results["CORR"] = (
+        corr := xr.Dataset(
+            {k: xr.corr(coe[k], kenda[k], dim=["y", "x"]) for k in coe.data_vars}
+        )
+    )
+    results["R2"] = corr**2
     results = xr.Dataset({k: v.to_array("param") for k, v in results.items()})
     results = results.to_array("metric").to_dataframe(name="value").reset_index()
 
@@ -168,35 +188,60 @@ def main(args: ScriptConfig):
     args.output.parent.mkdir(parents=True, exist_ok=True)
     results.to_csv(args.output)
 
+
 if __name__ == "__main__":
     parser = ArgumentParser(description="Verify COSMO-E forecast data.")
 
     # truth data must be provided either as a GRIB archive or a anemoi-generated Zarr dataset
     truth_group = parser.add_mutually_exclusive_group(required=True)
-    truth_group.add_argument("--archive_root", type=Path, required=False,
-                        help="Root directory of the archive containing GRIB files.")
-    truth_group.add_argument("--zarr_dataset", type=Path, required=False,
-                        help="Path to the Zarr dataset containing COSMOe data.")
-    
-    parser.add_argument("--cosmoe_zarr", type=Path, required=True,
-                        help="Path to the Zarr dataset containing COSMO-E forecast data.")
-    
-    parser.add_argument("--reftime", type=lambda s: datetime.strptime(s, "%Y%m%d%H%M"),
-                        help="Valid time for the data in ISO format (default: 6 hours ago).")
-    parser.add_argument("--params",
-                        type=lambda x: x.split(","),
-                        # default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"])
-                        default=["T_2M", "TD_2M", "U_10M", "V_10M"])
-    parser.add_argument("--lead_time",
-                        type=_parse_lead_time,
-                        default="0/126/6",
-                        help="Lead time in the format 'start/stop/step' (default: 0/126/6).")
-    parser.add_argument("--output", type=Path, default="verif.csv",
-                        help="Output file to save the verification results (default: verif.csv)."),
-    args = parser.parse_args()
-    
-    main(args)
+    truth_group.add_argument(
+        "--archive_root",
+        type=Path,
+        required=False,
+        help="Root directory of the archive containing GRIB files.",
+    )
+    truth_group.add_argument(
+        "--zarr_dataset",
+        type=Path,
+        required=False,
+        help="Path to the Zarr dataset containing COSMOe data.",
+    )
 
-    # run examples 
+    parser.add_argument(
+        "--cosmoe_zarr",
+        type=Path,
+        required=True,
+        help="Path to the Zarr dataset containing COSMO-E forecast data.",
+    )
+
+    parser.add_argument(
+        "--reftime",
+        type=lambda s: datetime.strptime(s, "%Y%m%d%H%M"),
+        help="Valid time for the data in ISO format (default: 6 hours ago).",
+    )
+    parser.add_argument(
+        "--params",
+        type=lambda x: x.split(","),
+        # default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"])
+        default=["T_2M", "TD_2M", "U_10M", "V_10M"],
+    )
+    parser.add_argument(
+        "--lead_time",
+        type=_parse_lead_time,
+        default="0/126/6",
+        help="Lead time in the format 'start/stop/step' (default: 0/126/6).",
+    )
+    (
+        parser.add_argument(
+            "--output",
+            type=Path,
+            default="verif.csv",
+            help="Output file to save the verification results (default: verif.csv).",
+        ),
+    )
+    args = parser.parse_args()
+
+    main(args)
+    # run examples
     # uv run workflow/scripts/verif_cosmoe_fcst.py --zarr_dataset /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr --reftime 202006011200 --output debug_verif_zarr.csv
     # uv run workflow/scripts/verif_cosmoe_fcst.py --archive_root /scratch/mch/fzanetta/data/KENDA-1 --reftime 2020-06-01T12:00 --output debug_verif_grib.csv

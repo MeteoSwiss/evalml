@@ -9,7 +9,7 @@ from datetime import datetime
 
 configfile: "config/config.yaml"
 
-        
+
 rule create_inference_pyproject:
     input:
         toml="workflow/envs/anemoi_inference.toml",
@@ -51,8 +51,10 @@ rule create_inference_venv:
         echo 'Inference virutal environment successfully created at {output.venv}'
         ) > {log} 2>&1
         """
-        # optionally, precompile to bytecode to reduce the import times
-        # find {output.venv} -exec stat --format='%i' {} + | sort -u | wc -l  # optionally, how many files did I create?
+
+
+# optionally, precompile to bytecode to reduce the import times
+# find {output.venv} -exec stat --format='%i' {} + | sort -u | wc -l  # optionally, how many files did I create?
 
 
 rule make_squashfs_image:
@@ -64,10 +66,10 @@ rule make_squashfs_image:
         OUT_ROOT / "logs/make_squashfs_image/{run_id}.log",
     localrule: True
     shell:
+        # we can safely ignore the many warnings "Unrecognised xattr prefix..."
         "mksquashfs {input.venv} {output.image}"
         " -no-recovery -noappend -Xcompression-level 3"
         " > {log} 2>/dev/null"
-        # we can safely ignore the many warnings "Unrecognised xattr prefix..."
 
 
 rule run_inference_group:
@@ -104,20 +106,20 @@ rule run_inference_group:
         export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
         i=0
         for reftime in {params.reftimes}; do
-            
+
             # prepare the working directory
             _reftime_str=$(date -d "$reftime" +%Y%m%d%H%M)
             WORKDIR={params.output_root}/runs/{wildcards.run_id}/$_reftime_str
             mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw
             cp {input.config} config.yaml
 
-            
+
             CMD_ARGS=(
                 date=$reftime
                 checkpoint={params.checkpoints_path}/inference-last.ckpt
                 lead_time={params.lead_time}
             )
-            
+
             CUDA_VISIBLE_DEVICES=$i anemoi-inference run config.yaml "${{CMD_ARGS[@]}}" > inference.log 2>&1 &
             echo "Started inference for reftime $reftime in $WORKDIR"
             echo "CUDA_VISIBLE_DEVICES=$i"
@@ -131,7 +133,8 @@ rule run_inference_group:
 rule map_init_time_to_inference_group:
     localrule: True
     input:
-        lambda wc: OUT_ROOT / f"data/runs/{wc.run_id}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
+        lambda wc: OUT_ROOT
+        / f"data/runs/{wc.run_id}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
     output:
         directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
         directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/raw"),

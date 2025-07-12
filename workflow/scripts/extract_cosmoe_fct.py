@@ -9,19 +9,22 @@ import tarfile
 definition_path = Path(sys.prefix) / "share/eccodes-cosmo-resources/definitions"
 os.environ["ECCODES_DEFINITION_PATH"] = str(definition_path)
 
-import earthkit.data as ekd
-import numpy as np
-import xarray as xr
-from earthkit.data.sources.stream import StreamFieldList
+import earthkit.data as ekd  # noqa: E402
+import numpy as np  # noqa: E402
+import xarray as xr  # noqa: E402
+from earthkit.data.sources.stream import StreamFieldList  # noqa: E402
 
 LOG = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+
 
 def reftime_from_tarfile(tarfile: Path, suffix: str | None = None) -> datetime:
     """Extract reftime from tarfile name."""
     suffix = tarfile.stem[-4:] if suffix is None else suffix
     return datetime.strptime(tarfile.stem.removesuffix(suffix), "%y%m%d%H")
+
 
 def check_reftime_consistency(tarfiles: list[Path], delta_h: int = 12):
     """Check that all reftimes are available and every delta_h hours."""
@@ -37,19 +40,20 @@ def check_reftime_consistency(tarfiles: list[Path], delta_h: int = 12):
         expected_reftime += timedelta(hours=delta_h)
     return first_reftime, expected_reftime - timedelta(hours=delta_h)
 
-def extract(tar: Path, lead_time: list[int], run_id: str, params: list[str]) -> xr.Dataset:
 
+def extract(
+    tar: Path, lead_time: list[int], run_id: str, params: list[str]
+) -> xr.Dataset:
     LOG.info(f"Extracting fields from {tar}.")
     reftime = reftime_from_tarfile(tar)
 
     tar_archive = tarfile.open(tar, mode="r:*")
-    reftime_str = reftime.strftime("%y%m%d%H")
     out = ekd.SimpleFieldList()
     for lt in lead_time:
         filename = f"{tar.stem}/grib/ceffsurf{lt:03}_{run_id}"
         LOG.info(f"Extracting {filename}.")
         stream = tar_archive.extractfile(filename)
-        
+
         # LOG.info(f"Reading fields...")
         streamfieldlist: StreamFieldList = ekd.from_source("stream", stream)
         for field in streamfieldlist:
@@ -60,9 +64,12 @@ def extract(tar: Path, lead_time: list[int], run_id: str, params: list[str]) -> 
     tar_archive.close()
 
     out = out.to_xarray(profile="grib")
-    out = out.expand_dims(forecast_reference_time=[np.array(reftime, dtype="datetime64[ns]")], axis=0)
+    out = out.expand_dims(
+        forecast_reference_time=[np.array(reftime, dtype="datetime64[ns]")], axis=0
+    )
 
     return out
+
 
 class ScriptConfig(Namespace):
     archive_dir: Path
@@ -71,24 +78,30 @@ class ScriptConfig(Namespace):
     run_id: str
     params: list[str]
 
+
 def _parse_lead_time(lead_time: str) -> int:
     # check that lead_time is in the format "start/stop/step"
     if "/" not in lead_time:
-        raise ValueError(f"Expected lead_time in format 'start/stop/step', got '{lead_time}'")
+        raise ValueError(
+            f"Expected lead_time in format 'start/stop/step', got '{lead_time}'"
+        )
     if len(lead_time.split("/")) != 3:
-        raise ValueError(f"Expected lead_time in format 'start/stop/step', got '{lead_time}'")
-    
+        raise ValueError(
+            f"Expected lead_time in format 'start/stop/step', got '{lead_time}'"
+        )
+
     return list(range(*map(int, lead_time.split("/"))))
 
-def main(cfg: ScriptConfig):
 
+def main(cfg: ScriptConfig):
     tarfiles = sorted(cfg.archive_dir.glob("*.tar"))
     first_reftime, last_reftime = check_reftime_consistency(tarfiles)
-    LOG.info(f"Found {len(tarfiles)} tar archives from {first_reftime} to {last_reftime}.")
+    LOG.info(
+        f"Found {len(tarfiles)} tar archives from {first_reftime} to {last_reftime}."
+    )
 
     ds = []
     for i, file in enumerate(tarfiles):
-
         ds = extract(file, cfg.lead_time, cfg.run_id, cfg.params)
 
         LOG.info(f"Extracted: {ds}")
@@ -99,7 +112,9 @@ def main(cfg: ScriptConfig):
 
         # Write to zarr, appending if store exists
         ds = ds.chunk({"forecast_reference_time": 1})
-        zarr_encoding = {"forecast_reference_time": {"units": "nanoseconds since 1970-01-01"}}
+        zarr_encoding = {
+            "forecast_reference_time": {"units": "nanoseconds since 1970-01-01"}
+        }
         if i == 0:
             ds.to_zarr(cfg.output_store, mode="w", encoding=zarr_encoding)
         else:
@@ -107,29 +122,28 @@ def main(cfg: ScriptConfig):
 
 
 if __name__ == "__main__":
-
     parser = ArgumentParser()
 
-    parser.add_argument("--archive_dir",
-                        type=Path,
-                        default="/archive/mch/msopr/osm/COSMO-E/FCST20/")
+    parser.add_argument(
+        "--archive_dir", type=Path, default="/archive/mch/msopr/osm/COSMO-E/FCST20/"
+    )
 
-    parser.add_argument("--output_store",
-                        type=Path,
-                        help="Path to the output zarr store.",)
+    parser.add_argument(
+        "--output_store",
+        type=Path,
+        help="Path to the output zarr store.",
+    )
 
-    parser.add_argument("--lead_time",
-                        type=_parse_lead_time,
-                        default="0/126/6")
-    
-    parser.add_argument("--run_id",
-                        type=str,
-                        default="000")
-    
-    parser.add_argument("--params",
-                        type=lambda x: x.split(","),
-                        default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"])
-    
+    parser.add_argument("--lead_time", type=_parse_lead_time, default="0/126/6")
+
+    parser.add_argument("--run_id", type=str, default="000")
+
+    parser.add_argument(
+        "--params",
+        type=lambda x: x.split(","),
+        default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"],
+    )
+
     args = parser.parse_args()
-    
+
     main(args)

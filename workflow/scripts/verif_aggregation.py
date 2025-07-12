@@ -6,8 +6,9 @@ import logging
 import pandas as pd
 
 LOG = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 
 def get_season(time):
@@ -20,7 +21,7 @@ def get_season(time):
         return "JJA"
     else:
         return "SON"
-    
+
 
 def read_verif_file(Path: str) -> pd.DataFrame:
     """Read a verification file and return it as a DataFrame."""
@@ -30,7 +31,7 @@ def read_verif_file(Path: str) -> pd.DataFrame:
         date_format="ISO8601",
         parse_dates=["ref_time", "valid_time", "time"],
         dtype={"lead_time": str},
-        index_col=0
+        index_col=0,
     )
     df["lead_time"] = pd.to_timedelta(df["lead_time"])
     return df
@@ -38,7 +39,6 @@ def read_verif_file(Path: str) -> pd.DataFrame:
 
 def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
     """Compute mean metric values aggregated by all combinations of hour, season, and init_hour."""
-    
 
     # extract features
     df = df.copy()
@@ -61,16 +61,25 @@ def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
     df_extended = pd.concat(groupings, ignore_index=True)
 
     # aggregate
-    aggregated = df_extended.groupby(
-        ["metric", "lead_time", "param", "hour", "season", "init_hour"],
-        dropna=False  # optional, ensures NaN values are not dropped
-    ).agg(value_mean=("value", "mean"), value_count=("value", "count"), value_sum=("value","sum")).reset_index()
-    
+    aggregated = (
+        df_extended.groupby(
+            ["metric", "lead_time", "param", "hour", "season", "init_hour"],
+            dropna=False,  # optional, ensures NaN values are not dropped
+        )
+        .agg(
+            value_mean=("value", "mean"),
+            value_count=("value", "count"),
+            value_sum=("value", "sum"),
+        )
+        .reset_index()
+    )
+
     return aggregated
+
 
 def main(args: Namespace) -> None:
     """Main function to verify results from KENDA-1 data."""
-    
+
     LOG.info("Reading %d verification files", len(args.verif_files))
     df = pd.concat([read_verif_file(f) for f in args.verif_files], ignore_index=True)
 
@@ -87,14 +96,21 @@ def main(args: Namespace) -> None:
 
     LOG.info("Results saved to %s", args.output)
 
+
 if __name__ == "__main__":
     parser = ArgumentParser(description="Verify results from KENDA-1 data.")
-    parser.add_argument("verif_files", type=Path, nargs="+",
-                        help="Paths to verification files.")
-    parser.add_argument("--output", type=Path, default="verif_results.csv",
-                        help="Path to save the aggregated results."),
+    parser.add_argument(
+        "verif_files", type=Path, nargs="+", help="Paths to verification files."
+    )
+    (
+        parser.add_argument(
+            "--output",
+            type=Path,
+            default="verif_results.csv",
+            help="Path to save the aggregated results.",
+        ),
+    )
     args = parser.parse_args()
     main(args)
-
     # example usage:
     # uv run workflow/scripts/verif_results.py /users/fzanetta/projects/mch-anemoi-evaluation/output/7c58e59d24e949c9ade3df635bbd37e2/*/verif.csv
