@@ -13,4 +13,3 @@ rule report_experiment_dashboard:
         touch(OUT_ROOT / "results/{experiment}/report.html")
     log:
         OUT_ROOT / "logs/report_experiment_dashboard/{experiment}.log",
-

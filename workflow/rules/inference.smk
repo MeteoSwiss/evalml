@@ -9,7 +9,7 @@ from datetime import datetime
 
 configfile: "config/config.yaml"
 
-        
+
 rule create_inference_pyproject:
     input:
         toml="workflow/envs/anemoi_inference.toml",
@@ -104,20 +104,20 @@ rule run_inference_group:
         export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
         i=0
         for reftime in {params.reftimes}; do
-            
+
             # prepare the working directory
             _reftime_str=$(date -d "$reftime" +%Y%m%d%H%M)
             WORKDIR={params.output_root}/runs/{wildcards.run_id}/$_reftime_str
             mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw
             cp {input.config} config.yaml
 
-            
+
             CMD_ARGS=(
                 date=$reftime
                 checkpoint={params.checkpoints_path}/inference-last.ckpt
                 lead_time={params.lead_time}
             )
-            
+
             CUDA_VISIBLE_DEVICES=$i anemoi-inference run config.yaml "${{CMD_ARGS[@]}}" > inference.log 2>&1 &
             echo "Started inference for reftime $reftime in $WORKDIR"
             echo "CUDA_VISIBLE_DEVICES=$i"

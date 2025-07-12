@@ -10,9 +10,9 @@ output:
     outputs:
     - extract_lam:
         output:
-          assign_mask: 
+          assign_mask:
             mask: "source0/trimedge_mask"
-            output: 
+            output:
               grib:
                 path: grib/{dateTime}_{step:03}.grib
                 encoding:

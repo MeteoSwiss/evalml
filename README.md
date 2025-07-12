@@ -18,7 +18,7 @@ To launch an experiment, prepare a config file defining your experiment, e.g.
 description: |
   This is an experiment to do blabla.
 
-dates: 
+dates:
   start: 2020-01-01T12:00
   end: 2020-01-10T00:00
   frequency: 54h
@@ -40,7 +40,7 @@ execution:
 
 locations:
   output_root: output/
-  mlflow_uri: 
+  mlflow_uri:
     - https://servicedepl.meteoswiss.ch/mlstore
     - https://mlflow.ecmwf.int
 
@@ -69,8 +69,8 @@ This project uses [uv](https://github.com/astral-sh/uv). Download and install it
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-then, install the project and its dependencies with `uv sync` and activate the virtual 
-environment with `source .venv/bin/activate`. 
+then, install the project and its dependencies with `uv sync` and activate the virtual
+environment with `source .venv/bin/activate`.
 
 ## Credentials setup
 

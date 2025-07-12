@@ -2,7 +2,7 @@
 description: |
   This is an experiment to do blabla.
 
-dates: 
+dates:
   start: 2020-01-01T12:00
   end: 2020-01-10T00:00
   # end: 2020-03-30T00:00
@@ -28,10 +28,10 @@ execution:
 
 locations:
   output_root: output/
-  mlflow_uri: 
+  mlflow_uri:
     - https://servicedepl.meteoswiss.ch/mlstore
     - https://mlflow.ecmwf.int
-  
+
 profile:
   executor: slurm
   default_resources:
