@@ -43,8 +43,8 @@ EXPERIMENT_HASH = short_hash_config()
 rule all:
     """Final target rule to run all necessary steps."""
     input:
-        OUT_ROOT / f"results/{EXPERIMENT_HASH}/report.html",
-        OUT_ROOT / f"results/{EXPERIMENT_HASH}/plot_metrics",
+        OUT_ROOT / f"results/{EXPERIMENT_HASH}/dashboard.html",
+        OUT_ROOT / f"results/{EXPERIMENT_HASH}/plot_metrics"
     default_target: True
 
 
