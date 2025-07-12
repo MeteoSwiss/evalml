@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+        # we will add testing with dev versions of anemoi-inference and anemoi-datasets
+        anemoi-dev: [false]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v2
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the project
+        run: uv sync --all-extras --dev
+
+      - name: Run tests (anemoi stable)
+        if: matrix.anemoi-dev == false
+        run: uv run pytest tests/
+
+      - name: Run tests (anemoi dev)
+        if: matrix.anemoi-dev == true
+        run: >
+          uv run
+          --with git+https://github.com/ecmwf/anemoi-inference.git@main
+          --with git+https://github.com/ecmwf/anemoi-datasets.git@main
+          pytest tests/
+
+
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+
+      - name: Run pre-commit hooks
+        run: uvx pre-commit run
