@@ -8,14 +8,10 @@ import click
 from evalml.config import ExperimentConfig
 
 
-def run_command(command: list[str], dry_run: bool = False) -> int:
+def run_command(command: list[str]) -> int:
     """Execute a shell command, optionally as dry-run."""
-    if dry_run:
-        click.echo("[dry-run] " + " ".join(command))
-        return 0
-    else:
-        click.echo("Launching: " + " ".join(command))
-        return subprocess.run(command).returncode
+    click.echo("Launching: " + " ".join(command))
+    return subprocess.run(command).returncode
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -25,7 +21,7 @@ def load_yaml(path: Path) -> dict[str, Any]:
 
 def common_options(func):
     func = click.option(
-        "--dry-run", "-n", is_flag=True, help="Only print the Snakemake command."
+        "--dry-run", "-n", is_flag=True, help="Execute a dry run."
     )(func)
     func = click.option("--verbose", "-v", is_flag=True, help="Enable verbose output.")(
         func
@@ -67,8 +63,12 @@ def experiment(
     command += ["--configfile", str(configfile)]
     command += ["--cores", str(cores)]
 
+    # Execute dry snakemake run if set
+    if dry_run:
+        command.append("--dry-run")
+
     # Add global options if set
     if verbose:
         command += ["--printshellcmds"]
 
-    raise SystemExit(run_command(command, dry_run=dry_run))
+    raise SystemExit(run_command(command))
