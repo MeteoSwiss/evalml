@@ -94,3 +94,12 @@ rule verif_metrics_plot_all:
             rules.verif_metrics_plot.output,
             experiment=EXPERIMENT_HASH,
         ),
+
+
+rule run_verif_aggregate_statistics_all:
+    """Aggregate verification statistics for all runs."""
+    input:
+        expand(
+            rules.run_verif_aggregate_statistics.output,
+            run_id=collect_all_runs(),
+        ),
