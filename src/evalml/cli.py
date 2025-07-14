@@ -21,7 +21,7 @@ def load_yaml(path: Path) -> dict[str, Any]:
 
 def common_options(func):
     func = click.option(
-        "--dry-run", "-n", is_flag=True, help="Execute a dry run."
+        "--dry-run", "-n", is_flag=True, help="Do not execute anything, and display what would be done."
     )(func)
     func = click.option("--verbose", "-v", is_flag=True, help="Enable verbose output.")(
         func
