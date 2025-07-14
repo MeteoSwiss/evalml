@@ -15,9 +15,9 @@ rule report_experiment_dashboard:
         template="resources/report/dashboard/template.html.jinja2",
         js_script="resources/report/dashboard/script.js",
     output:
-        OUT_ROOT / "results/{experiment}/dashboard.html"
+        OUT_ROOT / "results/{experiment}/dashboard.html",
     params:
-        labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys()))
+        labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
     log:
         OUT_ROOT / "logs/report_experiment_dashboard/{experiment}.log",
     shell:
