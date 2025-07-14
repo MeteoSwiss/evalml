@@ -15,6 +15,7 @@ dependencies = [
     "meteodata-lab>=0.4.0",
     "anemoi-datasets>=0.5.25",
     "mlflow>=3.1.1",
+    "pydantic>=2.11.7",
 ]
 
 [project.scripts]
