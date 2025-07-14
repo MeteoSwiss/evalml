@@ -6,8 +6,10 @@ import pandas as pd
 import jinja2
 
 LOG = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+
 
 def read_verif_file(Path: str) -> pd.DataFrame:
     """Read a verification file and return it as a DataFrame."""
@@ -20,7 +22,9 @@ def read_verif_file(Path: str) -> pd.DataFrame:
     return df
 
 
-def combine_verif_files(verif_files: Path, labels: list[str] | None = None) -> pd.DataFrame:
+def combine_verif_files(
+    verif_files: Path, labels: list[str] | None = None
+) -> pd.DataFrame:
     """
     Combine multiple verification files into a single DataFrame.
     Each file is expected to have a 'model' column indicating the model name.
@@ -50,15 +54,17 @@ def program_summary_log(args):
     LOG.info("Output: %s", args.output)
     LOG.info("=" * 80)
 
-def main(args):
 
+def main(args):
     program_summary_log(args)
 
     # load and combine verification data
     df = combine_verif_files(args.verif_files, args.labels)
 
     # TODO: remove this when we have the logic to handle these groups
-    df = df[(df["hour"] == "all") & (df["season"] == "all") & (df["init_hour"] == "all")]
+    df = df[
+        (df["hour"] == "all") & (df["season"] == "all") & (df["init_hour"] == "all")
+    ]
     LOG.info("Loaded verification data: \n%s", df)
 
     # get unique models and params
@@ -69,46 +75,70 @@ def main(args):
     df_json = df.to_json(orient="records", lines=False)
 
     # compute number of bytes in the JSON string
-    json_size = len(df_json.encode('utf-8'))
+    json_size = len(df_json.encode("utf-8"))
     LOG.info("Size of embedded JSON data: %d bytes", json_size)
-    
+
     # read script
     with open(args.script, "r") as f:
         js_src = f.read()
 
     # generate HTML from Jinja2 template
-    environment = jinja2.Environment(loader = jinja2.FileSystemLoader(args.template.parent))
+    environment = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(args.template.parent)
+    )
     template = environment.get_template(args.template.name)
-    html = template.render(verif_data=df_json, js_src = js_src, models=models, params=params)
-    LOG.info("Size of generated HTML: %d bytes", len(html.encode('utf-8')))
-    
+    html = template.render(
+        verif_data=df_json, js_src=js_src, models=models, params=params
+    )
+    LOG.info("Size of generated HTML: %d bytes", len(html.encode("utf-8")))
+
     with open(args.output, "w") as f:
         f.write(html)
-    
+
     LOG.info("Dashboard generated and saved to %s", args.output)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate a dashboard for experiment verification data.")
-    parser.add_argument("--verif_files", type=Path, nargs="+",
-                        default=[],
-                        help="Paths to verification data files (not used in this mock).")
-    parser.add_argument("--labels", type=lambda s: s.split(","),
-                        default=None,
-                        help="Labels for the verification data files. If not provided, labels will be derived from the file paths.")
-    parser.add_argument("--template", type=Path, required=True,
-                        help="Path to the Jinja2 template file.")
-    parser.add_argument("--script", type=Path, required=True,
-                        help="Path to the JavaScript source file for the dashboard.")
-    parser.add_argument("--output", type=Path, default=Path("dashboard.html"),
-                        help="Path to save the generated HTML dashboard file.")
+    parser = argparse.ArgumentParser(
+        description="Generate a dashboard for experiment verification data."
+    )
+    parser.add_argument(
+        "--verif_files",
+        type=Path,
+        nargs="+",
+        default=[],
+        help="Paths to verification data files (not used in this mock).",
+    )
+    parser.add_argument(
+        "--labels",
+        type=lambda s: s.split(","),
+        default=None,
+        help="Labels for the verification data files. If not provided, labels will be derived from the file paths.",
+    )
+    parser.add_argument(
+        "--template", type=Path, required=True, help="Path to the Jinja2 template file."
+    )
+    parser.add_argument(
+        "--script",
+        type=Path,
+        required=True,
+        help="Path to the JavaScript source file for the dashboard.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("dashboard.html"),
+        help="Path to save the generated HTML dashboard file.",
+    )
     args = parser.parse_args()
 
     # check that number of labels matches number of files
     if args.labels is not None and len(args.labels) != len(args.verif_files):
-        raise ValueError("Number of labels must match the number of verification files."
-                         f" Got {len(args.labels)} labels for {len(args.verif_files)} files.")
-    
+        raise ValueError(
+            "Number of labels must match the number of verification files."
+            f" Got {len(args.labels)} labels for {len(args.verif_files)} files."
+        )
+
     main(args)
 
 """
