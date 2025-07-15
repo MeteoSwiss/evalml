@@ -82,19 +82,18 @@ environment with `source .venv/bin/activate`.
 Some experiments are stored on the ECMWF-hosted MLflow server:
 [https://mlflow.ecmwf.int](https://mlflow.ecmwf.int). To access these runs in the
 evaluation workflow, you need to authenticate using a valid token. Run the following
-command **once** to log in and obtain a token:
+commands **once** to log in and obtain a token:
 
 ```bash
-anemoi-utils mlflow login --url https://mlflow.ecmwf.int
+uv pip install anemoi-training --no-deps
+anemoi-training mlflow login --url https://mlflow.ecmwf.int
 ```
 
 You will be prompted to paste a seed token obtained from https://mlflow.ecmwf.int/seed.
-After this step, your token is stored locally and used for subsequent runs.
-
-This will reuse the previously stored URL and token. Tokens are valid for 30 days.
-Every training or evaluation run within this period automatically extends the token by
-another 30 days. It’s good practice to run the login command before executing the
-workflow to ensure your token is still valid.
+After this step, your token is stored locally and used for subsequent runs. Tokens are
+valid for 30 days. Every training or evaluation run within this period automatically
+extends the token by another 30 days. It’s good practice to run the login command before
+executing the workflow to ensure your token is still valid.
 
 ## Workspace setup
 
