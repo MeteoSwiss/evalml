@@ -18,6 +18,14 @@ dependencies = [
     "pydantic>=2.11.7",
 ]
 
+[project.optional-dependencies]
+kerchunk = [
+    "kerchunk",
+    "zarr<3.0.0",
+    "fastparquet",
+    "ujson"
+]
+
 [project.scripts]
 evalml = "evalml:cli"
 
