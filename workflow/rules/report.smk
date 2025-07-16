@@ -16,7 +16,7 @@ rule report_experiment_dashboard:
         js_script="resources/report/dashboard/script.js",
     output:
         report(
-            directory(OUT_ROOT / "results/{experiment}/dashboard"),
+            directory(OUT_ROOT / "results/{experiment}/metrics/dashboard"),
             htmlindex="dashboard.html",
         ),
     params:
