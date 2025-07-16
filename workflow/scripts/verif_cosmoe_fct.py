@@ -67,7 +67,21 @@ def load_kenda1_data_from_zarr(
     )
 
     # select valid times
-    ds = ds.sel(time=valid_times)
+    # (handle special case where some valid times are not in the dataset, e.g. at the end)
+    valid_time_included = valid_times.isin(ds.time.values).values
+    if all(valid_time_included):
+        ds = ds.sel(time=valid_times)
+    elif np.sum(valid_time_included) < len(valid_time_included):
+        LOG.warning(
+            "Some valid times are not included in the dataset: \n%s",
+            valid_times[~valid_time_included].values,
+        )
+        ds = ds.sel(time=valid_times[valid_time_included])
+    else:
+        raise ValueError(
+            "Valid times are not included in the dataset. "
+            "Please check the valid times and the dataset."
+        )
 
     return ds
 
@@ -136,10 +150,28 @@ class ScriptConfig(Namespace):
     lead_time: list[int] = _parse_lead_time("0/126/6")
 
 
+def program_summary_log(args):
+    """Log a welcome message with the script information."""
+    LOG.info("=" * 80)
+    LOG.info("Running verification of COSMO-E forecast data")
+    LOG.info("=" * 80)
+    LOG.info("COSMO-E Zarr dataset: %s", args.cosmoe_zarr)
+    if args.zarr_dataset:
+        LOG.info("Zarr dataset for KENDA-1: %s", args.zarr_dataset)
+    elif args.archive_root:
+        LOG.info("GRIB archive root for KENDA-1: %s", args.archive_root)
+    LOG.info("Reference time: %s", args.reftime)
+    LOG.info("Parameters to verify: %s", args.params)
+    LOG.info("Lead time: %s", args.lead_time)
+    LOG.info("Output file: %s", args.output)
+    LOG.info("=" * 80)
+
+
 def main(args: ScriptConfig):
     """Main function to verify COSMOe forecast data."""
 
     # get COSMO-E forecast data
+    now = datetime.now()
     coe = xr.open_zarr(args.cosmoe_zarr, consolidated=True, decode_timedelta=True)
     coe = coe.rename({"forecast_reference_time": "ref_time", "step": "lead_time"})
     coe = coe[args.params].sel(
@@ -147,8 +179,14 @@ def main(args: ScriptConfig):
         lead_time=np.array(args.lead_time, dtype="timedelta64[h]"),
     )
     coe = coe.assign_coords(valid_time=coe.ref_time + coe.lead_time)
+    LOG.info(
+        "Loaded COSMO-E forecast data in %s seconds: \n%s",
+        (datetime.now() - now).total_seconds(),
+        coe,
+    )
 
     # get truth data (COSMO-2 analysis aka KENDA-1)
+    now = datetime.now()
     if args.zarr_dataset:
         kenda = (
             load_kenda1_data_from_zarr(
@@ -167,8 +205,14 @@ def main(args: ScriptConfig):
         )
     else:
         raise ValueError("Either --archive_root or --zarr_dataset must be provided.")
+    LOG.info(
+        "Loaded KENDA-1 data in %s seconds: \n%s",
+        (datetime.now() - now).total_seconds(),
+        kenda,
+    )
 
     # compute metrics and statistics
+    now = datetime.now()
     error = coe - kenda
     results = {}
     results["BIAS"] = error.mean(["y", "x"])
@@ -183,10 +227,18 @@ def main(args: ScriptConfig):
     results["R2"] = corr**2
     results = xr.Dataset({k: v.to_array("param") for k, v in results.items()})
     results = results.to_array("metric").to_dataframe(name="value").reset_index()
+    LOG.info(
+        "Computed verification metrics in %s seconds: \n%s",
+        (datetime.now() - now).total_seconds(),
+        results,
+    )
 
     # save results to CSV
     args.output.parent.mkdir(parents=True, exist_ok=True)
     results.to_csv(args.output)
+    LOG.info("Saved verification results to %s", args.output)
+
+    LOG.info("Program completed successfully.")
 
 
 if __name__ == "__main__":
@@ -231,13 +283,11 @@ if __name__ == "__main__":
         default="0/126/6",
         help="Lead time in the format 'start/stop/step' (default: 0/126/6).",
     )
-    (
-        parser.add_argument(
-            "--output",
-            type=Path,
-            default="verif.csv",
-            help="Output file to save the verification results (default: verif.csv).",
-        ),
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default="verif.csv",
+        help="Output file to save the verification results (default: verif.csv).",
     )
     args = parser.parse_args()
 
