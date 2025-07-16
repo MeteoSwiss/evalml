@@ -15,7 +15,10 @@ rule report_experiment_dashboard:
         template="resources/report/dashboard/template.html.jinja2",
         js_script="resources/report/dashboard/script.js",
     output:
-        OUT_ROOT / "results/{experiment}/dashboard.html",
+        report(
+            directory(OUT_ROOT / "results/{experiment}/metrics/dashboard"),
+            htmlindex="dashboard.html",
+        ),
     params:
         labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
     log:

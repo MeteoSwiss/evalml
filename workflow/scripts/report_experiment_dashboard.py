@@ -92,10 +92,12 @@ def main(args):
     )
     LOG.info("Size of generated HTML: %d bytes", len(html.encode("utf-8")))
 
-    with open(args.output, "w") as f:
+    output = Path(args.output) / "dashboard.html"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with open(output, "w") as f:
         f.write(html)
 
-    LOG.info("Dashboard generated and saved to %s", args.output)
+    LOG.info("Dashboard generated and saved to %s", output)
 
 
 if __name__ == "__main__":
