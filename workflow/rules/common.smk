@@ -4,7 +4,7 @@ import hashlib
 import json
 
 CONFIG_ROOT = Path("config").resolve()
-OUT_ROOT = Path(config["locations"]["output_root"]).resolve()
+OUT_ROOT = Path(config["locations"]["output_root"])
 
 
 def short_hash_config():
