@@ -72,69 +72,55 @@ rule make_squashfs_image:
         " > {log} 2>/dev/null"
 
 
-rule run_inference_group:
+rule run_inference:
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
         config=str(Path("config/anemoi_inference.yaml").resolve()),
     output:
-        okfile=temp(touch(OUT_ROOT / "data/runs/{run_id}/group-{group_index}.ok")),
+        directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
+        directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/raw"),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
         ),
-        reftimes=lambda wc: [
-            t.strftime("%Y-%m-%dT%H:%M") for t in REFTIMES_GROUPS[int(wc.group_index)]
-        ],
         lead_time=config["lead_time"],
+        reftime_to_iso=lambda wc: datetime.strptime(
+            wc.init_time, "%Y%m%d%H%M"
+        ).strftime("%Y-%m-%dT%H:%M"),
         output_root=OUT_ROOT / "data",
-    # TODO: we can have named logs for each reftime
     log:
-        OUT_ROOT / "logs/inference_run/{run_id}-{group_index}.log",
+        OUT_ROOT / "logs/inference_run/{run_id}-{init_time}.log",
     resources:
-        slurm_partition="short",
+        slurm_partition="debug",
         cpus_per_task=32,
         mem_mb_per_cpu=8000,
         runtime="20m",
-        gres="gpu:1",  # because we use --exclusive, this will be 1 GPU per run (--ntasks-per-gpus is automatically set to 1)
-        # see https://github.com/MeteoSwiss/mch-anemoi-evaluation/pull/3#issuecomment-2998997104
-        slurm_extra=lambda wc, input: f"--uenv={input.image}:/user-environment --exclusive",
+        gres="gpu:1",
+        slurm_extra=lambda wc, input: f"--uenv={input.image}:/user-environment",
     shell:
         """
+        (
         export TZ=UTC
         source /user-environment/bin/activate
         export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
-        i=0
-        for reftime in {params.reftimes}; do
 
-            # prepare the working directory
-            _reftime_str=$(date -d "$reftime" +%Y%m%d%H%M)
-            WORKDIR={params.output_root}/runs/{wildcards.run_id}/$_reftime_str
-            mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw
-            cp {input.config} config.yaml
+        # prepare the working directory
+        WORKDIR={params.output_root}/runs/{wildcards.run_id}/{wildcards.init_time}
+        mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw
+        cp {input.config} config.yaml
 
+        CMD_ARGS=(
+            date={params.reftime_to_iso}
+            checkpoint={params.checkpoints_path}/inference-last.ckpt
+            lead_time={params.lead_time}
+        )
+        echo "=========================================================="
+        echo "SLURM JOB ID: $SLURM_JOB_ID"
+        echo "HOSTNAME: $(hostname)"
+        echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
+        echo "=========================================================="
 
-            CMD_ARGS=(
-                date=$reftime
-                checkpoint={params.checkpoints_path}/inference-last.ckpt
-                lead_time={params.lead_time}
-            )
-
-            CUDA_VISIBLE_DEVICES=$i anemoi-inference run config.yaml "${{CMD_ARGS[@]}}" > inference.log 2>&1 &
-            echo "Started inference for reftime $reftime in $WORKDIR"
-            echo "CUDA_VISIBLE_DEVICES=$i"
-            i=$((i + 1))
-
-        done
-        wait
+        anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+        ) > {log} 2>&1
         """
-
-
-rule map_init_time_to_inference_group:
-    localrule: True
-    input:
-        lambda wc: OUT_ROOT
-        / f"data/runs/{wc.run_id}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
-    output:
-        directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
-        directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/raw"),
