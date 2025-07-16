@@ -10,7 +10,7 @@ include: "common.smk"
 
 
 # TODO: make sure the boundaries aren't used
-rule run_verif_cosmoe:
+rule verif_metrics_cosmoe:
     localrule: True
     input:
         script="workflow/scripts/verif_cosmoe_fct.py",
@@ -23,7 +23,7 @@ rule run_verif_cosmoe:
     output:
         OUT_ROOT / "data/baselines/COSMO-E/{init_time}/verif.csv",
     log:
-        OUT_ROOT / "logs/verif_cosmoe/{init_time}.log",
+        OUT_ROOT / "logs/verif_metrics_cosmoe/{init_time}.log",
     shell:
         """
         uv run {input.script} \
@@ -35,7 +35,7 @@ rule run_verif_cosmoe:
 
 
 # TODO: not have zarr_dataset hardcoded
-rule run_verif_fct:
+rule verif_metrics:
     localrule: True
     input:
         script="workflow/scripts/verif_from_grib.py",
@@ -47,13 +47,12 @@ rule run_verif_fct:
     # run_id="^" # to avoid ambiguitiy with run_cosmoe_verif
     # TODO: implement logic to use experiment name instead of run_id as wildcard
     log:
-        OUT_ROOT / "logs/verif_from_grib/{run_id}-{init_time}.log",
+        OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",
     shell:
         """
         uv run {input.script} \
             --grib_output_dir {input.grib_output} \
             --zarr_dataset {input.zarr_dataset} \
-            --reftime {wildcards.init_time} \
             --output {output} > {log} 2>&1
         """
 
@@ -65,12 +64,12 @@ def _restrict_reftimes_to_hours(reftimes, hours=None):
     return [t.strftime("%Y%m%d%H%M") for t in reftimes if t.hour in hours]
 
 
-rule run_verif_aggregation:
+rule verif_metrics_aggregation:
     localrule: True
     input:
         script="workflow/scripts/verif_aggregation.py",
         verif_csv=lambda wc: expand(
-            rules.run_verif_fct.output,
+            rules.verif_metrics.output,
             init_time=_restrict_reftimes_to_hours(REFTIMES),
             allow_missing=True,
         ),
@@ -79,7 +78,7 @@ rule run_verif_aggregation:
     params:
         verif_files_glob=lambda wc: OUT_ROOT / f"data/runs/{wc.run_id}/*/verif.csv",
     log:
-        OUT_ROOT / "logs/verif_aggregation/{run_id}.log",
+        OUT_ROOT / "logs/verif_metrics_aggregation/{run_id}.log",
     shell:
         """
         uv run {input.script} {params.verif_files_glob} \
@@ -87,12 +86,12 @@ rule run_verif_aggregation:
         """
 
 
-rule run_verif_aggregation_cosmoe:
+rule verif_metrics_aggregation_cosmoe:
     localrule: True
     input:
         script="workflow/scripts/verif_aggregation.py",
         verif_csv=lambda wc: expand(
-            rules.run_verif_cosmoe.output,
+            rules.verif_metrics_cosmoe.output,
             init_time=_restrict_reftimes_to_hours(REFTIMES, [0, 12]),
             allow_missing=True,
         ),
@@ -101,7 +100,7 @@ rule run_verif_aggregation_cosmoe:
     params:
         verif_files_glob=lambda wc: OUT_ROOT / "data/baselines/COSMO-E/*/verif.csv",
     log:
-        OUT_ROOT / "logs/verif_aggregation/COSMO-E.log",
+        OUT_ROOT / "logs/verif_metrics_aggregation_cosmoe/COSMO-E.log",
     shell:
         """
         uv run {input.script} {params.verif_files_glob} \
@@ -109,7 +108,7 @@ rule run_verif_aggregation_cosmoe:
         """
 
 
-rule run_verif_plot_metrics:
+rule verif_metrics_plot:
     localrule: True
     input:
         script="workflow/scripts/verif_plot_metrics.py",
@@ -119,7 +118,7 @@ rule run_verif_plot_metrics:
     params:
         labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
     log:
-        OUT_ROOT / "logs/verif_plot_metrics/{experiment}.log",
+        OUT_ROOT / "logs/verif_metrics_plot/{experiment}.log",
     shell:
         """
         uv run {input.script} {input.verif} \

@@ -74,7 +74,22 @@ def load_kenda1_data_from_zarr(
     )
 
     # select valid times
-    ds = ds.sel(time=valid_times)
+    # (handle special case where some valid times are not in the dataset, e.g. at the end)
+    valid_time_included = valid_times.isin(ds.time.values).values
+    if all(valid_time_included):
+        ds = ds.sel(time=valid_times)
+
+    elif 0 < np.sum(valid_time_included) < len(valid_time_included):
+        LOG.warning(
+            "Some valid times are not included in the dataset: \n%s",
+            valid_times[~valid_time_included].values,
+        )
+        ds = ds.sel(time=valid_times[valid_time_included])
+    else:
+        raise ValueError(
+            "Valid times are not included in the dataset. "
+            "Please check the valid times and the dataset."
+        )
 
     return ds
 
@@ -156,9 +171,24 @@ class ScriptConfig(Namespace):
     archive_root: Path = None
     zarr_dataset: Path = None
     cosmoe_zarr: Path = Path("/scratch/mch/fzanetta/data/COSMO-E/2020.zarr")
-    reftime: datetime = None
     params: list[str]
     lead_time: list[int] = _parse_lead_time("0/126/6")
+
+
+def program_summary_log(args):
+    """Log a welcome message with the script information."""
+    LOG.info("=" * 80)
+    LOG.info("Running verification of ML model forecast data")
+    LOG.info("=" * 80)
+    LOG.info("GRIB output directory: %s", args.grib_output_dir)
+    if args.zarr_dataset:
+        LOG.info("Zarr dataset: %s", args.zarr_dataset)
+    else:
+        LOG.info("Archive root: %s", args.archive_root)
+    LOG.info("Parameters: %s", args.params)
+    LOG.info("Lead time: %s", args.lead_time)
+    LOG.info("Output file: %s", args.output)
+    LOG.info("=" * 80)
 
 
 def main(args: ScriptConfig):
@@ -170,25 +200,22 @@ def main(args: ScriptConfig):
         grib_output_dir=args.grib_output_dir, params=args.params, step=args.lead_time
     )
     LOG.info(
-        "Loaded forecast data from GRIB files in %.2f seconds",
+        "Loaded forecast data from GRIB files in %.2f seconds: \n%s",
         (datetime.now() - start).total_seconds(),
+        fct,
     )
 
     # get truth data (COSMO-2 analysis aka KENDA-1)
+    start = datetime.now()
     if args.zarr_dataset:
-        start = datetime.now()
         kenda = (
             load_kenda1_data_from_zarr(
                 zarr_dataset=args.zarr_dataset,
-                valid_times=fct.valid_time,
+                valid_times=fct.valid_time.squeeze(),
                 params=args.params,
             )
             .compute()
             .chunk({"y": -1, "x": -1})
-        )
-        LOG.info(
-            "Loaded KENDA-1 data from Zarr dataset in %.2f seconds",
-            (datetime.now() - start).total_seconds(),
         )
     elif args.archive_root:
         # kenda = load_kenda1_data_from_grib(
@@ -199,6 +226,11 @@ def main(args: ScriptConfig):
         pass
     else:
         raise ValueError("Either --archive_root or --zarr_dataset must be provided.")
+    LOG.info(
+        "Loaded KENDA-1 data from Zarr dataset in %.2f seconds: \n%s",
+        (datetime.now() - start).total_seconds(),
+        kenda,
+    )
 
     # compute metrics and statistics
     start = datetime.now()
@@ -217,7 +249,9 @@ def main(args: ScriptConfig):
     results = xr.Dataset({k: v.to_array("param") for k, v in results.items()})
     results = results.to_array("metric").to_dataframe(name="value").reset_index()
     LOG.info(
-        "Computed metrics in %.2f seconds", (datetime.now() - start).total_seconds()
+        "Computed metrics in %.2f seconds: \n%s",
+        (datetime.now() - start).total_seconds(),
+        results,
     )
 
     # # save results to CSV
@@ -258,30 +292,23 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--reftime",
-        type=lambda s: datetime.strptime(s, "%Y%m%d%H%M"),
-        help="Valid time for the data in ISO format (default: 6 hours ago).",
-    )
-    parser.add_argument(
         "--params",
         type=lambda x: x.split(","),
         required=False,
         default=PARAMS,
-        help="Comma-separated list of parameters to verify (default: T_2M,TD_2M,U_10M,V_10M).",
+        help="Comma-separated list of parameters to verify.",
     )
     parser.add_argument(
         "--lead_time",
         type=_parse_lead_time,
         default="0/126/6",
-        help="Lead time in the format 'start/stop/step' (default: 0/126/6).",
+        help="Lead time in the format 'start/stop/step'.",
     )
-    (
-        parser.add_argument(
-            "--output",
-            type=Path,
-            default="verif.csv",
-            help="Output file to save the verification results (default: verif.csv).",
-        ),
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default="verif.csv",
+        help="Output file to save the verification results.",
     )
     args = parser.parse_args()
 
