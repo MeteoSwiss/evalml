@@ -48,12 +48,27 @@ def cli():
     type=int,
     help="Number of cores to use for local execution.",
 )
+@click.option(
+    "--report",
+    default=None,
+    required=False,
+    metavar="FILE",
+    type=click.Path(path_type=Path),
+    help=(
+        "Create a self-contained HTML report with workflow statistics, provenance information, "
+        "and results. Specify a `.html` file to embed all results. "
+        "Open `report.html` in a browser to view it."
+    ),
+    is_flag=False,
+    flag_value="report.html",
+)
 @common_options
 def experiment(
     configfile: Path,
     cores: int | None = None,
     verbose: bool = False,
     dry_run: bool = False,
+    report: Path | None = None,
 ):
     """Run an ML experiment defined in the given config file."""
     config = load_yaml(configfile)
@@ -73,5 +88,9 @@ def experiment(
     # Add global options if set
     if verbose:
         command += ["--printshellcmds"]
+
+    # Create report after finishing the run
+    if report and not dry_run:
+        command += ["--report-after-run", "--report", str(report)]
 
     raise SystemExit(run_command(command))
