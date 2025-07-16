@@ -115,7 +115,10 @@ rule run_verif_plot_metrics:
         script="workflow/scripts/verif_plot_metrics.py",
         verif=list(EXPERIMENT_PARTICIPANTS.values()),
     output:
-        directory(OUT_ROOT / "results/{experiment}/metrics/plots"),
+        report(
+            directory(OUT_ROOT / "results/{experiment}/metrics/plots"),
+            patterns=["{name}.png"],
+        ),
     params:
         labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
     log:
