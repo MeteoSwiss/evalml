@@ -147,3 +147,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args)
+
+"""
+Example usage:
+python workflow/scripts/extract_cosmoe_fct.py \
+    --archive_dir /archive/mch/msopr/osm/COSMO-E/FCST20 \
+    --output_store /store_new/mch/msopr/ml/COSMO-E/FCST20.zarr \
+    --lead_time 0/126/6
+"""
