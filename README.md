@@ -62,7 +62,7 @@ profile:
 You can then run it with:
 
 ```bash
-evalml experiment path/to/experiment/config.yaml
+evalml experiment path/to/experiment/config.yaml --report
 ```
 
 
