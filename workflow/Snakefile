@@ -40,12 +40,17 @@ onerror:
 EXPERIMENT_HASH = short_hash_config()
 
 
-rule all:
-    """Final target rule to run all necessary steps."""
+rule experiment_all:
+    """Target rule for experiment workflow."""
     input:
         OUT_ROOT / f"results/{EXPERIMENT_HASH}/metrics/dashboard",
         OUT_ROOT / f"results/{EXPERIMENT_HASH}/metrics/plots",
-    default_target: True
+
+
+rule showcase_all:
+    """Target rule for showcase workflow."""
+    input:
+        [],
 
 
 rule run_inference_all:

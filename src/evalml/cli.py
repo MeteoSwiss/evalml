@@ -19,17 +19,56 @@ def load_yaml(path: Path) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def common_options(func):
+def workflow_options(func):
+    """Decorator to apply common CLI options."""
     func = click.option(
-        "--dry-run",
-        "-n",
-        is_flag=True,
-        help="Do not execute anything, and display what would be done.",
+        "--dry-run", "-n", is_flag=True, help="Do not execute anything."
     )(func)
     func = click.option("--verbose", "-v", is_flag=True, help="Enable verbose output.")(
         func
     )
+    func = click.option(
+        "--cores", "-c", default=4, type=int, help="Number of cores to use."
+    )(func)
+    func = click.option(
+        "--report",
+        default=None,
+        required=False,
+        metavar="FILE",
+        type=click.Path(path_type=Path),
+        help=(
+            "Create a self-contained HTML report. Use `.html` to embed all results. "
+            "Default name is derived from the command."
+        ),
+        is_flag=False,
+    )(func)
     return func
+
+
+def execute_workflow(
+    configfile: Path,
+    target: str,
+    cores: int,
+    verbose: bool,
+    dry_run: bool,
+    report: Path | None,
+):
+    config = ExperimentConfig.model_validate(load_yaml(configfile))
+
+    command = ["snakemake"]
+    command += config.profile.parsable()
+    command += ["--configfile", str(configfile)]
+    command += ["--cores", str(cores)]
+
+    if dry_run:
+        command.append("--dry-run")
+    if verbose:
+        command.append("--printshellcmds")
+    if report and not dry_run:
+        command += ["--report-after-run", "--report", str(report)]
+
+    command.append(target)
+    raise SystemExit(run_command(command))
 
 
 @click.group(help="Evaluation workflows for ML experiments.")
@@ -41,56 +80,19 @@ def cli():
 @click.argument(
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
-@click.option(
-    "--cores",
-    "-c",
-    default=4,
-    type=int,
-    help="Number of cores to use for local execution.",
+@workflow_options
+def experiment(configfile, cores, verbose, dry_run, report):
+    if report is True:
+        report = Path("experiment-report.html")
+    execute_workflow(configfile, "experiment_all", cores, verbose, dry_run, report)
+
+
+@cli.command(help="Obtain showcase material as defined by a config YAML file.")
+@click.argument(
+    "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
-@click.option(
-    "--report",
-    default=None,
-    required=False,
-    metavar="FILE",
-    type=click.Path(path_type=Path),
-    help=(
-        "Create a self-contained HTML report with workflow statistics, provenance information, "
-        "and results. Specify a `.html` file to embed all results. "
-        "Open `report.html` in a browser to view it."
-    ),
-    is_flag=False,
-    flag_value="report.html",
-)
-@common_options
-def experiment(
-    configfile: Path,
-    cores: int | None = None,
-    verbose: bool = False,
-    dry_run: bool = False,
-    report: Path | None = None,
-):
-    """Run an ML experiment defined in the given config file."""
-    config = load_yaml(configfile)
-
-    # Validate the config against the ExperimentConfig model
-    config = ExperimentConfig.model_validate(config)
-
-    command = ["snakemake"]
-    command += config.profile.parsable()
-    command += ["--configfile", str(configfile)]
-    command += ["--cores", str(cores)]
-
-    # Execute dry snakemake run if set
-    if dry_run:
-        command.append("--dry-run")
-
-    # Add global options if set
-    if verbose:
-        command += ["--printshellcmds"]
-
-    # Create report after finishing the run
-    if report and not dry_run:
-        command += ["--report-after-run", "--report", str(report)]
-
-    raise SystemExit(run_command(command))
+@workflow_options
+def showcase(configfile, cores, verbose, dry_run, report):
+    if report is True:
+        report = Path("showcase-report.html")
+    execute_workflow(configfile, "showcase_all", cores, verbose, dry_run, report)
