@@ -79,6 +79,14 @@
       "title": "Execution",
       "type": "object"
     },
+    "ExplicitDates": {
+      "description": "Explicit list of initialisation dates as ISO-8601 formatted strings.",
+      "items": {
+        "type": "string"
+      },
+      "title": "ExplicitDates",
+      "type": "array"
+    },
     "Locations": {
       "description": "Locations of data and services used in the workflow.",
       "properties": {
@@ -166,7 +174,15 @@
       "type": "string"
     },
     "dates": {
-      "$ref": "#/$defs/Dates"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Dates"
+        },
+        {
+          "$ref": "#/$defs/ExplicitDates"
+        }
+      ],
+      "title": "Dates"
     },
     "lead_time": {
       "description": "Forecast length, e.g. '120h'",
