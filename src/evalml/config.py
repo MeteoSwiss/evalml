@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, RootModel
 
 
 class Dates(BaseModel):
@@ -20,6 +20,10 @@ class Dates(BaseModel):
         description="Time between initialisations. Must be a combination of a number and a time unit (h or d).",
         pattern=r"^\d+[hd]$",
     )
+
+
+class ExplicitDates(RootModel[List[str]]):
+    """Explicit list of initialisation dates as ISO-8601 formatted strings."""
 
 
 class RunConfig(BaseModel):
@@ -91,7 +95,7 @@ class ExperimentConfig(BaseModel):
         ...,
         description="Description of the experiment, e.g. 'Hindcast of the 2023 season.'",
     )
-    dates: Dates
+    dates: Dates | ExplicitDates
     lead_time: str = Field(
         ..., description="Forecast length, e.g. '120h'", pattern=r"^\d+[hmd]$"
     )
