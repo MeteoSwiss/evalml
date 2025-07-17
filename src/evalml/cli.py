@@ -38,6 +38,7 @@ def workflow_options(func):
         default=None,
         required=False,
         metavar="FILE",
+        type=click.Path(path_type=Path),
         help="Create a self-contained HTML report.",
         is_flag=False,
         flag_value=f"{command_name}_report.html",
@@ -82,9 +83,7 @@ def cli():
 )
 @workflow_options
 def experiment(configfile, cores, verbose, dry_run, report):
-    execute_workflow(
-        configfile, "experiment_all", cores, verbose, dry_run, Path(report)
-    )
+    execute_workflow(configfile, "experiment_all", cores, verbose, dry_run, report)
 
 
 @cli.command(help="Obtain showcase material as defined by a config YAML file.")
@@ -93,4 +92,4 @@ def experiment(configfile, cores, verbose, dry_run, report):
 )
 @workflow_options
 def showcase(configfile, cores, verbose, dry_run, report):
-    execute_workflow(configfile, "showcase_all", cores, verbose, dry_run, Path(report))
+    execute_workflow(configfile, "showcase_all", cores, verbose, dry_run, report)
