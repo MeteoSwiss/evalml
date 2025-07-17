@@ -36,11 +36,7 @@ def workflow_options(func):
         required=False,
         metavar="FILE",
         type=click.Path(path_type=Path),
-        help=(
-            "Create a self-contained HTML report. Use `.html` to embed all results. "
-            "Default name is derived from the command."
-        ),
-        is_flag=False,
+        help="Create a self-contained HTML report.",
     )(func)
     return func
 
@@ -82,8 +78,6 @@ def cli():
 )
 @workflow_options
 def experiment(configfile, cores, verbose, dry_run, report):
-    if report is True:
-        report = Path("experiment-report.html")
     execute_workflow(configfile, "experiment_all", cores, verbose, dry_run, report)
 
 
@@ -93,6 +87,4 @@ def experiment(configfile, cores, verbose, dry_run, report):
 )
 @workflow_options
 def showcase(configfile, cores, verbose, dry_run, report):
-    if report is True:
-        report = Path("showcase-report.html")
     execute_workflow(configfile, "showcase_all", cores, verbose, dry_run, report)
