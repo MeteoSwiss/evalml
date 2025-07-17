@@ -88,7 +88,7 @@ class Profile(BaseModel):
         return out
 
 
-class ExperimentConfig(BaseModel):
+class ConfigModel(BaseModel):
     """Top-level configuration."""
 
     description: str = Field(
@@ -114,8 +114,8 @@ class ExperimentConfig(BaseModel):
 
 
 def generate_config_schema() -> str:
-    """Generate the JSON schema for the ExperimentConfig model."""
-    return ExperimentConfig.model_json_schema()
+    """Generate the JSON schema for the ConfigModel."""
+    return ConfigModel.model_json_schema()
 
 
 if __name__ == "__main__":
@@ -123,7 +123,7 @@ if __name__ == "__main__":
     import json
 
     parser = argparse.ArgumentParser(
-        description="Generate the JSON schema for the experiment configuration."
+        description="Generate the JSON schema for the evalml configuration"
     )
     parser.add_argument(
         "output", type=str, help="Path to save the generated JSON schema."

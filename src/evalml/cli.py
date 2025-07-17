@@ -5,7 +5,7 @@ from typing import Any
 import yaml
 import click
 
-from evalml.config import ExperimentConfig
+from evalml.config import ConfigModel
 
 
 def run_command(command: list[str]) -> int:
@@ -53,7 +53,7 @@ def execute_workflow(
     dry_run: bool,
     report: Path | None,
 ):
-    config = ExperimentConfig.model_validate(load_yaml(configfile))
+    config = ConfigModel.model_validate(load_yaml(configfile))
 
     command = ["snakemake"]
     command += config.profile.parsable()

@@ -222,6 +222,6 @@
     "locations",
     "profile"
   ],
-  "title": "ExperimentConfig",
+  "title": "ConfigModel",
   "type": "object"
 }
