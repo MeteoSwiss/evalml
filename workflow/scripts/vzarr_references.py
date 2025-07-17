@@ -5,6 +5,7 @@ from itertools import product
 from datetime import datetime, timedelta
 import sys
 import os
+import logging
 
 import ujson
 from kerchunk.combine import merge_vars, MultiZarrToZarr
@@ -15,6 +16,12 @@ import xarray as xr
 
 DEFINITION_PATH = Path(sys.prefix) / "share/eccodes-cosmo-resources/definitions"
 os.environ["ECCODES_DEFINITION_PATH"] = str(DEFINITION_PATH)
+
+LOG = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 
 
 def merged_var_refs(gribfile: Path, filter: dict):
@@ -146,18 +153,32 @@ def _pl_mzz_post_process(refs: dict[str, dict]):
 
 def cmd_generate(args):
     """Command to generate references from GRIB2 files."""
+
+    LOG.info("=" * 80)
+    LOG.info("Generating references for GRIB2 files")
+    LOG.info(f"Template: {args.template}")
+    LOG.info(f"Values: {args.values}")
+    LOG.info(f"Levels: {args.levels}")
+    LOG.info(f"Output file: {args.output}")
+    LOG.info(f"Inspect: {args.inspect}")
+    LOG.info("=" * 80)
+
     files = find_files(args.template, expand=dict(args.values))
     if not files:
         raise ValueError(
             f"No files found for template {args.template} with values {args.values}"
         )
+    LOG.info(f"Found {len(files)} files matching the template.")
 
     sfc_refs = create_combine_sfc_refs(files)
     pl_refs = create_combine_pl_refs(files, levelist=args.levels)
     refs = merge_vars([sfc_refs, pl_refs])
+    LOG.info("Created references.")
 
     with open(args.output, "w") as f:
         ujson.dump(refs, f, indent=4)
+
+    LOG.info(f"Saved references to {args.output}")
 
     if args.inspect:
         ds = xr.open_dataset(refs, engine="kerchunk", decode_timedelta=True)
@@ -167,44 +188,41 @@ def cmd_generate(args):
 def cmd_combine(args):
     """Command to combine existing reference JSON files."""
 
+    LOG.info("=" * 80)
+    LOG.info("Combining references from multiple runs")
+    LOG.info(f"Experiment root: {args.experiment_root}")
+    LOG.info(f"Output file: {args.output}")
+    LOG.info(f"Start time: {args.start}")
+    LOG.info(f"End time: {args.end}")
+    LOG.info(f"Step size: {args.step} hours")
+    LOG.info("=" * 80)
+
     start = datetime.fromisoformat(args.start)
     end = datetime.fromisoformat(args.end)
     step = timedelta(hours=args.step)
     current = start
     refs = []
     while current <= end:
-        print(f"Processing {current}...")
         timestamp = current.strftime("%Y%m%d%H%M")
         ref_file = args.experiment_root / timestamp / "references.json"
         if not ref_file.exists():
             raise FileNotFoundError(f"Reference file {ref_file} does not exist.")
         refs.append(ref_file.as_posix())
         current += step
+    LOG.info(f"Found {len(refs)} reference files.")
 
     refs = MultiZarrToZarr(
         refs,
         concat_dims=["forecast_reference_time"],
         identical_dims=["latitude", "longitude"],
     ).translate()
+    LOG.info("Combined references")
 
-    if args.inspect:
-        # import fsspec
-        # fs = fsspec.filesystem("reference", fo=refs, remote_options={'anon':True}).get_mapper("")
-        # ds = xr.open_zarr(fs, decode_timedelta=True, consolidated=False)
-        ds = xr.open_dataset(  # noqa: F841
-            refs,
-            engine="kerchunk",
-            decode_timedelta=True,
-            chunks={"forecast_reference_time": "auto", "step": 1},
-        )
-        # print(ds)
-        # print(ds["T_2M"][:].mean(["forecast_reference_time","step"]).compute(num_workers=8))
-        # print(ds.isel(forecast_reference_time=slice(None, 50)).persist(num_workers=128).mean().compute(num_workers=16))
-        # print(ds["T_2M"].persist(num_workers=128).mean().compute(num_workers=16))
-        # exit()
-        breakpoint()
+    refs_to_dataframe(refs, args.output)
+    LOG.info(f"Saved combined references to {args.output}")
 
-    refs_to_dataframe(refs, str(args.experiment_root / args.output))
+    ds = xr.open_dataset(refs, engine="kerchunk", decode_timedelta=True)
+    LOG.info("Resulting dataset: \n%s", ds)
 
 
 def parse_kv(s: str) -> tuple[str, int | list[int] | str]:
@@ -224,7 +242,6 @@ def _cast_int(v: str) -> int | str:
 
 
 def main():
-    # breakpoint()
     # show defaults
     parser = argparse.ArgumentParser(
         prog="kerchunk-tool",

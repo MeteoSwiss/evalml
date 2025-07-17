@@ -67,7 +67,7 @@ rule make_squashfs_image:
     localrule: True
     shell:
         # we can safely ignore the many warnings "Unrecognised xattr prefix..."
-        "mksquashfs {input.venv} {output.image}"
+        "mksquashfs $(realpath {input.venv}) {output.image}"
         " -no-recovery -noappend -Xcompression-level 3"
         " > {log} 2>/dev/null"
 
@@ -87,7 +87,7 @@ rule run_inference_group:
             t.strftime("%Y-%m-%dT%H:%M") for t in REFTIMES_GROUPS[int(wc.group_index)]
         ],
         lead_time=config["lead_time"],
-        output_root=OUT_ROOT / "data",
+        output_root=(OUT_ROOT / "data").resolve(),
     # TODO: we can have named logs for each reftime
     log:
         OUT_ROOT / "logs/inference_run/{run_id}-{group_index}.log",
@@ -98,7 +98,7 @@ rule run_inference_group:
         runtime="20m",
         gres="gpu:1",  # because we use --exclusive, this will be 1 GPU per run (--ntasks-per-gpus is automatically set to 1)
         # see https://github.com/MeteoSwiss/mch-anemoi-evaluation/pull/3#issuecomment-2998997104
-        slurm_extra=lambda wc, input: f"--uenv={input.image}:/user-environment --exclusive",
+        slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment --exclusive",
     shell:
         """
         export TZ=UTC
