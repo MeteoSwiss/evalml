@@ -21,6 +21,9 @@ def load_yaml(path: Path) -> dict[str, Any]:
 
 def workflow_options(func):
     """Decorator to apply common CLI options."""
+
+    command_name = func.__name__
+
     func = click.option(
         "--dry-run", "-n", is_flag=True, help="Do not execute anything."
     )(func)
@@ -35,8 +38,9 @@ def workflow_options(func):
         default=None,
         required=False,
         metavar="FILE",
-        type=click.Path(path_type=Path),
         help="Create a self-contained HTML report.",
+        is_flag=False,
+        flag_value=f"{command_name}_report.html",
     )(func)
     return func
 
@@ -78,7 +82,9 @@ def cli():
 )
 @workflow_options
 def experiment(configfile, cores, verbose, dry_run, report):
-    execute_workflow(configfile, "experiment_all", cores, verbose, dry_run, report)
+    execute_workflow(
+        configfile, "experiment_all", cores, verbose, dry_run, Path(report)
+    )
 
 
 @cli.command(help="Obtain showcase material as defined by a config YAML file.")
@@ -87,4 +93,4 @@ def experiment(configfile, cores, verbose, dry_run, report):
 )
 @workflow_options
 def showcase(configfile, cores, verbose, dry_run, report):
-    execute_workflow(configfile, "showcase_all", cores, verbose, dry_run, report)
+    execute_workflow(configfile, "showcase_all", cores, verbose, dry_run, Path(report))
