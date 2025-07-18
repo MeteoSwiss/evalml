@@ -47,10 +47,14 @@ def main(args: argparse.Namespace) -> None:
 
     LOG.info("Created zip file: %s", args.output)
 
-    # test with 'unzip -l sandbox.zip' to verify contents
     with zipfile.ZipFile(args.output, "r") as zipf:
         zip_contents = zipf.namelist()
+        for label, path in files_to_add.items():
+            if label not in zip_contents:
+                sys.exit(f"Error: {label} not found in the zip file: {args.output}")
         LOG.info("Contents of the created zip file: \n%s", "\n".join(zip_contents))
+
+    LOG.info("Program completed successfully.")
 
 
 if __name__ == "__main__":

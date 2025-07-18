@@ -27,6 +27,7 @@ rule create_inference_venv:
         pyproject=rules.create_inference_pyproject.output.pyproject,
     output:
         venv=temp(directory(OUT_ROOT / "data/runs/{run_id}/.venv")),
+        lockfile=OUT_ROOT / "data/runs/{run_id}/uv.lock",
     params:
         py_version=parse_input(
             input.pyproject, parse_toml, key="project.requires-python"
@@ -70,6 +71,36 @@ rule make_squashfs_image:
         "mksquashfs $(realpath {input.venv}) {output.image}"
         " -no-recovery -noappend -Xcompression-level 3"
         " > {log} 2>/dev/null"
+
+
+rule create_inference_sandbox:
+    """Generate a zipped directory that can be used as a sandbox for running inference jobs.
+
+    TO use this sandbox, unzip it to a target directory.
+
+    ```bash
+    unzip sandbox.zip -d /path/to/target/directory
+    ```
+    """
+    input:
+        script="workflow/scripts/inference_create_sandbox.py",
+        image=rules.make_squashfs_image.output.image,
+        pyproject=rules.create_inference_pyproject.output.pyproject,
+        lockfile=rules.create_inference_venv.output.lockfile,
+        config=str(Path("config/anemoi_inference.yaml").resolve()),
+    output:
+        sandbox=OUT_ROOT / "data/runs/{run_id}/sandbox.zip",
+    log:
+        OUT_ROOT / "logs/create_inference_sandbox/{run_id}.log",
+    localrule: True
+    shell:
+        """
+        uv run {input.script} \
+            --pyproject {input.pyproject} \
+            --lockfile {input.lockfile} \
+            --output {output.sandbox} \
+            > {log} 2>&1
+        """
 
 
 rule run_inference_group:
