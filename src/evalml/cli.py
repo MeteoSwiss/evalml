@@ -93,3 +93,14 @@ def experiment(configfile, cores, verbose, dry_run, report):
 @workflow_options
 def showcase(configfile, cores, verbose, dry_run, report):
     execute_workflow(configfile, "showcase_all", cores, verbose, dry_run, report)
+
+
+@cli.command(
+    help="Generate a sandbox for inference for the runs defined in the config YAML file."
+)
+@click.argument(
+    "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
+@workflow_options
+def sandbox(configfile, cores, verbose, dry_run, report):
+    execute_workflow(configfile, "sandbox_all", cores, verbose, dry_run, report)
