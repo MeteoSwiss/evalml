@@ -53,6 +53,15 @@ rule showcase_all:
         [],
 
 
+rule sandbox_all:
+    """Target rule for creating a sandbox for inference."""
+    input:
+        expand(
+            rules.create_inference_sandbox.output.sandbox,
+            run_id=collect_all_runs(),
+        ),
+
+
 rule run_inference_all:
     """Run inference for all reference times as defined in the configuration."""
     input:

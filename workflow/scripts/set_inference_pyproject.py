@@ -257,7 +257,11 @@ def version_to_pep440_range(version: str) -> str:
 
 
 def update_pyproject_toml(
-    versions: dict, toml_path: Path, python_version: str, checkpoints_path: str
+    versions: dict,
+    toml_path: Path,
+    python_version: str,
+    checkpoints_path: str,
+    run_mlflow_link: str,
 ) -> None:
     """
     Update pyproject.toml [project.dependencies] with versions or Git references.
@@ -298,6 +302,7 @@ def update_pyproject_toml(
     config["project"]["dependencies"] = updated
     config["project"]["requires-python"] = version_to_pep440_range(python_version)
     config.setdefault("tool", {})["anemoi"] = {"checkpoints_path": checkpoints_path}
+    config["tool"]["anemoi"]["run_mlflow_link"] = run_mlflow_link
 
     try:
         with open(toml_path, "w", encoding="utf-8") as f:
@@ -324,8 +329,13 @@ def main(snakemake) -> None:
     python_version = get_python_version(client, run_id)
     checkpoints_path = get_path_to_checkpoints(client, run_id)
 
+    run_mlflow_link = client.tracking_uri + "/#/runs/" + run_id
     update_pyproject_toml(
-        anemoi_versions, toml_path_out, python_version, checkpoints_path
+        anemoi_versions,
+        toml_path_out,
+        python_version,
+        checkpoints_path,
+        run_mlflow_link,
     )
 
     logger.info("Successfully updated dependencies in %s", toml_path_out)
