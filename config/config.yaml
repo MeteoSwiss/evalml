@@ -39,4 +39,4 @@ profile:
       cpus_per_task: 1
       mem_mb_per_cpu: 1800
       runtime: "1h"
-  jobs: 30
+  jobs: 10

@@ -120,11 +120,13 @@ rule verif_metrics_plot:
         ),
     params:
         labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
+        valid_every="12",  # TODO: make this a parameter
     log:
         OUT_ROOT / "logs/verif_metrics_plot/{experiment}.log",
     shell:
         """
         uv run {input.script} {input.verif} \
             --labels '{params.labels}' \
+            --valid-every '{params.valid_every}' \
             --output_dir {output} > {log} 2>&1
         """
