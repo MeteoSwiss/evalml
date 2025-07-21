@@ -77,11 +77,13 @@ rule verif_metrics_aggregation:
         OUT_ROOT / "data/runs/{run_id}/verif_aggregated.csv",
     params:
         verif_files_glob=lambda wc: OUT_ROOT / f"data/runs/{wc.run_id}/*/verif.csv",
+        valid_every="12",  # TODO: make this a parameter
     log:
         OUT_ROOT / "logs/verif_metrics_aggregation/{run_id}.log",
     shell:
         """
         uv run {input.script} {params.verif_files_glob} \
+            --valid_every '{params.valid_every}' \
             --output {output} > {log} 2>&1
         """
 
@@ -99,11 +101,13 @@ rule verif_metrics_aggregation_cosmoe:
         OUT_ROOT / "data/baselines/COSMO-E/verif_aggregated.csv",
     params:
         verif_files_glob=lambda wc: OUT_ROOT / "data/baselines/COSMO-E/*/verif.csv",
+        valid_every="12",  # TODO: make this a parameter
     log:
         OUT_ROOT / "logs/verif_metrics_aggregation_cosmoe/COSMO-E.log",
     shell:
         """
         uv run {input.script} {params.verif_files_glob} \
+            --valid_every '{params.valid_every}' \
             --output {output} > {log} 2>&1
         """
 
@@ -120,13 +124,11 @@ rule verif_metrics_plot:
         ),
     params:
         labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
-        valid_every="12",  # TODO: make this a parameter
     log:
         OUT_ROOT / "logs/verif_metrics_plot/{experiment}.log",
     shell:
         """
         uv run {input.script} {input.verif} \
             --labels '{params.labels}' \
-            --valid-every '{params.valid_every}' \
             --output_dir {output} > {log} 2>&1
         """

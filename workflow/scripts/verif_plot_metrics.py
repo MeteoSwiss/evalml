@@ -103,18 +103,6 @@ def main(args: Namespace) -> None:
         title = f"{metric} - {param}"
         title += f"- {hour} - {season} - {init_hour}" if args.stratify else ""
         for i, df in enumerate(subsets_dfs):
-            # compute valid time
-            df["valid_time"] = df["init_time"] + df["lead_time"]
-            # apply valid_time filter
-            if args.valid_every:
-                df = df[
-                    (df["valid_time"].dt.minute == 0)
-                    & (df["valid_time"].dt.second == 0)
-                    & (df["valid_time"].dt.hour % args.valid_every == 0)
-                ]
-            if df.empty:
-                LOG.warning(f"Skipping plot for '{labels[i]}' due to empty dataframe.")
-                continue
             # convert lead time to integer hours for plotting
             df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
             df.plot(
@@ -157,12 +145,6 @@ if __name__ == "__main__":
         type=Path,
         default="plots",
         help="Path to save the aggregated results.",
-    )
-    parser.add_argument(
-        "--valid_every",
-        type=int,
-        default=None,
-        help="Only include data where the valid time (init_time + lead_time) is a multiple of this number of hours.",
     )
     args = parser.parse_args()
     main(args)
