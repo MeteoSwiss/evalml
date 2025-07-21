@@ -118,7 +118,7 @@ if __name__ == "__main__":
         "--valid_every",
         type=int,
         default=None,
-        help="Only include data where the valid time (init_time + lead_time) is a multiple of this number of hours.",
+        help="Only include data where the hour of the day of the valid time is a multiple of this number of hours.",
     )
     parser.add_argument(
         "--output",
