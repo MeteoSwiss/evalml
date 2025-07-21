@@ -77,7 +77,7 @@ rule verif_metrics_aggregation:
         OUT_ROOT / "data/runs/{run_id}/verif_aggregated.csv",
     params:
         verif_files_glob=lambda wc: OUT_ROOT / f"data/runs/{wc.run_id}/*/verif.csv",
-        valid_every="12",  # TODO: make this a parameter
+        valid_every=config.get("verification", {}).get("valid_every"),
     log:
         OUT_ROOT / "logs/verif_metrics_aggregation/{run_id}.log",
     shell:
@@ -101,7 +101,7 @@ rule verif_metrics_aggregation_cosmoe:
         OUT_ROOT / "data/baselines/COSMO-E/verif_aggregated.csv",
     params:
         verif_files_glob=lambda wc: OUT_ROOT / "data/baselines/COSMO-E/*/verif.csv",
-        valid_every="12",  # TODO: make this a parameter
+        valid_every=config.get("verification", {}).get("valid_every"),
     log:
         OUT_ROOT / "logs/verif_metrics_aggregation_cosmoe/COSMO-E.log",
     shell:
