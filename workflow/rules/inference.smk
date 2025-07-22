@@ -7,9 +7,6 @@ from pathlib import Path
 from datetime import datetime
 
 
-configfile: "config/config.yaml"
-
-
 rule create_inference_pyproject:
     input:
         toml="workflow/envs/anemoi_inference.toml",

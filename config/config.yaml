@@ -35,8 +35,8 @@ locations:
 profile:
   executor: slurm
   default_resources:
-      slurm_partition: "postproc"
-      cpus_per_task: 1
-      mem_mb_per_cpu: 1800
-      runtime: "1h"
-  jobs: 30
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+  jobs: 10

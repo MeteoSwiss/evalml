@@ -103,14 +103,15 @@ def main(args: Namespace) -> None:
         title = f"{metric} - {param}"
         title += f"- {hour} - {season} - {init_hour}" if args.stratify else ""
         for i, df in enumerate(subsets_dfs):
-            # convert lead time to integer hours
+            # convert lead time to integer hours for plotting
             df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
             df.plot(
                 x="lead_time",
                 y="value_mean",
                 kind="line",
+                marker="o",
                 title=title,
-                xlabel="Lead Time",
+                xlabel="Lead Time [h]",
                 ylabel=metric,
                 label=labels[i],
                 ax=ax,
@@ -139,13 +140,11 @@ if __name__ == "__main__":
         default=None,
         help="Labels for the runs, if not provided, will use run_id.",
     )
-    (
-        parser.add_argument(
-            "--output_dir",
-            type=Path,
-            default="plots",
-            help="Path to save the aggregated results.",
-        ),
+    parser.add_argument(
+        "--output_dir",
+        type=Path,
+        default="plots",
+        help="Path to save the aggregated results.",
     )
     args = parser.parse_args()
     main(args)

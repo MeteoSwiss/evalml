@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, HttpUrl, RootModel
 
@@ -38,6 +38,15 @@ class RunConfig(BaseModel):
     label: str = Field(
         ...,
         description="The label for the run that will be used in experiment results such as reports and figures.",
+    )
+
+
+class VerifConfig(BaseModel):
+    """Configuration for the verification of the experiment."""
+
+    valid_every: Optional[int] = Field(
+        ge=1,
+        description="Hours between verification times starting from 00:00 UTC. If None, no filtering is applied.",
     )
 
 
@@ -103,6 +112,7 @@ class ConfigModel(BaseModel):
     baseline: str = Field(
         ..., description="The label of the NWP baseline run to compare against."
     )
+    verification: Optional[VerifConfig] = None
     execution: Execution
     locations: Locations
     profile: Profile
