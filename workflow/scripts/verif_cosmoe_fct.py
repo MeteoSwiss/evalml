@@ -173,6 +173,8 @@ def main(args: ScriptConfig):
     # get COSMO-E forecast data
     now = datetime.now()
     coe = xr.open_zarr(args.cosmoe_zarr, consolidated=True, decode_timedelta=True)
+    if "TOT_PREC" in coe.data_vars:
+        coe = coe.assign(TOT_PREC = lambda x: x.TOT_PREC / 1000) # change units to m as in analysis
     coe = coe.rename({"forecast_reference_time": "ref_time", "step": "lead_time"})
     coe = coe[args.params].sel(
         ref_time=args.reftime,
