@@ -85,6 +85,18 @@ def main(args: Namespace) -> None:
 
     LOG.info("Concatenated DataFrame: \n %s", df.head())
 
+    if args.valid_every:
+        LOG.info("Filtering data based on valid time")
+        df = df[
+            (df["valid_time"].dt.minute == 0)
+            & (df["valid_time"].dt.second == 0)
+            & (df["valid_time"].dt.hour % args.valid_every == 0)
+        ]
+        if df.empty:
+            raise ValueError(
+                f"No data found with valid time every {args.valid_every} hours."
+            )
+
     LOG.info("Aggregating results")
     results = aggregate_results(df)
 
@@ -102,13 +114,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "verif_files", type=Path, nargs="+", help="Paths to verification files."
     )
-    (
-        parser.add_argument(
-            "--output",
-            type=Path,
-            default="verif_results.csv",
-            help="Path to save the aggregated results.",
-        ),
+    parser.add_argument(
+        "--valid_every",
+        type=int,
+        default=None,
+        help="Only include data where the hour of the day of the valid time is a multiple of this number of hours.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default="verif_results.csv",
+        help="Path to save the aggregated results.",
     )
     args = parser.parse_args()
     main(args)

@@ -163,6 +163,29 @@
       ],
       "title": "RunConfig",
       "type": "object"
+    },
+    "VerifConfig": {
+      "description": "Configuration for the verification of the experiment.",
+      "properties": {
+        "valid_every": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Hours between verification times starting from 00:00 UTC. If None, no filtering is applied.",
+          "title": "Valid Every"
+        }
+      },
+      "required": [
+        "valid_every"
+      ],
+      "title": "VerifConfig",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -201,6 +224,17 @@
       "description": "The label of the NWP baseline run to compare against.",
       "title": "Baseline",
       "type": "string"
+    },
+    "verification": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VerifConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "execution": {
       "$ref": "#/$defs/Execution"
