@@ -148,6 +148,15 @@ def load_fct_data_from_grib(
         elif "z" in da.dims and da.sizes["z"] > 1:
             ds[var] = da.rename({"z": da.attrs["vcoord_type"]})
     ds = xr.merge([ds[p].rename(p) for p in ds])
+    if "TOT_PREC" in ds.data_vars:
+        LOG.info("Disaggregating precipitation")
+        ds = ds.assign(
+            TOT_PREC=lambda x: (
+                x.TOT_PREC.fillna(0)
+                .diff("lead_time")
+                .pad(lead_time=(1, 0), constant_value=None)
+            )
+        )
     return ds
 
 
