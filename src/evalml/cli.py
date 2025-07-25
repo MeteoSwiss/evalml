@@ -43,6 +43,12 @@ def workflow_options(func):
         is_flag=False,
         flag_value=f"{command_name}_report.html",
     )(func)
+    func = click.argument(
+        "extra_smk_args",
+        nargs=-1,
+        type=click.UNPROCESSED,
+        metavar="-- [EXTRA_SMK_ARGS]",
+    )(func)
     return func
 
 
@@ -53,6 +59,7 @@ def execute_workflow(
     verbose: bool,
     dry_run: bool,
     report: Path | None,
+    extra_smk_args: tuple[str, ...] = (),
 ):
     config = ConfigModel.model_validate(load_yaml(configfile))
 
@@ -69,6 +76,8 @@ def execute_workflow(
         command += ["--report-after-run", "--report", str(report)]
 
     command.append(target)
+    command += list(extra_smk_args)
+
     raise SystemExit(run_command(command))
 
 
@@ -82,8 +91,10 @@ def cli():
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
 @workflow_options
-def experiment(configfile, cores, verbose, dry_run, report):
-    execute_workflow(configfile, "experiment_all", cores, verbose, dry_run, report)
+def experiment(configfile, cores, verbose, dry_run, report, extra_smk_args):
+    execute_workflow(
+        configfile, "experiment_all", cores, verbose, dry_run, report, extra_smk_args
+    )
 
 
 @cli.command(help="Obtain showcase material as defined by a config YAML file.")
@@ -91,8 +102,10 @@ def experiment(configfile, cores, verbose, dry_run, report):
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
 @workflow_options
-def showcase(configfile, cores, verbose, dry_run, report):
-    execute_workflow(configfile, "showcase_all", cores, verbose, dry_run, report)
+def showcase(configfile, cores, verbose, dry_run, report, extra_smk_args):
+    execute_workflow(
+        configfile, "showcase_all", cores, verbose, dry_run, report, extra_smk_args
+    )
 
 
 @cli.command(
@@ -102,5 +115,7 @@ def showcase(configfile, cores, verbose, dry_run, report):
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
 @workflow_options
-def sandbox(configfile, cores, verbose, dry_run, report):
-    execute_workflow(configfile, "sandbox_all", cores, verbose, dry_run, report)
+def sandbox(configfile, cores, verbose, dry_run, report, extra_smk_args):
+    execute_workflow(
+        configfile, "sandbox_all", cores, verbose, dry_run, report, extra_smk_args
+    )
