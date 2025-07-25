@@ -222,7 +222,7 @@ def main() -> None:
             "run_mlflow_link": cfg_module.run_mlflow_link,
             "checkpoint_path": (
                 cfg_module.checkpoint_path.name
-                if not args.strict
+                if args.strict
                 else str(cfg_module.checkpoint_path)
             ),
             "strict": args.strict,
@@ -254,4 +254,7 @@ python workflow/scripts/inference_create_sandbox.py \
     --squashfs output/data/runs/${RUN_ID}/venv.squashfs \
     --readme-template resources/inference/sandbox/readme.md.jinja2 \
     --output sandbox.zip && mkdir -p _sandbox && yes | unzip sandbox.zip -d _sandbox/
+
+
+mkdir -p _sandbox && yes | unzip output/data/runs/2f962c89ff644ca7940072fa9cd088ec/sandbox.zip -d _sandbox/
 """
