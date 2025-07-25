@@ -120,7 +120,10 @@ rule run_inference_group:
         output_root=(OUT_ROOT / "data").resolve(),
     # TODO: we can have named logs for each reftime
     log:
-        OUT_ROOT / "logs/inference_run/{run_id}-{group_index}.log",
+        [
+            OUT_ROOT / ("logs/inference_run/{run_id}-{group_index}" + f"-{i}.log")
+            for i in range(config["execution"]["run_group_size"])
+        ],
     resources:
         slurm_partition="short",
         cpus_per_task=32,
@@ -134,15 +137,16 @@ rule run_inference_group:
         export TZ=UTC
         source /user-environment/bin/activate
         export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
+
+        logs=($(realpath {log}))
+        pids=()
         i=0
         for reftime in {params.reftimes}; do
 
-            # prepare the working directory
             _reftime_str=$(date -d "$reftime" +%Y%m%d%H%M)
             WORKDIR={params.output_root}/runs/{wildcards.run_id}/$_reftime_str
             mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw
             cp {input.config} config.yaml
-
 
             CMD_ARGS=(
                 date=$reftime
@@ -150,13 +154,22 @@ rule run_inference_group:
                 lead_time={params.lead_time}
             )
 
-            CUDA_VISIBLE_DEVICES=$i anemoi-inference run config.yaml "${{CMD_ARGS[@]}}" > inference.log 2>&1 &
+            CUDA_VISIBLE_DEVICES=$i anemoi-inference run config.yaml "${{CMD_ARGS[@]}}" > "${{logs[$i]}}" 2>&1 &
+            pids+=($!)
             echo "Started inference for reftime $reftime in $WORKDIR"
             echo "CUDA_VISIBLE_DEVICES=$i"
             i=$((i + 1))
 
         done
-        wait
+
+        # Wait for all background jobs and capture failures
+        fail=0
+        for pid in "${{pids[@]}}"; do
+            wait $pid || fail=1
+        done
+
+        exit $fail
+
         """
 
 

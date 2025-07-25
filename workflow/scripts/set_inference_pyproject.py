@@ -21,8 +21,11 @@ from mlflow.exceptions import RestException
 from anemoi.utils.mlflow.auth import TokenAuth
 from anemoi.utils.mlflow.client import AnemoiMlflowClient
 
+logfile = snakemake.log[0]  # type: ignore # noqa: F821
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    filename=logfile,
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -35,6 +38,26 @@ _GIT_DEPENDENCIES_CONFIG = {
         "ecmwf": {
             "url": "https://github.com/ecmwf/anemoi-core.git",
             "subdirectory": "models",
+        },
+    },
+    "anemoi-graphs": {
+        "meteoswiss": {
+            "url": "https://github.com/MeteoSwiss/anemoi-core.git",
+            "subdirectory": "graphs",
+        },
+        "ecmwf": {
+            "url": "https://github.com/ecmwf/anemoi-core.git",
+            "subdirectory": "graphs",
+        },
+    },
+    "anemoi-training": {
+        "meteoswiss": {
+            "url": "https://github.com/MeteoSwiss/anemoi-core.git",
+            "subdirectory": "training",
+        },
+        "ecmwf": {
+            "url": "https://github.com/ecmwf/anemoi-core.git",
+            "subdirectory": "training",
         },
     },
     "anemoi-datasets": {
@@ -330,6 +353,11 @@ def main(snakemake) -> None:
     checkpoints_path = get_path_to_checkpoints(client, run_id)
 
     run_mlflow_link = client.tracking_uri + "/#/runs/" + run_id
+    logger.info(
+        "Updating pyproject.toml with versions from MLflow run %s at %s",
+        run_id,
+        run_mlflow_link,
+    )
     update_pyproject_toml(
         anemoi_versions,
         toml_path_out,
