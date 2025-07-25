@@ -85,6 +85,7 @@ rule create_inference_sandbox:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         lockfile=rules.create_inference_venv.output.lockfile,
         config=str(Path("config/anemoi_inference.yaml").resolve()),
+        readme_template="resources/inference/sandbox/readme.md.jinja2",
     output:
         sandbox=OUT_ROOT / "data/runs/{run_id}/sandbox.zip",
     log:
@@ -95,6 +96,7 @@ rule create_inference_sandbox:
         uv run {input.script} \
             --pyproject {input.pyproject} \
             --lockfile {input.lockfile} \
+            --readme-template {input.readme_template} \
             --output {output.sandbox} \
             > {log} 2>&1
         """

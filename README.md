@@ -14,7 +14,12 @@ Run evaluation pipelines for anemoi models.
 2. [Credentials setup](#credentials-setup)
 3. [Workspace setup](#workspace-setup)
 
-## Example
+## Features:
+- [Experiments](#experiment): compare model performance via standard and diagnostic verification
+- [Showcasing](#showcase): produce visual material for specific events
+- [Sandboxing](#sandbox): generate an isolated inference development environments for any model
+
+## Quick example
 
 To launch an experiment, prepare a config file defining your experiment, e.g.
 
@@ -51,7 +56,7 @@ locations:
 
 profile:
   executor: slurm
-  default-resources:
+  default_resources:
     slurm_partition: "postproc"
     cpus_per_task: 1
     mem_mb_per_cpu: 1800
