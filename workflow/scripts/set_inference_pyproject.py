@@ -204,9 +204,17 @@ def get_anemoi_versions(client: MlflowClient, run_id: str) -> dict:
     versions = {}
     for dep_type in _GIT_DEPENDENCIES_CONFIG:
         version, commit_hash = get_version_and_commit_hash(client, run_id, dep_type)
-        versions[f"{dep_type}"] = (
-            resolve_dependency_config(commit_hash, dep_type) if commit_hash else version
-        )
+        if not version and not commit_hash:
+            logger.warning("No commit or version found for %s", dep_type)
+            continue
+        if commit_hash:
+            logger.info("Found commit %s for %s", commit_hash, dep_type)
+            ref = resolve_dependency_config(commit_hash, dep_type)
+        else:
+            logger.info("Using version %s for %s", version, dep_type)
+            ref = version
+
+        versions[f"{dep_type}"] = ref
 
     if not versions:
         raise ValueError("No valid dependencies found in MLflow run")
