@@ -21,8 +21,11 @@ from mlflow.exceptions import RestException
 from anemoi.utils.mlflow.auth import TokenAuth
 from anemoi.utils.mlflow.client import AnemoiMlflowClient
 
+logfile = snakemake.log[0]  # type: ignore # noqa: F821
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    filename=logfile,
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -35,6 +38,26 @@ _GIT_DEPENDENCIES_CONFIG = {
         "ecmwf": {
             "url": "https://github.com/ecmwf/anemoi-core.git",
             "subdirectory": "models",
+        },
+    },
+    "anemoi-graphs": {
+        "meteoswiss": {
+            "url": "https://github.com/MeteoSwiss/anemoi-core.git",
+            "subdirectory": "graphs",
+        },
+        "ecmwf": {
+            "url": "https://github.com/ecmwf/anemoi-core.git",
+            "subdirectory": "graphs",
+        },
+    },
+    "anemoi-training": {
+        "meteoswiss": {
+            "url": "https://github.com/MeteoSwiss/anemoi-core.git",
+            "subdirectory": "training",
+        },
+        "ecmwf": {
+            "url": "https://github.com/ecmwf/anemoi-core.git",
+            "subdirectory": "training",
         },
     },
     "anemoi-datasets": {
@@ -181,9 +204,17 @@ def get_anemoi_versions(client: MlflowClient, run_id: str) -> dict:
     versions = {}
     for dep_type in _GIT_DEPENDENCIES_CONFIG:
         version, commit_hash = get_version_and_commit_hash(client, run_id, dep_type)
-        versions[f"{dep_type}"] = (
-            resolve_dependency_config(commit_hash, dep_type) if commit_hash else version
-        )
+        if not version and not commit_hash:
+            logger.warning("No commit or version found for %s", dep_type)
+            continue
+        if commit_hash:
+            logger.info("Found commit %s for %s", commit_hash, dep_type)
+            ref = resolve_dependency_config(commit_hash, dep_type)
+        else:
+            logger.info("Using version %s for %s", version, dep_type)
+            ref = version
+
+        versions[f"{dep_type}"] = ref
 
     if not versions:
         raise ValueError("No valid dependencies found in MLflow run")
@@ -330,6 +361,11 @@ def main(snakemake) -> None:
     checkpoints_path = get_path_to_checkpoints(client, run_id)
 
     run_mlflow_link = client.tracking_uri + "/#/runs/" + run_id
+    logger.info(
+        "Updating pyproject.toml with versions from MLflow run %s at %s",
+        run_id,
+        run_mlflow_link,
+    )
     update_pyproject_toml(
         anemoi_versions,
         toml_path_out,
