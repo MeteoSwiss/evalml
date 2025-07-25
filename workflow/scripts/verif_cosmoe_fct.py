@@ -173,10 +173,19 @@ def main(args: ScriptConfig):
     # get COSMO-E forecast data
     now = datetime.now()
     coe = xr.open_zarr(args.cosmoe_zarr, consolidated=True, decode_timedelta=True)
-    if "TOT_PREC" in coe.data_vars and coe.TOT_PREC.units == "kg m-2":
-        coe = coe.assign(TOT_PREC=lambda x: x.TOT_PREC / 1000)
-        coe.TOT_PREC.attrs["units"] = "m"
     coe = coe.rename({"forecast_reference_time": "ref_time", "step": "lead_time"})
+    if "TOT_PREC" in coe.data_vars:
+        if coe.TOT_PREC.units == "kg m-2":
+            coe = coe.assign(TOT_PREC=lambda x: x.TOT_PREC / 1000)
+            coe.TOT_PREC.attrs["units"] = "m"
+        ## disaggregate precipitation
+        coe = coe.assign(
+            TOT_PREC = lambda x: (
+                x.TOT_PREC.fillna(0)
+                .diff("lead_time")
+                .pad(lead_time = (1,0), constant_value = None)
+            )
+        )
     coe = coe[args.params].sel(
         ref_time=args.reftime,
         lead_time=np.array(args.lead_time, dtype="timedelta64[h]"),
