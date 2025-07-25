@@ -180,10 +180,10 @@ def main(args: ScriptConfig):
             coe.TOT_PREC.attrs["units"] = "m"
         ## disaggregate precipitation
         coe = coe.assign(
-            TOT_PREC = lambda x: (
+            TOT_PREC=lambda x: (
                 x.TOT_PREC.fillna(0)
                 .diff("lead_time")
-                .pad(lead_time = (1,0), constant_value = None)
+                .pad(lead_time=(1, 0), constant_value=None)
             )
         )
     coe = coe[args.params].sel(
