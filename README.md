@@ -48,6 +48,9 @@ baseline: COSMO-E
 execution:
   run_group_size: 4
 
+verification:
+  valid_every: 12
+
 locations:
   output_root: output/
   mlflow_uri:
