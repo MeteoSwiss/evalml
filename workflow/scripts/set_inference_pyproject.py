@@ -29,6 +29,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+OTHER_DEPENDENCIES = [
+    "torch-geometric",
+]
+
 _GIT_DEPENDENCIES_CONFIG = {
     "anemoi-models": {
         "meteoswiss": {
@@ -138,7 +142,10 @@ def get_version_and_commit_hash(
         tuple[str, str]: Tuple containing (version, commit_hash)
     """
     run = client.get_run(run_id)
-    dependency = dependency.replace("-", ".")
+    if "anemoi" in dependency:
+        dependency = dependency.replace("-", ".")
+    else:
+        dependency = dependency.replace("-", "_")
     commit_hash_param = (
         f"metadata.provenance_training.git_versions.{dependency}.git.sha1"
     )
@@ -219,6 +226,31 @@ def get_anemoi_versions(client: MlflowClient, run_id: str) -> dict:
     if not versions:
         raise ValueError("No valid dependencies found in MLflow run")
 
+    return versions
+
+
+def get_other_versions(client: MlflowClient, run_id: str) -> dict:
+    """Get other non-anemoi dependencies from MLflow run.
+
+    Args:
+        client (MlflowClient): MLflow client instance
+        run_id (str): ID of the MLflow run
+    Returns:
+        dict: Dictionary mapping other dependencies to their versions.
+    """
+    versions = {}
+    for dep in OTHER_DEPENDENCIES:
+        version, commit_hash = get_version_and_commit_hash(client, run_id, dep)
+        if not version and not commit_hash:
+            logger.warning("No commit or version found for %s", dep)
+            continue
+        if commit_hash:
+            logger.info("Found commit %s for %s", commit_hash, dep)
+            ref = resolve_dependency_config(commit_hash, dep)
+        else:
+            logger.info("Using version %s for %s", version, dep)
+            ref = version
+        versions[dep] = ref
     return versions
 
 
@@ -315,9 +347,8 @@ def update_pyproject_toml(
     deps = config.get("project", {}).get("dependencies", [])
     if not isinstance(deps, list):
         raise ValueError("[project.dependencies] must be a list")
-
     updated = []
-    for dep in deps:
+    for dep in deps + OTHER_DEPENDENCIES:
         pkg_name = dep.split("==")[0].split(">=")[0].split("@")[0].split()[0].strip()
         if pkg_name in versions:
             val = versions[pkg_name]
@@ -357,6 +388,7 @@ def main(snakemake) -> None:
 
     client = get_mlflow_client_given_runid(mlflow_uri, run_id)
     anemoi_versions = get_anemoi_versions(client, run_id)
+    other_versions = get_other_versions(client, run_id)
     python_version = get_python_version(client, run_id)
     checkpoints_path = get_path_to_checkpoints(client, run_id)
 
@@ -367,7 +399,7 @@ def main(snakemake) -> None:
         run_mlflow_link,
     )
     update_pyproject_toml(
-        anemoi_versions,
+        anemoi_versions | other_versions,
         toml_path_out,
         python_version,
         checkpoints_path,
