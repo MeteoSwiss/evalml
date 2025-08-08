@@ -46,11 +46,16 @@ def extract(
 ) -> xr.Dataset:
     LOG.info(f"Extracting fields from {tar}.")
     reftime = reftime_from_tarfile(tar)
-
+    if "COSMO-E" in tar.parts:
+        gribname = "ceffsurf"
+    elif "COSMO-1E" in tar.parts:
+        gribname = "c1effsurf"
+    else:
+        raise ValueError("Currently only COSMO-E and COSMO-1E are supported.")
     tar_archive = tarfile.open(tar, mode="r:*")
     out = ekd.SimpleFieldList()
     for lt in lead_time:
-        filename = f"{tar.stem}/grib/ceffsurf{lt:03}_{run_id}"
+        filename = f"{tar.stem}/grib/{gribname}{lt:03}_{run_id}"
         LOG.info(f"Extracting {filename}.")
         stream = tar_archive.extractfile(filename)
 
@@ -95,7 +100,10 @@ def _parse_lead_time(lead_time: str) -> int:
 
 def main(cfg: ScriptConfig):
     tarfiles = sorted(cfg.archive_dir.glob("*.tar"))
-    first_reftime, last_reftime = check_reftime_consistency(tarfiles)
+    delta_h = 12
+    if "COSMO-1E" in tarfiles[0].parts:
+        delta_h = 3
+    first_reftime, last_reftime = check_reftime_consistency(tarfiles, delta_h)
     LOG.info(
         f"Found {len(tarfiles)} tar archives from {first_reftime} to {last_reftime}."
     )
@@ -156,7 +164,7 @@ python workflow/scripts/extract_baseline_fct.py \
     --lead_time 0/126/6
 
 python workflow/scripts/extract_baseline_fct.py \
-    --archive_dir /archive/mch/msopr/osm/COSMO-1E/FCST20 \
+    --archive_dir /archive/mch/s83/osm/from_GPFS/COSMO-1E/FCST20 \
     --output_store /store_new/mch/msopr/ml/COSMO-1E/FCST20.zarr \
     --lead_time 0/34/1
 """

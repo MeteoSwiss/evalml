@@ -35,7 +35,7 @@ if "extract_cosmo1e_fcts" in config.get("include-optional-rules", []):
 
     rule extract_cosmo1e_fcts:
         input:
-            archive=Path("/archive/mch/msopr/osm/COSMO-1E"),
+            archive=Path("/archive/mch/s83/osm/from_GPFS/COSMO-1E"),
         output:
             fcts=protected(
                 directory(Path("/store_new/mch/msopr/ml/COSMO-1E/FCST{year}.zarr"))
