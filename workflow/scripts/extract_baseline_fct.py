@@ -108,26 +108,22 @@ def main(cfg: ScriptConfig):
         f"Found {len(tarfiles)} tar archives from {first_reftime} to {last_reftime}."
     )
 
-    reftimes = np.array(
-        [reftime_from_tarfile(f) for f in tarfiles], 
-        dtype = "datetime64"
-    )
+    reftimes = np.array([reftime_from_tarfile(f) for f in tarfiles], dtype="datetime64")
     missing = reftimes
-    append = False # should missing reftimes be appended to existing dataset?
-    if cfg.overwrite == False: # only check dataset when we want to append as this is slow
+    if not cfg.overwrite:  # only check dataset when we want to append as this is slow
         existing_reftimes = np.array([])
         try:
             with xr.open_dataset(cfg.output_store) as ds:
                 existing_reftimes = ds.forecast_reference_time
-        except:
+        except FileNotFoundError:
             LOG.info("Dataset doesn't exist yet.")
 
         if existing_reftimes.size > 0 and reftimes[0] == existing_reftimes[0]:
-            missing = np.setdiff1d(reftimes, existing_reftimes) 
-            append = True
+            missing = np.setdiff1d(reftimes, existing_reftimes)
             LOG.info("Dataset already exists, missing reftimes will be appended")
-            LOG.info(f"{existing_reftimes.size} reftimes of {reftimes.size} already ingested.")
-
+            LOG.info(
+                f"{existing_reftimes.size} reftimes of {reftimes.size} already ingested."
+            )
 
     _, indices, _ = np.intersect1d(reftimes, missing, return_indices=True)
 
@@ -179,7 +175,7 @@ if __name__ == "__main__":
         "--overwrite",
         type=bool,
         default=False,
-        help = "Should existing dataset be overwritten?",
+        help="Should existing dataset be overwritten?",
     )
 
     args = parser.parse_args()
