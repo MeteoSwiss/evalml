@@ -112,13 +112,19 @@ def main(cfg: ScriptConfig):
     missing = reftimes
     if not cfg.overwrite:  # only check dataset when we want to append as this is slow
         existing_reftimes = np.array([])
+        data_vars = []
         try:
             with xr.open_dataset(cfg.output_store) as ds:
                 existing_reftimes = ds.forecast_reference_time
+                data_vars = ds.data_vars
         except FileNotFoundError:
             LOG.info("Dataset doesn't exist yet.")
 
-        if existing_reftimes.size > 0 and reftimes[0] == existing_reftimes[0]:
+        if (
+            existing_reftimes.size > 0
+            and reftimes[0] == existing_reftimes[0]
+            and set(cfg.params) == set(data_vars)
+        ):
             missing = np.setdiff1d(reftimes, existing_reftimes)
             LOG.info("Dataset already exists, missing reftimes will be appended")
             LOG.info(
