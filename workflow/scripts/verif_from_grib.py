@@ -264,15 +264,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--grib_output_dir",
         type=Path,
-        required=False,
-        default=Path(
-            "/scratch/mch/bhendj/evalml/output/data/runs/2f962c89ff644ca7940072fa9cd088ec/202001011200/grib"
-        ),
+        required=True,
         help="Path to the Zarr dataset containing COSMO-E forecast data.",
     )
 
     # truth data must be provided either as a GRIB archive or a anemoi-generated Zarr dataset
-    truth_group = parser.add_mutually_exclusive_group(required=False)
+    truth_group = parser.add_mutually_exclusive_group(required=True)
     truth_group.add_argument(
         "--archive_root",
         type=Path,
@@ -283,9 +280,6 @@ if __name__ == "__main__":
         "--zarr_dataset",
         type=Path,
         required=False,
-        default=Path(
-            "/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr"
-        ),
         help="Path to the Zarr dataset containing COSMOe data.",
     )
 
