@@ -106,7 +106,7 @@ rule run_inference_group:
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
-        config=str(Path("config/anemoi_inference.yaml").resolve()),
+        config=lambda wc: RUN_CONFIGS[wc.run_id]["config"],
     output:
         okfile=temp(touch(OUT_ROOT / "data/runs/{run_id}/group-{group_index}.ok")),
     params:
