@@ -139,14 +139,12 @@ def main(args: Namespace) -> None:
 if __name__ == "__main__":
     parser = ArgumentParser(description="Verify results from KENDA-1 data.")
     parser.add_argument(
-        "verif_files",
-        type=Path,
-        nargs="+",
-        help="Paths to verification files.",
+        "verif_files", type=Path, nargs="+", help="Paths to verification files."
     )
     parser.add_argument(
         "--valid_every",
         type=int,
+        default=None,
         help="Only include data where the hour of the day of the valid time is a multiple of this number of hours.",
     )
     parser.add_argument(
