@@ -98,9 +98,17 @@
           "type": "string"
         },
         "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
           "description": "The label for the run that will be used in experiment results such as reports and figures.",
-          "title": "Label",
-          "type": "string"
+          "title": "Label"
         },
         "config": {
           "anyOf": [
@@ -118,8 +126,7 @@
         }
       },
       "required": [
-        "run_id",
-        "label"
+        "run_id"
       ],
       "title": "ForecasterConfig",
       "type": "object"
@@ -147,9 +154,17 @@
           "type": "string"
         },
         "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
           "description": "The label for the run that will be used in experiment results such as reports and figures.",
-          "title": "Label",
-          "type": "string"
+          "title": "Label"
         },
         "config": {
           "anyOf": [
@@ -172,7 +187,6 @@
       },
       "required": [
         "run_id",
-        "label",
         "forecaster"
       ],
       "title": "InterpolatorConfig",

@@ -39,8 +39,8 @@ class RunConfig(BaseModel):
         max_length=32,
         description="The mlflow run ID, as a 32-character hexadecimal string.",
     )
-    label: str = Field(
-        ...,
+    label: str | None = Field(
+        None,
         description="The label for the run that will be used in experiment results such as reports and figures.",
     )
 
