@@ -13,6 +13,8 @@ from meteodatalab import data_source, grib_decoder  # noqa: E402
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
 
+from src.verification import verify  # noqa: E402
+
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -242,26 +244,7 @@ def main(args: ScriptConfig):
     )
 
     # compute metrics and statistics
-    start = datetime.now()
-    error = fct - kenda
-    results = {}
-    results["BIAS"] = error.mean(["y", "x"])
-    results["RMSE"] = np.sqrt((error**2).mean(["y", "x"]))
-    results["MAE"] = abs(error).mean(["y", "x"])
-    results["STD"] = error.std(["y", "x"])
-    results["CORR"] = (
-        corr := xr.Dataset(
-            {k: xr.corr(fct[k], kenda[k], dim=["y", "x"]) for k in fct.data_vars}
-        )
-    )
-    results["R2"] = corr**2
-    results = xr.Dataset({k: v.to_array("param") for k, v in results.items()})
-    results = results.to_array("metric").to_dataframe(name="value").reset_index()
-    LOG.info(
-        "Computed metrics in %.2f seconds: \n%s",
-        (datetime.now() - start).total_seconds(),
-        results,
-    )
+    results = verify(fcst=fct, obs = kenda)
 
     # # save results to CSV
     args.output.parent.mkdir(parents=True, exist_ok=True)

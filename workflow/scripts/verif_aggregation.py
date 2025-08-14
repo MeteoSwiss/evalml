@@ -63,15 +63,33 @@ def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
     # aggregate
     aggregated = (
         df_extended.groupby(
-            ["metric", "lead_time", "param", "hour", "season", "init_hour"],
+            ["lead_time", "param", "hour", "season", "init_hour"],
             dropna=False,  # optional, ensures NaN values are not dropped
         )
-        .agg(
-            value_mean=("value", "mean"),
-            value_count=("value", "count"),
-            value_sum=("value", "sum"),
-        )
+        .agg({
+            "BIAS": "mean",
+            "MSE": "mean",
+            "MAE": "mean",
+            "VAR": "mean",
+            "CORR": "mean",
+            "R2": "mean",
+            "fcst_mean": "mean",
+            "fcst_var": "mean",
+            "fcst_min": "min",
+            "fcst_max": "max",
+            "obs_mean": "mean",
+            "obs_var": "mean",
+            "obs_min": "min",
+            "obs_max": "max"
+        })
         .reset_index()
+    )
+
+    # Pivot to long format: columns to 'metric', values to 'value'
+    aggregated = aggregated.melt(
+        id_vars=["lead_time", "param", "hour", "season", "init_hour"],
+        var_name="metric",
+        value_name="value"
     )
 
     return aggregated
