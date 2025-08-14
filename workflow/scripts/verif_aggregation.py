@@ -139,21 +139,14 @@ def main(args: Namespace) -> None:
 if __name__ == "__main__":
     parser = ArgumentParser(description="Verify results from KENDA-1 data.")
     parser.add_argument(
-        "--verif_files",
+        "verif_files",
         type=Path,
-        default=list(
-            Path("/scratch/mch/bhendj/evalml/output/data/baselines/COSMO-E").glob(
-                "*/verif.csv"
-            )
-        ),
         nargs="+",
         help="Paths to verification files.",
-        required=False,
     )
     parser.add_argument(
         "--valid_every",
         type=int,
-        default=12,
         help="Only include data where the hour of the day of the valid time is a multiple of this number of hours.",
     )
     parser.add_argument(
