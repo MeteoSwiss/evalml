@@ -87,6 +87,13 @@ def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
     )
 
+    # square-root transform VAR and MSE and rename to STD and RMSE
+    aggregated["STD"] = aggregated["VAR"] ** 0.5
+    aggregated["RMSE"] = aggregated["MSE"] ** 0.5
+    aggregated["fcst_std"] = aggregated["fcst_var"] ** 0.5
+    aggregated["obs_std"] = aggregated["obs_var"] ** 0.5
+    aggregated = aggregated.drop(columns=["VAR", "MSE", "fcst_var", "obs_var"])
+
     # Pivot to long format: columns to 'metric', values to 'value'
     aggregated = aggregated.melt(
         id_vars=["lead_time", "param", "hour", "season", "init_hour"],
