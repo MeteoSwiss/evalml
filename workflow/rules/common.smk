@@ -1,3 +1,4 @@
+import copy
 from datetime import datetime, timedelta
 import yaml
 import hashlib
@@ -78,7 +79,16 @@ REFTIME_TO_GROUP = {
 
 def collect_all_runs():
     """Collect all runs defined in the configuration."""
-    return [cfg["run_id"] for cfg in config["runs"].values()]
+    runs = {}
+    for run_entry in copy.deepcopy(config["runs"]):
+        model_type = next(iter(run_entry))
+        run_config = run_entry[model_type]
+        run_id = run_config.pop("run_id")
+        runs[run_id] = run_config
+        if model_type == "interpolator":
+            run_id = run_config["forecaster"].pop("run_id")
+            runs[run_id] = run_config["forecaster"]
+    return runs
 
 
 def collect_all_baselines():
@@ -100,12 +110,15 @@ def collect_experiment_participants():
         participants[baseline] = (
             OUT_ROOT / f"data/baselines/{baseline}/verif_aggregated.csv"
         )
-    for name, run in config["runs"].items():
-        label = run.get("label", name)
-        participants[label] = (
-            OUT_ROOT / f"data/runs/{run['run_id']}/verif_aggregated.csv"
-        )
+    for run_entry in config["runs"]:
+        # every run entry is a single-key dict
+        # where the key is the model type ("forecaster", "interpolator", etc.)
+        run = next(iter(run_entry.values()))
+        run_id = run["run_id"]
+        label = run.get("label", run_id)
+        participants[label] = OUT_ROOT / f"data/runs/{run_id}/verif_aggregated.csv"
     return participants
 
 
+RUN_CONFIGS = collect_all_runs()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
