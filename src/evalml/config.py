@@ -1,7 +1,9 @@
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any, TypedDict
 
 from pydantic import BaseModel, Field, HttpUrl, RootModel
+
+PROJECT_ROOT = Path(__file__).parents[2]
 
 
 class Dates(BaseModel):
@@ -26,9 +28,11 @@ class ExplicitDates(RootModel[List[str]]):
     """Explicit list of initialisation dates as ISO-8601 formatted strings."""
 
 
-class RunConfig(BaseModel):
-    """Single training run stored in MLflow."""
+class AnemoiInferenceConfig(RootModel[Dict[str, Any]]):
+    """Configuration for the Anemoi inference workflow."""
 
+
+class RunConfig(BaseModel):
     run_id: str = Field(
         ...,
         min_length=32,
@@ -39,6 +43,39 @@ class RunConfig(BaseModel):
         ...,
         description="The label for the run that will be used in experiment results such as reports and figures.",
     )
+
+    config: Dict[str, Any] | str
+
+
+class ForecasterConfig(RunConfig):
+    """Single training run stored in MLflow."""
+
+    config: Dict[str, Any] | str = Field(
+        str(PROJECT_ROOT / "resources" / "inference" / "configs" / "forecaster.yaml"),
+        description="Configuration for the forecaster run. Can be a dictionary of parameters or a path to a configuration file.",
+    )
+
+
+class InterpolatorConfig(RunConfig):
+    """Single training run stored in MLflow."""
+
+    config: Dict[str, Any] | str = Field(
+        str(PROJECT_ROOT / "resources" / "inference" / "configs" / "interpolator.yaml"),
+        description="Configuration for the interpolator run. Can be a dictionary of parameters or a path to a configuration file.",
+    )
+
+    forecaster: ForecasterConfig = Field(
+        ...,
+        description="Configuration for the forecaster run that this interpolator is based on.",
+    )
+
+
+class ForecasterItem(TypedDict):
+    forecaster: ForecasterConfig
+
+
+class InterpolatorItem(TypedDict):
+    interpolator: InterpolatorConfig
 
 
 class VerifConfig(BaseModel):
@@ -108,7 +145,10 @@ class ConfigModel(BaseModel):
     lead_time: str = Field(
         ..., description="Forecast length, e.g. '120h'", pattern=r"^\d+[hmd]$"
     )
-    runs: Dict[str, RunConfig]
+    runs: List[ForecasterItem | InterpolatorItem] = Field(
+        ...,
+        description="Dictionary of runs to execute, with run IDs as keys and configurations as values.",
+    )
     baseline: str = Field(
         ..., description="The label of the NWP baseline run to compare against."
     )
