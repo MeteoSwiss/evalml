@@ -13,7 +13,7 @@ from meteodatalab import data_source, grib_decoder  # noqa: E402
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
 
-from src.verification import verify
+from src.verification import verify  # noqa: E402
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -226,7 +226,7 @@ def main(args: ScriptConfig):
     )
 
     # compute metrics and statistics
-    
+
     results = verify(coe, kenda)
 
     # save results to CSV

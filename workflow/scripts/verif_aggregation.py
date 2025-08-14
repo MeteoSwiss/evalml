@@ -66,22 +66,24 @@ def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
             ["lead_time", "param", "hour", "season", "init_hour"],
             dropna=False,  # optional, ensures NaN values are not dropped
         )
-        .agg({
-            "BIAS": "mean",
-            "MSE": "mean",
-            "MAE": "mean",
-            "VAR": "mean",
-            "CORR": "mean",
-            "R2": "mean",
-            "fcst_mean": "mean",
-            "fcst_var": "mean",
-            "fcst_min": "min",
-            "fcst_max": "max",
-            "obs_mean": "mean",
-            "obs_var": "mean",
-            "obs_min": "min",
-            "obs_max": "max"
-        })
+        .agg(
+            {
+                "BIAS": "mean",
+                "MSE": "mean",
+                "MAE": "mean",
+                "VAR": "mean",
+                "CORR": "mean",
+                "R2": "mean",
+                "fcst_mean": "mean",
+                "fcst_var": "mean",
+                "fcst_min": "min",
+                "fcst_max": "max",
+                "obs_mean": "mean",
+                "obs_var": "mean",
+                "obs_min": "min",
+                "obs_max": "max",
+            }
+        )
         .reset_index()
     )
 
@@ -89,7 +91,7 @@ def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
     aggregated = aggregated.melt(
         id_vars=["lead_time", "param", "hour", "season", "init_hour"],
         var_name="metric",
-        value_name="value"
+        value_name="value",
     )
 
     return aggregated
@@ -130,12 +132,21 @@ def main(args: Namespace) -> None:
 if __name__ == "__main__":
     parser = ArgumentParser(description="Verify results from KENDA-1 data.")
     parser.add_argument(
-        "verif_files", type=Path, nargs="+", help="Paths to verification files."
+        "--verif_files",
+        type=Path,
+        default=list(
+            Path("/scratch/mch/bhendj/evalml/output/data/baselines/COSMO-E").glob(
+                "*/verif.csv"
+            )
+        ),
+        nargs="+",
+        help="Paths to verification files.",
+        required=False,
     )
     parser.add_argument(
         "--valid_every",
         type=int,
-        default=None,
+        default=12,
         help="Only include data where the hour of the day of the valid time is a multiple of this number of hours.",
     )
     parser.add_argument(

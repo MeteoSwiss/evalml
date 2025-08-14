@@ -1,10 +1,10 @@
 import xarray as xr
 import pandas as pd
-import dask
 import time
 import logging
 
 LOG = logging.getLogger(__name__)
+
 
 def verify(fcst: xr.Dataset, obs: xr.Dataset) -> pd.DataFrame:
     """
@@ -37,12 +37,5 @@ def verify(fcst: xr.Dataset, obs: xr.Dataset) -> pd.DataFrame:
     LOG.info("Computed statistics in %.2f seconds", time.time() - start)
     LOG.info("Statistics dataset: \n%s", out)
     # adopt wide format for now, where each column contains a metric / statistic
-    out = (
-        out
-        .assign(R2=lambda ds: ds.CORR**2)
-        .to_dataframe()
-        .reset_index()
-    ) 
+    out = out.assign(R2=lambda ds: ds.CORR**2).to_dataframe().reset_index()
     return out
-
-
