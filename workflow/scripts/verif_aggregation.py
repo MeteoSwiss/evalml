@@ -88,7 +88,7 @@ def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     # square-root transform VAR and MSE and rename to STD and RMSE
-    aggregated["STD"] = aggregated["VAR"] ** 0.5
+    aggregated["STDE"] = aggregated["VAR"] ** 0.5
     aggregated["RMSE"] = aggregated["MSE"] ** 0.5
     aggregated["fcst_std"] = aggregated["fcst_var"] ** 0.5
     aggregated["obs_std"] = aggregated["obs_var"] ** 0.5

@@ -107,7 +107,7 @@ def main(args: Namespace) -> None:
             df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
             df.plot(
                 x="lead_time",
-                y="value_mean",
+                y="value",
                 kind="line",
                 marker="o",
                 title=title,
