@@ -157,6 +157,7 @@ def load_fct_data_from_grib(
                 x.TOT_PREC.fillna(0)
                 .diff("lead_time")
                 .pad(lead_time=(1, 0), constant_value=None)
+                .clip(min=0.0)
             )
         )
     return ds
