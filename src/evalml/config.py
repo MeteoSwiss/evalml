@@ -54,7 +54,7 @@ class ForecasterConfig(RunConfig):
         default_factory=lambda _: str(
             PROJECT_ROOT / "resources" / "inference" / "configs" / "forecaster.yaml"
         ),
-        description="Configuration for the forecaster run. Can be a dictionary of parameters or a path to a configuration file." \
+        description="Configuration for the forecaster run. Can be a dictionary of parameters or a path to a configuration file."
         "By default, it will point to resources/inference/configs/forecaster.yaml in the evalml repository.",
     )
 
@@ -66,7 +66,7 @@ class InterpolatorConfig(RunConfig):
         default_factory=lambda _: str(
             PROJECT_ROOT / "resources" / "inference" / "configs" / "interpolator.yaml"
         ),
-        description="Configuration for the interpolator run. Can be a dictionary of parameters or a path to a configuration file. " \
+        description="Configuration for the interpolator run. Can be a dictionary of parameters or a path to a configuration file. "
         "By default, it will point to resources/inference/configs/interpolator.yaml in the evalml repository.",
     )
 
