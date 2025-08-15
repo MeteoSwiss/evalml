@@ -83,10 +83,11 @@ def collect_all_runs():
     for run_entry in copy.deepcopy(config["runs"]):
         model_type = next(iter(run_entry))
         run_config = run_entry[model_type]
+        run_config["model_type"] = model_type
         run_id = run_config.pop("run_id")
         runs[run_id] = run_config
         if model_type == "interpolator":
-            run_id = run_config["forecaster"].pop("run_id")
+            run_id = run_config["forecaster"]["run_id"]
             runs[run_id] = run_config["forecaster"]
     return runs
 
