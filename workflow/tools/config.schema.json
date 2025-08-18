@@ -110,6 +110,14 @@
           "description": "The label for the run that will be used in experiment results such as reports and figures.",
           "title": "Label"
         },
+        "extra_dependencies": {
+          "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Extra Dependencies",
+          "type": "array"
+        },
         "config": {
           "anyOf": [
             {
@@ -164,6 +172,14 @@
           "default": null,
           "description": "The label for the run that will be used in experiment results such as reports and figures.",
           "title": "Label"
+        },
+        "extra_dependencies": {
+          "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Extra Dependencies",
+          "type": "array"
         },
         "config": {
           "anyOf": [

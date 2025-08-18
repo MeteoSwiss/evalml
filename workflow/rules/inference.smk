@@ -12,6 +12,10 @@ rule create_inference_pyproject:
         toml="workflow/envs/anemoi_inference.toml",
     output:
         pyproject=OUT_ROOT / "data/runs/{run_id}/pyproject.toml",
+    params:
+        extra_dependencies=lambda wc: RUN_CONFIGS[wc.run_id].get(
+            "extra_dependencies", []
+        ),
     log:
         OUT_ROOT / "logs/create_inference_pyproject/{run_id}.log",
     localrule: True

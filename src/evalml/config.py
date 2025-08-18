@@ -43,6 +43,11 @@ class RunConfig(BaseModel):
         None,
         description="The label for the run that will be used in experiment results such as reports and figures.",
     )
+    extra_dependencies: List[str] = Field(
+        default_factory=list,
+        description="List of extra dependencies to install for this model. "
+        "These will be added to the pyproject.toml file in the run directory.",
+    )
 
     config: Dict[str, Any] | str
 
