@@ -179,13 +179,20 @@
           "title": "Config"
         },
         "forecaster": {
-          "$ref": "#/$defs/ForecasterConfig",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ForecasterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
           "description": "Configuration for the forecaster run that this interpolator is based on."
         }
       },
       "required": [
-        "run_id",
-        "forecaster"
+        "run_id"
       ],
       "title": "InterpolatorConfig",
       "type": "object"

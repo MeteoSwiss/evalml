@@ -70,8 +70,8 @@ class InterpolatorConfig(RunConfig):
         "By default, it will point to resources/inference/configs/interpolator.yaml in the evalml repository.",
     )
 
-    forecaster: ForecasterConfig = Field(
-        ...,
+    forecaster: ForecasterConfig | None = Field(
+        None,
         description="Configuration for the forecaster run that this interpolator is based on.",
     )
 
