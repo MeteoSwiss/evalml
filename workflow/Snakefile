@@ -2,14 +2,10 @@
 # Please follow the best practices:
 # https://snakemake.readthedocs.io/en/stable/snakefiles/best_practices.html,
 
-# from tools.config_schema import ExperimentConfig
+from evalml.config import ConfigModel
 
-# load configuration
-# -----------------------------------------------------
-# configfile: "config/config.yaml"
-
-# validate configuration
-# ExperimentConfig.validate(dict(config))
+# validate configuration and add defaults
+update_config(config, ConfigModel.validate(dict(config)).model_dump(mode="json"))
 
 
 # load rules

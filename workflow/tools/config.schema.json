@@ -87,6 +87,144 @@
       "title": "ExplicitDates",
       "type": "array"
     },
+    "ForecasterConfig": {
+      "description": "Single training run stored in MLflow.",
+      "properties": {
+        "run_id": {
+          "description": "The mlflow run ID, as a 32-character hexadecimal string.",
+          "maxLength": 32,
+          "minLength": 32,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The label for the run that will be used in experiment results such as reports and figures.",
+          "title": "Label"
+        },
+        "extra_dependencies": {
+          "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Extra Dependencies",
+          "type": "array"
+        },
+        "config": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Configuration for the forecaster run. Can be a dictionary of parameters or a path to a configuration file.By default, it will point to resources/inference/configs/forecaster.yaml in the evalml repository.",
+          "title": "Config"
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "title": "ForecasterConfig",
+      "type": "object"
+    },
+    "ForecasterItem": {
+      "properties": {
+        "forecaster": {
+          "$ref": "#/$defs/ForecasterConfig"
+        }
+      },
+      "required": [
+        "forecaster"
+      ],
+      "title": "ForecasterItem",
+      "type": "object"
+    },
+    "InterpolatorConfig": {
+      "description": "Single training run stored in MLflow.",
+      "properties": {
+        "run_id": {
+          "description": "The mlflow run ID, as a 32-character hexadecimal string.",
+          "maxLength": 32,
+          "minLength": 32,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The label for the run that will be used in experiment results such as reports and figures.",
+          "title": "Label"
+        },
+        "extra_dependencies": {
+          "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Extra Dependencies",
+          "type": "array"
+        },
+        "config": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Configuration for the interpolator run. Can be a dictionary of parameters or a path to a configuration file. By default, it will point to resources/inference/configs/interpolator.yaml in the evalml repository.",
+          "title": "Config"
+        },
+        "forecaster": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ForecasterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Configuration for the forecaster run that this interpolator is based on."
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "title": "InterpolatorConfig",
+      "type": "object"
+    },
+    "InterpolatorItem": {
+      "properties": {
+        "interpolator": {
+          "$ref": "#/$defs/InterpolatorConfig"
+        }
+      },
+      "required": [
+        "interpolator"
+      ],
+      "title": "InterpolatorItem",
+      "type": "object"
+    },
     "Locations": {
       "description": "Locations of data and services used in the workflow.",
       "properties": {
@@ -141,29 +279,6 @@
       "title": "Profile",
       "type": "object"
     },
-    "RunConfig": {
-      "description": "Single training run stored in MLflow.",
-      "properties": {
-        "run_id": {
-          "description": "The mlflow run ID, as a 32-character hexadecimal string.",
-          "maxLength": 32,
-          "minLength": 32,
-          "title": "Run Id",
-          "type": "string"
-        },
-        "label": {
-          "description": "The label for the run that will be used in experiment results such as reports and figures.",
-          "title": "Label",
-          "type": "string"
-        }
-      },
-      "required": [
-        "run_id",
-        "label"
-      ],
-      "title": "RunConfig",
-      "type": "object"
-    },
     "VerifConfig": {
       "description": "Configuration for the verification of the experiment.",
       "properties": {
@@ -214,11 +329,19 @@
       "type": "string"
     },
     "runs": {
-      "additionalProperties": {
-        "$ref": "#/$defs/RunConfig"
+      "description": "Dictionary of runs to execute, with run IDs as keys and configurations as values.",
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ForecasterItem"
+          },
+          {
+            "$ref": "#/$defs/InterpolatorItem"
+          }
+        ]
       },
       "title": "Runs",
-      "type": "object"
+      "type": "array"
     },
     "baseline": {
       "description": "The label of the NWP baseline run to compare against.",

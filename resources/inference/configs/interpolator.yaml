@@ -1,0 +1,65 @@
+runner: time_interpolator
+
+pre_processors:
+  - extract_mask:
+      mask: "trimedge_mask"
+
+post_processors:
+  - assign_mask:
+      mask: "trimedge_mask"
+
+input:
+  grib:
+    path: grib
+    namer:
+      rules:
+        - - shortName: SKT
+          - skt
+        - - shortName: T_G
+          - skt
+        - - shortName: T
+          - t_{level}
+        - - shortName: U
+          - u_{level}
+        - - shortName: V
+          - v_{level}
+        - - shortName: W
+          - w_{level}
+        - - shortName: QV
+          - q_{level}
+        - - shortName: FI
+          - z_{level}
+        - - shortName: PMSL
+          - msl
+        - - shortName: FIS
+          - z
+        - - shortName: PS
+          - sp
+        - - shortName: T_2M
+          - 2t
+        - - shortName: TD_2M
+          - 2d
+        - - shortName: U_10M
+          - 10u
+        - - shortName: V_10M
+          - 10v
+        - - shortName: FR_LAND
+          - lsm
+        - - shortName: TOT_PREC
+          - tp
+
+output:
+  grib:
+    path: interp_grib/{dateTime}_{step:03}.grib
+    encoding:
+      typeOfGeneratingProcess: 2
+    templates:
+      samples: /users/fzanetta/projects/ml-pilot-anemoi/inference/configs/templates_index.yaml
+
+forcings:
+  test:
+    use_original_paths: true
+
+verbosity: 1
+allow_nans: true
+output_frequency: "1h"
