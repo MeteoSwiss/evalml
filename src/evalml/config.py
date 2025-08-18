@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
-from pydantic import BaseModel, Field, RootModel
+from pydantic import BaseModel, Field, RootModel, HttpUrl
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -104,8 +104,8 @@ class Execution(BaseModel):
 class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
 
-    output_root: str = Field(..., description="Root directory for all output files.")
-    mlflow_uri: List[str] = Field(
+    output_root: Path = Field(..., description="Root directory for all output files.")
+    mlflow_uri: List[HttpUrl] = Field(
         ...,
         description="MLflow tracking URI(s) for the experiment. Can be a list of URIs if using multiple tracking servers.",
     )

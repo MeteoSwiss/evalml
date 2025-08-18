@@ -207,12 +207,16 @@
       "properties": {
         "output_root": {
           "description": "Root directory for all output files.",
+          "format": "path",
           "title": "Output Root",
           "type": "string"
         },
         "mlflow_uri": {
           "description": "MLflow tracking URI(s) for the experiment. Can be a list of URIs if using multiple tracking servers.",
           "items": {
+            "format": "uri",
+            "maxLength": 2083,
+            "minLength": 1,
             "type": "string"
           },
           "title": "Mlflow Uri",

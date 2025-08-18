@@ -10,9 +10,14 @@ OUT_ROOT = Path(config["locations"]["output_root"])
 
 def short_hash_config():
     """Generate a short hash of the configuration file."""
-    with open(CONFIG_ROOT / "anemoi_inference.yaml", "r") as f:
-        cfg = yaml.safe_load(f)
-    cfg_str = json.dumps([config, cfg], sort_keys=True)
+    configs_to_hash = []
+    for run_id, run_config in RUN_CONFIGS.items():
+        with open(run_config["config"], "r") as f:
+            configs_to_hash.append(yaml.safe_load(f))
+        if "forecaster" in run_config:
+            with open(run_config["forecaster"]["config"], "r") as f:
+                configs_to_hash.append(yaml.safe_load(f))
+    cfg_str = json.dumps([config, *configs_to_hash], sort_keys=True)
     return hashlib.sha256(cfg_str.encode()).hexdigest()[:8]
 
 
