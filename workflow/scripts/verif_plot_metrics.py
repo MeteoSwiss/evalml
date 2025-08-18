@@ -149,7 +149,7 @@ def main(args: Namespace) -> None:
                 y="obs",
                 kind="line",
                 marker="o",
-                label="obs",
+                label="Observations",
                 ax=ax,
                 color="black",
             )
