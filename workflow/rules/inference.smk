@@ -122,6 +122,7 @@ rule inference_group_forecaster:
         ],
         lead_time=config["lead_time"],
         output_root=(OUT_ROOT / "data").resolve(),
+        resources_root=Path("resources/inference").resolve(),
     # TODO: we can have named logs for each reftime
     log:
         [
@@ -150,8 +151,8 @@ rule inference_group_forecaster:
 
             _reftime_str=$(date -d "$reftime" +%Y%m%d%H%M)
             WORKDIR={params.output_root}/runs/{wildcards.run_id}/$_reftime_str
-            mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw
-            cp {input.config} config.yaml
+            mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw _resources
+            cp {input.config} config.yaml && cp -r {params.resources_root}/templates/* _resources/
 
             CMD_ARGS=(
                 date=$reftime
