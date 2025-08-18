@@ -76,13 +76,12 @@ rule verif_metrics_aggregation:
     output:
         OUT_ROOT / "data/runs/{run_id}/verif_aggregated.csv",
     params:
-        verif_files_glob=lambda wc: OUT_ROOT / f"data/runs/{wc.run_id}/*/verif.csv",
         valid_every=config.get("verification", {}).get("valid_every"),
     log:
         OUT_ROOT / "logs/verif_metrics_aggregation/{run_id}.log",
     shell:
         """
-        uv run {input.script} {params.verif_files_glob} \
+        uv run {input.script} {input.verif_csv} \
             --valid_every '{params.valid_every}' \
             --output {output} > {log} 2>&1
         """
