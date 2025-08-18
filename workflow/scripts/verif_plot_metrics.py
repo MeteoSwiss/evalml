@@ -149,7 +149,8 @@ def main(args: Namespace) -> None:
                 y="obs",
                 kind="line",
                 marker="o",
-                label="Observations",
+                # TODO: generalize label for observations for multiple datasets
+                label="COSMO-E analysis",  # hard-coded for now
                 ax=ax,
                 color="black",
             )
