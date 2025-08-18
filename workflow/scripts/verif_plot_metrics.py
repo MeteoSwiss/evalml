@@ -143,7 +143,7 @@ def main(args: Namespace) -> None:
                 label=labels[i],
                 ax=ax,
             )
-        if metric not in scores_names: # add observations once
+        if metric not in scores_names:  # add observations once
             df.plot(
                 x="lead_time",
                 y="obs",
