@@ -1,12 +1,12 @@
 
 - - {levtype: pl}
-  - /users/fzanetta/projects/ml-pilot-anemoi/inference/templates/co2-typeOfLevel=isobaricInhPa.grib
+  - _resources/co2-typeOfLevel=isobaricInhPa.grib
 
 - - {levtype: sfc, param: [T_2M, TD_2M, U_10M, V_10M]}
-  - /users/fzanetta/projects/ml-pilot-anemoi/inference/templates/co2-typeOfLevel=heightAboveGround.grib
+  - _resources/co2-typeOfLevel=heightAboveGround.grib
 
 - - {levtype: sfc, param: [FR_LAND, TOC_PREC, PMSL, PS, FIS, T_G]}
-  - /users/fzanetta/projects/ml-pilot-anemoi/inference/templates/co2-typeOfLevel=surface.grib
+  - _resources/co2-typeOfLevel=surface.grib
 
 - - {levtype: sfc, param: [TOT_PREC]}
-  - /users/fzanetta/projects/ml-pilot-anemoi/inference/templates/co2-shortName=TOT_PREC.grib
+  - _resources/co2-shortName=TOT_PREC.grib

@@ -1,5 +1,5 @@
 - - {levtype: pl}
-  - /users/fzanetta/projects/ml-pilot-anemoi/inference/templates/co2-typeOfLevel=isobaricInhPa.grib
+  - _resources/ifs-levtype=pl.grib
 
 - - {levtype: sfc}
-  - /users/fzanetta/projects/ml-pilot-anemoi/inference/templates/co2-typeOfLevel=heightAboveGround.grib
+  - _resources/ifs-levtype=sfc.grib
