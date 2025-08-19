@@ -87,26 +87,26 @@ def main(args: Namespace) -> None:
             )
 
         subsets_dfs = [_subset_df(df) for df in dfs]
+        all_df = pd.concat(subsets_dfs, ignore_index=True).dropna().drop_duplicates()
+        all_df["lead_time"] = all_df["lead_time"].dt.total_seconds() / 3600
+
         # breakpoint()
         fig, ax = plt.subplots(figsize=(10, 6))
 
         title = f"{metric} - {param}"
         title += f"- {hour} - {season} - {init_hour}" if args.stratify else ""
-        for i, sdf in enumerate(subsets_dfs):
-            # convert lead time to integer hours for plotting
-            sdf["lead_time"] = sdf["lead_time"].dt.total_seconds() / 3600
-            for label, df in sdf.groupby("label"):
-                df.plot(
-                    x="lead_time",
-                    y="value",
-                    kind="line",
-                    marker="o",
-                    title=title,
-                    xlabel="Lead Time [h]",
-                    ylabel=metric,
-                    label=label,
-                    ax=ax,
-                )
+        for label, df in all_df.groupby("label"):
+            df.plot(
+                x="lead_time",
+                y="value",
+                kind="line",
+                marker="o",
+                title=title,
+                xlabel="Lead Time [h]",
+                ylabel=metric,
+                label=label,
+                ax=ax,
+            )
         args.output_dir.mkdir(parents=True, exist_ok=True)
         fn = f"{metric}_{param}"
         fn += f"_{hour}_{season}_{init_hour}.png" if args.stratify else ".png"
