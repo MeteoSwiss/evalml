@@ -41,3 +41,7 @@ nosetests.xml
 
 # Sphinx documentation
 docs/_build/
+
+# files with secrets
+.env
+*credentials*
