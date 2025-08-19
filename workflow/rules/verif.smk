@@ -99,13 +99,12 @@ rule verif_metrics_aggregation_cosmoe:
     output:
         OUT_ROOT / "data/baselines/COSMO-E/verif_aggregated.csv",
     params:
-        verif_files_glob=lambda wc: OUT_ROOT / "data/baselines/COSMO-E/*/verif.csv",
         valid_every=config.get("verification", {}).get("valid_every"),
     log:
         OUT_ROOT / "logs/verif_metrics_aggregation_cosmoe/COSMO-E.log",
     shell:
         """
-        uv run {input.script} {params.verif_files_glob} \
+        uv run {input.script} {input.verif_csv} \
             --valid_every '{params.valid_every}' \
             --output {output} > {log} 2>&1
         """
