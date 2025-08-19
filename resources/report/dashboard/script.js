@@ -55,7 +55,7 @@ var spec = {
     "mark": { "type": "line" },
     "encoding": {
       "x": { "field": "lead_time", "type": "ordinal" },
-      "y": { "field": "value_mean", "type": "quantitative" },
+      "y": { "field": "value", "type": "quantitative" },
       "color": { "field": "model", "legend": { "orient": "top", "labelLimit": 1000, "symbolSize": 1000 } }
     }
   },

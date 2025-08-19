@@ -18,7 +18,7 @@ output:
                 encoding:
                   typeOfGeneratingProcess: 2
                 templates:
-                  samples: /users/fzanetta/projects/ml-pilot-anemoi/inference/configs/templates_index.yaml
+                  samples: _resources/templates_index_cosmo.yaml
     - printer
 
 write_initial_state: true

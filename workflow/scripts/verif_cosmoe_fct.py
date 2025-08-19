@@ -13,6 +13,8 @@ from meteodatalab import data_source, grib_decoder  # noqa: E402
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
 
+from src.verification import verify  # noqa: E402
+
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -184,6 +186,7 @@ def main(args: ScriptConfig):
                 x.TOT_PREC.fillna(0)
                 .diff("lead_time")
                 .pad(lead_time=(1, 0), constant_value=None)
+                .clip(min=0.0)
             )
         )
     coe = coe[args.params].sel(
@@ -224,26 +227,8 @@ def main(args: ScriptConfig):
     )
 
     # compute metrics and statistics
-    now = datetime.now()
-    error = coe - kenda
-    results = {}
-    results["BIAS"] = error.mean(["y", "x"])
-    results["RMSE"] = np.sqrt((error**2).mean(["y", "x"]))
-    results["MAE"] = abs(error).mean(["y", "x"])
-    results["STD"] = error.std(["y", "x"])
-    results["CORR"] = (
-        corr := xr.Dataset(
-            {k: xr.corr(coe[k], kenda[k], dim=["y", "x"]) for k in coe.data_vars}
-        )
-    )
-    results["R2"] = corr**2
-    results = xr.Dataset({k: v.to_array("param") for k, v in results.items()})
-    results = results.to_array("metric").to_dataframe(name="value").reset_index()
-    LOG.info(
-        "Computed verification metrics in %s seconds: \n%s",
-        (datetime.now() - now).total_seconds(),
-        results,
-    )
+
+    results = verify(coe, kenda)
 
     # save results to CSV
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -14,6 +14,7 @@ import shutil
 from pathlib import Path
 import requests
 import toml
+import subprocess
 
 from mlflow.tracking import MlflowClient
 from mlflow.exceptions import RestException
@@ -383,7 +384,7 @@ def main(snakemake) -> None:
     run_id = snakemake.wildcards["run_id"]
     requirements_path_in = Path(snakemake.input[0])
     toml_path_out = Path(snakemake.output[0])
-
+    extra_dependencies = snakemake.params.get("extra_dependencies", [])
     shutil.copy2(requirements_path_in, toml_path_out)
 
     client = get_mlflow_client_given_runid(mlflow_uri, run_id)
@@ -405,6 +406,22 @@ def main(snakemake) -> None:
         checkpoints_path,
         run_mlflow_link,
     )
+
+    if extra_dependencies:
+        command = ["uv"]
+        command += ["--project", str(toml_path_out.parent.resolve())]
+        command += ["add", "--no-sync"]
+        command += extra_dependencies
+        try:
+            subprocess.run(command, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(
+                "Failed to add extra dependencies: %s\n%s",
+                e,
+                e.stderr or e.stdout,
+            )
+            raise RuntimeError("Failed to add extra dependencies") from e
+        logger.info("Added extra dependencies: %s", extra_dependencies)
 
     logger.info("Successfully updated dependencies in %s", toml_path_out)
 

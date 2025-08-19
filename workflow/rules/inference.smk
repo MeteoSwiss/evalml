@@ -12,6 +12,10 @@ rule create_inference_pyproject:
         toml="workflow/envs/anemoi_inference.toml",
     output:
         pyproject=OUT_ROOT / "data/runs/{run_id}/pyproject.toml",
+    params:
+        extra_dependencies=lambda wc: RUN_CONFIGS[wc.run_id].get(
+            "extra_dependencies", []
+        ),
     log:
         OUT_ROOT / "logs/create_inference_pyproject/{run_id}.log",
     localrule: True
@@ -102,13 +106,17 @@ rule create_inference_sandbox:
         """
 
 
-rule run_inference_group:
+rule inference_group_forecaster:
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
-        config=str(Path("config/anemoi_inference.yaml").resolve()),
+        config=lambda wc: RUN_CONFIGS[wc.run_id]["config"],
     output:
-        okfile=temp(touch(OUT_ROOT / "data/runs/{run_id}/group-{group_index}.ok")),
+        okfile=temp(
+            touch(
+                OUT_ROOT / "logs/inference_group_forecaster/{run_id}-{group_index}.ok"
+            )
+        ),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
@@ -118,10 +126,12 @@ rule run_inference_group:
         ],
         lead_time=config["lead_time"],
         output_root=(OUT_ROOT / "data").resolve(),
+        resources_root=Path("resources/inference").resolve(),
     # TODO: we can have named logs for each reftime
     log:
         [
-            OUT_ROOT / ("logs/inference_run/{run_id}-{group_index}" + f"-{i}.log")
+            OUT_ROOT
+            / ("logs/inference_group_forecaster/{run_id}-{group_index}" + f"-{i}.log")
             for i in range(config["execution"]["run_group_size"])
         ],
     resources:
@@ -145,8 +155,8 @@ rule run_inference_group:
 
             _reftime_str=$(date -d "$reftime" +%Y%m%d%H%M)
             WORKDIR={params.output_root}/runs/{wildcards.run_id}/$_reftime_str
-            mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw
-            cp {input.config} config.yaml
+            mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw _resources
+            cp {input.config} config.yaml && cp -r {params.resources_root}/templates/* _resources/
 
             CMD_ARGS=(
                 date=$reftime
@@ -173,11 +183,68 @@ rule run_inference_group:
         """
 
 
+def _get_forecaster_run_id(run_id):
+    """Get the forecaster run ID from the RUN_CONFIGS."""
+    return RUN_CONFIGS[run_id]["forecaster"]["run_id"]
+
+
+rule inference_group_interpolator:
+    """Run the interpolator for a specific run ID."""
+    input:
+        pyproject=rules.create_inference_pyproject.output.pyproject,
+        image=rules.make_squashfs_image.output.image,
+        config=lambda wc: RUN_CONFIGS[wc.run_id]["config"],
+        forecasts=lambda wc: OUT_ROOT
+        / f"logs/inference_group_forecaster/{_get_forecaster_run_id(wc.run_id)}-{wc.group_index}.ok",
+    output:
+        okfile=temp(
+            touch(
+                OUT_ROOT
+                / "logs/inference_group_interpolator/{run_id}-{group_index}.ok"
+            )
+        ),
+    params:
+        checkpoints_path=parse_input(
+            input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
+        ),
+        reftimes=lambda wc: [
+            t.strftime("%Y-%m-%dT%H:%M") for t in REFTIMES_GROUPS[int(wc.group_index)]
+        ],
+    log:
+        [
+            OUT_ROOT
+            / (
+                "logs/inference_group_interpolator/{run_id}-{group_index}"
+                + f"-{i}.log"
+            )
+            for i in range(config["execution"]["run_group_size"])
+        ],
+    localrule: True
+    shell:
+        """
+        touch {output.okfile}
+        """
+
+
+def _inference_job_routing(wc):
+
+    run_config = RUN_CONFIGS[wc.run_id]
+    group_index = REFTIME_TO_GROUP[wc.init_time]
+
+    if run_config["model_type"] == "forecaster":
+        input_path = f"logs/inference_group_forecaster/{wc.run_id}-{group_index}.ok"
+    elif run_config["model_type"] == "interpolator":
+        input_path = f"logs/inference_group_interpolator/{wc.run_id}-{group_index}.ok"
+    else:
+        raise ValueError(f"Unsupported model type: {run_config['model_type']}")
+
+    return OUT_ROOT / input_path
+
+
 rule map_init_time_to_inference_group:
     localrule: True
     input:
-        lambda wc: OUT_ROOT
-        / f"data/runs/{wc.run_id}/group-{REFTIME_TO_GROUP[wc.init_time]}.ok",
+        _inference_job_routing,
     output:
         directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
         directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/raw"),
