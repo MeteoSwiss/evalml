@@ -36,7 +36,6 @@ dates:
 lead_time: 120h
 
 runs:
-runs:
   # - interpolator:
   #     run_id: 9c18b90074214d769b8b383722fc5a06
   #     label: Interpolator (M-1 forecaster)
