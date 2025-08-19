@@ -14,12 +14,16 @@ rule verif_metrics_cosmoe:
     localrule: True
     input:
         script="workflow/scripts/verif_cosmoe_fct.py",
+        module="workflow/scripts/src/verification.py",
         # cosmoe_zarr=lambda wc: expand(rules.extract_cosmoe_fcts.output, year=wc.init_time[2:4]),
         cosmoe_zarr=lambda wc: expand(
             "/store_new/mch/msopr/ml/COSMO-E/FCST{year}.zarr",
             year=wc.init_time[2:4],
         ),
         zarr_dataset="/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr",
+    params:
+        cosmoe_label="COSMO-E",
+        analysis_label="COSMO-E analysis",
     output:
         OUT_ROOT / "data/baselines/COSMO-E/{init_time}/verif.csv",
     log:
@@ -30,6 +34,8 @@ rule verif_metrics_cosmoe:
             --zarr_dataset {input.zarr_dataset} \
             --cosmoe_zarr {input.cosmoe_zarr} \
             --reftime {wildcards.init_time} \
+            --cosmoe_label "{params.cosmoe_label}" \
+            --analysis_label "{params.analysis_label}" \
             --output {output} > {log} 2>&1
         """
 
@@ -39,6 +45,7 @@ rule verif_metrics:
     localrule: True
     input:
         script="workflow/scripts/verif_from_grib.py",
+        module="workflow/scripts/src/verification.py",
         grib_output=rules.map_init_time_to_inference_group.output[0],
         zarr_dataset="/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr",
     output:
@@ -46,6 +53,9 @@ rule verif_metrics:
     # wildcard_constraints:
     # run_id="^" # to avoid ambiguitiy with run_cosmoe_verif
     # TODO: implement logic to use experiment name instead of run_id as wildcard
+    params:
+        fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
+        analysis_label="COSMO-E analysis",
     log:
         OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",
     shell:
@@ -53,6 +63,8 @@ rule verif_metrics:
         uv run {input.script} \
             --grib_output_dir {input.grib_output} \
             --zarr_dataset {input.zarr_dataset} \
+            --fcst_label "{params.fcst_label}" \
+            --analysis_label "{params.analysis_label}" \
             --output {output} > {log} 2>&1
         """
 
@@ -127,6 +139,5 @@ rule verif_metrics_plot:
     shell:
         """
         uv run {input.script} {input.verif} \
-            --labels '{params.labels}' \
             --output_dir {output} > {log} 2>&1
         """
