@@ -228,7 +228,7 @@ def main(args: ScriptConfig):
 
     # compute metrics and statistics
 
-    results = verify(coe, kenda)
+    results = verify(coe, kenda, args.cosmoe_label, args.analysis_label)
 
     # save results to CSV
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -253,7 +253,7 @@ if __name__ == "__main__":
         "--zarr_dataset",
         type=Path,
         required=False,
-        help="Path to the Zarr dataset containing COSMOe data.",
+        help="Path to the Zarr dataset containing COSMO-E analysis data.",
     )
 
     parser.add_argument(
@@ -278,6 +278,18 @@ if __name__ == "__main__":
         type=_parse_lead_time,
         default="0/126/6",
         help="Lead time in the format 'start/stop/step' (default: 0/126/6).",
+    )
+    parser.add_argument(
+        "--cosmoe_label",
+        type=str,
+        default="COSMO-E",
+        help="Label for the COSMO-E forecast data (default: COSMO-E).",
+    )
+    parser.add_argument(
+        "--analysis_label",
+        type=str,
+        default="COSMO-E analysis",
+        help="Label for the COSMO-E analysis data (default: COSMO-E analysis).",
     )
     parser.add_argument(
         "--output",

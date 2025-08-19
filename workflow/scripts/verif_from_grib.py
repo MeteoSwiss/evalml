@@ -245,7 +245,7 @@ def main(args: ScriptConfig):
     )
 
     # compute metrics and statistics
-    results = verify(fcst=fct, obs=kenda)
+    results = verify(fct, kenda, args.fcst_label, args.analysis_label)
 
     # # save results to CSV
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -281,7 +281,7 @@ if __name__ == "__main__":
         "--zarr_dataset",
         type=Path,
         required=False,
-        help="Path to the Zarr dataset containing COSMOe data.",
+        help="Path to the Zarr dataset containing COSMO-E analysis data.",
     )
 
     parser.add_argument(
@@ -296,6 +296,17 @@ if __name__ == "__main__":
         type=_parse_lead_time,
         default="0/126/6",
         help="Lead time in the format 'start/stop/step'.",
+    )
+    parser.add_argument(
+        "--fcst_label",
+        type=str,
+        help="Label for the forecast data.",
+    )
+    parser.add_argument(
+        "--analysis_label",
+        type=str,
+        help="Label for the analysis data (default: COSMO-E analysis).",
+        default="COSMO-E analysis",
     )
     parser.add_argument(
         "--output",
