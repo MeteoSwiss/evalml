@@ -105,7 +105,7 @@ To permanently set these variables within this project, use a `.env` file in the
 
 ```
 # .env
-MLFLOW_TRACKING_USERNAME=mlflow-PROD-user
+MLFLOW_TRACKING_USERNAME=mlflow-user
 MLFLOW_TRACKING_PASSWORD=mlflow-password
 ```
 
