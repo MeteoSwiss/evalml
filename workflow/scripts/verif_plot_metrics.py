@@ -56,16 +56,6 @@ def _check_same_column_values(dfs: list[pd.DataFrame], column: str) -> None:
 def main(args: Namespace) -> None:
     """Main function to verify results from KENDA-1 data."""
 
-    if args.labels is not None:
-        if len(args.labels) != len(args.verif_files):
-            raise ValueError(
-                "Number of labels must match the number of verification files."
-                f" Got {len(args.labels)} labels for {len(args.verif_files)} files."
-            )
-        labels = args.labels
-    else:
-        labels = [file.parent.name for file in args.verif_files]
-
     dfs = [read_verif_file(file) for file in args.verif_files]
 
     _check_same_columns(dfs)
@@ -77,33 +67,6 @@ def main(args: Namespace) -> None:
     init_hours = (
         _check_same_column_values(dfs, "init_hour") if args.stratify else ["all"]
     )
-
-    # Split metrics into statistics (start with 'fcst_' or 'obs_') and scores (the rest)
-    all_statistics_names = [
-        name for name in metrics if name.startswith(("fcst_", "obs_"))
-    ]
-    scores_names = [name for name in metrics if name not in all_statistics_names]
-
-    # split metric into source and metric and pivot with source as names
-    def _split_and_pivot(df: pd.DataFrame) -> pd.DataFrame:
-        scores_df = df[df.metric.isin(scores_names)].copy()
-        stats_df = df[df.metric.isin(all_statistics_names)].copy()
-        stats_df[["source", "metric"]] = stats_df["metric"].str.split(
-            "_", n=1, expand=True
-        )
-        colnames = [c for c in stats_df.columns if c not in ["value", "source"]]
-        stats_df = stats_df.pivot_table(
-            index=colnames,
-            columns="source",
-            values="value",
-            aggfunc="mean",
-        ).reset_index()
-        stats_df.rename(columns={"fcst": "value"}, inplace=True)
-        out = pd.concat([scores_df, stats_df], ignore_index=True)
-        return out
-
-    dfs = [_split_and_pivot(df) for df in dfs]
-    metrics = _check_same_column_values(dfs, "metric")
 
     for metric, param, hour, season, init_hour in itertools.product(
         metrics, params, hours, seasons, init_hours
@@ -129,31 +92,21 @@ def main(args: Namespace) -> None:
 
         title = f"{metric} - {param}"
         title += f"- {hour} - {season} - {init_hour}" if args.stratify else ""
-        for i, df in enumerate(subsets_dfs):
+        for i, sdf in enumerate(subsets_dfs):
             # convert lead time to integer hours for plotting
-            df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
-            df.plot(
-                x="lead_time",
-                y="value",
-                kind="line",
-                marker="o",
-                title=title,
-                xlabel="Lead Time [h]",
-                ylabel=metric,
-                label=labels[i],
-                ax=ax,
-            )
-        if metric not in scores_names:  # add observations once
-            df.plot(
-                x="lead_time",
-                y="obs",
-                kind="line",
-                marker="o",
-                # TODO: generalize label for observations for multiple datasets
-                label="COSMO-E analysis",  # hard-coded for now
-                ax=ax,
-                color="black",
-            )
+            sdf["lead_time"] = sdf["lead_time"].dt.total_seconds() / 3600
+            for label, df in sdf.groupby("label"):
+                df.plot(
+                    x="lead_time",
+                    y="value",
+                    kind="line",
+                    marker="o",
+                    title=title,
+                    xlabel="Lead Time [h]",
+                    ylabel=metric,
+                    label=label,
+                    ax=ax,
+                )
         args.output_dir.mkdir(parents=True, exist_ok=True)
         fn = f"{metric}_{param}"
         fn += f"_{hour}_{season}_{init_hour}.png" if args.stratify else ".png"
@@ -176,12 +129,6 @@ if __name__ == "__main__":
         action="store_true",
         help="Stratify results by hour, season, and init_hour.",
         default=False,
-    )
-    parser.add_argument(
-        "--labels",
-        type=lambda s: s.split(","),
-        default=None,
-        help="Labels for the runs, if not provided, will use run_id.",
     )
     parser.add_argument(
         "--output_dir",
