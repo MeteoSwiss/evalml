@@ -78,6 +78,33 @@ def main(args: Namespace) -> None:
         _check_same_column_values(dfs, "init_hour") if args.stratify else ["all"]
     )
 
+    # Split metrics into statistics (start with 'fcst_' or 'obs_') and scores (the rest)
+    all_statistics_names = [
+        name for name in metrics if name.startswith(("fcst_", "obs_"))
+    ]
+    scores_names = [name for name in metrics if name not in all_statistics_names]
+
+    # split metric into source and metric and pivot with source as names
+    def _split_and_pivot(df: pd.DataFrame) -> pd.DataFrame:
+        scores_df = df[df.metric.isin(scores_names)].copy()
+        stats_df = df[df.metric.isin(all_statistics_names)].copy()
+        stats_df[["source", "metric"]] = stats_df["metric"].str.split(
+            "_", n=1, expand=True
+        )
+        colnames = [c for c in stats_df.columns if c not in ["value", "source"]]
+        stats_df = stats_df.pivot_table(
+            index=colnames,
+            columns="source",
+            values="value",
+            aggfunc="mean",
+        ).reset_index()
+        stats_df.rename(columns={"fcst": "value"}, inplace=True)
+        out = pd.concat([scores_df, stats_df], ignore_index=True)
+        return out
+
+    dfs = [_split_and_pivot(df) for df in dfs]
+    metrics = _check_same_column_values(dfs, "metric")
+
     for metric, param, hour, season, init_hour in itertools.product(
         metrics, params, hours, seasons, init_hours
     ):
@@ -107,7 +134,7 @@ def main(args: Namespace) -> None:
             df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
             df.plot(
                 x="lead_time",
-                y="value_mean",
+                y="value",
                 kind="line",
                 marker="o",
                 title=title,
@@ -116,7 +143,17 @@ def main(args: Namespace) -> None:
                 label=labels[i],
                 ax=ax,
             )
-
+        if metric not in scores_names:  # add observations once
+            df.plot(
+                x="lead_time",
+                y="obs",
+                kind="line",
+                marker="o",
+                # TODO: generalize label for observations for multiple datasets
+                label="COSMO-E analysis",  # hard-coded for now
+                ax=ax,
+                color="black",
+            )
         args.output_dir.mkdir(parents=True, exist_ok=True)
         fn = f"{metric}_{param}"
         fn += f"_{hour}_{season}_{init_hour}.png" if args.stratify else ".png"
@@ -127,12 +164,18 @@ def main(args: Namespace) -> None:
 if __name__ == "__main__":
     parser = ArgumentParser(description="Verify results from KENDA-1 data.")
     parser.add_argument(
-        "verif_files", type=Path, nargs="+", help="Paths to verification files."
+        "verif_files",
+        type=Path,
+        nargs="+",
+        help="Paths to verification files.",
+        # "--verif_files", type=Path, nargs="+", help="Paths to verification files.",
+        # default = list(Path("output/data").glob("*/*/verif_aggregated.csv")), required=False
     )
     parser.add_argument(
         "--stratify",
         action="store_true",
         help="Stratify results by hour, season, and init_hour.",
+        default=False,
     )
     parser.add_argument(
         "--labels",
