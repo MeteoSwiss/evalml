@@ -27,7 +27,6 @@ rule report_experiment_dashboard:
         """
         python {input.script} \
             --verif_files {input.verif} \
-            --labels '{params.labels}' \
             --template {input.template} \
             --script {input.js_script} \
             --output {output} > {log} 2>&1

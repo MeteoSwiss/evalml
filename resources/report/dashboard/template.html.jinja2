@@ -114,12 +114,9 @@
             <div class="control-group">
                 <label>Metric(s)</label>
                 <select id="metric-select" multiple>
-                    <option value="BIAS" selected>BIAS</option>
-                    <option value="RMSE" selected>RMSE</option>
-                    <option value="STDE" selected>STDE</option>
-                    <option value="MAE" selected>MAE</option>
-                    <option value="CORR" selected>CORR</option>
-                    <option value="R2" selected>CORR</option>
+                    {% for metric in metrics %}
+                    <option value="{{metric}}" selected>{{metric}}</option>
+                    {% endfor %}
                 </select>
             </div>
             <div class="control-group">

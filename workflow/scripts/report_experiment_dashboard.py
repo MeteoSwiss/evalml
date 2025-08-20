@@ -23,7 +23,7 @@ def read_verif_file(Path: str) -> pd.DataFrame:
 
 
 def combine_verif_files(
-    verif_files: Path, labels: list[str] | None = None
+    verif_files: Path
 ) -> pd.DataFrame:
     """
     Combine multiple verification files into a single DataFrame.
@@ -32,8 +32,10 @@ def combine_verif_files(
     df = pd.DataFrame()
     for i, file in enumerate(verif_files):
         _df = read_verif_file(file)
-        _df["model"] = labels[i] if labels is not None else file.parent.name
         df = pd.concat([df, _df])
+    subset_cols = [c for c in df.columns if c not in ["value"]]
+    df = df.drop_duplicates(subset=subset_cols)
+    df.rename(columns={"label": "model"}, inplace=True)
     df = df.reset_index(drop=True)
 
     return df
@@ -45,10 +47,6 @@ def program_summary_log(args):
     LOG.info("Generating experiment verification dashboard")
     LOG.info("=" * 80)
     LOG.info("Verification files: \n%s", "\n".join(str(f) for f in args.verif_files))
-    if args.labels:
-        LOG.info("Labels for verification files: \n%s", "\n".join(args.labels))
-    else:
-        LOG.info("No labels provided, using file names as labels.")
     LOG.info("Template: %s", args.template)
     LOG.info("Script: %s", args.script)
     LOG.info("Output: %s", args.output)
@@ -59,7 +57,7 @@ def main(args):
     program_summary_log(args)
 
     # load and combine verification data
-    df = combine_verif_files(args.verif_files, args.labels)
+    df = combine_verif_files(args.verif_files)
 
     # TODO: remove this when we have the logic to handle these groups
     df = df[
@@ -70,6 +68,7 @@ def main(args):
     # get unique models and params
     models = df["model"].unique()
     params = df["param"].unique()
+    metrics = df["metric"].unique()
 
     # get json string to embed in the HTML
     df_json = df.to_json(orient="records", lines=False)
@@ -88,7 +87,7 @@ def main(args):
     )
     template = environment.get_template(args.template.name)
     html = template.render(
-        verif_data=df_json, js_src=js_src, models=models, params=params
+        verif_data=df_json, js_src=js_src, models=models, params=params, metrics=metrics,
     )
     LOG.info("Size of generated HTML: %d bytes", len(html.encode("utf-8")))
 
@@ -112,12 +111,6 @@ if __name__ == "__main__":
         help="Paths to verification data files (not used in this mock).",
     )
     parser.add_argument(
-        "--labels",
-        type=lambda s: s.split(","),
-        default=None,
-        help="Labels for the verification data files. If not provided, labels will be derived from the file paths.",
-    )
-    parser.add_argument(
         "--template", type=Path, required=True, help="Path to the Jinja2 template file."
     )
     parser.add_argument(
@@ -133,13 +126,6 @@ if __name__ == "__main__":
         help="Path to save the generated HTML dashboard file.",
     )
     args = parser.parse_args()
-
-    # check that number of labels matches number of files
-    if args.labels is not None and len(args.labels) != len(args.verif_files):
-        raise ValueError(
-            "Number of labels must match the number of verification files."
-            f" Got {len(args.labels)} labels for {len(args.verif_files)} files."
-        )
 
     main(args)
 
