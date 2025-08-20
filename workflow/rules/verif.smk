@@ -83,6 +83,7 @@ rule verif_metrics_aggregation:
         verif_csv=lambda wc: expand(
             rules.verif_metrics.output,
             init_time=_restrict_reftimes_to_hours(REFTIMES),
+            run_id=RUN_CONFIGS.keys(),
             allow_missing=False,
         ),
     output:
