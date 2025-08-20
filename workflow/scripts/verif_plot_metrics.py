@@ -89,7 +89,7 @@ def main(args: Namespace) -> None:
         subsets_dfs = [_subset_df(df) for df in dfs]
         all_df = pd.concat(subsets_dfs, ignore_index=True).dropna()
         subset_cols = [c for c in all_df.columns if c != "value"]
-        all_df = all_df.drop_duplicates(subset = subset_cols, keep = "last")
+        all_df = all_df.drop_duplicates(subset=subset_cols, keep="last")
         all_df["lead_time"] = all_df["lead_time"].dt.total_seconds() / 3600
 
         # breakpoint()

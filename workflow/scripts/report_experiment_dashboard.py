@@ -22,9 +22,7 @@ def read_verif_file(Path: str) -> pd.DataFrame:
     return df
 
 
-def combine_verif_files(
-    verif_files: Path
-) -> pd.DataFrame:
+def combine_verif_files(verif_files: Path) -> pd.DataFrame:
     """
     Combine multiple verification files into a single DataFrame.
     Each file is expected to have a 'model' column indicating the model name.
@@ -87,7 +85,11 @@ def main(args):
     )
     template = environment.get_template(args.template.name)
     html = template.render(
-        verif_data=df_json, js_src=js_src, models=models, params=params, metrics=metrics,
+        verif_data=df_json,
+        js_src=js_src,
+        models=models,
+        params=params,
+        metrics=metrics,
     )
     LOG.info("Size of generated HTML: %d bytes", len(html.encode("utf-8")))
 
