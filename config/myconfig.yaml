@@ -17,6 +17,7 @@ runs:
         run_id: d0846032fc7248a58b089cbe8fa4c511
       extra_dependencies:
          - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
+         - torch-geometric==2.6.1
   - interpolator:
       run_id: 07c3d9698db14d859b78bb712a65bbbf
       label: Stretched interpolator (M-1 forecaster)
@@ -26,6 +27,7 @@ runs:
         config: /users/omiralle/evalml/resources/inference/configs/forecaster_with_global.yaml
       extra_dependencies:
          - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
+         - torch-geometric==2.6.1
 
 baseline: COSMO-E
 

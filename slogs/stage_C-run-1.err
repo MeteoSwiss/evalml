@@ -1,7 +1,7 @@
-host: nid001005
+host: nid001001
 Building DAG of jobs...
 You are running snakemake in a SLURM job context. This is not recommended, as it may lead to unexpected behavior. Please run Snakemake directly on the login node.
-SLURM run ID: 84ef4593-1287-483e-aa88-7d743461b7ea
+SLURM run ID: 30d8260f-d558-49f2-84b7-a0fc73225c67
 Using shell: /usr/local/bin/bash
 Provided remote nodes: 10
 Job stats:
@@ -17,15 +17,22 @@ map_init_time_to_inference_group        8
 report_experiment_dashboard             1
 verif_metrics                           8
 verif_metrics_aggregation               2
-verif_metrics_aggregation_cosmoe        1
-verif_metrics_cosmoe                    2
 verif_metrics_plot                      1
-total                                  36
+total                                  33
 
 Select jobs to execute...
-Execute 5 jobs...
+Execute 3 jobs...
 
-[Wed Aug 20 13:23:34 2025]
+[Wed Aug 20 15:47:19 2025]
+localrule create_inference_pyproject:
+    input: workflow/envs/anemoi_inference.toml
+    output: output/data/runs/9c18b90074214d769b8b383722fc5a06/pyproject.toml
+    log: output/logs/create_inference_pyproject/9c18b90074214d769b8b383722fc5a06.log
+    jobid: 9
+    reason: Code has changed since last execution; Params have changed since last execution: Union of exclusive params before and now across all output: before: ['git+https://github.com/ecmwf/anemoi-inference@fix/interp_files'] now: ['git+https://github.com/ecmwf/anemoi-inference@fix/interp_files', 'torch-geometric==2.6.1'] 
+    wildcards: run_id=9c18b90074214d769b8b383722fc5a06
+    resources: mem_mb=1000, mem_mib=954, disk_mb=1000, disk_mib=954, tmpdir=/tmp, slurm_partition=postproc, cpus_per_task=1, mem_mb_per_cpu=1800, runtime=60
+[Wed Aug 20 15:47:19 2025]
 localrule create_inference_pyproject:
     input: workflow/envs/anemoi_inference.toml
     output: output/data/runs/d0846032fc7248a58b089cbe8fa4c511/pyproject.toml
@@ -34,50 +41,38 @@ localrule create_inference_pyproject:
     reason: Missing output files: output/data/runs/d0846032fc7248a58b089cbe8fa4c511/pyproject.toml
     wildcards: run_id=d0846032fc7248a58b089cbe8fa4c511
     resources: mem_mb=1000, mem_mib=954, disk_mb=1000, disk_mib=954, tmpdir=/tmp, slurm_partition=postproc, cpus_per_task=1, mem_mb_per_cpu=1800, runtime=60
-[Wed Aug 20 13:23:34 2025]
-localrule verif_metrics_cosmoe:
-    input: workflow/scripts/verif_cosmoe_fct.py, /store_new/mch/msopr/ml/COSMO-E/FCST20.zarr, /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr
-    output: output/data/baselines/COSMO-E/202001011200/verif.csv
-    log: output/logs/verif_metrics_cosmoe/202001011200.log
-    jobid: 3
-    reason: Missing output files: output/data/baselines/COSMO-E/202001011200/verif.csv
-    wildcards: init_time=202001011200
-    resources: mem_mb=1000, mem_mib=954, disk_mb=1000, disk_mib=954, tmpdir=/tmp, slurm_partition=postproc, cpus_per_task=1, mem_mb_per_cpu=1800, runtime=60
-[Wed Aug 20 13:23:34 2025]
+[Wed Aug 20 15:47:19 2025]
 localrule create_inference_pyproject:
     input: workflow/envs/anemoi_inference.toml
     output: output/data/runs/07c3d9698db14d859b78bb712a65bbbf/pyproject.toml
     log: output/logs/create_inference_pyproject/07c3d9698db14d859b78bb712a65bbbf.log
     jobid: 26
-    reason: Missing output files: output/data/runs/07c3d9698db14d859b78bb712a65bbbf/pyproject.toml
+    reason: Code has changed since last execution; Params have changed since last execution: Union of exclusive params before and now across all output: before: ['git+https://github.com/ecmwf/anemoi-inference@fix/interp_files'] now: ['git+https://github.com/ecmwf/anemoi-inference@fix/interp_files', 'torch-geometric==2.6.1'] 
     wildcards: run_id=07c3d9698db14d859b78bb712a65bbbf
     resources: mem_mb=1000, mem_mib=954, disk_mb=1000, disk_mib=954, tmpdir=/tmp, slurm_partition=postproc, cpus_per_task=1, mem_mb_per_cpu=1800, runtime=60
-[Wed Aug 20 13:23:34 2025]
-localrule create_inference_pyproject:
-    input: workflow/envs/anemoi_inference.toml
-    output: output/data/runs/9c18b90074214d769b8b383722fc5a06/pyproject.toml
-    log: output/logs/create_inference_pyproject/9c18b90074214d769b8b383722fc5a06.log
-    jobid: 9
-    reason: Missing output files: output/data/runs/9c18b90074214d769b8b383722fc5a06/pyproject.toml
-    wildcards: run_id=9c18b90074214d769b8b383722fc5a06
-    resources: mem_mb=1000, mem_mib=954, disk_mb=1000, disk_mib=954, tmpdir=/tmp, slurm_partition=postproc, cpus_per_task=1, mem_mb_per_cpu=1800, runtime=60
-[Wed Aug 20 13:23:34 2025]
-localrule verif_metrics_cosmoe:
-    input: workflow/scripts/verif_cosmoe_fct.py, /store_new/mch/msopr/ml/COSMO-E/FCST20.zarr, /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr
-    output: output/data/baselines/COSMO-E/202001060000/verif.csv
-    log: output/logs/verif_metrics_cosmoe/202001060000.log
-    jobid: 4
-    reason: Missing output files: output/data/baselines/COSMO-E/202001060000/verif.csv
-    wildcards: init_time=202001060000
-    resources: mem_mb=1000, mem_mib=954, disk_mb=1000, disk_mib=954, tmpdir=/tmp, slurm_partition=postproc, cpus_per_task=1, mem_mb_per_cpu=1800, runtime=60
 Traceback (most recent call last):
-  File "/users/omiralle/evalml/.snakemake/scripts/tmpj9wr51n9.set_inference_pyproject.py", line 435, in <module>
+  File "/users/omiralle/evalml/.snakemake/scripts/tmp3zpafl3j.set_inference_pyproject.py", line 435, in <module>
     raise SystemExit(main(snakemake))
                      ^^^^^^^^^^^^^^^
-  File "/users/omiralle/evalml/.snakemake/scripts/tmpj9wr51n9.set_inference_pyproject.py", line 393, in main
+  File "/users/omiralle/evalml/.snakemake/scripts/tmp3zpafl3j.set_inference_pyproject.py", line 419, in main
+    subprocess.run(command, check=True, capture_output=True, text=True)
+  File "/users/omiralle/.local/share/uv/python/cpython-3.12.7-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 548, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/users/omiralle/.local/share/uv/python/cpython-3.12.7-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/users/omiralle/.local/share/uv/python/cpython-3.12.7-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1885, in _execute_child
+    self.pid = _fork_exec(
+               ^^^^^^^^^^^
+TypeError: expected str, bytes or os.PathLike object, not list
+Traceback (most recent call last):
+  File "/users/omiralle/evalml/.snakemake/scripts/tmpn7b56vgu.set_inference_pyproject.py", line 435, in <module>
+    raise SystemExit(main(snakemake))
+                     ^^^^^^^^^^^^^^^
+  File "/users/omiralle/evalml/.snakemake/scripts/tmpn7b56vgu.set_inference_pyproject.py", line 393, in main
     client = get_mlflow_client_given_runid(mlflow_uri, run_id)
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/users/omiralle/evalml/.snakemake/scripts/tmpj9wr51n9.set_inference_pyproject.py", line 100, in get_mlflow_client_given_runid
+  File "/users/omiralle/evalml/.snakemake/scripts/tmpn7b56vgu.set_inference_pyproject.py", line 100, in get_mlflow_client_given_runid
     client.get_run(run_id)
   File "/users/omiralle/evalml/.venv/lib/python3.12/site-packages/mlflow/tracking/client.py", line 275, in get_run
     return self._tracking_client.get_run(run_id)
@@ -172,7 +167,7 @@ mlflow.exceptions.MlflowException: API request to endpoint was successful but th
     <div id="kc-form">
      <div id="kc-form-wrapper">
 
-            <form id="kc-form-login" onsubmit="login.disabled = true; return true;" action="https://accounts.ecmwf.int/auth/realms/ecmwf/login-actions/authenticate?session_code=luoiQmCYtVMfqEWc0Dab6WVQ0TCXx1IcgQi12khu4w4&amp;execution=408a29c4-9451-4b7e-b750-a4935f05abd0&amp;client_id=mlflow&amp;tab_id=5BwGBdQMHiY" method="post">
+            <form id="kc-form-login" onsubmit="login.disabled = true; return true;" action="https://accounts.ecmwf.int/auth/realms/ecmwf/login-actions/authenticate?session_code=UBMK38lT5guGcDTcB_C59keHMGbeagPSznR8wq0ApDU&amp;execution=408a29c4-9451-4b7e-b750-a4935f05abd0&amp;client_id=mlflow&amp;tab_id=XD-h7yCLdiE" method="post">
 
                     <div class="form-group">
                         <label for="username" class="pf-c-form__label pf-c-form__label-text">
@@ -205,7 +200,7 @@ mlflow.exceptions.MlflowException: API request to endpoint was successful but th
                 <div class="form-group login-pf-settings">
                     <div id="kc-form-options">
                         <div class="">
-                                <span><a tabindex="5" href="/auth/realms/ecmwf/login-actions/reset-credentials?client_id=mlflow&amp;tab_id=5BwGBdQMHiY">Forgot Password?</a></span>
+                                <span><a tabindex="5" href="/auth/realms/ecmwf/login-actions/reset-credentials?client_id=mlflow&amp;tab_id=XD-h7yCLdiE">Forgot Password?</a></span>
                         </div>
                     </div>
                 </div>
@@ -253,7 +248,7 @@ mlflow.exceptions.MlflowException: API request to endpoint was successful but th
                         </ul>
    <p>To check if you are eligible for more features you can read about <a href="https://www.ecmwf.int/en/forecasts/accessing-forecasts">access to forecast data</a> and <a href="https://www.ecmwf.int/en/computing/access-computing-facilities">access to our computing facilities</a>.</p>
    <div id="kc-form-buttons" class="form-group">
-        <a href="/auth/realms/ecmwf/login-actions/registration?client_id=mlflow&amp;tab_id=5BwGBdQMHiY" class="pf-c-button pf-m-primary pf-m-block btn-lg">Register new user</a>
+        <a href="/auth/realms/ecmwf/login-actions/registration?client_id=mlflow&amp;tab_id=XD-h7yCLdiE" class="pf-c-button pf-m-primary pf-m-block btn-lg">Register new user</a>
    </div>
 
 
@@ -379,66 +374,25 @@ h1 {
 
 </style>
 '
-RuleException:
-CalledProcessError in file "/users/omiralle/evalml/workflow/rules/inference.smk", line 23:
-Command 'set -euo pipefail;  /users/omiralle/evalml/.venv/bin/python /users/omiralle/evalml/.snakemake/scripts/tmpj9wr51n9.set_inference_pyproject.py' returned non-zero exit status 1.
-[Wed Aug 20 13:23:48 2025]
-Error in rule create_inference_pyproject:
-    message: None
-    jobid: 13
-    input: workflow/envs/anemoi_inference.toml
-    output: output/data/runs/d0846032fc7248a58b089cbe8fa4c511/pyproject.toml
-    log: output/logs/create_inference_pyproject/d0846032fc7248a58b089cbe8fa4c511.log (check log file(s) for error details)
-Removing output files of failed job create_inference_pyproject since they might be corrupted:
-output/data/runs/d0846032fc7248a58b089cbe8fa4c511/pyproject.toml
 Traceback (most recent call last):
-  File "/users/omiralle/evalml/.snakemake/scripts/tmpbsgyyaq5.set_inference_pyproject.py", line 419, in main
-    subprocess.run(command, check=True, capture_output=True, text=True)
-  File "/users/omiralle/.local/share/uv/python/cpython-3.12.7-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 571, in run
-    raise CalledProcessError(retcode, process.args,
-subprocess.CalledProcessError: Command '['uv', '--project', '/scratch/mch/omiralle/evalenv/output/data/runs/9c18b90074214d769b8b383722fc5a06', 'add', '--no-sync', 'git+https://github.com/ecmwf/anemoi-inference@fix/interp_files']' returned non-zero exit status 1.
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "/users/omiralle/evalml/.snakemake/scripts/tmpbsgyyaq5.set_inference_pyproject.py", line 435, in <module>
+  File "/users/omiralle/evalml/.snakemake/scripts/tmp2_iqrj_j.set_inference_pyproject.py", line 435, in <module>
     raise SystemExit(main(snakemake))
                      ^^^^^^^^^^^^^^^
-  File "/users/omiralle/evalml/.snakemake/scripts/tmpbsgyyaq5.set_inference_pyproject.py", line 426, in main
-    raise RuntimeError("Failed to add extra dependencies") from e
-RuntimeError: Failed to add extra dependencies
-Traceback (most recent call last):
-  File "/users/omiralle/evalml/.snakemake/scripts/tmpu_x2oiz7.set_inference_pyproject.py", line 419, in main
+  File "/users/omiralle/evalml/.snakemake/scripts/tmp2_iqrj_j.set_inference_pyproject.py", line 419, in main
     subprocess.run(command, check=True, capture_output=True, text=True)
-  File "/users/omiralle/.local/share/uv/python/cpython-3.12.7-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 571, in run
-    raise CalledProcessError(retcode, process.args,
-subprocess.CalledProcessError: Command '['uv', '--project', '/scratch/mch/omiralle/evalenv/output/data/runs/07c3d9698db14d859b78bb712a65bbbf', 'add', '--no-sync', 'git+https://github.com/ecmwf/anemoi-inference@fix/interp_files']' returned non-zero exit status 1.
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "/users/omiralle/evalml/.snakemake/scripts/tmpu_x2oiz7.set_inference_pyproject.py", line 435, in <module>
-    raise SystemExit(main(snakemake))
-                     ^^^^^^^^^^^^^^^
-  File "/users/omiralle/evalml/.snakemake/scripts/tmpu_x2oiz7.set_inference_pyproject.py", line 426, in main
-    raise RuntimeError("Failed to add extra dependencies") from e
-RuntimeError: Failed to add extra dependencies
+  File "/users/omiralle/.local/share/uv/python/cpython-3.12.7-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 548, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/users/omiralle/.local/share/uv/python/cpython-3.12.7-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/users/omiralle/.local/share/uv/python/cpython-3.12.7-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1885, in _execute_child
+    self.pid = _fork_exec(
+               ^^^^^^^^^^^
+TypeError: expected str, bytes or os.PathLike object, not list
 RuleException:
 CalledProcessError in file "/users/omiralle/evalml/workflow/rules/inference.smk", line 23:
-Command 'set -euo pipefail;  /users/omiralle/evalml/.venv/bin/python /users/omiralle/evalml/.snakemake/scripts/tmpbsgyyaq5.set_inference_pyproject.py' returned non-zero exit status 1.
-[Wed Aug 20 13:24:06 2025]
-Error in rule create_inference_pyproject:
-    message: None
-    jobid: 9
-    input: workflow/envs/anemoi_inference.toml
-    output: output/data/runs/9c18b90074214d769b8b383722fc5a06/pyproject.toml
-    log: output/logs/create_inference_pyproject/9c18b90074214d769b8b383722fc5a06.log (check log file(s) for error details)
-Removing output files of failed job create_inference_pyproject since they might be corrupted:
-output/data/runs/9c18b90074214d769b8b383722fc5a06/pyproject.toml
-RuleException:
-CalledProcessError in file "/users/omiralle/evalml/workflow/rules/inference.smk", line 23:
-Command 'set -euo pipefail;  /users/omiralle/evalml/.venv/bin/python /users/omiralle/evalml/.snakemake/scripts/tmpu_x2oiz7.set_inference_pyproject.py' returned non-zero exit status 1.
-[Wed Aug 20 13:24:06 2025]
+Command 'set -euo pipefail;  /users/omiralle/evalml/.venv/bin/python /users/omiralle/evalml/.snakemake/scripts/tmp3zpafl3j.set_inference_pyproject.py' returned non-zero exit status 1.
+[Wed Aug 20 15:47:23 2025]
 Error in rule create_inference_pyproject:
     message: None
     jobid: 26
@@ -447,36 +401,54 @@ Error in rule create_inference_pyproject:
     log: output/logs/create_inference_pyproject/07c3d9698db14d859b78bb712a65bbbf.log (check log file(s) for error details)
 Removing output files of failed job create_inference_pyproject since they might be corrupted:
 output/data/runs/07c3d9698db14d859b78bb712a65bbbf/pyproject.toml
-[Wed Aug 20 13:24:06 2025]
-Finished jobid: 4 (Rule: verif_metrics_cosmoe)
-1 of 36 steps (3%) done
-[Wed Aug 20 13:24:06 2025]
-Finished jobid: 3 (Rule: verif_metrics_cosmoe)
-2 of 36 steps (6%) done
-Shutting down, this might take some time.
-Cleaning up log files older than 10 day(s).
-Exiting because a job execution failed. Look below for error messages
-[Wed Aug 20 13:24:09 2025]
+RuleException:
+CalledProcessError in file "/users/omiralle/evalml/workflow/rules/inference.smk", line 23:
+Command 'set -euo pipefail;  /users/omiralle/evalml/.venv/bin/python /users/omiralle/evalml/.snakemake/scripts/tmpn7b56vgu.set_inference_pyproject.py' returned non-zero exit status 1.
+[Wed Aug 20 15:47:23 2025]
 Error in rule create_inference_pyproject:
     message: None
     jobid: 13
     input: workflow/envs/anemoi_inference.toml
     output: output/data/runs/d0846032fc7248a58b089cbe8fa4c511/pyproject.toml
     log: output/logs/create_inference_pyproject/d0846032fc7248a58b089cbe8fa4c511.log (check log file(s) for error details)
-[Wed Aug 20 13:24:09 2025]
+RuleException:
+CalledProcessError in file "/users/omiralle/evalml/workflow/rules/inference.smk", line 23:
+Command 'set -euo pipefail;  /users/omiralle/evalml/.venv/bin/python /users/omiralle/evalml/.snakemake/scripts/tmp2_iqrj_j.set_inference_pyproject.py' returned non-zero exit status 1.
+[Wed Aug 20 15:47:23 2025]
 Error in rule create_inference_pyproject:
     message: None
     jobid: 9
     input: workflow/envs/anemoi_inference.toml
     output: output/data/runs/9c18b90074214d769b8b383722fc5a06/pyproject.toml
     log: output/logs/create_inference_pyproject/9c18b90074214d769b8b383722fc5a06.log (check log file(s) for error details)
-[Wed Aug 20 13:24:09 2025]
+Removing output files of failed job create_inference_pyproject since they might be corrupted:
+output/data/runs/d0846032fc7248a58b089cbe8fa4c511/pyproject.toml
+Removing output files of failed job create_inference_pyproject since they might be corrupted:
+output/data/runs/9c18b90074214d769b8b383722fc5a06/pyproject.toml
+Shutting down, this might take some time.
+Cleaning up log files older than 10 day(s).
+Exiting because a job execution failed. Look below for error messages
+[Wed Aug 20 15:47:54 2025]
+Error in rule create_inference_pyproject:
+    message: None
+    jobid: 9
+    input: workflow/envs/anemoi_inference.toml
+    output: output/data/runs/9c18b90074214d769b8b383722fc5a06/pyproject.toml
+    log: output/logs/create_inference_pyproject/9c18b90074214d769b8b383722fc5a06.log (check log file(s) for error details)
+[Wed Aug 20 15:47:54 2025]
+Error in rule create_inference_pyproject:
+    message: None
+    jobid: 13
+    input: workflow/envs/anemoi_inference.toml
+    output: output/data/runs/d0846032fc7248a58b089cbe8fa4c511/pyproject.toml
+    log: output/logs/create_inference_pyproject/d0846032fc7248a58b089cbe8fa4c511.log (check log file(s) for error details)
+[Wed Aug 20 15:47:54 2025]
 Error in rule create_inference_pyproject:
     message: None
     jobid: 26
     input: workflow/envs/anemoi_inference.toml
     output: output/data/runs/07c3d9698db14d859b78bb712a65bbbf/pyproject.toml
     log: output/logs/create_inference_pyproject/07c3d9698db14d859b78bb712a65bbbf.log (check log file(s) for error details)
-Complete log(s): /users/omiralle/evalml/.snakemake/log/2025-08-20T132329.533702.snakemake.log
+Complete log(s): /users/omiralle/evalml/.snakemake/log/2025-08-20T154714.346769.snakemake.log
 WorkflowError:
 At least one job did not complete successfully.
