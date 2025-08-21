@@ -74,15 +74,15 @@ function getSelectedValues(id) {
 }
 
 function updateChart() {
-    const selectedModels = getSelectedValues("model-select");
+    const selectedSources = getSelectedValues("source-select");
     const selectedparams = getSelectedValues("param-select");
     const selectedMetrics = getSelectedValues("metric-select");
 
     const newSpec = JSON.parse(JSON.stringify(spec));
     const filters = [];
 
-    if (selectedModels.length > 0) {
-        filters.push({ field: "model", oneOf: selectedModels });
+    if (selectedSources.length > 0) {
+        filters.push({ field: "source", oneOf: selectedSources });
     }
     if (selectedparams.length > 0) {
         filters.push({ field: "param", oneOf: selectedparams });
