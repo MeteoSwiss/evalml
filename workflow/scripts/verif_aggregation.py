@@ -63,7 +63,7 @@ def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
     # aggregate
     aggregated = (
         df_extended.groupby(
-            ["metric", "label", "lead_time", "param", "hour", "season", "init_hour"],
+            ["metric", "source", "lead_time", "param", "hour", "season", "init_hour"],
             dropna=False,  # optional, ensures NaN values are not dropped
         )
         .agg({"value": "mean"})

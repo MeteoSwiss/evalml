@@ -20,7 +20,7 @@ rule report_experiment_dashboard:
             htmlindex="dashboard.html",
         ),
     params:
-        labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
+        sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
     log:
         OUT_ROOT / "logs/report_experiment_dashboard/{experiment}.log",
     shell:

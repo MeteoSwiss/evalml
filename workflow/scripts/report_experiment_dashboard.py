@@ -25,7 +25,7 @@ def read_verif_file(Path: str) -> pd.DataFrame:
 def combine_verif_files(verif_files: Path) -> pd.DataFrame:
     """
     Combine multiple verification files into a single DataFrame.
-    Each file is expected to have a 'model' column indicating the model name.
+    Each file is expected to have a 'source' column indicating the forecast name.
     """
     df = pd.DataFrame()
     for i, file in enumerate(verif_files):
@@ -33,7 +33,6 @@ def combine_verif_files(verif_files: Path) -> pd.DataFrame:
         df = pd.concat([df, _df])
     subset_cols = [c for c in df.columns if c not in ["value"]]
     df = df.drop_duplicates(subset=subset_cols)
-    df.rename(columns={"label": "model"}, inplace=True)
     df = df.reset_index(drop=True)
 
     return df
@@ -63,8 +62,8 @@ def main(args):
     ]
     LOG.info("Loaded verification data: \n%s", df)
 
-    # get unique models and params
-    models = df["model"].unique()
+    # get unique sources and params
+    sources = df["source"].unique()
     params = df["param"].unique()
     metrics = df["metric"].unique()
 
@@ -87,7 +86,7 @@ def main(args):
     html = template.render(
         verif_data=df_json,
         js_src=js_src,
-        models=models,
+        sources=sources,
         params=params,
         metrics=metrics,
     )

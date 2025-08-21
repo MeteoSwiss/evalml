@@ -30,7 +30,7 @@ def verify(
             "min": fcst_arr.min(dim=["y", "x"]),
             "max": fcst_arr.max(dim=["y", "x"]),
         },
-    ).expand_dims({"label": [fcst_label]})
+    ).expand_dims({"source": [fcst_label]})
 
     out_obs = xr.Dataset(
         {
@@ -39,7 +39,7 @@ def verify(
             "min": obs_arr.min(dim=["y", "x"]),
             "max": obs_arr.max(dim=["y", "x"]),
         }
-    ).expand_dims({"label": [obs_label]})
+    ).expand_dims({"source": [obs_label]})
     out = xr.merge([out_fcst, out_obs]).compute(num_workers=4, scheduler="threads")
     LOG.info("Computed statistics in %.2f seconds", time.time() - start)
     LOG.info("Statistics dataset: \n%s", out)

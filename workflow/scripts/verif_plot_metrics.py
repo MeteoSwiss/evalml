@@ -97,7 +97,7 @@ def main(args: Namespace) -> None:
 
         title = f"{metric} - {param}"
         title += f"- {hour} - {season} - {init_hour}" if args.stratify else ""
-        for label, df in all_df.groupby("label"):
+        for source, df in all_df.groupby("source"):
             df.plot(
                 x="lead_time",
                 y="value",
@@ -106,8 +106,8 @@ def main(args: Namespace) -> None:
                 title=title,
                 xlabel="Lead Time [h]",
                 ylabel=metric,
-                label=label,
-                color="black" if "analysis" in label else None,
+                label=source,
+                color="black" if "analysis" in source else None,
                 ax=ax,
             )
         args.output_dir.mkdir(parents=True, exist_ok=True)
