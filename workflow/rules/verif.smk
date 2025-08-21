@@ -83,8 +83,7 @@ rule verif_metrics_aggregation:
         verif_csv=lambda wc: expand(
             rules.verif_metrics.output,
             init_time=_restrict_reftimes_to_hours(REFTIMES),
-            run_id=RUN_CONFIGS.keys(),
-            allow_missing=False,
+            allow_missing=True,
         ),
     output:
         OUT_ROOT / "data/runs/{run_id}/verif_aggregated.csv",
@@ -107,7 +106,7 @@ rule verif_metrics_aggregation_cosmoe:
         verif_csv=lambda wc: expand(
             rules.verif_metrics_cosmoe.output,
             init_time=_restrict_reftimes_to_hours(REFTIMES, [0, 12]),
-            allow_missing=False,
+            allow_missing=True,
         ),
     output:
         OUT_ROOT / "data/baselines/COSMO-E/verif_aggregated.csv",
