@@ -12,14 +12,14 @@ document.querySelectorAll(".tab-link").forEach(button => {
 // Initialize selection widgets
 const choicesInstances = {};
 
-choicesInstances["model-select"] = new Choices("#model-select", {
+choicesInstances["source-select"] = new Choices("#source-select", {
     searchEnabled: false,
     removeItemButton: true,
     shouldSort: false,
     itemSelectText: "",
     placeholder: false
 });
-document.getElementById("model-select").addEventListener("change", updateChart);
+document.getElementById("source-select").addEventListener("change", updateChart);
 
 choicesInstances["metric-select"] = new Choices("#metric-select", {
     searchEnabled: false,
@@ -55,8 +55,8 @@ var spec = {
     "mark": { "type": "line" },
     "encoding": {
       "x": { "field": "lead_time", "type": "ordinal" },
-      "y": { "field": "value", "type": "quantitative" },
-      "color": { "field": "model", "legend": { "orient": "top", "labelLimit": 1000, "symbolSize": 1000 } }
+      "y": { "field": "value", "type": "quantitative" , "scale": { "zero": false }},
+      "color": { "field": "source", "legend": { "orient": "top", "labelLimit": 1000, "symbolSize": 1000 } }
     }
   },
   "resolve": {
