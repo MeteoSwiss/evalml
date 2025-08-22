@@ -21,11 +21,13 @@ rule report_experiment_dashboard:
         ),
     params:
         sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
-        header_text="Initializations from " + config.get("dates").get("start") \
-            + " to " + config.get("dates").get("end") \
-            + " by " + config.get("dates").get("frequency") \
-            + " have been used."
-
+        header_text="Initializations from "
+        + config.get("dates").get("start")
+        + " to "
+        + config.get("dates").get("end")
+        + " by "
+        + config.get("dates").get("frequency")
+        + " have been used.",
     log:
         OUT_ROOT / "logs/report_experiment_dashboard/{experiment}.log",
     shell:
