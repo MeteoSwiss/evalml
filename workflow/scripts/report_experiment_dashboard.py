@@ -89,9 +89,7 @@ def main(args):
         sources=sources,
         params=params,
         metrics=metrics,
-        start=args.start,
-        end=args.end,
-        frequency=args.frequency,
+        header_text=args.header_text,
     )
     LOG.info("Size of generated HTML: %d bytes", len(html.encode("utf-8")))
 
@@ -124,16 +122,10 @@ if __name__ == "__main__":
         help="Path to the JavaScript source file for the dashboard.",
     )
     parser.add_argument(
-        "--start", type=str, default="YYYY-MM-DD", help="Start date for the dashboard."
-    )
-    parser.add_argument(
-        "--end", type=str, default="YYYY-MM-DD", help="End date for the dashboard."
-    )
-    parser.add_argument(
-        "--frequency",
+        "--header_text",
         type=str,
-        default="12h",
-        help="Frequency of initializations (e.g., '12h').",
+        default="",
+        help="Text to display in the header of the dashboard.",
     )
     parser.add_argument(
         "--output",
