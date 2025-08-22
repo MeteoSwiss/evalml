@@ -71,7 +71,8 @@ def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     # square root transform MSE and VAR
-    transform_metrics = {"VAR": "STDE", "MSE": "RMSE", "var": "std"}
+    metrics = aggregated["metric"].unique() 
+    transform_metrics = {m: m.replace("MSE", "RMSE").replace("VAR", "STDE").replace("var", "std") for m in metrics if "MSE" in m or "VAR" in m or "var" in m}
     aggregated.loc[aggregated["metric"].isin(transform_metrics.keys()), "value"] = (
         aggregated.loc[aggregated["metric"].isin(transform_metrics.keys()), "value"]
         ** 0.5
