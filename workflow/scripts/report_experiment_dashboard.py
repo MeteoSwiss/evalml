@@ -133,7 +133,7 @@ if __name__ == "__main__":
 """
 Example usage:
 python report_experiment_dashboard.py \
-    --verif_files output/data/*/*/verif_aggregated.csv \
+    --verif_files output/data/*/*/verif_aggregated.nc \
     --template resources/report/dashboard/template.html.jinja2 \
     --script resources/report/dashboard/script.js
 """

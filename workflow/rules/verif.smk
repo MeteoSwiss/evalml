@@ -25,7 +25,7 @@ rule verif_metrics_cosmoe:
         cosmoe_label="COSMO-E",
         analysis_label="COSMO-E analysis",
     output:
-        OUT_ROOT / "data/baselines/COSMO-E/{init_time}/verif.csv",
+        OUT_ROOT / "data/baselines/COSMO-E/{init_time}/verif.nc",
     log:
         OUT_ROOT / "logs/verif_metrics_cosmoe/{init_time}.log",
     shell:
@@ -49,7 +49,7 @@ rule verif_metrics:
         grib_output=rules.map_init_time_to_inference_group.output[0],
         zarr_dataset="/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr",
     output:
-        OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.csv",
+        OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.nc",
     # wildcard_constraints:
     # run_id="^" # to avoid ambiguitiy with run_cosmoe_verif
     # TODO: implement logic to use experiment name instead of run_id as wildcard
@@ -80,20 +80,20 @@ rule verif_metrics_aggregation:
     localrule: True
     input:
         script="workflow/scripts/verif_aggregation.py",
-        verif_csv=lambda wc: expand(
+        verif_nc=lambda wc: expand(
             rules.verif_metrics.output,
             init_time=_restrict_reftimes_to_hours(REFTIMES),
             allow_missing=True,
         ),
     output:
-        OUT_ROOT / "data/runs/{run_id}/verif_aggregated.csv",
+        OUT_ROOT / "data/runs/{run_id}/verif_aggregated.nc",
     params:
         valid_every=config.get("verification", {}).get("valid_every"),
     log:
         OUT_ROOT / "logs/verif_metrics_aggregation/{run_id}.log",
     shell:
         """
-        uv run {input.script} {input.verif_csv} \
+        uv run {input.script} {input.verif_nc} \
             --valid_every '{params.valid_every}' \
             --output {output} > {log} 2>&1
         """
@@ -103,20 +103,20 @@ rule verif_metrics_aggregation_cosmoe:
     localrule: True
     input:
         script="workflow/scripts/verif_aggregation.py",
-        verif_csv=lambda wc: expand(
+        verif_nc=lambda wc: expand(
             rules.verif_metrics_cosmoe.output,
             init_time=_restrict_reftimes_to_hours(REFTIMES, [0, 12]),
             allow_missing=True,
         ),
     output:
-        OUT_ROOT / "data/baselines/COSMO-E/verif_aggregated.csv",
+        OUT_ROOT / "data/baselines/COSMO-E/verif_aggregated.nc",
     params:
         valid_every=config.get("verification", {}).get("valid_every"),
     log:
         OUT_ROOT / "logs/verif_metrics_aggregation_cosmoe/COSMO-E.log",
     shell:
         """
-        uv run {input.script} {input.verif_csv} \
+        uv run {input.script} {input.verif_nc} \
             --valid_every '{params.valid_every}' \
             --output {output} > {log} 2>&1
         """

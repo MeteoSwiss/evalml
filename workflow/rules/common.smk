@@ -114,7 +114,7 @@ def collect_experiment_participants():
     participants = {}
     for baseline in collect_all_baselines():
         participants[baseline] = (
-            OUT_ROOT / f"data/baselines/{baseline}/verif_aggregated.csv"
+            OUT_ROOT / f"data/baselines/{baseline}/verif_aggregated.nc"
         )
     for run_entry in config["runs"]:
         # every run entry is a single-key dict
@@ -122,7 +122,7 @@ def collect_experiment_participants():
         run = next(iter(run_entry.values()))
         run_id = run["run_id"]
         label = run.get("label", run_id)
-        participants[label] = OUT_ROOT / f"data/runs/{run_id}/verif_aggregated.csv"
+        participants[label] = OUT_ROOT / f"data/runs/{run_id}/verif_aggregated.nc"
     return participants
 
 

@@ -249,7 +249,7 @@ def main(args: ScriptConfig):
 
     # # save results to CSV
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    results.to_csv(args.output)
+    results.to_netcdf(args.output)
     LOG.info("Saved results to %s", args.output)
     LOG.info("Verification completed successfully.")
 
@@ -311,7 +311,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output",
         type=Path,
-        default="verif.csv",
+        default="verif.nc",
         help="Output file to save the verification results.",
     )
     args = parser.parse_args()

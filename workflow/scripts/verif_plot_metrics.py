@@ -125,7 +125,7 @@ if __name__ == "__main__":
         nargs="+",
         help="Paths to verification files.",
         # "--verif_files", type=Path, nargs="+", help="Paths to verification files.",
-        # default = list(Path("output/data").glob("*/*/verif_aggregated.csv")), required=False
+        # default = list(Path("output/data").glob("*/*/verif_aggregated.nc")), required=False
     )
     parser.add_argument(
         "--stratify",

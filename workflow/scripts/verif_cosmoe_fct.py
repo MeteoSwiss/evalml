@@ -230,9 +230,9 @@ def main(args: ScriptConfig):
 
     results = verify(coe, kenda, args.cosmoe_label, args.analysis_label)
 
-    # save results to CSV
+    # save results to NetCDF
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    results.to_csv(args.output)
+    results.to_netcdf(args.output)
     LOG.info("Saved verification results to %s", args.output)
 
     LOG.info("Program completed successfully.")
@@ -294,8 +294,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output",
         type=Path,
-        default="verif.csv",
-        help="Output file to save the verification results (default: verif.csv).",
+        default="verif.nc",
+        help="Output file to save the verification results (default: verif.nc).",
     )
     args = parser.parse_args()
 
