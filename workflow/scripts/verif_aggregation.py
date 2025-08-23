@@ -3,6 +3,9 @@ import itertools
 from argparse import ArgumentParser, Namespace
 import logging
 
+import xarray as xr
+from xarray.groupers import UniqueGrouper
+import numpy as np
 import pandas as pd
 
 LOG = logging.getLogger(__name__)
@@ -23,60 +26,21 @@ def get_season(time):
         return "SON"
 
 
-def read_verif_file(Path: str) -> pd.DataFrame:
-    """Read a verification file and return it as a DataFrame."""
+def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
+    """Compute mean metric values aggregated by all combinations of hour, season, init_hour."""
 
-    df = pd.read_csv(
-        Path,
-        date_format="ISO8601",
-        parse_dates=["ref_time", "valid_time", "time"],
-        dtype={"lead_time": str},
-        index_col=0,
-    )
-    df["lead_time"] = pd.to_timedelta(df["lead_time"])
-    return df
-
-
-def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute mean metric values aggregated by all combinations of hour, season, and init_hour."""
-
-    # extract features
-    df = df.copy()
-    df["hour"] = df["time"].dt.hour
-    df["init_hour"] = df["ref_time"].dt.hour
-    df["season"] = df["time"].apply(get_season)
-
-    # generate all combinations of original and "all" for ["hour", "season", "init_hour"]
-    features = ["hour", "season", "init_hour"]
-    groupings = []
-
-    for combination in itertools.product([True, False], repeat=3):
-        modified_df = df.copy()
-        for include_original, col in zip(combination, features):
-            if not include_original:
-                modified_df[col] = "all"
-        groupings.append(modified_df)
-
-    # concatenate all versions
-    df_extended = pd.concat(groupings, ignore_index=True)
-
-    # aggregate
-    aggregated = (
-        df_extended.groupby(
-            ["metric", "source", "lead_time", "param", "hour", "season", "init_hour"],
-            dropna=False,  # optional, ensures NaN values are not dropped
-        )
-        .agg({"value": "mean"})
-        .reset_index()
-    )
-
-    # square root transform MSE and VAR
-    transform_metrics = {"VAR": "STDE", "MSE": "RMSE", "var": "std"}
-    aggregated.loc[aggregated["metric"].isin(transform_metrics.keys()), "value"] = (
-        aggregated.loc[aggregated["metric"].isin(transform_metrics.keys()), "value"]
-        ** 0.5
-    )
-    aggregated["metric"] = aggregated["metric"].replace(transform_metrics)
+    # ds = ds.assign_coords(
+    #     hour = lambda ds: ds.time.dt.hour,
+    #     init_hour = lambda ds: ds.ref_time.dt.hour,
+    #     season = lambda ds: ds.time.dt.season
+    # )
+    # ds_grouped = ds.groupby(
+    #     hour = UniqueGrouper(labels = np.unique(ds.hour)),
+    #     init_hour = UniqueGrouper(labels = np.unique(ds.init_hour)),
+    #     season = UniqueGrouper(labels = np.unique(ds.season))
+    # )
+    # out = ds_grouped.mean()
+    aggregated = ds.mean(dim="ref_time", skipna=True)
 
     return aggregated
 
@@ -84,31 +48,38 @@ def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
 def main(args: Namespace) -> None:
     """Main function to verify results from KENDA-1 data."""
 
-    LOG.info("Reading %d verification files", len(args.verif_files))
-    df = pd.concat([read_verif_file(f) for f in args.verif_files], ignore_index=True)
+    # grouping by all combinations of hour, season, init_hour may not be supported directly
+    # TODO: implement grouping
 
-    LOG.info("Concatenated DataFrame: \n %s", df.head())
+    LOG.info("Reading %d verification files", len(args.verif_files))
+    ds = xr.open_mfdataset(args.verif_files, combine="by_coords")
+
+    LOG.info("Concatenated Dataset: \n %s", ds)
+
+    # indexing into multi-dimensional time coordinate is not supported
+    # instead index into lead_time
+    # TODO: implement filtering based on valid time
 
     if args.valid_every:
-        LOG.info("Filtering data based on valid time")
-        df = df[
-            (df["valid_time"].dt.minute == 0)
-            & (df["valid_time"].dt.second == 0)
-            & (df["valid_time"].dt.hour % args.valid_every == 0)
-        ]
-        if df.empty:
+        LOG.info("Filtering data based on lead time")
+        max_lead_time = ds.lead_time.max().values.astype("timedelta64[h]").astype(int)
+        valid_every = np.arange(
+            0, max_lead_time + 1, args.valid_every, dtype="timedelta64[h]"
+        )
+        ds = ds.sel(lead_time=valid_every)
+        if ds.lead_time.size == 0:
             raise ValueError(
-                f"No data found with valid time every {args.valid_every} hours."
+                f"No data found with lead time every {args.valid_every} hours."
             )
 
     LOG.info("Aggregating results")
-    results = aggregate_results(df)
+    results = aggregate_results(ds)
 
-    LOG.info("Aggregated results: \n %s", results.head())
+    LOG.info("Aggregated results: \n %s", results)
 
-    # Save results to CSV
+    # Save results to NetCDF
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    results.to_csv(args.output, index=False)
+    results.to_netcdf(args.output)
 
     LOG.info("Results saved to %s", args.output)
 
