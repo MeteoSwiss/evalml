@@ -68,6 +68,14 @@ def verify(
         fcst_param, obs_param = xr.align(fcst[param], obs[param], join="inner")
         score = _compute_scores(fcst_param, obs_param, prefix=param + ".")
         scores.append(score)
+        score = _compute_scores(
+            fcst_param,
+            obs_param,
+            prefix=param + ".",
+            suffix=".spatial",
+            dim="lead_time",
+        )
+        scores.append(score)
         fcst_statistics = _compute_statistics(fcst_param, prefix=param + ".")
         fcst_statistics = fcst_statistics.expand_dims({"source": [fcst_label]})
         obs_statistics = _compute_statistics(obs_param, prefix=param + ".")
