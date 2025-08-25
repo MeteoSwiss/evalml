@@ -1,5 +1,4 @@
 import xarray as xr
-import pandas as pd
 import time
 import logging
 
@@ -7,7 +6,7 @@ LOG = logging.getLogger(__name__)
 
 
 def _compute_scores(
-    fcst: xr.DataArray, obs: xr.DataArray, dim=["x", "y"], prefix="", suffix=""
+    fcst: xr.DataArray, obs: xr.DataArray, dim=["x", "y"], prefix="", suffix="", source=""
 ) -> xr.Dataset:
     """
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
@@ -24,11 +23,12 @@ def _compute_scores(
             f"{prefix}R2{suffix}": xr.corr(fcst, obs, dim=dim) ** 2,
         }
     )
+    scores = scores.expand_dims({"source": [source]})
     return scores
 
 
 def _compute_statistics(
-    data: xr.DataArray, dim=["x", "y"], prefix="", suffix=""
+    data: xr.DataArray, dim=["x", "y"], prefix="", suffix="", source="",
 ) -> xr.Dataset:
     """
     Compute basic statistics of a xarray DataArray (data).
@@ -42,8 +42,15 @@ def _compute_statistics(
             f"{prefix}max{suffix}": data.max(dim=dim),
         }
     )
+    stats = stats.expand_dims({"source": [source]})
     return stats
 
+def _merge_metrics(ds = xr.Dataset) -> xr.Dataset:
+    out = xr.merge(ds)
+    if "ref_time" not in out.dims:
+        out = out.expand_dims("ref_time").set_coords("ref_time")
+    out = out.compute(num_workers=4, scheduler="threads")
+    return out
 
 def verify(
     fcst: xr.Dataset, obs: xr.Dataset, fcst_label: str, obs_label: str
@@ -66,7 +73,7 @@ def verify(
             continue
         LOG.info("Verifying parameter %s", param)
         fcst_param, obs_param = xr.align(fcst[param], obs[param], join="inner")
-        score = _compute_scores(fcst_param, obs_param, prefix=param + ".")
+        score = _compute_scores(fcst_param, obs_param, prefix=param + ".", source=fcst_label)
         scores.append(score)
         score = _compute_scores(
             fcst_param,
@@ -74,17 +81,16 @@ def verify(
             prefix=param + ".",
             suffix=".spatial",
             dim="lead_time",
+            source=fcst_label
         )
         scores.append(score)
-        fcst_statistics = _compute_statistics(fcst_param, prefix=param + ".")
-        fcst_statistics = fcst_statistics.expand_dims({"source": [fcst_label]})
-        obs_statistics = _compute_statistics(obs_param, prefix=param + ".")
-        obs_statistics = obs_statistics.expand_dims({"source": [obs_label]})
+        fcst_statistics = _compute_statistics(fcst_param, prefix=param + ".", source=fcst_label)
+        obs_statistics = _compute_statistics(obs_param, prefix=param + ".", source=obs_label)
         statistics.append(xr.merge([fcst_statistics, obs_statistics]))
 
-    out = xr.merge([xr.merge(statistics), xr.merge(scores)])
-    out = out.compute(num_workers=4, scheduler="threads")
-    out = out.expand_dims("ref_time").set_coords("ref_time")
-    LOG.info("Computed statistics in %.2f seconds", time.time() - start)
-    LOG.info("Statistics dataset: \n%s", out)
+    scores = _merge_metrics(scores)
+    statistics = _merge_metrics(statistics)
+    out = xr.merge([scores, statistics])
+    LOG.info("Computed metrics in %.2f seconds", time.time() - start)
+    LOG.info("Metrics dataset: \n%s", out)
     return out
