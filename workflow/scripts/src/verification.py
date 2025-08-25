@@ -6,7 +6,12 @@ LOG = logging.getLogger(__name__)
 
 
 def _compute_scores(
-    fcst: xr.DataArray, obs: xr.DataArray, dim=["x", "y"], prefix="", suffix="", source=""
+    fcst: xr.DataArray,
+    obs: xr.DataArray,
+    dim=["x", "y"],
+    prefix="",
+    suffix="",
+    source="",
 ) -> xr.Dataset:
     """
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
@@ -15,9 +20,9 @@ def _compute_scores(
     error = fcst - obs
     scores = xr.Dataset(
         {
-            f"{prefix}BIAS{suffix}": error.mean(dim=dim),
-            f"{prefix}MSE{suffix}": (error**2).mean(dim=dim),
-            f"{prefix}MAE{suffix}": abs(error).mean(dim=dim),
+            f"{prefix}BIAS{suffix}": error.mean(dim=dim, skipna=True),
+            f"{prefix}MSE{suffix}": (error**2).mean(dim=dim, skipna=True),
+            f"{prefix}MAE{suffix}": abs(error).mean(dim=dim, skipna=True),
             f"{prefix}VAR{suffix}": error.var(dim=dim, skipna=True),
             f"{prefix}CORR{suffix}": xr.corr(fcst, obs, dim=dim),
             f"{prefix}R2{suffix}": xr.corr(fcst, obs, dim=dim) ** 2,
@@ -28,7 +33,11 @@ def _compute_scores(
 
 
 def _compute_statistics(
-    data: xr.DataArray, dim=["x", "y"], prefix="", suffix="", source="",
+    data: xr.DataArray,
+    dim=["x", "y"],
+    prefix="",
+    suffix="",
+    source="",
 ) -> xr.Dataset:
     """
     Compute basic statistics of a xarray DataArray (data).
@@ -36,21 +45,23 @@ def _compute_statistics(
     """
     stats = xr.Dataset(
         {
-            f"{prefix}mean{suffix}": data.mean(dim=dim),
+            f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),
             f"{prefix}var{suffix}": data.var(dim=dim, skipna=True),
-            f"{prefix}min{suffix}": data.min(dim=dim),
-            f"{prefix}max{suffix}": data.max(dim=dim),
+            f"{prefix}min{suffix}": data.min(dim=dim, skipna=True),
+            f"{prefix}max{suffix}": data.max(dim=dim, skipna=True),
         }
     )
     stats = stats.expand_dims({"source": [source]})
     return stats
 
-def _merge_metrics(ds = xr.Dataset) -> xr.Dataset:
+
+def _merge_metrics(ds=xr.Dataset) -> xr.Dataset:
     out = xr.merge(ds)
     if "ref_time" not in out.dims:
         out = out.expand_dims("ref_time").set_coords("ref_time")
     out = out.compute(num_workers=4, scheduler="threads")
     return out
+
 
 def verify(
     fcst: xr.Dataset, obs: xr.Dataset, fcst_label: str, obs_label: str
@@ -73,7 +84,9 @@ def verify(
             continue
         LOG.info("Verifying parameter %s", param)
         fcst_param, obs_param = xr.align(fcst[param], obs[param], join="inner")
-        score = _compute_scores(fcst_param, obs_param, prefix=param + ".", source=fcst_label)
+        score = _compute_scores(
+            fcst_param, obs_param, prefix=param + ".", source=fcst_label
+        )
         scores.append(score)
         score = _compute_scores(
             fcst_param,
@@ -81,11 +94,15 @@ def verify(
             prefix=param + ".",
             suffix=".spatial",
             dim="lead_time",
-            source=fcst_label
+            source=fcst_label,
         )
         scores.append(score)
-        fcst_statistics = _compute_statistics(fcst_param, prefix=param + ".", source=fcst_label)
-        obs_statistics = _compute_statistics(obs_param, prefix=param + ".", source=obs_label)
+        fcst_statistics = _compute_statistics(
+            fcst_param, prefix=param + ".", source=fcst_label
+        )
+        obs_statistics = _compute_statistics(
+            obs_param, prefix=param + ".", source=obs_label
+        )
         statistics.append(xr.merge([fcst_statistics, obs_statistics]))
 
     scores = _merge_metrics(scores)
