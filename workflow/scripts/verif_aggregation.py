@@ -42,6 +42,15 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
     # out = ds_grouped.mean()
     aggregated = ds.mean(dim="ref_time", skipna=True)
 
+    var_transform = {
+        d: d.replace("VAR", "STDE").replace("var", "std").replace("MSE", "RMSE")
+        for d in aggregated.data_vars
+        if "VAR" in d or "var" in d or "MSE" in d
+    }
+    for var in var_transform:
+        aggregated[var] = np.sqrt(aggregated[var])
+    aggregated = aggregated.rename(var_transform)
+
     return aggregated
 
 
