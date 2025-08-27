@@ -32,11 +32,11 @@ def main(args):
 
     # extract only  non-spatial variables to pd.DataFrame
     nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
-    df = ds[nonspatial_vars].to_array("stack").to_dataframe(name = "value").reset_index()
-    df[["param", "metric"]] = df["stack"].str.split(".", n = 1, expand=True)
-    df.drop(columns = ["stack"], inplace=True)
+    df = ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
+    df[["param", "metric"]] = df["stack"].str.split(".", n=1, expand=True)
+    df.drop(columns=["stack"], inplace=True)
     df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
-    
+
     # TODO: remove this when we have the logic to handle these groups
     # df = df[
     #     (df["hour"] == "all") & (df["season"] == "all") & (df["init_hour"] == "all")
