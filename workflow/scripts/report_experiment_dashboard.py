@@ -3,7 +3,6 @@ import argparse
 import logging
 
 import xarray as xr
-import pandas as pd
 import jinja2
 
 LOG = logging.getLogger(__name__)

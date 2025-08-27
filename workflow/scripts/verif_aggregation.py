@@ -1,12 +1,9 @@
 from pathlib import Path
-import itertools
 from argparse import ArgumentParser, Namespace
 import logging
 
 import xarray as xr
-from xarray.groupers import UniqueGrouper
 import numpy as np
-import pandas as pd
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
