@@ -26,8 +26,14 @@ def program_summary_log(args):
 def main(args):
     program_summary_log(args)
 
-    # override to remove duplicated but not identical values from analyses (rounding errors)
-    ds = xr.open_mfdataset(args.verif_files, compat="override")
+    # remove duplicated but not identical values from analyses (rounding errors)
+    dfs = [xr.open_dataset(f) for f in args.verif_files]
+    sources = [set(d.source.values) for d in dfs]
+    common_sources = list(set.intersection(*sources))
+    for i in range(len(dfs)):
+        if i > 0:
+            dfs[i] = dfs[i].drop_sel(source=common_sources)
+    ds = xr.merge(dfs)
 
     # extract only  non-spatial variables to pd.DataFrame
     nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
