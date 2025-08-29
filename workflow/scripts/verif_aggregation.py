@@ -1,6 +1,7 @@
 from pathlib import Path
 from argparse import ArgumentParser, Namespace
 import logging
+import time
 
 import xarray as xr
 import numpy as np
@@ -24,31 +25,39 @@ def get_season(time):
 
 
 def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
-    """Compute mean metric values aggregated by all combinations of hour, season, init_hour."""
+    """Compute mean metric values aggregated by season"""
+    LOG.info("Aggregation results")
+    start = time.time()
 
-    # ds = ds.assign_coords(
-    #     hour = lambda ds: ds.time.dt.hour,
-    #     init_hour = lambda ds: ds.ref_time.dt.hour,
-    #     season = lambda ds: ds.time.dt.season
-    # )
-    # ds_grouped = ds.groupby(
-    #     hour = UniqueGrouper(labels = np.unique(ds.hour)),
-    #     init_hour = UniqueGrouper(labels = np.unique(ds.init_hour)),
-    #     season = UniqueGrouper(labels = np.unique(ds.season))
-    # )
-    # out = ds_grouped.mean()
-    aggregated = ds.mean(dim="ref_time", skipna=True)
+    # for simplicity we group by season based on ref_time (as this is a dimension of the dataset)
+    ds = ds.assign_coords(
+        season=lambda ds: ds.ref_time.dt.season,
+    )
+    ds_mean = (
+        ds.mean(dim="ref_time")
+        .assign_coords({"season": "all"})
+        .compute(num_workers=4, scheduler="threads")
+    )
+    ds_grouped_mean = (
+        ds.groupby("season")
+        .mean(dim="ref_time")
+        .compute(num_workers=4, scheduler="threads")
+    )
+    out = xr.concat([ds_mean, ds_grouped_mean], dim="season")
 
     var_transform = {
         d: d.replace("VAR", "STDE").replace("var", "std").replace("MSE", "RMSE")
-        for d in aggregated.data_vars
+        for d in out.data_vars
         if "VAR" in d or "var" in d or "MSE" in d
     }
     for var in var_transform:
-        aggregated[var] = np.sqrt(aggregated[var])
-    aggregated = aggregated.rename(var_transform)
+        out[var] = np.sqrt(out[var])
+    out = out.rename(var_transform)
 
-    return aggregated
+    LOG.info("Computed aggregation in %.2f seconds", time.time() - start)
+    LOG.info("Aggregated results: \n %s", out)
+
+    return out
 
 
 def main(args: Namespace) -> None:
@@ -58,7 +67,14 @@ def main(args: Namespace) -> None:
     # TODO: implement grouping
 
     LOG.info("Reading %d verification files", len(args.verif_files))
-    ds = xr.open_mfdataset(args.verif_files, combine="by_coords")
+    ds = xr.open_mfdataset(
+        args.verif_files,
+        combine="by_coords",
+        data_vars="minimal",
+        coords="minimal",
+        compat="override",
+        chunks="auto",
+    )
 
     LOG.info("Concatenated Dataset: \n %s", ds)
 
@@ -66,22 +82,19 @@ def main(args: Namespace) -> None:
     # instead index into lead_time
     # TODO: implement filtering based on valid time
 
-    if args.valid_every:
-        LOG.info("Filtering data based on lead time")
-        max_lead_time = ds.lead_time.max().values.astype("timedelta64[h]").astype(int)
-        valid_every = np.arange(
-            0, max_lead_time + 1, args.valid_every, dtype="timedelta64[h]"
-        )
-        ds = ds.sel(lead_time=valid_every)
-        if ds.lead_time.size == 0:
-            raise ValueError(
-                f"No data found with lead time every {args.valid_every} hours."
-            )
+    # if args.valid_every:
+    #     LOG.info("Filtering data based on lead time")
+    #     max_lead_time = ds.lead_time.max().values.astype("timedelta64[h]").astype(int)
+    #     valid_every = np.arange(
+    #         0, max_lead_time + 1, args.valid_every, dtype="timedelta64[h]"
+    #     )
+    #     ds = ds.sel(lead_time=valid_every)
+    #     if ds.lead_time.size == 0:
+    #         raise ValueError(
+    #             f"No data found with lead time every {args.valid_every} hours."
+    #         )
 
-    LOG.info("Aggregating results")
     results = aggregate_results(ds)
-
-    LOG.info("Aggregated results: \n %s", results)
 
     # Save results to NetCDF
     args.output.parent.mkdir(parents=True, exist_ok=True)
