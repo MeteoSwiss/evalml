@@ -22,7 +22,7 @@ logging.basicConfig(
 
 
 def load_kenda1_data_from_zarr(
-    zarr_dataset: Path, valid_times: Iterable[datetime], params: list[str]
+    zarr_dataset: Path, times: Iterable[datetime], params: list[str]
 ) -> xr.Dataset:
     """Load KENDA-1 data from an anemoi-generated Zarr dataset
 
@@ -77,16 +77,16 @@ def load_kenda1_data_from_zarr(
 
     # select valid times
     # (handle special case where some valid times are not in the dataset, e.g. at the end)
-    valid_time_included = valid_times.isin(ds.time.values).values
-    if all(valid_time_included):
-        ds = ds.sel(time=valid_times)
+    times_included = times.isin(ds.time.values).values
+    if all(times_included):
+        ds = ds.sel(time=times)
 
-    elif 0 < np.sum(valid_time_included) < len(valid_time_included):
+    elif 0 < np.sum(times_included) < len(times_included):
         LOG.warning(
             "Some valid times are not included in the dataset: \n%s",
-            valid_times[~valid_time_included].values,
+            times[~times_included].values,
         )
-        ds = ds.sel(time=valid_times[valid_time_included])
+        ds = ds.sel(time=times[times_included])
     else:
         raise ValueError(
             "Valid times are not included in the dataset. "
@@ -94,47 +94,6 @@ def load_kenda1_data_from_zarr(
         )
 
     return ds
-
-
-# def load_kenda1_data_from_grib(archive_root: Path, valid_times: datetime, params: list[str]) -> xr.Dataset:
-#     """Load KENDA1 data from GRIB files for a specific valid time."""
-
-#     ACCUM_PARAMS = [
-#         "TOT_PREC",
-#     ]
-
-#     archive_year = archive_root / str(valid_time.year)
-#     files = [
-#         archive_year / f"laf_sfc_{valid_time:%Y%m%d%H}.grib2",
-#         archive_year / f"lff_sfc_{valid_time:%Y%m%d%H}.grib2"
-#     ]
-#     accum_file = archive_year / f"lff_sfc_6haccum_{valid_time:%Y%m%d%H}.grib2"
-
-#     # separate parameters into instantaneous and accumulated
-#     # TODO: we need a more general way to handle this
-#     accum_params = []
-#     for param in params:
-#         if param in ACCUM_PARAMS:
-#             accum_params.append(param)
-#             params.remove(param)
-
-#     fds = data_source.FileDataSource(datafiles=files)
-#     ds = grib_decoder.load(fds, {"param": params})
-#     for var, da in ds.items():
-#         if "z" in da.dims and da.sizes["z"] == 1:
-#             ds[var] = da.squeeze("z", drop=True)
-#         elif "z" in da.dims and da.sizes["z"] > 1:
-#             ds[var] = da.rename({"z": da.attrs["vcoord_type"]})
-
-#     ds = xr.Dataset(ds)
-
-#     if accum_params:
-#         fds = data_source.FileDataSource(datafiles=[str(accum_file)])
-#         for var, da in grib_decoder.load(fds, {"param": accum_params}).items():
-#             da = da.drop("z") if "z" in da.dims else da
-#             ds[var] = da
-
-#     return ds
 
 
 def load_fct_data_from_grib(
@@ -160,6 +119,13 @@ def load_fct_data_from_grib(
                 .clip(min=0.0)
             )
         )
+
+    # make sure time coordinate is available, and valid_time is not
+    if "valid_time" in ds.coords:
+        ds = ds.rename({"valid_time": "time"})
+    if "time" not in ds.coords:
+        ds = ds.assign_coords(time=ds.ref_time + ds.lead_time)
+
     return ds
 
 
@@ -223,21 +189,14 @@ def main(args: ScriptConfig):
         kenda = (
             load_kenda1_data_from_zarr(
                 zarr_dataset=args.zarr_dataset,
-                valid_times=fct.valid_time.squeeze(),
+                times=fct.time.squeeze(),
                 params=args.params,
             )
             .compute()
             .chunk({"y": -1, "x": -1})
         )
-    elif args.archive_root:
-        # kenda = load_kenda1_data_from_grib(
-        #     archive_root=args.archive_root,
-        #     valid_times=fct.valid_time,
-        #     params=args.params
-        # )
-        pass
     else:
-        raise ValueError("Either --archive_root or --zarr_dataset must be provided.")
+        raise ValueError("--zarr_dataset must be provided.")
     LOG.info(
         "Loaded KENDA-1 data from Zarr dataset in %.2f seconds: \n%s",
         (datetime.now() - start).total_seconds(),
@@ -268,22 +227,12 @@ if __name__ == "__main__":
         required=True,
         help="Path to the Zarr dataset containing COSMO-E forecast data.",
     )
-
-    # truth data must be provided either as a GRIB archive or a anemoi-generated Zarr dataset
-    truth_group = parser.add_mutually_exclusive_group(required=True)
-    truth_group.add_argument(
-        "--archive_root",
-        type=Path,
-        required=False,
-        help="Root directory of the archive containing GRIB files.",
-    )
-    truth_group.add_argument(
+    parser.add_argument(
         "--zarr_dataset",
         type=Path,
-        required=False,
+        required=True,
         help="Path to the Zarr dataset containing COSMO-E analysis data.",
     )
-
     parser.add_argument(
         "--params",
         type=lambda x: x.split(","),
@@ -319,13 +268,10 @@ if __name__ == "__main__":
     main(args)
 
 # run examples
-# uv run workflow/scripts/verif_from_grib.py --zarr_dataset /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr --reftime 202006011200 --output debug_verif_zarr.csv
 # uv run workflow/scripts/verif_from_grib.py \
-#     --grib_output_dir /users/fzanetta/projects/mch-anemoi-evaluation/output/7c58e59d24e949c9ade3df635bbd37e2/202001050600/grib \
-#     --archive_root /scratch/mch/fzanetta/data/KENDA-1 \
+#     --zarr_dataset /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr \
 #     --reftime 202006011200 \
-#     --output debug_verif_grib.csv
-#     --params T_2M,TD_2M,U_10M,V_10M,PS,PMSL,TOT_PREC
+#     --output debug_verif_zarr.csv
 # uv run workflow/scripts/verif_from_grib.py \
 #     --grib_output_dir /users/fzanetta/projects/mch-anemoi-evaluation/output/7c58e59d24e949c9ade3df635bbd37e2/202001050600/grib \
 #     --zarr_dataset /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr \

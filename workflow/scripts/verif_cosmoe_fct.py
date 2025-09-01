@@ -9,7 +9,6 @@ from typing import Iterable
 eccodes_definition_path = Path(sys.prefix) / "share/eccodes-cosmo-resources/definitions"
 os.environ["ECCODES_DEFINITION_PATH"] = str(eccodes_definition_path)
 
-from meteodatalab import data_source, grib_decoder  # noqa: E402
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
 
@@ -22,7 +21,7 @@ logging.basicConfig(
 
 
 def load_kenda1_data_from_zarr(
-    zarr_dataset: Path, valid_times: Iterable[datetime], params: list[str]
+    zarr_dataset: Path, times: Iterable[datetime], params: list[str]
 ) -> xr.Dataset:
     """Load KENDA-1 data from an anemoi-generated Zarr dataset
 
@@ -70,59 +69,20 @@ def load_kenda1_data_from_zarr(
 
     # select valid times
     # (handle special case where some valid times are not in the dataset, e.g. at the end)
-    valid_time_included = valid_times.isin(ds.time.values).values
-    if all(valid_time_included):
-        ds = ds.sel(time=valid_times)
-    elif np.sum(valid_time_included) < len(valid_time_included):
+    times_included = times.isin(ds.time.values).values
+    if all(times_included):
+        ds = ds.sel(time=times)
+    elif np.sum(times_included) < len(times_included):
         LOG.warning(
             "Some valid times are not included in the dataset: \n%s",
-            valid_times[~valid_time_included].values,
+            times[~times_included].values,
         )
-        ds = ds.sel(time=valid_times[valid_time_included])
+        ds = ds.sel(time=times[times_included])
     else:
         raise ValueError(
             "Valid times are not included in the dataset. "
             "Please check the valid times and the dataset."
         )
-
-    return ds
-
-
-def load_kenda1_data_from_grib(
-    archive_root: Path, valid_time: datetime, params: list[str]
-) -> xr.Dataset:
-    """Load KENDA1 data from GRIB files for a specific valid time."""
-
-    ACCUM_PARAMS = [
-        "TOT_PREC",
-    ]
-
-    archive_year = archive_root / str(valid_time.year)
-    files = [
-        archive_year / f"laf_sfc_{valid_time:%Y%m%d%H}.grib2",
-        archive_year / f"lff_sfc_{valid_time:%Y%m%d%H}.grib2",
-    ]
-    accum_file = archive_year / f"lff_sfc_6haccum_{valid_time:%Y%m%d%H}.grib2"
-
-    # separate parameters into instantaneous and accumulated
-    # TODO: we need a more general way to handle this
-    accum_params = []
-    for param in params:
-        if param in ACCUM_PARAMS:
-            accum_params.append(param)
-            params.remove(param)
-
-    fds = data_source.FileDataSource(datafiles=files)
-    ds = grib_decoder.load(fds, {"param": params})
-    for var, da in ds.items():
-        ds[var] = da.drop("z") if "z" in da.dims else da
-    ds = xr.Dataset(ds)
-
-    if accum_params:
-        fds = data_source.FileDataSource(datafiles=[str(accum_file)])
-        for var, da in grib_decoder.load(fds, {"param": accum_params}).items():
-            da = da.drop("z") if "z" in da.dims else da
-            ds[var] = da
 
     return ds
 
@@ -193,7 +153,7 @@ def main(args: ScriptConfig):
         ref_time=args.reftime,
         lead_time=np.array(args.lead_time, dtype="timedelta64[h]"),
     )
-    coe = coe.assign_coords(valid_time=coe.ref_time + coe.lead_time)
+    coe = coe.assign_coords(time=coe.ref_time + coe.lead_time)
     LOG.info(
         "Loaded COSMO-E forecast data in %s seconds: \n%s",
         (datetime.now() - now).total_seconds(),
@@ -206,20 +166,14 @@ def main(args: ScriptConfig):
         kenda = (
             load_kenda1_data_from_zarr(
                 zarr_dataset=args.zarr_dataset,
-                valid_times=coe.valid_time,
+                times=coe.time,
                 params=args.params,
             )
             .compute()
             .chunk({"y": -1, "x": -1})
         )
-    elif args.archive_root:
-        kenda = load_kenda1_data_from_grib(
-            archive_root=args.archive_root,
-            valid_times=coe.valid_time,
-            params=args.params,
-        )
     else:
-        raise ValueError("Either --archive_root or --zarr_dataset must be provided.")
+        raise ValueError("--zarr_dataset must be provided.")
     LOG.info(
         "Loaded KENDA-1 data in %s seconds: \n%s",
         (datetime.now() - now).total_seconds(),
@@ -241,28 +195,18 @@ def main(args: ScriptConfig):
 if __name__ == "__main__":
     parser = ArgumentParser(description="Verify COSMO-E forecast data.")
 
-    # truth data must be provided either as a GRIB archive or a anemoi-generated Zarr dataset
-    truth_group = parser.add_mutually_exclusive_group(required=True)
-    truth_group.add_argument(
-        "--archive_root",
-        type=Path,
-        required=False,
-        help="Root directory of the archive containing GRIB files.",
-    )
-    truth_group.add_argument(
-        "--zarr_dataset",
-        type=Path,
-        required=False,
-        help="Path to the Zarr dataset containing COSMO-E analysis data.",
-    )
-
     parser.add_argument(
         "--cosmoe_zarr",
         type=Path,
         required=True,
         help="Path to the Zarr dataset containing COSMO-E forecast data.",
     )
-
+    parser.add_argument(
+        "--zarr_dataset",
+        type=Path,
+        required=True,
+        help="Path to the Zarr dataset containing COSMO-E analysis data.",
+    )
     parser.add_argument(
         "--reftime",
         type=lambda s: datetime.strptime(s, "%Y%m%d%H%M"),
