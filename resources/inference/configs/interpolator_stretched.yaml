@@ -4,7 +4,7 @@ input:
   cutout:
     lam_0:
       grib:
-        path: grib_local/*
+        path: grib/20*
         pre_processors:
           - extract_mask: "source0/trimedge_mask"
         namer:
@@ -21,13 +21,13 @@ input:
               - q_{level}
             - - shortName: FI
               - z_{level}
-            - - shortName: PMSL 
+            - - shortName: PMSL
               - msl
-            - - shortName: FIS 
+            - - shortName: FIS
               - z
-            - - shortName: PS 
+            - - shortName: PS
               - sp
-            - - shortName: T_2M 
+            - - shortName: T_2M
               - 2t
             - - shortName: TD_2M
               - 2d
@@ -43,7 +43,7 @@ input:
               - tp
     global:
       grib:
-        path: grib_global/*
+        path: grib/ifs*
         namer:
           rules:
             - - shortName: T
@@ -58,13 +58,13 @@ input:
               - q_{level}
             - - shortName: FI
               - z_{level}
-            - - shortName: PMSL 
+            - - shortName: PMSL
               - msl
-            - - shortName: FIS 
+            - - shortName: FIS
               - z
-            - - shortName: PS 
+            - - shortName: PS
               - sp
-            - - shortName: T_2M 
+            - - shortName: T_2M
               - 2t
             - - shortName: TD_2M
               - 2d
@@ -78,7 +78,7 @@ input:
               - lsm
             - - shortName: TOT_PREC
               - tp
-      
+
 forcings:
   test:
     use_original_paths: true
@@ -86,7 +86,7 @@ forcings:
 patch_metadata:
   dataset:
     constant_fields: [z, lsm]
-  
+
 output:
   tee:
     outputs:
@@ -96,11 +96,11 @@ output:
             mask: "source0/trimedge_mask"
             output:
               grib:
-                path: grib_local/{dateTime}_{step:03}.grib
+                path: grib/{dateTime}_{step:03}.grib
                 encoding:
                   typeOfGeneratingProcess: 2
                 templates:
-                   samples: /users/fzanetta/projects/ml-pilot-anemoi/inference/configs/templates_index.yaml
+                  samples: _resources/templates_index_cosmo.yaml
 
 verbosity: 1
 allow_nans: true

@@ -13,17 +13,17 @@ output:
             mask: "source0/trimedge_mask"
             output:
               grib:
-                path: grib_local/{dateTime}_{step:03}.grib
+                path: grib/{dateTime}_{step:03}.grib
                 encoding:
                   typeOfGeneratingProcess: 2
                 templates:
-                   samples: /users/fzanetta/projects/ml-pilot-anemoi/inference/configs/templates_index.yaml
+                   samples: _resources/templates_index_cosmo.yaml
     - grib:
-        path: grib_global/{dateTime}_{step:03}.grib
+        path: grib/ifs-{dateTime}_{step:03}.grib
         encoding:
           typeOfGeneratingProcess: 2
         templates:
-          samples: /scratch/mch/rradev/coding/temporal_interpolation/inference/templates/templates_index_ifs.yaml
+          samples: _resources/templates_index_ifs.yaml
         post_processors:
           - extract_slice: [189699, -1]
           - assign_mask: "global/cutout_mask"
