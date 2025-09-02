@@ -1,0 +1,5 @@
+- - {levtype: pl}
+  - _resources/ifs-levtype=pl.grib
+
+- - {levtype: sfc}
+  - _resources/ifs-levtype=sfc.grib

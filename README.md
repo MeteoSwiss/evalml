@@ -14,7 +14,12 @@ Run evaluation pipelines for anemoi models.
 2. [Credentials setup](#credentials-setup)
 3. [Workspace setup](#workspace-setup)
 
-## Example
+## Features:
+- [Experiments](#experiment): compare model performance via standard and diagnostic verification
+- [Showcasing](#showcase): produce visual material for specific events
+- [Sandboxing](#sandbox): generate an isolated inference development environments for any model
+
+## Quick example
 
 To launch an experiment, prepare a config file defining your experiment, e.g.
 
@@ -31,27 +36,36 @@ dates:
 lead_time: 120h
 
 runs:
-  stage_D-cerra-N320:
-    run_id: 2f962c89ff644ca7940072fa9cd088ec
-    label: Stage D - N320 global grid with CERRA finetuning
-  stage_D-cerra-N320-low_lam:
-    run_id: d0846032fc7248a58b089cbe8fa4c511
-    label: Stage D - N320 global grid with CERRA finetuning - low LAM weight
+  # - interpolator:
+  #     run_id: 9c18b90074214d769b8b383722fc5a06
+  #     label: Interpolator (M-1 forecaster)
+  #     forecaster:
+  #       run_id: d0846032fc7248a58b089cbe8fa4c511
+  - forecaster:
+      run_id: 2f962c89ff644ca7940072fa9cd088ec
+      label: Stage D - N320 global grid with CERRA finetuning
+  - forecaster:
+      run_id: d0846032fc7248a58b089cbe8fa4c511
+      label: M-1 forecaster
 
 baseline: COSMO-E
 
 execution:
   run_group_size: 4
 
+verification:
+  valid_every: 12
+
 locations:
   output_root: output/
   mlflow_uri:
+    - https://service.meteoswiss.ch/mlstore
     - https://servicedepl.meteoswiss.ch/mlstore
     - https://mlflow.ecmwf.int
 
 profile:
   executor: slurm
-  default-resources:
+  default_resources:
     slurm_partition: "postproc"
     cpus_per_task: 1
     mem_mb_per_cpu: 1800
@@ -62,7 +76,7 @@ profile:
 You can then run it with:
 
 ```bash
-evalml experiment path/to/experiment/config.yaml
+evalml experiment path/to/experiment/config.yaml --report
 ```
 
 
@@ -78,6 +92,22 @@ then, install the project and its dependencies with `uv sync` and activate the v
 environment with `source .venv/bin/activate`.
 
 ## Credentials setup
+
+Environment variables can be used to securely pass username and password to MLflow PROD
+server `https://service.meteoswiss.ch/mlstore`.
+
+```bash
+export MLFLOW_TRACKING_USERNAME=mlflow-username
+export MLFLOW_TRACKING_PASSWORD=mlflow-password
+```
+
+To permanently set these variables within this project, use a `.env` file in the root:
+
+```
+# .env
+MLFLOW_TRACKING_USERNAME=mlflow-user
+MLFLOW_TRACKING_PASSWORD=mlflow-password
+```
 
 Some experiments are stored on the ECMWF-hosted MLflow server:
 [https://mlflow.ecmwf.int](https://mlflow.ecmwf.int). To access these runs in the

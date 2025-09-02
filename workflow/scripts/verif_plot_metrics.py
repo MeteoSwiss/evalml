@@ -56,16 +56,6 @@ def _check_same_column_values(dfs: list[pd.DataFrame], column: str) -> None:
 def main(args: Namespace) -> None:
     """Main function to verify results from KENDA-1 data."""
 
-    if args.labels is not None:
-        if len(args.labels) != len(args.verif_files):
-            raise ValueError(
-                "Number of labels must match the number of verification files."
-                f" Got {len(args.labels)} labels for {len(args.verif_files)} files."
-            )
-        labels = args.labels
-    else:
-        labels = [file.parent.name for file in args.verif_files]
-
     dfs = [read_verif_file(file) for file in args.verif_files]
 
     _check_same_columns(dfs)
@@ -97,25 +87,29 @@ def main(args: Namespace) -> None:
             )
 
         subsets_dfs = [_subset_df(df) for df in dfs]
+        all_df = pd.concat(subsets_dfs, ignore_index=True).dropna()
+        subset_cols = [c for c in all_df.columns if c != "value"]
+        all_df = all_df.drop_duplicates(subset=subset_cols, keep="last")
+        all_df["lead_time"] = all_df["lead_time"].dt.total_seconds() / 3600
+
         # breakpoint()
         fig, ax = plt.subplots(figsize=(10, 6))
 
         title = f"{metric} - {param}"
         title += f"- {hour} - {season} - {init_hour}" if args.stratify else ""
-        for i, df in enumerate(subsets_dfs):
-            # convert lead time to integer hours
-            df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
+        for source, df in all_df.groupby("source"):
             df.plot(
                 x="lead_time",
-                y="value_mean",
+                y="value",
                 kind="line",
+                marker="o",
                 title=title,
-                xlabel="Lead Time",
+                xlabel="Lead Time [h]",
                 ylabel=metric,
-                label=labels[i],
+                label=source,
+                color="black" if "analysis" in source else None,
                 ax=ax,
             )
-
         args.output_dir.mkdir(parents=True, exist_ok=True)
         fn = f"{metric}_{param}"
         fn += f"_{hour}_{season}_{init_hour}.png" if args.stratify else ".png"
@@ -126,26 +120,24 @@ def main(args: Namespace) -> None:
 if __name__ == "__main__":
     parser = ArgumentParser(description="Verify results from KENDA-1 data.")
     parser.add_argument(
-        "verif_files", type=Path, nargs="+", help="Paths to verification files."
+        "verif_files",
+        type=Path,
+        nargs="+",
+        help="Paths to verification files.",
+        # "--verif_files", type=Path, nargs="+", help="Paths to verification files.",
+        # default = list(Path("output/data").glob("*/*/verif_aggregated.csv")), required=False
     )
     parser.add_argument(
         "--stratify",
         action="store_true",
         help="Stratify results by hour, season, and init_hour.",
+        default=False,
     )
     parser.add_argument(
-        "--labels",
-        type=lambda s: s.split(","),
-        default=None,
-        help="Labels for the runs, if not provided, will use run_id.",
-    )
-    (
-        parser.add_argument(
-            "--output_dir",
-            type=Path,
-            default="plots",
-            help="Path to save the aggregated results.",
-        ),
+        "--output_dir",
+        type=Path,
+        default="plots",
+        help="Path to save the aggregated results.",
     )
     args = parser.parse_args()
     main(args)

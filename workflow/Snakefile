@@ -2,14 +2,10 @@
 # Please follow the best practices:
 # https://snakemake.readthedocs.io/en/stable/snakefiles/best_practices.html,
 
-# from tools.config_schema import ExperimentConfig
+from evalml.config import ConfigModel
 
-# load configuration
-# -----------------------------------------------------
-# configfile: "config/config.yaml"
-
-# validate configuration
-# ExperimentConfig.validate(dict(config))
+# validate configuration and add defaults
+update_config(config, ConfigModel.validate(dict(config)).model_dump(mode="json"))
 
 
 # load rules
@@ -40,12 +36,26 @@ onerror:
 EXPERIMENT_HASH = short_hash_config()
 
 
-rule all:
-    """Final target rule to run all necessary steps."""
+rule experiment_all:
+    """Target rule for experiment workflow."""
     input:
-        OUT_ROOT / f"results/{EXPERIMENT_HASH}/dashboard.html",
-        OUT_ROOT / f"results/{EXPERIMENT_HASH}/plot_metrics",
-    default_target: True
+        OUT_ROOT / f"results/{EXPERIMENT_HASH}/metrics/dashboard",
+        OUT_ROOT / f"results/{EXPERIMENT_HASH}/metrics/plots",
+
+
+rule showcase_all:
+    """Target rule for showcase workflow."""
+    input:
+        [],
+
+
+rule sandbox_all:
+    """Target rule for creating a sandbox for inference."""
+    input:
+        expand(
+            rules.create_inference_sandbox.output.sandbox,
+            run_id=collect_all_runs(),
+        ),
 
 
 rule run_inference_all:
@@ -58,10 +68,10 @@ rule run_inference_all:
         ),
 
 
-rule run_verif_from_grib_all:
+rule verif_metrics_all:
     input:
         expand(
-            rules.run_verif_fct.output,
+            rules.verif_metrics.output,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=collect_all_runs(),
         ),
@@ -73,10 +83,10 @@ rule run_verif_from_grib_all:
 #         expand(rules.extract_cosmoe_fcts.output.fcts, year=[str(y)[-2:] for y in range(2020, 2021)])
 
 
-rule run_verif_plot_metrics_all:
+rule verif_metrics_plot_all:
     """Run verification plot metrics for all studies."""
     input:
         expand(
-            rules.run_verif_plot_metrics.output,
+            rules.verif_metrics_plot.output,
             experiment=EXPERIMENT_HASH,
         ),

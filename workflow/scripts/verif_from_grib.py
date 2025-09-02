@@ -13,6 +13,8 @@ from meteodatalab import data_source, grib_decoder  # noqa: E402
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
 
+from src.verification import verify  # noqa: E402
+
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -74,7 +76,22 @@ def load_kenda1_data_from_zarr(
     )
 
     # select valid times
-    ds = ds.sel(time=valid_times)
+    # (handle special case where some valid times are not in the dataset, e.g. at the end)
+    valid_time_included = valid_times.isin(ds.time.values).values
+    if all(valid_time_included):
+        ds = ds.sel(time=valid_times)
+
+    elif 0 < np.sum(valid_time_included) < len(valid_time_included):
+        LOG.warning(
+            "Some valid times are not included in the dataset: \n%s",
+            valid_times[~valid_time_included].values,
+        )
+        ds = ds.sel(time=valid_times[valid_time_included])
+    else:
+        raise ValueError(
+            "Valid times are not included in the dataset. "
+            "Please check the valid times and the dataset."
+        )
 
     return ds
 
@@ -133,6 +150,16 @@ def load_fct_data_from_grib(
         elif "z" in da.dims and da.sizes["z"] > 1:
             ds[var] = da.rename({"z": da.attrs["vcoord_type"]})
     ds = xr.merge([ds[p].rename(p) for p in ds])
+    if "TOT_PREC" in ds.data_vars:
+        LOG.info("Disaggregating precipitation")
+        ds = ds.assign(
+            TOT_PREC=lambda x: (
+                x.TOT_PREC.fillna(0)
+                .diff("lead_time")
+                .pad(lead_time=(1, 0), constant_value=None)
+                .clip(min=0.0)
+            )
+        )
     return ds
 
 
@@ -156,9 +183,24 @@ class ScriptConfig(Namespace):
     archive_root: Path = None
     zarr_dataset: Path = None
     cosmoe_zarr: Path = Path("/scratch/mch/fzanetta/data/COSMO-E/2020.zarr")
-    reftime: datetime = None
     params: list[str]
     lead_time: list[int] = _parse_lead_time("0/126/6")
+
+
+def program_summary_log(args):
+    """Log a welcome message with the script information."""
+    LOG.info("=" * 80)
+    LOG.info("Running verification of ML model forecast data")
+    LOG.info("=" * 80)
+    LOG.info("GRIB output directory: %s", args.grib_output_dir)
+    if args.zarr_dataset:
+        LOG.info("Zarr dataset: %s", args.zarr_dataset)
+    else:
+        LOG.info("Archive root: %s", args.archive_root)
+    LOG.info("Parameters: %s", args.params)
+    LOG.info("Lead time: %s", args.lead_time)
+    LOG.info("Output file: %s", args.output)
+    LOG.info("=" * 80)
 
 
 def main(args: ScriptConfig):
@@ -170,25 +212,22 @@ def main(args: ScriptConfig):
         grib_output_dir=args.grib_output_dir, params=args.params, step=args.lead_time
     )
     LOG.info(
-        "Loaded forecast data from GRIB files in %.2f seconds",
+        "Loaded forecast data from GRIB files in %.2f seconds: \n%s",
         (datetime.now() - start).total_seconds(),
+        fct,
     )
 
     # get truth data (COSMO-2 analysis aka KENDA-1)
+    start = datetime.now()
     if args.zarr_dataset:
-        start = datetime.now()
         kenda = (
             load_kenda1_data_from_zarr(
                 zarr_dataset=args.zarr_dataset,
-                valid_times=fct.valid_time,
+                valid_times=fct.valid_time.squeeze(),
                 params=args.params,
             )
             .compute()
             .chunk({"y": -1, "x": -1})
-        )
-        LOG.info(
-            "Loaded KENDA-1 data from Zarr dataset in %.2f seconds",
-            (datetime.now() - start).total_seconds(),
         )
     elif args.archive_root:
         # kenda = load_kenda1_data_from_grib(
@@ -199,26 +238,14 @@ def main(args: ScriptConfig):
         pass
     else:
         raise ValueError("Either --archive_root or --zarr_dataset must be provided.")
+    LOG.info(
+        "Loaded KENDA-1 data from Zarr dataset in %.2f seconds: \n%s",
+        (datetime.now() - start).total_seconds(),
+        kenda,
+    )
 
     # compute metrics and statistics
-    start = datetime.now()
-    error = fct - kenda
-    results = {}
-    results["BIAS"] = error.mean(["y", "x"])
-    results["RMSE"] = np.sqrt((error**2).mean(["y", "x"]))
-    results["MAE"] = abs(error).mean(["y", "x"])
-    results["STD"] = error.std(["y", "x"])
-    results["CORR"] = (
-        corr := xr.Dataset(
-            {k: xr.corr(fct[k], kenda[k], dim=["y", "x"]) for k in fct.data_vars}
-        )
-    )
-    results["R2"] = corr**2
-    results = xr.Dataset({k: v.to_array("param") for k, v in results.items()})
-    results = results.to_array("metric").to_dataframe(name="value").reset_index()
-    LOG.info(
-        "Computed metrics in %.2f seconds", (datetime.now() - start).total_seconds()
-    )
+    results = verify(fct, kenda, args.fcst_label, args.analysis_label)
 
     # # save results to CSV
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -254,34 +281,38 @@ if __name__ == "__main__":
         "--zarr_dataset",
         type=Path,
         required=False,
-        help="Path to the Zarr dataset containing COSMOe data.",
+        help="Path to the Zarr dataset containing COSMO-E analysis data.",
     )
 
-    parser.add_argument(
-        "--reftime",
-        type=lambda s: datetime.strptime(s, "%Y%m%d%H%M"),
-        help="Valid time for the data in ISO format (default: 6 hours ago).",
-    )
     parser.add_argument(
         "--params",
         type=lambda x: x.split(","),
         required=False,
         default=PARAMS,
-        help="Comma-separated list of parameters to verify (default: T_2M,TD_2M,U_10M,V_10M).",
+        help="Comma-separated list of parameters to verify.",
     )
     parser.add_argument(
         "--lead_time",
         type=_parse_lead_time,
         default="0/126/6",
-        help="Lead time in the format 'start/stop/step' (default: 0/126/6).",
+        help="Lead time in the format 'start/stop/step'.",
     )
-    (
-        parser.add_argument(
-            "--output",
-            type=Path,
-            default="verif.csv",
-            help="Output file to save the verification results (default: verif.csv).",
-        ),
+    parser.add_argument(
+        "--fcst_label",
+        type=str,
+        help="Label for the forecast data.",
+    )
+    parser.add_argument(
+        "--analysis_label",
+        type=str,
+        help="Label for the analysis data (default: COSMO-E analysis).",
+        default="COSMO-E analysis",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default="verif.csv",
+        help="Output file to save the verification results.",
     )
     args = parser.parse_args()
 

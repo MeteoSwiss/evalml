@@ -14,6 +14,7 @@ import shutil
 from pathlib import Path
 import requests
 import toml
+import subprocess
 
 from mlflow.tracking import MlflowClient
 from mlflow.exceptions import RestException
@@ -21,10 +22,17 @@ from mlflow.exceptions import RestException
 from anemoi.utils.mlflow.auth import TokenAuth
 from anemoi.utils.mlflow.client import AnemoiMlflowClient
 
+logfile = snakemake.log[0]  # type: ignore # noqa: F821
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    filename=logfile,
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+OTHER_DEPENDENCIES = [
+    "torch-geometric",
+]
 
 _GIT_DEPENDENCIES_CONFIG = {
     "anemoi-models": {
@@ -35,6 +43,26 @@ _GIT_DEPENDENCIES_CONFIG = {
         "ecmwf": {
             "url": "https://github.com/ecmwf/anemoi-core.git",
             "subdirectory": "models",
+        },
+    },
+    "anemoi-graphs": {
+        "meteoswiss": {
+            "url": "https://github.com/MeteoSwiss/anemoi-core.git",
+            "subdirectory": "graphs",
+        },
+        "ecmwf": {
+            "url": "https://github.com/ecmwf/anemoi-core.git",
+            "subdirectory": "graphs",
+        },
+    },
+    "anemoi-training": {
+        "meteoswiss": {
+            "url": "https://github.com/MeteoSwiss/anemoi-core.git",
+            "subdirectory": "training",
+        },
+        "ecmwf": {
+            "url": "https://github.com/ecmwf/anemoi-core.git",
+            "subdirectory": "training",
         },
     },
     "anemoi-datasets": {
@@ -115,7 +143,10 @@ def get_version_and_commit_hash(
         tuple[str, str]: Tuple containing (version, commit_hash)
     """
     run = client.get_run(run_id)
-    dependency = dependency.replace("-", ".")
+    if "anemoi" in dependency:
+        dependency = dependency.replace("-", ".")
+    else:
+        dependency = dependency.replace("-", "_")
     commit_hash_param = (
         f"metadata.provenance_training.git_versions.{dependency}.git.sha1"
     )
@@ -181,13 +212,46 @@ def get_anemoi_versions(client: MlflowClient, run_id: str) -> dict:
     versions = {}
     for dep_type in _GIT_DEPENDENCIES_CONFIG:
         version, commit_hash = get_version_and_commit_hash(client, run_id, dep_type)
-        versions[f"{dep_type}"] = (
-            resolve_dependency_config(commit_hash, dep_type) if commit_hash else version
-        )
+        if not version and not commit_hash:
+            logger.warning("No commit or version found for %s", dep_type)
+            continue
+        if commit_hash:
+            logger.info("Found commit %s for %s", commit_hash, dep_type)
+            ref = resolve_dependency_config(commit_hash, dep_type)
+        else:
+            logger.info("Using version %s for %s", version, dep_type)
+            ref = version
+
+        versions[f"{dep_type}"] = ref
 
     if not versions:
         raise ValueError("No valid dependencies found in MLflow run")
 
+    return versions
+
+
+def get_other_versions(client: MlflowClient, run_id: str) -> dict:
+    """Get other non-anemoi dependencies from MLflow run.
+
+    Args:
+        client (MlflowClient): MLflow client instance
+        run_id (str): ID of the MLflow run
+    Returns:
+        dict: Dictionary mapping other dependencies to their versions.
+    """
+    versions = {}
+    for dep in OTHER_DEPENDENCIES:
+        version, commit_hash = get_version_and_commit_hash(client, run_id, dep)
+        if not version and not commit_hash:
+            logger.warning("No commit or version found for %s", dep)
+            continue
+        if commit_hash:
+            logger.info("Found commit %s for %s", commit_hash, dep)
+            ref = resolve_dependency_config(commit_hash, dep)
+        else:
+            logger.info("Using version %s for %s", version, dep)
+            ref = version
+        versions[dep] = ref
     return versions
 
 
@@ -257,7 +321,11 @@ def version_to_pep440_range(version: str) -> str:
 
 
 def update_pyproject_toml(
-    versions: dict, toml_path: Path, python_version: str, checkpoints_path: str
+    versions: dict,
+    toml_path: Path,
+    python_version: str,
+    checkpoints_path: str,
+    run_mlflow_link: str,
 ) -> None:
     """
     Update pyproject.toml [project.dependencies] with versions or Git references.
@@ -280,9 +348,8 @@ def update_pyproject_toml(
     deps = config.get("project", {}).get("dependencies", [])
     if not isinstance(deps, list):
         raise ValueError("[project.dependencies] must be a list")
-
     updated = []
-    for dep in deps:
+    for dep in deps + OTHER_DEPENDENCIES:
         pkg_name = dep.split("==")[0].split(">=")[0].split("@")[0].split()[0].strip()
         if pkg_name in versions:
             val = versions[pkg_name]
@@ -298,6 +365,7 @@ def update_pyproject_toml(
     config["project"]["dependencies"] = updated
     config["project"]["requires-python"] = version_to_pep440_range(python_version)
     config.setdefault("tool", {})["anemoi"] = {"checkpoints_path": checkpoints_path}
+    config["tool"]["anemoi"]["run_mlflow_link"] = run_mlflow_link
 
     try:
         with open(toml_path, "w", encoding="utf-8") as f:
@@ -316,17 +384,44 @@ def main(snakemake) -> None:
     run_id = snakemake.wildcards["run_id"]
     requirements_path_in = Path(snakemake.input[0])
     toml_path_out = Path(snakemake.output[0])
-
+    extra_dependencies = snakemake.params.get("extra_dependencies", [])
     shutil.copy2(requirements_path_in, toml_path_out)
 
     client = get_mlflow_client_given_runid(mlflow_uri, run_id)
     anemoi_versions = get_anemoi_versions(client, run_id)
+    other_versions = get_other_versions(client, run_id)
     python_version = get_python_version(client, run_id)
     checkpoints_path = get_path_to_checkpoints(client, run_id)
 
-    update_pyproject_toml(
-        anemoi_versions, toml_path_out, python_version, checkpoints_path
+    run_mlflow_link = client.tracking_uri + "/#/runs/" + run_id
+    logger.info(
+        "Updating pyproject.toml with versions from MLflow run %s at %s",
+        run_id,
+        run_mlflow_link,
     )
+    update_pyproject_toml(
+        anemoi_versions | other_versions,
+        toml_path_out,
+        python_version,
+        checkpoints_path,
+        run_mlflow_link,
+    )
+
+    if extra_dependencies:
+        command = ["uv"]
+        command += ["--project", str(toml_path_out.parent.resolve())]
+        command += ["add", "--no-sync"]
+        command += extra_dependencies
+        try:
+            subprocess.run(command, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(
+                "Failed to add extra dependencies: %s\n%s",
+                e,
+                e.stderr or e.stdout,
+            )
+            raise RuntimeError("Failed to add extra dependencies") from e
+        logger.info("Added extra dependencies: %s", extra_dependencies)
 
     logger.info("Successfully updated dependencies in %s", toml_path_out)
 

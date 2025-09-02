@@ -104,19 +104,19 @@
 
         <div class="controls">
             <div class="control-group">
-                <label>Model(s)</label>
-                <select id="model-select" multiple>
-                    {% for model in models %}
-                    <option value="{{model}}" selected>{{model}}</option>
+                <label>Source(s)</label>
+                <select id="source-select" multiple>
+                    {% for source in sources %}
+                    <option value="{{source}}" selected>{{source}}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="control-group">
                 <label>Metric(s)</label>
                 <select id="metric-select" multiple>
-                    <option value="RMSE" selected>RMSE</option>
-                    <option value="BIAS" selected>BIAS</option>
-                    <option value="MAE" selected>MAE</option>
+                    {% for metric in metrics %}
+                    <option value="{{metric}}" selected>{{metric}}</option>
+                    {% endfor %}
                 </select>
             </div>
             <div class="control-group">

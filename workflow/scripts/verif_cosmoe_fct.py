@@ -13,6 +13,8 @@ from meteodatalab import data_source, grib_decoder  # noqa: E402
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
 
+from src.verification import verify  # noqa: E402
+
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -67,7 +69,21 @@ def load_kenda1_data_from_zarr(
     )
 
     # select valid times
-    ds = ds.sel(time=valid_times)
+    # (handle special case where some valid times are not in the dataset, e.g. at the end)
+    valid_time_included = valid_times.isin(ds.time.values).values
+    if all(valid_time_included):
+        ds = ds.sel(time=valid_times)
+    elif np.sum(valid_time_included) < len(valid_time_included):
+        LOG.warning(
+            "Some valid times are not included in the dataset: \n%s",
+            valid_times[~valid_time_included].values,
+        )
+        ds = ds.sel(time=valid_times[valid_time_included])
+    else:
+        raise ValueError(
+            "Valid times are not included in the dataset. "
+            "Please check the valid times and the dataset."
+        )
 
     return ds
 
@@ -136,19 +152,56 @@ class ScriptConfig(Namespace):
     lead_time: list[int] = _parse_lead_time("0/126/6")
 
 
+def program_summary_log(args):
+    """Log a welcome message with the script information."""
+    LOG.info("=" * 80)
+    LOG.info("Running verification of COSMO-E forecast data")
+    LOG.info("=" * 80)
+    LOG.info("COSMO-E Zarr dataset: %s", args.cosmoe_zarr)
+    if args.zarr_dataset:
+        LOG.info("Zarr dataset for KENDA-1: %s", args.zarr_dataset)
+    elif args.archive_root:
+        LOG.info("GRIB archive root for KENDA-1: %s", args.archive_root)
+    LOG.info("Reference time: %s", args.reftime)
+    LOG.info("Parameters to verify: %s", args.params)
+    LOG.info("Lead time: %s", args.lead_time)
+    LOG.info("Output file: %s", args.output)
+    LOG.info("=" * 80)
+
+
 def main(args: ScriptConfig):
     """Main function to verify COSMOe forecast data."""
 
     # get COSMO-E forecast data
+    now = datetime.now()
     coe = xr.open_zarr(args.cosmoe_zarr, consolidated=True, decode_timedelta=True)
     coe = coe.rename({"forecast_reference_time": "ref_time", "step": "lead_time"})
+    if "TOT_PREC" in coe.data_vars:
+        if coe.TOT_PREC.units == "kg m-2":
+            coe = coe.assign(TOT_PREC=lambda x: x.TOT_PREC / 1000)
+            coe.TOT_PREC.attrs["units"] = "m"
+        ## disaggregate precipitation
+        coe = coe.assign(
+            TOT_PREC=lambda x: (
+                x.TOT_PREC.fillna(0)
+                .diff("lead_time")
+                .pad(lead_time=(1, 0), constant_value=None)
+                .clip(min=0.0)
+            )
+        )
     coe = coe[args.params].sel(
         ref_time=args.reftime,
         lead_time=np.array(args.lead_time, dtype="timedelta64[h]"),
     )
     coe = coe.assign_coords(valid_time=coe.ref_time + coe.lead_time)
+    LOG.info(
+        "Loaded COSMO-E forecast data in %s seconds: \n%s",
+        (datetime.now() - now).total_seconds(),
+        coe,
+    )
 
     # get truth data (COSMO-2 analysis aka KENDA-1)
+    now = datetime.now()
     if args.zarr_dataset:
         kenda = (
             load_kenda1_data_from_zarr(
@@ -167,26 +220,22 @@ def main(args: ScriptConfig):
         )
     else:
         raise ValueError("Either --archive_root or --zarr_dataset must be provided.")
+    LOG.info(
+        "Loaded KENDA-1 data in %s seconds: \n%s",
+        (datetime.now() - now).total_seconds(),
+        kenda,
+    )
 
     # compute metrics and statistics
-    error = coe - kenda
-    results = {}
-    results["BIAS"] = error.mean(["y", "x"])
-    results["RMSE"] = np.sqrt((error**2).mean(["y", "x"]))
-    results["MAE"] = abs(error).mean(["y", "x"])
-    results["STD"] = error.std(["y", "x"])
-    results["CORR"] = (
-        corr := xr.Dataset(
-            {k: xr.corr(coe[k], kenda[k], dim=["y", "x"]) for k in coe.data_vars}
-        )
-    )
-    results["R2"] = corr**2
-    results = xr.Dataset({k: v.to_array("param") for k, v in results.items()})
-    results = results.to_array("metric").to_dataframe(name="value").reset_index()
+
+    results = verify(coe, kenda, args.cosmoe_label, args.analysis_label)
 
     # save results to CSV
     args.output.parent.mkdir(parents=True, exist_ok=True)
     results.to_csv(args.output)
+    LOG.info("Saved verification results to %s", args.output)
+
+    LOG.info("Program completed successfully.")
 
 
 if __name__ == "__main__":
@@ -204,7 +253,7 @@ if __name__ == "__main__":
         "--zarr_dataset",
         type=Path,
         required=False,
-        help="Path to the Zarr dataset containing COSMOe data.",
+        help="Path to the Zarr dataset containing COSMO-E analysis data.",
     )
 
     parser.add_argument(
@@ -222,8 +271,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--params",
         type=lambda x: x.split(","),
-        # default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"])
-        default=["T_2M", "TD_2M", "U_10M", "V_10M"],
+        default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"],
     )
     parser.add_argument(
         "--lead_time",
@@ -231,17 +279,24 @@ if __name__ == "__main__":
         default="0/126/6",
         help="Lead time in the format 'start/stop/step' (default: 0/126/6).",
     )
-    (
-        parser.add_argument(
-            "--output",
-            type=Path,
-            default="verif.csv",
-            help="Output file to save the verification results (default: verif.csv).",
-        ),
+    parser.add_argument(
+        "--cosmoe_label",
+        type=str,
+        default="COSMO-E",
+        help="Label for the COSMO-E forecast data (default: COSMO-E).",
+    )
+    parser.add_argument(
+        "--analysis_label",
+        type=str,
+        default="COSMO-E analysis",
+        help="Label for the COSMO-E analysis data (default: COSMO-E analysis).",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default="verif.csv",
+        help="Output file to save the verification results (default: verif.csv).",
     )
     args = parser.parse_args()
 
     main(args)
-    # run examples
-    # uv run workflow/scripts/verif_cosmoe_fcst.py --zarr_dataset /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr --reftime 202006011200 --output debug_verif_zarr.csv
-    # uv run workflow/scripts/verif_cosmoe_fcst.py --archive_root /scratch/mch/fzanetta/data/KENDA-1 --reftime 2020-06-01T12:00 --output debug_verif_grib.csv

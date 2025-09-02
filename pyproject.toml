@@ -1,6 +1,6 @@
 [project]
 name = "evalml"
-version = "0.1.0"
+version = "0.1.0-beta.1"
 description = "Evaluation CLI for ML models"
 readme = "README.md"
 authors = [
@@ -16,6 +16,15 @@ dependencies = [
     "anemoi-datasets>=0.5.25",
     "mlflow>=3.1.1",
     "pydantic>=2.11.7",
+    "python-dotenv>=1.1.1",
+]
+
+[project.optional-dependencies]
+kerchunk = [
+    "kerchunk",
+    "zarr<3.0.0",
+    "fastparquet",
+    "ujson"
 ]
 
 [project.scripts]

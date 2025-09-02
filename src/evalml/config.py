@@ -1,7 +1,9 @@
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Any
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, RootModel, HttpUrl
+
+PROJECT_ROOT = Path(__file__).parents[2]
 
 
 class Dates(BaseModel):
@@ -22,18 +24,77 @@ class Dates(BaseModel):
     )
 
 
-class RunConfig(BaseModel):
-    """Single training run stored in MLflow."""
+class ExplicitDates(RootModel[List[str]]):
+    """Explicit list of initialisation dates as ISO-8601 formatted strings."""
 
+
+class AnemoiInferenceConfig(RootModel[Dict[str, Any]]):
+    """Configuration for the Anemoi inference workflow."""
+
+
+class RunConfig(BaseModel):
     run_id: str = Field(
         ...,
         min_length=32,
         max_length=32,
         description="The mlflow run ID, as a 32-character hexadecimal string.",
     )
-    label: str = Field(
-        ...,
+    label: str | None = Field(
+        None,
         description="The label for the run that will be used in experiment results such as reports and figures.",
+    )
+    extra_dependencies: List[str] = Field(
+        default_factory=list,
+        description="List of extra dependencies to install for this model. "
+        "These will be added to the pyproject.toml file in the run directory.",
+    )
+
+    config: Dict[str, Any] | str
+
+
+class ForecasterConfig(RunConfig):
+    """Single training run stored in MLflow."""
+
+    config: Dict[str, Any] | str = Field(
+        default_factory=lambda _: str(
+            PROJECT_ROOT / "resources" / "inference" / "configs" / "forecaster.yaml"
+        ),
+        description="Configuration for the forecaster run. Can be a dictionary of parameters or a path to a configuration file."
+        "By default, it will point to resources/inference/configs/forecaster.yaml in the evalml repository.",
+    )
+
+
+class InterpolatorConfig(RunConfig):
+    """Single training run stored in MLflow."""
+
+    config: Dict[str, Any] | str = Field(
+        default_factory=lambda _: str(
+            PROJECT_ROOT / "resources" / "inference" / "configs" / "interpolator.yaml"
+        ),
+        description="Configuration for the interpolator run. Can be a dictionary of parameters or a path to a configuration file. "
+        "By default, it will point to resources/inference/configs/interpolator.yaml in the evalml repository.",
+    )
+
+    forecaster: ForecasterConfig | None = Field(
+        None,
+        description="Configuration for the forecaster run that this interpolator is based on.",
+    )
+
+
+class ForecasterItem(BaseModel):
+    forecaster: ForecasterConfig
+
+
+class InterpolatorItem(BaseModel):
+    interpolator: InterpolatorConfig
+
+
+class VerifConfig(BaseModel):
+    """Configuration for the verification of the experiment."""
+
+    valid_every: Optional[int] = Field(
+        ge=1,
+        description="Hours between verification times starting from 00:00 UTC. If None, no filtering is applied.",
     )
 
 
@@ -84,21 +145,25 @@ class Profile(BaseModel):
         return out
 
 
-class ExperimentConfig(BaseModel):
+class ConfigModel(BaseModel):
     """Top-level configuration."""
 
     description: str = Field(
         ...,
         description="Description of the experiment, e.g. 'Hindcast of the 2023 season.'",
     )
-    dates: Dates
+    dates: Dates | ExplicitDates
     lead_time: str = Field(
         ..., description="Forecast length, e.g. '120h'", pattern=r"^\d+[hmd]$"
     )
-    runs: Dict[str, RunConfig]
+    runs: List[ForecasterItem | InterpolatorItem] = Field(
+        ...,
+        description="Dictionary of runs to execute, with run IDs as keys and configurations as values.",
+    )
     baseline: str = Field(
         ..., description="The label of the NWP baseline run to compare against."
     )
+    verification: Optional[VerifConfig] = None
     execution: Execution
     locations: Locations
     profile: Profile
@@ -110,8 +175,8 @@ class ExperimentConfig(BaseModel):
 
 
 def generate_config_schema() -> str:
-    """Generate the JSON schema for the ExperimentConfig model."""
-    return ExperimentConfig.model_json_schema()
+    """Generate the JSON schema for the ConfigModel."""
+    return ConfigModel.model_json_schema()
 
 
 if __name__ == "__main__":
@@ -119,7 +184,7 @@ if __name__ == "__main__":
     import json
 
     parser = argparse.ArgumentParser(
-        description="Generate the JSON schema for the experiment configuration."
+        description="Generate the JSON schema for the evalml configuration"
     )
     parser.add_argument(
         "output", type=str, help="Path to save the generated JSON schema."

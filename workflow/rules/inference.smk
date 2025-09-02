@@ -7,14 +7,15 @@ from pathlib import Path
 from datetime import datetime
 
 
-configfile: "config/config.yaml"
-
-
 rule create_inference_pyproject:
     input:
         toml="workflow/envs/anemoi_inference.toml",
     output:
         pyproject=OUT_ROOT / "data/runs/{run_id}/pyproject.toml",
+    params:
+        extra_dependencies=lambda wc: RUN_CONFIGS[wc.run_id].get(
+            "extra_dependencies", []
+        ),
     log:
         OUT_ROOT / "logs/create_inference_pyproject/{run_id}.log",
     localrule: True
@@ -27,6 +28,7 @@ rule create_inference_venv:
         pyproject=rules.create_inference_pyproject.output.pyproject,
     output:
         venv=temp(directory(OUT_ROOT / "data/runs/{run_id}/.venv")),
+        lockfile=OUT_ROOT / "data/runs/{run_id}/uv.lock",
     params:
         py_version=parse_input(
             input.pyproject, parse_toml, key="project.requires-python"
@@ -67,37 +69,79 @@ rule make_squashfs_image:
     localrule: True
     shell:
         # we can safely ignore the many warnings "Unrecognised xattr prefix..."
-        "mksquashfs {input.venv} {output.image}"
+        "mksquashfs $(realpath {input.venv}) {output.image}"
         " -no-recovery -noappend -Xcompression-level 3"
         " > {log} 2>/dev/null"
 
 
-rule run_inference:
+rule create_inference_sandbox:
+    """Generate a zipped directory that can be used as a sandbox for running inference jobs.
+
+    TO use this sandbox, unzip it to a target directory.
+
+    ```bash
+    unzip sandbox.zip -d /path/to/target/directory
+    ```
+    """
+    input:
+        script="workflow/scripts/inference_create_sandbox.py",
+        image=rules.make_squashfs_image.output.image,
+        pyproject=rules.create_inference_pyproject.output.pyproject,
+        lockfile=rules.create_inference_venv.output.lockfile,
+        config=str(Path("config/anemoi_inference.yaml").resolve()),
+        readme_template="resources/inference/sandbox/readme.md.jinja2",
+    output:
+        sandbox=OUT_ROOT / "data/runs/{run_id}/sandbox.zip",
+    log:
+        OUT_ROOT / "logs/create_inference_sandbox/{run_id}.log",
+    localrule: True
+    shell:
+        """
+        uv run {input.script} \
+            --pyproject {input.pyproject} \
+            --lockfile {input.lockfile} \
+            --readme-template {input.readme_template} \
+            --output {output.sandbox} \
+            > {log} 2>&1
+        """
+
+
+rule inference_group_forecaster:
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
-        config=str(Path("config/anemoi_inference.yaml").resolve()),
+        config=lambda wc: RUN_CONFIGS[wc.run_id]["config"],
     output:
-        directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
-        directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/raw"),
+        okfile=temp(
+            touch(
+                OUT_ROOT / "logs/inference_group_forecaster/{run_id}-{group_index}.ok"
+            )
+        ),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
         ),
+        reftimes=lambda wc: [
+            t.strftime("%Y-%m-%dT%H:%M") for t in REFTIMES_GROUPS[int(wc.group_index)]
+        ],
         lead_time=config["lead_time"],
-        reftime_to_iso=lambda wc: datetime.strptime(
-            wc.init_time, "%Y%m%d%H%M"
-        ).strftime("%Y-%m-%dT%H:%M"),
-        output_root=OUT_ROOT / "data",
+        output_root=(OUT_ROOT / "data").resolve(),
+        resources_root=Path("resources/inference").resolve(),
+    # TODO: we can have named logs for each reftime
     log:
-        OUT_ROOT / "logs/inference_run/{run_id}-{init_time}.log",
+        [
+            OUT_ROOT
+            / ("logs/inference_group_forecaster/{run_id}-{group_index}" + f"-{i}.log")
+            for i in range(config["execution"]["run_group_size"])
+        ],
     resources:
-        slurm_partition="debug",
+        slurm_partition="short",
         cpus_per_task=32,
         mem_mb_per_cpu=8000,
         runtime="20m",
-        gres="gpu:1",
-        slurm_extra=lambda wc, input: f"--uenv={input.image}:/user-environment",
+        gres="gpu:1",  # because we use --exclusive, this will be 1 GPU per run (--ntasks-per-gpus is automatically set to 1)
+        # see https://github.com/MeteoSwiss/mch-anemoi-evaluation/pull/3#issuecomment-2998997104
+        slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment --exclusive",
     shell:
         """
         (
@@ -124,3 +168,69 @@ rule run_inference:
         anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
         ) > {log} 2>&1
         """
+
+
+def _get_forecaster_run_id(run_id):
+    """Get the forecaster run ID from the RUN_CONFIGS."""
+    return RUN_CONFIGS[run_id]["forecaster"]["run_id"]
+
+
+rule inference_group_interpolator:
+    """Run the interpolator for a specific run ID."""
+    input:
+        pyproject=rules.create_inference_pyproject.output.pyproject,
+        image=rules.make_squashfs_image.output.image,
+        config=lambda wc: RUN_CONFIGS[wc.run_id]["config"],
+        forecasts=lambda wc: OUT_ROOT
+        / f"logs/inference_group_forecaster/{_get_forecaster_run_id(wc.run_id)}-{wc.group_index}.ok",
+    output:
+        okfile=temp(
+            touch(
+                OUT_ROOT
+                / "logs/inference_group_interpolator/{run_id}-{group_index}.ok"
+            )
+        ),
+    params:
+        checkpoints_path=parse_input(
+            input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
+        ),
+        reftimes=lambda wc: [
+            t.strftime("%Y-%m-%dT%H:%M") for t in REFTIMES_GROUPS[int(wc.group_index)]
+        ],
+    log:
+        [
+            OUT_ROOT
+            / (
+                "logs/inference_group_interpolator/{run_id}-{group_index}"
+                + f"-{i}.log"
+            )
+            for i in range(config["execution"]["run_group_size"])
+        ],
+    localrule: True
+    shell:
+        """
+        touch {output.okfile}
+        """
+
+
+def _inference_routing_fn(wc):
+
+    run_config = RUN_CONFIGS[wc.run_id]
+
+    if run_config["model_type"] == "forecaster":
+        input_path = f"logs/inference_group_forecaster/{wc.run_id}-{wc.init_time}.ok"
+    elif run_config["model_type"] == "interpolator":
+        input_path = f"logs/inference_group_interpolator/{wc.run_id}-{wc.init_time}.ok"
+    else:
+        raise ValueError(f"Unsupported model type: {run_config['model_type']}")
+
+    return OUT_ROOT / input_path
+
+
+rule inference_routing:
+    localrule: True
+    input:
+        _inference_job_routing,
+    output:
+        directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
+        directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/raw"),
