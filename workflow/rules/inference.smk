@@ -106,42 +106,34 @@ rule create_inference_sandbox:
         """
 
 
-rule inference_group_forecaster:
+rule inference_forecaster:
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
         config=lambda wc: RUN_CONFIGS[wc.run_id]["config"],
     output:
         okfile=temp(
-            touch(
-                OUT_ROOT / "logs/inference_group_forecaster/{run_id}-{group_index}.ok"
-            )
+            touch(OUT_ROOT / "logs/inference_forecaster/{run_id}-{init_time}.ok")
         ),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
         ),
-        reftimes=lambda wc: [
-            t.strftime("%Y-%m-%dT%H:%M") for t in REFTIMES_GROUPS[int(wc.group_index)]
-        ],
         lead_time=config["lead_time"],
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
-    # TODO: we can have named logs for each reftime
+        reftime_to_iso=lambda wc: datetime.strptime(
+            wc.init_time, "%Y%m%d%H%M"
+        ).strftime("%Y-%m-%dT%H:%M"),
     log:
-        [
-            OUT_ROOT
-            / ("logs/inference_group_forecaster/{run_id}-{group_index}" + f"-{i}.log")
-            for i in range(config["execution"]["run_group_size"])
-        ],
+        OUT_ROOT / "logs/inference_forecaster/{run_id}-{init_time}.log",
     resources:
-        slurm_partition="short",
-        cpus_per_task=32,
+        slurm_partition="short-shared",
+        cpus_per_task=24,
         mem_mb_per_cpu=8000,
         runtime="20m",
-        gres="gpu:1",  # because we use --exclusive, this will be 1 GPU per run (--ntasks-per-gpus is automatically set to 1)
-        # see https://github.com/MeteoSwiss/mch-anemoi-evaluation/pull/3#issuecomment-2998997104
-        slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment --exclusive",
+        gres="gpu:1",
+        slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment",
     shell:
         """
         (
@@ -151,8 +143,8 @@ rule inference_group_forecaster:
 
         # prepare the working directory
         WORKDIR={params.output_root}/runs/{wildcards.run_id}/{wildcards.init_time}
-        mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw
-        cp {input.config} config.yaml
+        mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw _resources
+        cp {input.config} config.yaml && cp -r {params.resources_root}/templates/* _resources/
 
         CMD_ARGS=(
             date={params.reftime_to_iso}
@@ -175,38 +167,34 @@ def _get_forecaster_run_id(run_id):
     return RUN_CONFIGS[run_id]["forecaster"]["run_id"]
 
 
-rule inference_group_interpolator:
+rule inference_interpolator:
     """Run the interpolator for a specific run ID."""
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
         config=lambda wc: RUN_CONFIGS[wc.run_id]["config"],
         forecasts=lambda wc: OUT_ROOT
-        / f"logs/inference_group_forecaster/{_get_forecaster_run_id(wc.run_id)}-{wc.group_index}.ok",
+        / f"logs/inference_forecaster/{_get_forecaster_run_id(wc.run_id)}-{wc.init_time}.ok",
     output:
         okfile=temp(
-            touch(
-                OUT_ROOT
-                / "logs/inference_group_interpolator/{run_id}-{group_index}.ok"
-            )
+            touch(OUT_ROOT / "logs/inference_interpolator/{run_id}-{init_time}.ok")
         ),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
         ),
-        reftimes=lambda wc: [
-            t.strftime("%Y-%m-%dT%H:%M") for t in REFTIMES_GROUPS[int(wc.group_index)]
-        ],
+        reftime_to_iso=lambda wc: datetime.strptime(
+            wc.init_time, "%Y%m%d%H%M"
+        ).strftime("%Y-%m-%dT%H:%M"),
     log:
-        [
-            OUT_ROOT
-            / (
-                "logs/inference_group_interpolator/{run_id}-{group_index}"
-                + f"-{i}.log"
-            )
-            for i in range(config["execution"]["run_group_size"])
-        ],
-    localrule: True
+        OUT_ROOT / "logs/inference_interpolator/{run_id}-{init_time}.log",
+    resources:
+        slurm_partition="short-shared",
+        cpus_per_task=24,
+        mem_mb_per_cpu=8000,
+        runtime="20m",
+        gres="gpu:1",
+        slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment",
     shell:
         """
         touch {output.okfile}
@@ -218,9 +206,9 @@ def _inference_routing_fn(wc):
     run_config = RUN_CONFIGS[wc.run_id]
 
     if run_config["model_type"] == "forecaster":
-        input_path = f"logs/inference_group_forecaster/{wc.run_id}-{wc.init_time}.ok"
+        input_path = f"logs/inference_forecaster/{wc.run_id}-{wc.init_time}.ok"
     elif run_config["model_type"] == "interpolator":
-        input_path = f"logs/inference_group_interpolator/{wc.run_id}-{wc.init_time}.ok"
+        input_path = f"logs/inference_interpolator/{wc.run_id}-{wc.init_time}.ok"
     else:
         raise ValueError(f"Unsupported model type: {run_config['model_type']}")
 
@@ -230,7 +218,7 @@ def _inference_routing_fn(wc):
 rule inference_routing:
     localrule: True
     input:
-        _inference_job_routing,
+        _inference_routing_fn,
     output:
         directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
         directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/raw"),
