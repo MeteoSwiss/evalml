@@ -56,7 +56,6 @@ verification:
 locations:
   output_root: output/
   mlflow_uri:
-    - https://service.meteoswiss.ch/mlstore
     - https://servicedepl.meteoswiss.ch/mlstore
     - https://mlflow.ecmwf.int
 
@@ -89,22 +88,6 @@ then, install the project and its dependencies with `uv sync` and activate the v
 environment with `source .venv/bin/activate`.
 
 ## Credentials setup
-
-Environment variables can be used to securely pass username and password to MLflow PROD
-server `https://service.meteoswiss.ch/mlstore`.
-
-```bash
-export MLFLOW_TRACKING_USERNAME=mlflow-username
-export MLFLOW_TRACKING_PASSWORD=mlflow-password
-```
-
-To permanently set these variables within this project, use a `.env` file in the root:
-
-```
-# .env
-MLFLOW_TRACKING_USERNAME=mlflow-user
-MLFLOW_TRACKING_PASSWORD=mlflow-password
-```
 
 Some experiments are stored on the ECMWF-hosted MLflow server:
 [https://mlflow.ecmwf.int](https://mlflow.ecmwf.int). To access these runs in the
