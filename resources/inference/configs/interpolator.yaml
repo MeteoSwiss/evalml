@@ -10,7 +10,7 @@ post_processors:
 
 input:
   grib:
-    path: forecaster_grib/20*.grib
+    path: forecaster_grib/20*.grib # TODO: remove dirty fix to only use local files
     namer:
       rules:
         - - shortName: SKT
