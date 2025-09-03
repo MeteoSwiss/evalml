@@ -28,7 +28,6 @@ baseline: COSMO-E
 locations:
   output_root: output/
   mlflow_uri:
-    # - https://service.meteoswiss.ch/mlstore
     - https://servicedepl.meteoswiss.ch/mlstore
     - https://mlflow.ecmwf.int
 
