@@ -9,7 +9,7 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "snakemake<9.10",
+    "snakemake<9.10",  # https://github.com/snakemake/snakemake/issues/3289
     "snakemake-executor-plugin-slurm",
     "click",
     "meteodata-lab>=0.4.0",
