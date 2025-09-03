@@ -62,24 +62,7 @@ def _reftimes():
     return times
 
 
-def _reftimes_groups():
-    cfg = config["dates"]
-    group_size = config["execution"]["run_group_size"]
-    groups = []
-    for i in range(0, len(REFTIMES), group_size):
-        group = REFTIMES[i : i + group_size]
-        groups.append(group)
-    return groups
-
-
 REFTIMES = _reftimes()
-
-REFTIMES_GROUPS = _reftimes_groups()
-REFTIME_TO_GROUP = {
-    reftime.strftime("%Y%m%d%H%M"): group_index
-    for group_index, group in enumerate(REFTIMES_GROUPS)
-    for reftime in group
-}
 
 
 def collect_all_runs():

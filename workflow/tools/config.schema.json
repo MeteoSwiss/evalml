@@ -63,22 +63,6 @@
       "title": "DefaultResources",
       "type": "object"
     },
-    "Execution": {
-      "description": "Configuration for the execution of the experiment.",
-      "properties": {
-        "run_group_size": {
-          "description": "Number of runs to execute in the same SLURM job.",
-          "minimum": 1,
-          "title": "Run Group Size",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "run_group_size"
-      ],
-      "title": "Execution",
-      "type": "object"
-    },
     "ExplicitDates": {
       "description": "Explicit list of initialisation dates as ISO-8601 formatted strings.",
       "items": {
@@ -359,9 +343,6 @@
       ],
       "default": null
     },
-    "execution": {
-      "$ref": "#/$defs/Execution"
-    },
     "locations": {
       "$ref": "#/$defs/Locations"
     },
@@ -375,7 +356,6 @@
     "lead_time",
     "runs",
     "baseline",
-    "execution",
     "locations",
     "profile"
   ],
