@@ -21,6 +21,13 @@ rule report_experiment_dashboard:
         ),
     params:
         sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
+        header_text="Initializations from "
+        + config.get("dates").get("start")
+        + " to "
+        + config.get("dates").get("end")
+        + " by "
+        + config.get("dates").get("frequency")
+        + " have been used.",
     log:
         OUT_ROOT / "logs/report_experiment_dashboard/{experiment}.log",
     shell:
@@ -29,5 +36,6 @@ rule report_experiment_dashboard:
             --verif_files {input.verif} \
             --template {input.template} \
             --script {input.js_script} \
+            --header_text "{params.header_text}" \
             --output {output} > {log} 2>&1
         """

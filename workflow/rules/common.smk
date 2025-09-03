@@ -62,24 +62,7 @@ def _reftimes():
     return times
 
 
-def _reftimes_groups():
-    cfg = config["dates"]
-    group_size = config["execution"]["run_group_size"]
-    groups = []
-    for i in range(0, len(REFTIMES), group_size):
-        group = REFTIMES[i : i + group_size]
-        groups.append(group)
-    return groups
-
-
 REFTIMES = _reftimes()
-
-REFTIMES_GROUPS = _reftimes_groups()
-REFTIME_TO_GROUP = {
-    reftime.strftime("%Y%m%d%H%M"): group_index
-    for group_index, group in enumerate(REFTIMES_GROUPS)
-    for reftime in group
-}
 
 
 def collect_all_runs():
@@ -124,6 +107,20 @@ def collect_experiment_participants():
         label = run.get("label", run_id)
         participants[label] = OUT_ROOT / f"data/runs/{run_id}/verif_aggregated.nc"
     return participants
+
+
+def _inference_routing_fn(wc):
+
+    run_config = RUN_CONFIGS[wc.run_id]
+
+    if run_config["model_type"] == "forecaster":
+        input_path = f"logs/inference_forecaster/{wc.run_id}-{wc.init_time}.ok"
+    elif run_config["model_type"] == "interpolator":
+        input_path = f"logs/inference_interpolator/{wc.run_id}-{wc.init_time}.ok"
+    else:
+        raise ValueError(f"Unsupported model type: {run_config['model_type']}")
+
+    return OUT_ROOT / input_path
 
 
 RUN_CONFIGS = collect_all_runs()
