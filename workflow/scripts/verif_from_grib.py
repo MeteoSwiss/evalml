@@ -77,7 +77,7 @@ def load_kenda1_data_from_zarr(
 
     # select valid times
     # (handle special case where some valid times are not in the dataset, e.g. at the end)
-    times_included = times.isin(ds.time.values).values
+    times_included = times.isin(ds.time.values).values.ravel()
     if all(times_included):
         ds = ds.sel(time=times)
 
@@ -100,7 +100,7 @@ def load_fct_data_from_grib(
     grib_output_dir: Path, params: list[str], step: list[int]
 ) -> xr.Dataset:
     """Load COSMO-E forecast data from GRIB files for a specific valid time."""
-    files = sorted(grib_output_dir.glob("*.grib"))
+    files = sorted(grib_output_dir.glob("20*.grib"))
     fds = data_source.FileDataSource(datafiles=files)
     ds = grib_decoder.load(fds, {"param": params, "step": step})
     for var, da in ds.items():
@@ -189,7 +189,7 @@ def main(args: ScriptConfig):
         kenda = (
             load_kenda1_data_from_zarr(
                 zarr_dataset=args.zarr_dataset,
-                times=fct.time.squeeze(),
+                times=fct.time,
                 params=args.params,
             )
             .compute()
