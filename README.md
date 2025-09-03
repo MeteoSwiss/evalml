@@ -5,7 +5,7 @@
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Actions status](https://github.com/meteoswiss/evalml/actions/workflows/ci.yaml/badge.svg)](https://github.com/meteoswiss/evalml/actions)
 
-Run evaluation pipelines for anemoi models.
+Run evaluation pipelines for data-driven weather models built with [Anemoi](https://anemoi.readthedocs.io/).
 
 
 ## Getting started
