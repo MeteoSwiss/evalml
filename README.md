@@ -50,9 +50,6 @@ runs:
 
 baseline: COSMO-E
 
-execution:
-  run_group_size: 4
-
 verification:
   valid_every: 12
 

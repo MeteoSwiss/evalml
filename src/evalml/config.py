@@ -98,14 +98,6 @@ class VerifConfig(BaseModel):
     )
 
 
-class Execution(BaseModel):
-    """Configuration for the execution of the experiment."""
-
-    run_group_size: int = Field(
-        ..., ge=1, description="Number of runs to execute in the same SLURM job."
-    )
-
-
 class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
 
@@ -164,7 +156,6 @@ class ConfigModel(BaseModel):
         ..., description="The label of the NWP baseline run to compare against."
     )
     verification: Optional[VerifConfig] = None
-    execution: Execution
     locations: Locations
     profile: Profile
 
