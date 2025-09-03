@@ -110,11 +110,9 @@ rule inference_forecaster:
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
-        config=lambda wc: RUN_CONFIGS[wc.run_id]["config"],
+        config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
     output:
-        okfile=temp(
-            touch(OUT_ROOT / "logs/inference_forecaster/{run_id}-{init_time}.ok")
-        ),
+        okfile=touch(OUT_ROOT / "logs/inference_forecaster/{run_id}-{init_time}.ok"),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
@@ -176,9 +174,7 @@ rule inference_interpolator:
         forecasts=lambda wc: OUT_ROOT
         / f"logs/inference_forecaster/{_get_forecaster_run_id(wc.run_id)}-{wc.init_time}.ok",
     output:
-        okfile=temp(
-            touch(OUT_ROOT / "logs/inference_interpolator/{run_id}-{init_time}.ok")
-        ),
+        okfile=touch(OUT_ROOT / "logs/inference_interpolator/{run_id}-{init_time}.ok"),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
@@ -212,7 +208,7 @@ rule inference_interpolator:
         WORKDIR={params.output_root}/runs/{wildcards.run_id}/{wildcards.init_time}
         mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw _resources
         cp {input.config} config.yaml && cp -r {params.resources_root}/templates/* _resources/
-        ln -s --force $FORECASTER_WORKDIR/grib forecaster_grib
+        ln -fns $FORECASTER_WORKDIR/grib forecaster_grib
 
         CMD_ARGS=(
             date={params.reftime_to_iso}
