@@ -89,6 +89,7 @@ def main(args):
         sources=sources,
         params=params,
         metrics=metrics,
+        header_text=args.header_text,
     )
     LOG.info("Size of generated HTML: %d bytes", len(html.encode("utf-8")))
 
@@ -119,6 +120,12 @@ if __name__ == "__main__":
         type=Path,
         required=True,
         help="Path to the JavaScript source file for the dashboard.",
+    )
+    parser.add_argument(
+        "--header_text",
+        type=str,
+        default="",
+        help="Text to display in the header of the dashboard.",
     )
     parser.add_argument(
         "--output",
