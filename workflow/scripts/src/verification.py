@@ -1,6 +1,7 @@
-import xarray as xr
-import time
 import logging
+import time
+
+import xarray as xr
 
 LOG = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ def _compute_statistics(
     return stats
 
 
-def _merge_metrics(ds=xr.Dataset) -> xr.Dataset:
+def _merge_metrics(ds: xr.Dataset) -> xr.Dataset:
     out = xr.merge(ds)
     if "ref_time" not in out.dims:
         out = out.expand_dims("ref_time").set_coords("ref_time")
@@ -84,30 +85,25 @@ def verify(
             continue
         LOG.info("Verifying parameter %s", param)
         fcst_param, obs_param = xr.align(fcst[param], obs[param], join="inner")
+
+        # scores vs time (reduce spatially)
         score = _compute_scores(
             fcst_param, obs_param, prefix=param + ".", source=fcst_label
         )
         scores.append(score)
-        score = _compute_scores(
-            fcst_param,
-            obs_param,
-            prefix=param + ".",
-            suffix=".spatial",
-            dim="lead_time",
-            source=fcst_label,
-        )
-        scores.append(score)
+
+        # statistics vs time (reduce spatially)
         fcst_statistics = _compute_statistics(
             fcst_param, prefix=param + ".", source=fcst_label
         )
         obs_statistics = _compute_statistics(
             obs_param, prefix=param + ".", source=obs_label
         )
-        statistics.append(xr.merge([fcst_statistics, obs_statistics]))
+        statistics.append(xr.concat([fcst_statistics, obs_statistics], dim="source"))
 
     scores = _merge_metrics(scores)
     statistics = _merge_metrics(statistics)
-    out = xr.merge([scores, statistics])
+    out = xr.merge([scores, statistics], join="outer", compat="no_conflicts")
     LOG.info("Computed metrics in %.2f seconds", time.time() - start)
     LOG.info("Metrics dataset: \n%s", out)
     return out
