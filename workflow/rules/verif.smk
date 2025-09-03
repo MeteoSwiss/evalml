@@ -45,6 +45,7 @@ rule verif_metrics:
     localrule: True
     input:
         script="workflow/scripts/verif_from_grib.py",
+        inference_okfile=_inference_routing_fn,
         grib_output=rules.inference_routing.output[0],
         zarr_dataset="/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr",
     output:
