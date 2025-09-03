@@ -74,6 +74,8 @@ def main(args: Namespace) -> None:
         coords="minimal",
         compat="override",
         chunks="auto",
+        engine="h5netcdf",  # netcdf4 engine fails silently with parallel=True
+        parallel=True,
     )
 
     LOG.info("Concatenated Dataset: \n %s", ds)
