@@ -1,3 +1,4 @@
+import copy
 from datetime import datetime, timedelta
 import yaml
 import hashlib
@@ -9,9 +10,14 @@ OUT_ROOT = Path(config["locations"]["output_root"])
 
 def short_hash_config():
     """Generate a short hash of the configuration file."""
-    with open(CONFIG_ROOT / "anemoi_inference.yaml", "r") as f:
-        cfg = yaml.safe_load(f)
-    cfg_str = json.dumps([config, cfg], sort_keys=True)
+    configs_to_hash = []
+    for run_id, run_config in RUN_CONFIGS.items():
+        with open(run_config["config"], "r") as f:
+            configs_to_hash.append(yaml.safe_load(f))
+        if "forecaster" in run_config:
+            with open(run_config["forecaster"]["config"], "r") as f:
+                configs_to_hash.append(yaml.safe_load(f))
+    cfg_str = json.dumps([config, *configs_to_hash], sort_keys=True)
     return hashlib.sha256(cfg_str.encode()).hexdigest()[:8]
 
 
@@ -56,29 +62,22 @@ def _reftimes():
     return times
 
 
-def _reftimes_groups():
-    cfg = config["dates"]
-    group_size = config["execution"]["run_group_size"]
-    groups = []
-    for i in range(0, len(REFTIMES), group_size):
-        group = REFTIMES[i : i + group_size]
-        groups.append(group)
-    return groups
-
-
 REFTIMES = _reftimes()
-
-REFTIMES_GROUPS = _reftimes_groups()
-REFTIME_TO_GROUP = {
-    reftime.strftime("%Y%m%d%H%M"): group_index
-    for group_index, group in enumerate(REFTIMES_GROUPS)
-    for reftime in group
-}
 
 
 def collect_all_runs():
     """Collect all runs defined in the configuration."""
-    return [cfg["run_id"] for cfg in config["runs"].values()]
+    runs = {}
+    for run_entry in copy.deepcopy(config["runs"]):
+        model_type = next(iter(run_entry))
+        run_config = run_entry[model_type]
+        run_config["model_type"] = model_type
+        run_id = run_config.pop("run_id")
+        runs[run_id] = run_config
+        if model_type == "interpolator":
+            run_id = run_config["forecaster"]["run_id"]
+            runs[run_id] = run_config["forecaster"]
+    return runs
 
 
 def collect_all_baselines():
@@ -100,12 +99,29 @@ def collect_experiment_participants():
         participants[baseline] = (
             OUT_ROOT / f"data/baselines/{baseline}/verif_aggregated.csv"
         )
-    for name, run in config["runs"].items():
-        label = run.get("label", name)
-        participants[label] = (
-            OUT_ROOT / f"data/runs/{run['run_id']}/verif_aggregated.csv"
-        )
+    for run_entry in config["runs"]:
+        # every run entry is a single-key dict
+        # where the key is the model type ("forecaster", "interpolator", etc.)
+        run = next(iter(run_entry.values()))
+        run_id = run["run_id"]
+        label = run.get("label", run_id)
+        participants[label] = OUT_ROOT / f"data/runs/{run_id}/verif_aggregated.csv"
     return participants
 
 
+def _inference_routing_fn(wc):
+
+    run_config = RUN_CONFIGS[wc.run_id]
+
+    if run_config["model_type"] == "forecaster":
+        input_path = f"logs/inference_forecaster/{wc.run_id}-{wc.init_time}.ok"
+    elif run_config["model_type"] == "interpolator":
+        input_path = f"logs/inference_interpolator/{wc.run_id}-{wc.init_time}.ok"
+    else:
+        raise ValueError(f"Unsupported model type: {run_config['model_type']}")
+
+    return OUT_ROOT / input_path
+
+
+RUN_CONFIGS = collect_all_runs()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()

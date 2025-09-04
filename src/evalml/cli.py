@@ -27,6 +27,9 @@ def workflow_options(func):
     func = click.option(
         "--dry-run", "-n", is_flag=True, help="Do not execute anything."
     )(func)
+    func = click.option(
+        "--unlock", is_flag=True, help="Remove a lock on the working directory."
+    )(func)
     func = click.option("--verbose", "-v", is_flag=True, help="Enable verbose output.")(
         func
     )
@@ -58,6 +61,7 @@ def execute_workflow(
     cores: int,
     verbose: bool,
     dry_run: bool,
+    unlock: bool,
     report: Path | None,
     extra_smk_args: tuple[str, ...] = (),
 ):
@@ -70,6 +74,8 @@ def execute_workflow(
 
     if dry_run:
         command.append("--dry-run")
+    if unlock:
+        command.append("--unlock")
     if verbose:
         command.append("--printshellcmds")
     if report and not dry_run:
@@ -91,9 +97,16 @@ def cli():
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
 @workflow_options
-def experiment(configfile, cores, verbose, dry_run, report, extra_smk_args):
+def experiment(configfile, cores, verbose, dry_run, unlock, report, extra_smk_args):
     execute_workflow(
-        configfile, "experiment_all", cores, verbose, dry_run, report, extra_smk_args
+        configfile,
+        "experiment_all",
+        cores,
+        verbose,
+        dry_run,
+        unlock,
+        report,
+        extra_smk_args,
     )
 
 
@@ -102,9 +115,16 @@ def experiment(configfile, cores, verbose, dry_run, report, extra_smk_args):
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
 @workflow_options
-def showcase(configfile, cores, verbose, dry_run, report, extra_smk_args):
+def showcase(configfile, cores, verbose, dry_run, unlock, report, extra_smk_args):
     execute_workflow(
-        configfile, "showcase_all", cores, verbose, dry_run, report, extra_smk_args
+        configfile,
+        "showcase_all",
+        cores,
+        verbose,
+        dry_run,
+        unlock,
+        report,
+        extra_smk_args,
     )
 
 
@@ -115,7 +135,14 @@ def showcase(configfile, cores, verbose, dry_run, report, extra_smk_args):
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
 @workflow_options
-def sandbox(configfile, cores, verbose, dry_run, report, extra_smk_args):
+def sandbox(configfile, cores, verbose, dry_run, unlock, report, extra_smk_args):
     execute_workflow(
-        configfile, "sandbox_all", cores, verbose, dry_run, report, extra_smk_args
+        configfile,
+        "sandbox_all",
+        cores,
+        verbose,
+        dry_run,
+        unlock,
+        report,
+        extra_smk_args,
     )

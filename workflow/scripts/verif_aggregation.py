@@ -63,16 +63,20 @@ def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
     # aggregate
     aggregated = (
         df_extended.groupby(
-            ["metric", "lead_time", "param", "hour", "season", "init_hour"],
+            ["metric", "source", "lead_time", "param", "hour", "season", "init_hour"],
             dropna=False,  # optional, ensures NaN values are not dropped
         )
-        .agg(
-            value_mean=("value", "mean"),
-            value_count=("value", "count"),
-            value_sum=("value", "sum"),
-        )
+        .agg({"value": "mean"})
         .reset_index()
     )
+
+    # square root transform MSE and VAR
+    transform_metrics = {"VAR": "STDE", "MSE": "RMSE", "var": "std"}
+    aggregated.loc[aggregated["metric"].isin(transform_metrics.keys()), "value"] = (
+        aggregated.loc[aggregated["metric"].isin(transform_metrics.keys()), "value"]
+        ** 0.5
+    )
+    aggregated["metric"] = aggregated["metric"].replace(transform_metrics)
 
     return aggregated
 

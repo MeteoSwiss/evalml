@@ -5,7 +5,7 @@
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Actions status](https://github.com/meteoswiss/evalml/actions/workflows/ci.yaml/badge.svg)](https://github.com/meteoswiss/evalml/actions)
 
-Run evaluation pipelines for anemoi models.
+Run evaluation pipelines for data-driven weather models built with [Anemoi](https://anemoi.readthedocs.io/).
 
 
 ## Getting started
@@ -36,17 +36,19 @@ dates:
 lead_time: 120h
 
 runs:
-  stage_D-cerra-N320:
-    run_id: 2f962c89ff644ca7940072fa9cd088ec
-    label: Stage D - N320 global grid with CERRA finetuning
-  stage_D-cerra-N320-low_lam:
-    run_id: d0846032fc7248a58b089cbe8fa4c511
-    label: Stage D - N320 global grid with CERRA finetuning - low LAM weight
+  # - interpolator:
+  #     run_id: 9c18b90074214d769b8b383722fc5a06
+  #     label: Interpolator (M-1 forecaster)
+  #     forecaster:
+  #       run_id: d0846032fc7248a58b089cbe8fa4c511
+  - forecaster:
+      run_id: 2f962c89ff644ca7940072fa9cd088ec
+      label: Stage D - N320 global grid with CERRA finetuning
+  - forecaster:
+      run_id: d0846032fc7248a58b089cbe8fa4c511
+      label: M-1 forecaster
 
 baseline: COSMO-E
-
-execution:
-  run_group_size: 4
 
 verification:
   valid_every: 12

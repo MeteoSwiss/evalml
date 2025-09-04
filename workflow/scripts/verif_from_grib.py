@@ -13,6 +13,8 @@ from meteodatalab import data_source, grib_decoder  # noqa: E402
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
 
+from src.verification import verify  # noqa: E402
+
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -155,6 +157,7 @@ def load_fct_data_from_grib(
                 x.TOT_PREC.fillna(0)
                 .diff("lead_time")
                 .pad(lead_time=(1, 0), constant_value=None)
+                .clip(min=0.0)
             )
         )
     return ds
@@ -242,26 +245,7 @@ def main(args: ScriptConfig):
     )
 
     # compute metrics and statistics
-    start = datetime.now()
-    error = fct - kenda
-    results = {}
-    results["BIAS"] = error.mean(["y", "x"])
-    results["RMSE"] = np.sqrt((error**2).mean(["y", "x"]))
-    results["MAE"] = abs(error).mean(["y", "x"])
-    results["STD"] = error.std(["y", "x"])
-    results["CORR"] = (
-        corr := xr.Dataset(
-            {k: xr.corr(fct[k], kenda[k], dim=["y", "x"]) for k in fct.data_vars}
-        )
-    )
-    results["R2"] = corr**2
-    results = xr.Dataset({k: v.to_array("param") for k, v in results.items()})
-    results = results.to_array("metric").to_dataframe(name="value").reset_index()
-    LOG.info(
-        "Computed metrics in %.2f seconds: \n%s",
-        (datetime.now() - start).total_seconds(),
-        results,
-    )
+    results = verify(fct, kenda, args.fcst_label, args.analysis_label)
 
     # # save results to CSV
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -297,7 +281,7 @@ if __name__ == "__main__":
         "--zarr_dataset",
         type=Path,
         required=False,
-        help="Path to the Zarr dataset containing COSMOe data.",
+        help="Path to the Zarr dataset containing COSMO-E analysis data.",
     )
 
     parser.add_argument(
@@ -312,6 +296,17 @@ if __name__ == "__main__":
         type=_parse_lead_time,
         default="0/126/6",
         help="Lead time in the format 'start/stop/step'.",
+    )
+    parser.add_argument(
+        "--fcst_label",
+        type=str,
+        help="Label for the forecast data.",
+    )
+    parser.add_argument(
+        "--analysis_label",
+        type=str,
+        help="Label for the analysis data (default: COSMO-E analysis).",
+        default="COSMO-E analysis",
     )
     parser.add_argument(
         "--output",

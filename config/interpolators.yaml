@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Stretched interpolator vs LAM interpolator.
+
+dates:
+  start: 2020-01-01T12:00
+  end: 2020-01-10T00:00
+  frequency: 54h
+
+lead_time: 120h
+
+runs:
+  - interpolator:
+      run_id: 9c18b90074214d769b8b383722fc5a06
+      label: LAM Interpolator (M-1 forecaster)
+      forecaster:
+        run_id: d0846032fc7248a58b089cbe8fa4c511
+        config: resources/inference/configs/forecaster_with_global.yaml
+      extra_dependencies:
+         - git+https://github.com/MeteoSwiss/anemoi-inference@fix/interp_files
+        #  - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
+         - torch-geometric==2.6.1
+         - anemoi-graphs==0.5.2
+  - interpolator:
+      run_id: 07c3d9698db14d859b78bb712a65bbbf
+      label: SGM Interpolator (M-1 forecaster)
+      config: resources/inference/configs/interpolator_stretched.yaml
+      forecaster:
+        run_id: d0846032fc7248a58b089cbe8fa4c511
+        config: resources/inference/configs/forecaster_with_global.yaml
+      extra_dependencies:
+         - git+https://github.com/MeteoSwiss/anemoi-inference@fix/interp_files
+        #  - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
+         - torch-geometric==2.6.1
+         - anemoi-graphs==0.5.2
+
+baseline: COSMO-E
+
+locations:
+  output_root: output/
+  mlflow_uri:
+    # - https://service.meteoswiss.ch/mlstore
+    - https://servicedepl.meteoswiss.ch/mlstore
+    - https://mlflow.ecmwf.int
+
+verification:
+  valid_every: 12
+
+profile:
+  executor: slurm
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+  jobs: 10

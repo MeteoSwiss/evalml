@@ -15,6 +15,7 @@ _dev
 .idea
 .snakemake
 output
+_sandbox/
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
@@ -47,3 +48,6 @@ verification.ipynb
 config/*
 experiment_report.html
 uv.lock
+# files with secrets
+.env
+*credentials*
