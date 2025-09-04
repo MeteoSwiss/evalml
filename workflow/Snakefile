@@ -77,12 +77,6 @@ rule verif_metrics_all:
         ),
 
 
-# rule extract_cosmoe_fcts_all:
-#     """Extract COSMO-E forecasts for the year 2020."""
-#     input:
-#         expand(rules.extract_cosmoe_fcts.output.fcts, year=[str(y)[-2:] for y in range(2020, 2021)])
-
-
 rule verif_metrics_plot_all:
     """Run verification plot metrics for all studies."""
     input:

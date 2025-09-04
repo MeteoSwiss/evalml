@@ -10,59 +10,59 @@ include: "common.smk"
 
 
 # TODO: make sure the boundaries aren't used
-rule verif_metrics_cosmoe:
+rule verif_metrics_baseline:
     localrule: True
     input:
-        script="workflow/scripts/verif_cosmoe_fct.py",
+        script="workflow/scripts/verif_baseline.py",
         module="workflow/scripts/src/verification.py",
-        # cosmoe_zarr=lambda wc: expand(rules.extract_cosmoe_fcts.output, year=wc.init_time[2:4]),
-        cosmoe_zarr=lambda wc: expand(
-            "/store_new/mch/msopr/ml/COSMO-E/FCST{year}.zarr",
+        baseline_zarr=lambda wc: expand(
+            "{root}/FCST{year}.zarr",
+            root=BASELINE_CONFIGS[wc.baseline_id].get("root"),
             year=wc.init_time[2:4],
         ),
-        zarr_dataset="/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr",
+        analysis_zarr=config["analysis"].get("analysis_zarr"),
     params:
-        cosmoe_label="COSMO-E",
-        analysis_label="COSMO-E analysis",
+        baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
+        analysis_label=config["analysis"].get("label"),
     output:
-        OUT_ROOT / "data/baselines/COSMO-E/{init_time}/verif.nc",
+        OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
     log:
-        OUT_ROOT / "logs/verif_metrics_cosmoe/{init_time}.log",
+        OUT_ROOT / "logs/verif_metrics_baseline/{baseline_id}-{init_time}.log",
     shell:
         """
         uv run {input.script} \
-            --zarr_dataset {input.zarr_dataset} \
-            --cosmoe_zarr {input.cosmoe_zarr} \
+            --analysis_zarr {input.analysis_zarr} \
+            --baseline_zarr {input.baseline_zarr} \
             --reftime {wildcards.init_time} \
-            --cosmoe_label "{params.cosmoe_label}" \
+            --baseline_label "{params.baseline_label}" \
             --analysis_label "{params.analysis_label}" \
             --output {output} > {log} 2>&1
         """
 
 
-# TODO: not have zarr_dataset hardcoded
+# TODO: not have analysis_zarr hardcoded
 rule verif_metrics:
     localrule: True
     input:
         script="workflow/scripts/verif_from_grib.py",
         inference_okfile=_inference_routing_fn,
         grib_output=rules.inference_routing.output[0],
-        zarr_dataset="/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr",
+        analysis_zarr=config["analysis"].get("analysis_zarr"),
     output:
         OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.nc",
     # wildcard_constraints:
-    # run_id="^" # to avoid ambiguitiy with run_cosmoe_verif
+    # run_id="^" # to avoid ambiguitiy with run_baseline_verif
     # TODO: implement logic to use experiment name instead of run_id as wildcard
     params:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
-        analysis_label="COSMO-E analysis",
+        analysis_label=config["analysis"].get("label"),
     log:
         OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",
     shell:
         """
         uv run {input.script} \
             --grib_output_dir {input.grib_output} \
-            --zarr_dataset {input.zarr_dataset} \
+            --analysis_zarr {input.analysis_zarr} \
             --fcst_label "{params.fcst_label}" \
             --analysis_label "{params.analysis_label}" \
             --output {output} > {log} 2>&1
@@ -87,9 +87,7 @@ rule verif_metrics_aggregation:
         ),
     output:
         OUT_ROOT / "data/runs/{run_id}/verif_aggregated.nc",
-    params:
-        valid_every=config.get("verification", {}).get("valid_every"),
-    log:
+   log:
         OUT_ROOT / "logs/verif_metrics_aggregation/{run_id}.log",
     shell:
         """
@@ -99,21 +97,19 @@ rule verif_metrics_aggregation:
         """
 
 
-rule verif_metrics_aggregation_cosmoe:
+rule verif_metrics_aggregation_baseline:
     localrule: True
     input:
         script="workflow/scripts/verif_aggregation.py",
         verif_nc=lambda wc: expand(
-            rules.verif_metrics_cosmoe.output,
-            init_time=_restrict_reftimes_to_hours(REFTIMES, [0, 12]),
+            rules.verif_metrics_baseline.output,
+            init_time=_restrict_reftimes_to_hours(REFTIMES),
             allow_missing=True,
         ),
     output:
-        OUT_ROOT / "data/baselines/COSMO-E/verif_aggregated.nc",
-    params:
-        valid_every=config.get("verification", {}).get("valid_every"),
+        OUT_ROOT / "data/baselines/{baseline_id}/verif_aggregated.nc",
     log:
-        OUT_ROOT / "logs/verif_metrics_aggregation_cosmoe/COSMO-E.log",
+        OUT_ROOT / "logs/verif_metrics_aggregation_baseline/{baseline_id}.log",
     shell:
         """
         uv run {input.script} {input.verif_nc} \

@@ -82,22 +82,18 @@ def collect_all_runs():
 
 def collect_all_baselines():
     """Collect all baselines defined in the configuration."""
-    baselines = config.get("baseline", {})
-    if isinstance(baselines, list):
-        return baselines
-    elif isinstance(baselines, dict):
-        return list(baselines.keys())
-    elif isinstance(baselines, str):
-        return [baselines]
-    else:
-        raise ValueError("Baselines should be a list, dict, or string.")
+    baselines = config.get("baselines", {})
+    return baselines
 
 
 def collect_experiment_participants():
     participants = {}
-    for baseline in collect_all_baselines():
-        participants[baseline] = (
-            OUT_ROOT / f"data/baselines/{baseline}/verif_aggregated.nc"
+    for baseline_entry in config["baselines"]:
+        baseline = next(iter(baseline_entry.values()))
+        baseline_id = baseline["baseline_id"]
+        label = baseline.get("label", baseline_id)
+        participants[label] = (
+            OUT_ROOT / f"data/baselines/{baseline_id}/verif_aggregated.nc"
         )
     for run_entry in config["runs"]:
         # every run entry is a single-key dict
@@ -124,4 +120,5 @@ def _inference_routing_fn(wc):
 
 
 RUN_CONFIGS = collect_all_runs()
+BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
