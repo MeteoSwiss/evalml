@@ -133,8 +133,12 @@ def main(args: ScriptConfig):
 
     # get baseline forecast data
     now = datetime.now()
-    baseline = xr.open_zarr(args.baseline_zarr, consolidated=True, decode_timedelta=True)
-    baseline = baseline.rename({"forecast_reference_time": "ref_time", "step": "lead_time"})
+    baseline = xr.open_zarr(
+        args.baseline_zarr, consolidated=True, decode_timedelta=True
+    )
+    baseline = baseline.rename(
+        {"forecast_reference_time": "ref_time", "step": "lead_time"}
+    )
     if "TOT_PREC" in baseline.data_vars:
         if baseline.TOT_PREC.units == "kg m-2":
             baseline = baseline.assign(TOT_PREC=lambda x: x.TOT_PREC / 1000)
