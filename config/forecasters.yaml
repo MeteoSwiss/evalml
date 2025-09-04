@@ -31,7 +31,7 @@ baselines:
 
 analysis:
   label: COSMO KENDA
-  zarr_dataset: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr
+  analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr
 
 locations:
   output_root: output/

@@ -21,12 +21,12 @@ logging.basicConfig(
 )
 
 
-def load_kenda1_data_from_zarr(
-    zarr_dataset: Path, times: Iterable[datetime], params: list[str]
+def load_analysis_data_from_zarr(
+    analysis_zarr: Path, times: Iterable[datetime], params: list[str]
 ) -> xr.Dataset:
-    """Load KENDA-1 data from an anemoi-generated Zarr dataset
+    """Load analysis data from an anemoi-generated Zarr dataset
 
-    This function loads KENDA-1 data from a Zarr dataset, processing it to make it more
+    This function loads analysis data from a Zarr dataset, processing it to make it more
     xarray-friendly. It renames variables, sets the time index, and pivots the dataset.
     """
     PARAMS_MAP = {
@@ -46,7 +46,7 @@ def load_kenda1_data_from_zarr(
         "FI": "z",
     }
 
-    ds = xr.open_zarr(zarr_dataset, consolidated=False)
+    ds = xr.open_zarr(analysis_zarr, consolidated=False)
 
     # rename "dates" to "time" and set it as index
     ds = ds.set_index(time="dates")
@@ -66,7 +66,9 @@ def load_kenda1_data_from_zarr(
         ds = ds.unstack("cell")
 
     # set lat lon as coords (optional)
-    ds = ds.set_coords(["latitudes", "longitudes"])
+    if "latitudes" in ds and "longitudes" in ds:
+        ds = ds.rename({"latitudes": "latitude", "longitudes": "longitude"})
+    ds = ds.set_coords(["latitude", "longitude"])
 
     # pivot (use inverse of PARAMS_MAP)
     ds = (
@@ -99,7 +101,7 @@ def load_kenda1_data_from_zarr(
 def load_fct_data_from_grib(
     grib_output_dir: Path, params: list[str], step: list[int]
 ) -> xr.Dataset:
-    """Load COSMO-E forecast data from GRIB files for a specific valid time."""
+    """Load forecast data from GRIB files for a specific valid time."""
     files = sorted(grib_output_dir.glob("20*.grib"))
     fds = data_source.FileDataSource(datafiles=files)
     ds = grib_decoder.load(fds, {"param": params, "step": step})
@@ -144,11 +146,11 @@ def _parse_lead_time(lead_time: str) -> int:
 
 
 class ScriptConfig(Namespace):
-    """Configuration for the script to verify COSMOe forecast data."""
+    """Configuration for the script to verify forecast data."""
 
     archive_root: Path = None
-    zarr_dataset: Path = None
-    cosmoe_zarr: Path = Path("/scratch/mch/fzanetta/data/COSMO-E/2020.zarr")
+    analysis_zarr: Path = None
+    forecast_zarr: Path = None
     params: list[str]
     lead_time: list[int] = _parse_lead_time("0/126/6")
 
@@ -159,8 +161,8 @@ def program_summary_log(args):
     LOG.info("Running verification of ML model forecast data")
     LOG.info("=" * 80)
     LOG.info("GRIB output directory: %s", args.grib_output_dir)
-    if args.zarr_dataset:
-        LOG.info("Zarr dataset: %s", args.zarr_dataset)
+    if args.analysis_zarr:
+        LOG.info("Zarr dataset: %s", args.analysis_zarr)
     else:
         LOG.info("Archive root: %s", args.archive_root)
     LOG.info("Parameters: %s", args.params)
@@ -170,7 +172,7 @@ def program_summary_log(args):
 
 
 def main(args: ScriptConfig):
-    """Main function to verify COSMOe forecast data."""
+    """Main function to verify forecast data."""
 
     # get forecast data
     start = datetime.now()
@@ -183,12 +185,12 @@ def main(args: ScriptConfig):
         fct,
     )
 
-    # get truth data (COSMO-2 analysis aka KENDA-1)
+    # get truth data (aka analysis)
     start = datetime.now()
-    if args.zarr_dataset:
-        kenda = (
-            load_kenda1_data_from_zarr(
-                zarr_dataset=args.zarr_dataset,
+    if args.analysis_zarr:
+        analysis = (
+            load_analysis_data_from_zarr(
+                analysis_zarr=args.analysis_zarr,
                 times=fct.time,
                 params=args.params,
             )
@@ -196,15 +198,15 @@ def main(args: ScriptConfig):
             .chunk({"y": -1, "x": -1})
         )
     else:
-        raise ValueError("--zarr_dataset must be provided.")
+        raise ValueError("--analysis_zarr must be provided.")
     LOG.info(
-        "Loaded KENDA-1 data from Zarr dataset in %.2f seconds: \n%s",
+        "Loaded analysis data from zarr dataset in %.2f seconds: \n%s",
         (datetime.now() - start).total_seconds(),
-        kenda,
+        analysis,
     )
 
     # compute metrics and statistics
-    results = verify(fct, kenda, args.fcst_label, args.analysis_label)
+    results = verify(fct, analysis, args.fcst_label, args.analysis_label)
 
     # # save results to CSV
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -219,19 +221,19 @@ if __name__ == "__main__":
     PARAMS = ["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC", "T_G"]
     # PARAMS += ["T", "U", "V","QV","FI"]
 
-    parser = ArgumentParser(description="Verify COSMO-E forecast data.")
+    parser = ArgumentParser(description="Verify forecast data.")
 
     parser.add_argument(
         "--grib_output_dir",
         type=Path,
         required=True,
-        help="Path to the Zarr dataset containing COSMO-E forecast data.",
+        help="Path to the Zarr dataset containing forecast data.",
     )
     parser.add_argument(
-        "--zarr_dataset",
+        "--analysis_zarr",
         type=Path,
         required=True,
-        help="Path to the Zarr dataset containing COSMO-E analysis data.",
+        help="Path to the Zarr dataset containing analysis data.",
     )
     parser.add_argument(
         "--params",
@@ -254,8 +256,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--analysis_label",
         type=str,
-        help="Label for the analysis data (default: COSMO-E analysis).",
-        default="COSMO-E analysis",
+        help="Label for the analysis data (default: COSMO KENDA).",
+        default="COSMO KENDA",
     )
     parser.add_argument(
         "--output",
@@ -269,11 +271,11 @@ if __name__ == "__main__":
 
 # run examples
 # uv run workflow/scripts/verif_from_grib.py \
-#     --zarr_dataset /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr \
+#     --analysis_zarr /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr \
 #     --reftime 202006011200 \
 #     --output debug_verif_zarr.csv
 # uv run workflow/scripts/verif_from_grib.py \
 #     --grib_output_dir /users/fzanetta/projects/mch-anemoi-evaluation/output/7c58e59d24e949c9ade3df635bbd37e2/202001050600/grib \
-#     --zarr_dataset /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr \
+#     --analysis_zarr /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr \
 #     --reftime 202006011200 \
 #     --output debug_verif_grib.csv

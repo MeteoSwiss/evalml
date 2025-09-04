@@ -20,12 +20,12 @@ logging.basicConfig(
 )
 
 
-def load_kenda1_data_from_zarr(
-    zarr_dataset: Path, times: Iterable[datetime], params: list[str]
+def load_analysis_data_from_zarr(
+    analysis_zarr: Path, times: Iterable[datetime], params: list[str]
 ) -> xr.Dataset:
-    """Load KENDA-1 data from an anemoi-generated Zarr dataset
+    """Load analysis data from an anemoi-generated Zarr dataset
 
-    This function loads KENDA-1 data from a Zarr dataset, processing it to make it more
+    This function loads analysis data from a Zarr dataset, processing it to make it more
     xarray-friendly. It renames variables, sets the time index, and pivots the dataset.
     """
     PARAMS_MAP = {
@@ -38,7 +38,7 @@ def load_kenda1_data_from_zarr(
         "TOT_PREC": "tp",
     }
 
-    ds = xr.open_zarr(zarr_dataset, consolidated=False)
+    ds = xr.open_zarr(analysis_zarr, consolidated=False)
 
     # rename "dates" to "time" and set it as index
     ds = ds.set_index(time="dates")
@@ -58,7 +58,9 @@ def load_kenda1_data_from_zarr(
         ds = ds.unstack("cell")
 
     # set lat lon as coords (optional)
-    ds = ds.set_coords(["latitudes", "longitudes"])
+    if "latitudes" in ds and "longitudes" in ds:
+        ds = ds.rename({"latitudes": "latitude", "longitudes": "longitude"})
+    ds = ds.set_coords(["latitude", "longitude"])
 
     # pivot (use inverse of PARAMS_MAP)
     ds = (
@@ -102,11 +104,11 @@ def _parse_lead_time(lead_time: str) -> int:
 
 
 class ScriptConfig(Namespace):
-    """Configuration for the script to verify COSMOe forecast data."""
+    """Configuration for the script to verify baseline forecast data."""
 
     archive_root: Path = None
-    zarr_dataset: Path = None
-    cosmoe_zarr: Path = None
+    analysis_zarr: Path = None
+    baseline_zarr: Path = None
     reftime: datetime = None
     params: list[str] = ["T_2M", "TD_2M", "U_10M", "V_10M"]
     lead_time: list[int] = _parse_lead_time("0/126/6")
@@ -115,13 +117,10 @@ class ScriptConfig(Namespace):
 def program_summary_log(args):
     """Log a welcome message with the script information."""
     LOG.info("=" * 80)
-    LOG.info("Running verification of COSMO-E forecast data")
+    LOG.info("Running verification of baseline forecast data")
     LOG.info("=" * 80)
-    LOG.info("COSMO-E Zarr dataset: %s", args.cosmoe_zarr)
-    if args.zarr_dataset:
-        LOG.info("Zarr dataset for KENDA-1: %s", args.zarr_dataset)
-    elif args.archive_root:
-        LOG.info("GRIB archive root for KENDA-1: %s", args.archive_root)
+    LOG.info("baseline zarr dataset: %s", args.baseline_zarr)
+    LOG.info("Zarr dataset for analysis: %s", args.analysis_zarr)
     LOG.info("Reference time: %s", args.reftime)
     LOG.info("Parameters to verify: %s", args.params)
     LOG.info("Lead time: %s", args.lead_time)
@@ -130,18 +129,18 @@ def program_summary_log(args):
 
 
 def main(args: ScriptConfig):
-    """Main function to verify COSMOe forecast data."""
+    """Main function to verify baseline forecast data."""
 
-    # get COSMO-E forecast data
+    # get baseline forecast data
     now = datetime.now()
-    coe = xr.open_zarr(args.cosmoe_zarr, consolidated=True, decode_timedelta=True)
-    coe = coe.rename({"forecast_reference_time": "ref_time", "step": "lead_time"})
-    if "TOT_PREC" in coe.data_vars:
-        if coe.TOT_PREC.units == "kg m-2":
-            coe = coe.assign(TOT_PREC=lambda x: x.TOT_PREC / 1000)
-            coe.TOT_PREC.attrs["units"] = "m"
+    baseline = xr.open_zarr(args.baseline_zarr, consolidated=True, decode_timedelta=True)
+    baseline = baseline.rename({"forecast_reference_time": "ref_time", "step": "lead_time"})
+    if "TOT_PREC" in baseline.data_vars:
+        if baseline.TOT_PREC.units == "kg m-2":
+            baseline = baseline.assign(TOT_PREC=lambda x: x.TOT_PREC / 1000)
+            baseline.TOT_PREC.attrs["units"] = "m"
         ## disaggregate precipitation
-        coe = coe.assign(
+        baseline = baseline.assign(
             TOT_PREC=lambda x: (
                 x.TOT_PREC.fillna(0)
                 .diff("lead_time")
@@ -149,40 +148,40 @@ def main(args: ScriptConfig):
                 .clip(min=0.0)
             )
         )
-    coe = coe[args.params].sel(
+    baseline = baseline[args.params].sel(
         ref_time=args.reftime,
         lead_time=np.array(args.lead_time, dtype="timedelta64[h]"),
     )
-    coe = coe.assign_coords(time=coe.ref_time + coe.lead_time)
+    baseline = baseline.assign_coords(time=baseline.ref_time + baseline.lead_time)
     LOG.info(
-        "Loaded COSMO-E forecast data in %s seconds: \n%s",
+        "Loaded baseline forecast data in %s seconds: \n%s",
         (datetime.now() - now).total_seconds(),
-        coe,
+        baseline,
     )
 
-    # get truth data (COSMO-2 analysis aka KENDA-1)
+    # get truth data (aka analysis data)
     now = datetime.now()
-    if args.zarr_dataset:
-        kenda = (
-            load_kenda1_data_from_zarr(
-                zarr_dataset=args.zarr_dataset,
-                times=coe.time,
+    if args.analysis_zarr:
+        analysis = (
+            load_analysis_data_from_zarr(
+                analysis_zarr=args.analysis_zarr,
+                times=baseline.time,
                 params=args.params,
             )
             .compute()
             .chunk({"y": -1, "x": -1})
         )
     else:
-        raise ValueError("--zarr_dataset must be provided.")
+        raise ValueError("--analysis_zarr must be provided.")
     LOG.info(
-        "Loaded KENDA-1 data in %s seconds: \n%s",
+        "Loaded analysis data in %s seconds: \n%s",
         (datetime.now() - now).total_seconds(),
-        kenda,
+        analysis,
     )
 
     # compute metrics and statistics
 
-    results = verify(coe, kenda, args.cosmoe_label, args.analysis_label)
+    results = verify(baseline, analysis, args.baseline_label, args.analysis_label)
 
     # save results to NetCDF
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -193,19 +192,19 @@ def main(args: ScriptConfig):
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description="Verify COSMO-E forecast data.")
+    parser = ArgumentParser(description="Verify baseline forecast data.")
 
     parser.add_argument(
-        "--cosmoe_zarr",
+        "--baseline_zarr",
         type=Path,
         required=True,
-        help="Path to the Zarr dataset containing COSMO-E forecast data.",
+        help="Path to the zarr dataset containing baseline forecast data.",
     )
     parser.add_argument(
-        "--zarr_dataset",
+        "--analysis_zarr",
         type=Path,
         required=True,
-        help="Path to the Zarr dataset containing COSMO-E analysis data.",
+        help="Path to the zarr dataset containing analysis data.",
     )
     parser.add_argument(
         "--reftime",
@@ -224,16 +223,16 @@ if __name__ == "__main__":
         help="Lead time in the format 'start/stop/step' (default: 0/126/6).",
     )
     parser.add_argument(
-        "--cosmoe_label",
+        "--baseline_label",
         type=str,
         default="COSMO-E",
-        help="Label for the COSMO-E forecast data (default: COSMO-E).",
+        help="Label for the baseline forecast data (default: COSMO-E).",
     )
     parser.add_argument(
         "--analysis_label",
         type=str,
-        default="COSMO-E analysis",
-        help="Label for the COSMO-E analysis data (default: COSMO-E analysis).",
+        default="COSMO KENDA",
+        help="Label for the analysis data (default: COSMO KENDA).",
     )
     parser.add_argument(
         "--output",

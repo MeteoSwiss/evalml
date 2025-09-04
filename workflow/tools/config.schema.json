@@ -9,16 +9,16 @@
           "title": "Label",
           "type": "string"
         },
-        "zarr_dataset": {
+        "analysis_zarr": {
           "description": "Path to the zarr dataset containing the analysis data.",
           "minLength": 1,
-          "title": "Zarr Dataset",
+          "title": "Analysis Zarr",
           "type": "string"
         }
       },
       "required": [
         "label",
-        "zarr_dataset"
+        "analysis_zarr"
       ],
       "title": "AnalysisConfig",
       "type": "object"

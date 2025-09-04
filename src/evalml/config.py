@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 
 from pydantic import BaseModel, Field, RootModel, HttpUrl
 
@@ -80,8 +80,10 @@ class InterpolatorConfig(RunConfig):
         description="Configuration for the forecaster run that this interpolator is based on.",
     )
 
+
 class BaselineConfig(BaseModel):
     """Configuration for a single baseline to include in the verification."""
+
     baseline_id: str = Field(
         ...,
         min_length=1,
@@ -98,6 +100,7 @@ class BaselineConfig(BaseModel):
         description="Root directory where the baseline data is stored.",
     )
 
+
 class AnalysisConfig(BaseModel):
     """Configuration for the analysis data used in the verification."""
 
@@ -106,20 +109,24 @@ class AnalysisConfig(BaseModel):
         min_length=1,
         description="Label for the analysis that will be used in experiment results such as reports and figures.",
     )
-    zarr_dataset: str = Field(
+    analysis_zarr: str = Field(
         ...,
         min_length=1,
         description="Path to the zarr dataset containing the analysis data.",
     )
 
+
 class ForecasterItem(BaseModel):
     forecaster: ForecasterConfig
+
 
 class InterpolatorItem(BaseModel):
     interpolator: InterpolatorConfig
 
+
 class BaselineItem(BaseModel):
     baseline: BaselineConfig
+
 
 class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
@@ -176,7 +183,8 @@ class ConfigModel(BaseModel):
         description="Dictionary of runs to execute, with run IDs as keys and configurations as values.",
     )
     baselines: List[BaselineItem] = Field(
-        ..., description="Dictionary of baselines to include in the verification.",
+        ...,
+        description="Dictionary of baselines to include in the verification.",
     )
     analysis: AnalysisConfig
     locations: Locations
