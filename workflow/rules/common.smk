@@ -82,7 +82,12 @@ def collect_all_runs():
 
 def collect_all_baselines():
     """Collect all baselines defined in the configuration."""
-    baselines = config.get("baselines", {})
+    baselines = {}
+    for baseline_entry in copy.deepcopy(config["baselines"]):
+        baseline_type = next(iter(baseline_entry))
+        baseline_config = baseline_entry[baseline_type]
+        baseline_id = baseline_config.pop("baseline_id")
+        baselines[baseline_id] = baseline_config
     return baselines
 
 
