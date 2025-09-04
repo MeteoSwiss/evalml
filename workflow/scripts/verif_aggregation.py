@@ -80,22 +80,6 @@ def main(args: Namespace) -> None:
 
     LOG.info("Concatenated Dataset: \n %s", ds)
 
-    # indexing into multi-dimensional time coordinate is not supported
-    # instead index into lead_time
-    # TODO: implement filtering based on valid time
-
-    # if args.valid_every:
-    #     LOG.info("Filtering data based on lead time")
-    #     max_lead_time = ds.lead_time.max().values.astype("timedelta64[h]").astype(int)
-    #     valid_every = np.arange(
-    #         0, max_lead_time + 1, args.valid_every, dtype="timedelta64[h]"
-    #     )
-    #     ds = ds.sel(lead_time=valid_every)
-    #     if ds.lead_time.size == 0:
-    #         raise ValueError(
-    #             f"No data found with lead time every {args.valid_every} hours."
-    #         )
-
     results = aggregate_results(ds)
 
     # Save results to NetCDF
@@ -109,12 +93,6 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="Verify results from KENDA-1 data.")
     parser.add_argument(
         "verif_files", type=Path, nargs="+", help="Paths to verification files."
-    )
-    parser.add_argument(
-        "--valid_every",
-        type=int,
-        default=None,
-        help="Only include data where the hour of the day of the valid time is a multiple of this number of hours.",
     )
     parser.add_argument(
         "--output",

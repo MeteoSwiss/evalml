@@ -87,12 +87,11 @@ rule verif_metrics_aggregation:
         ),
     output:
         OUT_ROOT / "data/runs/{run_id}/verif_aggregated.nc",
-   log:
+    log:
         OUT_ROOT / "logs/verif_metrics_aggregation/{run_id}.log",
     shell:
         """
         uv run {input.script} {input.verif_nc} \
-            --valid_every '{params.valid_every}' \
             --output {output} > {log} 2>&1
         """
 
@@ -113,7 +112,6 @@ rule verif_metrics_aggregation_baseline:
     shell:
         """
         uv run {input.script} {input.verif_nc} \
-            --valid_every '{params.valid_every}' \
             --output {output} > {log} 2>&1
         """
 
