@@ -40,3 +40,10 @@ nosetests.xml
 
 # Sphinx documentation
 docs/_build/
+
+verification.ipynb
+
+# Config
+config/*
+experiment_report.html
+uv.lock
