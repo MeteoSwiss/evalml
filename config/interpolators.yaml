@@ -34,7 +34,19 @@ runs:
          - torch-geometric==2.6.1
          - anemoi-graphs==0.5.2
 
-baseline: COSMO-E
+baselines: 
+  - baseline:
+      baseline_id: COSMO-E-1h
+      label: COSMO-E
+      root: /scratch/mch/bhendj/COSMO-E
+  - baseline:
+      baseline_id: COSMO-E-6h
+      label: COSMO-E
+      root: /store_new/mch/msopr/ml/COSMO-E
+
+analysis:
+  label: COSMO KENDA
+  zarr_dataset: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-1h-v3-pl13.zarr
 
 locations:
   output_root: output/
@@ -42,9 +54,6 @@ locations:
     # - https://service.meteoswiss.ch/mlstore
     - https://servicedepl.meteoswiss.ch/mlstore
     - https://mlflow.ecmwf.int
-
-verification:
-  valid_every: 12
 
 profile:
   executor: slurm

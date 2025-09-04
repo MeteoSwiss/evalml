@@ -1,5 +1,70 @@
 {
   "$defs": {
+    "AnalysisConfig": {
+      "description": "Configuration for the analysis data used in the verification.",
+      "properties": {
+        "label": {
+          "description": "Label for the analysis that will be used in experiment results such as reports and figures.",
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "zarr_dataset": {
+          "description": "Path to the zarr dataset containing the analysis data.",
+          "minLength": 1,
+          "title": "Zarr Dataset",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "zarr_dataset"
+      ],
+      "title": "AnalysisConfig",
+      "type": "object"
+    },
+    "BaselineConfig": {
+      "description": "Configuration for a single baseline to include in the verification.",
+      "properties": {
+        "baseline_id": {
+          "description": "Identifier for the baseline, e.g. 'COSMO-E'.",
+          "minLength": 1,
+          "title": "Baseline Id",
+          "type": "string"
+        },
+        "label": {
+          "description": "Label for the baseline that will be used in experiment results such as reports and figures.",
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "root": {
+          "description": "Root directory where the baseline data is stored.",
+          "minLength": 1,
+          "title": "Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "baseline_id",
+        "label",
+        "root"
+      ],
+      "title": "BaselineConfig",
+      "type": "object"
+    },
+    "BaselineItem": {
+      "properties": {
+        "baseline": {
+          "$ref": "#/$defs/BaselineConfig"
+        }
+      },
+      "required": [
+        "baseline"
+      ],
+      "title": "BaselineItem",
+      "type": "object"
+    },
     "Dates": {
       "description": "Start/stop of the hindcast period and the launch frequency.",
       "properties": {
@@ -262,29 +327,6 @@
       ],
       "title": "Profile",
       "type": "object"
-    },
-    "VerifConfig": {
-      "description": "Configuration for the verification of the experiment.",
-      "properties": {
-        "valid_every": {
-          "anyOf": [
-            {
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Hours between verification times starting from 00:00 UTC. If None, no filtering is applied.",
-          "title": "Valid Every"
-        }
-      },
-      "required": [
-        "valid_every"
-      ],
-      "title": "VerifConfig",
-      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -327,21 +369,16 @@
       "title": "Runs",
       "type": "array"
     },
-    "baseline": {
-      "description": "The label of the NWP baseline run to compare against.",
-      "title": "Baseline",
-      "type": "string"
+    "baselines": {
+      "description": "Dictionary of baselines to include in the verification.",
+      "items": {
+        "$ref": "#/$defs/BaselineItem"
+      },
+      "title": "Baselines",
+      "type": "array"
     },
-    "verification": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/VerifConfig"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
+    "analysis": {
+      "$ref": "#/$defs/AnalysisConfig"
     },
     "locations": {
       "$ref": "#/$defs/Locations"
@@ -355,7 +392,8 @@
     "dates",
     "lead_time",
     "runs",
-    "baseline",
+    "baselines",
+    "analysis",
     "locations",
     "profile"
   ],

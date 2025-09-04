@@ -80,23 +80,46 @@ class InterpolatorConfig(RunConfig):
         description="Configuration for the forecaster run that this interpolator is based on.",
     )
 
+class BaselineConfig(BaseModel):
+    """Configuration for a single baseline to include in the verification."""
+    baseline_id: str = Field(
+        ...,
+        min_length=1,
+        description="Identifier for the baseline, e.g. 'COSMO-E'.",
+    )
+    label: str = Field(
+        ...,
+        min_length=1,
+        description="Label for the baseline that will be used in experiment results such as reports and figures.",
+    )
+    root: str = Field(
+        ...,
+        min_length=1,
+        description="Root directory where the baseline data is stored.",
+    )
+
+class AnalysisConfig(BaseModel):
+    """Configuration for the analysis data used in the verification."""
+
+    label: str = Field(
+        ...,
+        min_length=1,
+        description="Label for the analysis that will be used in experiment results such as reports and figures.",
+    )
+    zarr_dataset: str = Field(
+        ...,
+        min_length=1,
+        description="Path to the zarr dataset containing the analysis data.",
+    )
 
 class ForecasterItem(BaseModel):
     forecaster: ForecasterConfig
 
-
 class InterpolatorItem(BaseModel):
     interpolator: InterpolatorConfig
 
-
-class VerifConfig(BaseModel):
-    """Configuration for the verification of the experiment."""
-
-    valid_every: Optional[int] = Field(
-        ge=1,
-        description="Hours between verification times starting from 00:00 UTC. If None, no filtering is applied.",
-    )
-
+class BaselineItem(BaseModel):
+    baseline: BaselineConfig
 
 class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
@@ -152,10 +175,10 @@ class ConfigModel(BaseModel):
         ...,
         description="Dictionary of runs to execute, with run IDs as keys and configurations as values.",
     )
-    baseline: str = Field(
-        ..., description="The label of the NWP baseline run to compare against."
+    baselines: List[BaselineItem] = Field(
+        ..., description="Dictionary of baselines to include in the verification.",
     )
-    verification: Optional[VerifConfig] = None
+    analysis: AnalysisConfig
     locations: Locations
     profile: Profile
 
