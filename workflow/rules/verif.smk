@@ -41,11 +41,13 @@ rule verif_metrics_baseline:
             --output {output} > {log} 2>&1
         """
 
+
 def _get_no_none(dict, key, replacement):
     out = dict.get(key, replacement)
     if out is None:
         out = replacement
     return out
+
 
 # TODO: not have analysis_zarr hardcoded
 rule verif_metrics:

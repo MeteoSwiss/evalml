@@ -5,7 +5,7 @@
 from evalml.config import ConfigModel
 
 # validate configuration and add defaults
-update_config(config, ConfigModel.validate(dict(config)).model_dump(mode="json"))
+update_config(config, ConfigModel.model_validate(dict(config)).model_dump(mode="json"))
 
 
 # load rules
