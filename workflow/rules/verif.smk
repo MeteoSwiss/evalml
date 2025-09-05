@@ -41,6 +41,11 @@ rule verif_metrics_baseline:
             --output {output} > {log} 2>&1
         """
 
+def _get_no_none(dict, key, replacement):
+    out = dict.get(key, replacement)
+    if out is None:
+        out = replacement
+    return out
 
 # TODO: not have analysis_zarr hardcoded
 rule verif_metrics:
@@ -57,7 +62,7 @@ rule verif_metrics:
     # TODO: implement logic to use experiment name instead of run_id as wildcard
     params:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
-        fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id].get("steps", "0/126/6"),
+        fcst_steps=lambda wc: _get_no_none(RUN_CONFIGS[wc.run_id], "steps", "0/126/6"),
         analysis_label=config["analysis"].get("label"),
     log:
         OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",

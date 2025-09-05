@@ -4,8 +4,8 @@ description: |
 
 dates:
   start: 2020-01-01T12:00
-  end: 2020-01-10T00:00
-  frequency: 36h
+  end: 2020-10-28T12:00
+  frequency: 12h
 
 lead_time: 120h
 
@@ -39,14 +39,9 @@ runs:
 baselines: 
   - baseline:
       baseline_id: COSMO-E-1h
-      label: COSMO-E (1h)
+      label: COSMO-E
       root: /scratch/mch/bhendj/COSMO-E
       steps: 0/121/1
-  - baseline:
-      baseline_id: COSMO-E-6h
-      label: COSMO-E (6h)
-      root: /store_new/mch/msopr/ml/COSMO-E
-      steps: 0/126/6
 
 analysis:
   label: COSMO KENDA
