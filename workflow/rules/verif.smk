@@ -49,7 +49,6 @@ def _get_no_none(dict, key, replacement):
     return out
 
 
-# TODO: not have analysis_zarr hardcoded
 rule verif_metrics:
     localrule: True
     input:
