@@ -36,7 +36,7 @@ runs:
          - torch-geometric==2.6.1
          - anemoi-graphs==0.5.2
 
-baselines: 
+baselines:
   - baseline:
       baseline_id: COSMO-E-1h
       label: COSMO-E
