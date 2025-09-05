@@ -42,7 +42,9 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
             ds_grouped = ds
         else:
             ds_grouped = ds.groupby(group)
-        ds_grouped = ds_grouped.mean(dim="ref_time").compute(num_workers=4, scheduler="threads")
+        ds_grouped = ds_grouped.mean(dim="ref_time").compute(
+            num_workers=4, scheduler="threads"
+        )
         if "init_hour" not in group:
             ds_grouped = ds_grouped.expand_dims({"init_hour": [-999]})
         if "season" not in group:

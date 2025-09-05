@@ -47,7 +47,9 @@ def main(args: Namespace) -> None:
     metrics = all_df["metric"].unique()
     params = all_df["param"].unique()
     seasons = all_df["season"].unique() if args.stratify else ["all"]
-    init_hours = all_df["init_hour"].unique() if args.stratify else [-999] # numeric code to indicate all init hours
+    init_hours = (
+        all_df["init_hour"].unique() if args.stratify else [-999]
+    )  # numeric code to indicate all init hours
 
     for metric, param, season, init_hour in itertools.product(
         metrics, params, seasons, init_hours
