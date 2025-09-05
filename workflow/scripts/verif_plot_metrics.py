@@ -28,12 +28,12 @@ def main(args: Namespace) -> None:
 
     # remove duplicated but not identical values from analyses (rounding errors)
     dfs = [xr.open_dataset(f) for f in args.verif_files]
-    sources = [set(d.source.values) for d in dfs]
+    sources = [set(d.source.values.tolist()) for d in dfs]
     common_sources = list(set.intersection(*sources))
     for i in range(len(dfs)):
         if i > 0:
             dfs[i] = dfs[i].drop_sel(source=common_sources)
-    ds = xr.merge(dfs)
+    ds = xr.concat(dfs, dim="source", join="outer")
 
     # extract only  non-spatial variables to pd.DataFrame
     nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
@@ -42,21 +42,18 @@ def main(args: Namespace) -> None:
     )
     all_df[["param", "metric"]] = all_df["stack"].str.split(".", n=1, expand=True)
     all_df.drop(columns=["stack"], inplace=True)
-    all_df[["hour", "season", "init_hour"]] = "all"
     all_df["lead_time"] = all_df["lead_time"].dt.total_seconds() / 3600
 
     metrics = all_df["metric"].unique()
     params = all_df["param"].unique()
-    hours = all_df["hour"].unique() if args.stratify else ["all"]
     seasons = all_df["season"].unique() if args.stratify else ["all"]
-    init_hours = all_df["init_hour"].unique() if args.stratify else ["all"]
+    init_hours = all_df["init_hour"].unique() if args.stratify else [-999] # numeric code to indicate all init hours
 
-    for metric, param, hour, season, init_hour in itertools.product(
-        metrics, params, hours, seasons, init_hours
+    for metric, param, season, init_hour in itertools.product(
+        metrics, params, seasons, init_hours
     ):
         LOG.info(
-            f"Processing metric: {metric}, param: {param}, hour: {hour}, "
-            f"season: {season}, init_hour: {init_hour}"
+            f"Processing metric: {metric}, param: {param}, season: {season}, init_hour: {init_hour}"
         )
 
         def _subset_df(df):
@@ -64,7 +61,6 @@ def main(args: Namespace) -> None:
                 df,
                 metric=metric,
                 param=param,
-                hour=hour,
                 season=season,
                 init_hour=init_hour,
             )
@@ -75,7 +71,7 @@ def main(args: Namespace) -> None:
         fig, ax = plt.subplots(figsize=(10, 6))
 
         title = f"{metric} - {param}"
-        title += f"- {hour} - {season} - {init_hour}" if args.stratify else ""
+        title += f"- {season} - {init_hour}" if args.stratify else ""
         for source, df in sub_df.groupby("source"):
             df.plot(
                 x="lead_time",
@@ -91,7 +87,7 @@ def main(args: Namespace) -> None:
             )
         args.output_dir.mkdir(parents=True, exist_ok=True)
         fn = f"{metric}_{param}"
-        fn += f"_{hour}_{season}_{init_hour}.png" if args.stratify else ".png"
+        fn += f"_{season}_{init_hour}.png" if args.stratify else ".png"
         plt.savefig(args.output_dir / fn)
         plt.close(fig)
 
