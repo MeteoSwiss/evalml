@@ -37,12 +37,12 @@ runs:
 baselines: 
   - baseline:
       baseline_id: COSMO-E-1h
-      label: COSMO-E
+      label: COSMO-E (1h)
       root: /scratch/mch/bhendj/COSMO-E
       steps: 0/121/1
   - baseline:
       baseline_id: COSMO-E-6h
-      label: COSMO-E
+      label: COSMO-E (6h)
       root: /store_new/mch/msopr/ml/COSMO-E
       steps: 0/126/6
 
