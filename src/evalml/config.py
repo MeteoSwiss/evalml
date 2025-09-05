@@ -99,6 +99,11 @@ class BaselineConfig(BaseModel):
         min_length=1,
         description="Root directory where the baseline data is stored.",
     )
+    steps: str = Field(
+        ...,
+        description="Forecast steps to be used from baseline, e.g. '10/120/1'.",
+        pattern=r"^\d*/\d*/\d*$",
+    )
 
 
 class AnalysisConfig(BaseModel):

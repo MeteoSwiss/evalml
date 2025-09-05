@@ -28,6 +28,7 @@ baselines:
       baseline_id: COSMO-E
       label: COSMO-E
       root: /store_new/mch/msopr/ml/COSMO-E
+      steps: 0/126/6
 
 analysis:
   label: COSMO KENDA

@@ -23,6 +23,7 @@ rule verif_metrics_baseline:
         analysis_zarr=config["analysis"].get("analysis_zarr"),
     params:
         baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
+        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("steps"),
         analysis_label=config["analysis"].get("label"),
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
@@ -34,6 +35,7 @@ rule verif_metrics_baseline:
             --analysis_zarr {input.analysis_zarr} \
             --baseline_zarr {input.baseline_zarr} \
             --reftime {wildcards.init_time} \
+            --lead_time "{params.baseline_steps}" \
             --baseline_label "{params.baseline_label}" \
             --analysis_label "{params.analysis_label}" \
             --output {output} > {log} 2>&1

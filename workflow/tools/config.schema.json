@@ -43,12 +43,19 @@
           "minLength": 1,
           "title": "Root",
           "type": "string"
+        },
+        "steps": {
+          "description": "Forecast steps to be used from baseline, e.g. '10/120/1'.",
+          "pattern": "^\\d*/\\d*/\\d*$",
+          "title": "Steps",
+          "type": "string"
         }
       },
       "required": [
         "baseline_id",
         "label",
-        "root"
+        "root",
+        "steps"
       ],
       "title": "BaselineConfig",
       "type": "object"
