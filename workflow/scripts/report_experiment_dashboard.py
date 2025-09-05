@@ -28,12 +28,13 @@ def main(args):
 
     # remove duplicated but not identical values from analyses (rounding errors)
     dfs = [xr.open_dataset(f) for f in args.verif_files]
-    sources = [set(d.source.values) for d in dfs]
+    sources = [set(d.source.values.tolist()) for d in dfs]
     common_sources = list(set.intersection(*sources))
     for i in range(len(dfs)):
         if i > 0:
             dfs[i] = dfs[i].drop_sel(source=common_sources)
-    ds = xr.merge(dfs)
+    ds = xr.concat(dfs, dim="source", join="outer")
+    LOG.info("Loaded verification netcdf: \n%s", ds)
 
     # extract only  non-spatial variables to pd.DataFrame
     nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
@@ -41,12 +42,10 @@ def main(args):
     df[["param", "metric"]] = df["stack"].str.split(".", n=1, expand=True)
     df.drop(columns=["stack"], inplace=True)
     df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
-
-    # TODO: remove this when we have the logic to handle these groups
-    # df = df[
-    #     (df["hour"] == "all") & (df["season"] == "all") & (df["init_hour"] == "all")
-    # ]
-    LOG.info("Loaded verification data: \n%s", df)
+    # select only results for all seasons and init_hours (for now)
+    df = df[(df["season"] == "all") & (df["init_hour"] == -999)]
+    df.dropna(inplace=True)
+    LOG.info("Loaded verification data frame: \n%s", df)
 
     # get unique sources and params
     sources = df["source"].unique()
