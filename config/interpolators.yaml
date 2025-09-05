@@ -4,8 +4,8 @@ description: |
 
 dates:
   start: 2020-01-01T12:00
-  end: 2020-10-28T12:00
-  frequency: 12h
+  end: 2020-01-06T12:00
+  frequency: 36h
 
 lead_time: 120h
 
