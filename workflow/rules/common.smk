@@ -97,7 +97,7 @@ def collect_experiment_participants():
         baseline = next(iter(baseline_entry.values()))
         baseline_id = baseline["baseline_id"]
         label = baseline.get("label", baseline_id)
-        participants[label] = (
+        participants[baseline_id] = (
             OUT_ROOT / f"data/baselines/{baseline_id}/verif_aggregated.nc"
         )
     for run_entry in config["runs"]:
