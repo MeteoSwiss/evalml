@@ -82,22 +82,23 @@ def collect_all_runs():
 
 def collect_all_baselines():
     """Collect all baselines defined in the configuration."""
-    baselines = config.get("baseline", {})
-    if isinstance(baselines, list):
-        return baselines
-    elif isinstance(baselines, dict):
-        return list(baselines.keys())
-    elif isinstance(baselines, str):
-        return [baselines]
-    else:
-        raise ValueError("Baselines should be a list, dict, or string.")
+    baselines = {}
+    for baseline_entry in copy.deepcopy(config["baselines"]):
+        baseline_type = next(iter(baseline_entry))
+        baseline_config = baseline_entry[baseline_type]
+        baseline_id = baseline_config.pop("baseline_id")
+        baselines[baseline_id] = baseline_config
+    return baselines
 
 
 def collect_experiment_participants():
     participants = {}
-    for baseline in collect_all_baselines():
-        participants[baseline] = (
-            OUT_ROOT / f"data/baselines/{baseline}/verif_aggregated.csv"
+    for baseline_entry in config["baselines"]:
+        baseline = next(iter(baseline_entry.values()))
+        baseline_id = baseline["baseline_id"]
+        label = baseline.get("label", baseline_id)
+        participants[baseline_id] = (
+            OUT_ROOT / f"data/baselines/{baseline_id}/verif_aggregated.nc"
         )
     for run_entry in config["runs"]:
         # every run entry is a single-key dict
@@ -105,7 +106,7 @@ def collect_experiment_participants():
         run = next(iter(run_entry.values()))
         run_id = run["run_id"]
         label = run.get("label", run_id)
-        participants[label] = OUT_ROOT / f"data/runs/{run_id}/verif_aggregated.csv"
+        participants[label] = OUT_ROOT / f"data/runs/{run_id}/verif_aggregated.nc"
     return participants
 
 
@@ -124,4 +125,5 @@ def _inference_routing_fn(wc):
 
 
 RUN_CONFIGS = collect_all_runs()
+BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()

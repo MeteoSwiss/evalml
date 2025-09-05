@@ -16,6 +16,7 @@ _dev
 .snakemake
 output
 _sandbox/
+experiment_report.html
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/

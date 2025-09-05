@@ -5,7 +5,7 @@
 from evalml.config import ConfigModel
 
 # validate configuration and add defaults
-update_config(config, ConfigModel.validate(dict(config)).model_dump(mode="json"))
+update_config(config, ConfigModel.model_validate(dict(config)).model_dump(mode="json"))
 
 
 # load rules
@@ -75,12 +75,6 @@ rule verif_metrics_all:
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=collect_all_runs(),
         ),
-
-
-# rule extract_cosmoe_fcts_all:
-#     """Extract COSMO-E forecasts for the year 2020."""
-#     input:
-#         expand(rules.extract_cosmoe_fcts.output.fcts, year=[str(y)[-2:] for y in range(2020, 2021)])
 
 
 rule verif_metrics_plot_all:
