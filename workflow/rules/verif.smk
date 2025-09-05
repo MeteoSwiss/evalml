@@ -57,6 +57,7 @@ rule verif_metrics:
     # TODO: implement logic to use experiment name instead of run_id as wildcard
     params:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
+        fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id].get("steps", "0/126/6"),
         analysis_label=config["analysis"].get("label"),
     log:
         OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",
@@ -65,6 +66,7 @@ rule verif_metrics:
         uv run {input.script} \
             --grib_output_dir {input.grib_output} \
             --analysis_zarr {input.analysis_zarr} \
+            --lead_time "{params.fcst_steps}" \
             --fcst_label "{params.fcst_label}" \
             --analysis_label "{params.analysis_label}" \
             --output {output} > {log} 2>&1

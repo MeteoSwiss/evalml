@@ -166,6 +166,19 @@
           "description": "The label for the run that will be used in experiment results such as reports and figures.",
           "title": "Label"
         },
+        "steps": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Forecast steps to be used from interpolator, e.g. '0/126/6'.",
+          "title": "Steps"
+        },
         "extra_dependencies": {
           "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
           "items": {
@@ -228,6 +241,19 @@
           "default": null,
           "description": "The label for the run that will be used in experiment results such as reports and figures.",
           "title": "Label"
+        },
+        "steps": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Forecast steps to be used from interpolator, e.g. '0/126/6'.",
+          "title": "Steps"
         },
         "extra_dependencies": {
           "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",

@@ -43,6 +43,10 @@ class RunConfig(BaseModel):
         None,
         description="The label for the run that will be used in experiment results such as reports and figures.",
     )
+    steps: str | None = Field(
+        None,
+        description="Forecast steps to be used from interpolator, e.g. '0/126/6'.",
+    )
     extra_dependencies: List[str] = Field(
         default_factory=list,
         description="List of extra dependencies to install for this model. "
