@@ -65,7 +65,7 @@ def main(args: Namespace) -> None:
                 init_hour=init_hour,
             )
 
-        sub_df = _subset_df(all_df)
+        sub_df = _subset_df(all_df).dropna()
 
         # breakpoint()
         fig, ax = plt.subplots(figsize=(10, 6))
