@@ -32,18 +32,24 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
     # for simplicity we group by season based on ref_time (as this is a dimension of the dataset)
     ds = ds.assign_coords(
         season=lambda ds: ds.ref_time.dt.season,
-    )
-    ds_mean = (
-        ds.mean(dim="ref_time")
-        .assign_coords({"season": "all"})
-        .compute(num_workers=4, scheduler="threads")
-    )
-    ds_grouped_mean = (
-        ds.groupby("season")
-        .mean(dim="ref_time")
-        .compute(num_workers=4, scheduler="threads")
-    )
-    out = xr.concat([ds_mean, ds_grouped_mean], dim="season")
+        init_hour=lambda ds: ds.ref_time.dt.hour,
+    ).drop_vars(["time"])
+
+    # compute mean with grouping by all permutations of season and init_hour
+    ds_mean = []
+    for group in [[], "season", "init_hour", ["season", "init_hour"]]:
+        if group == []:
+            ds_grouped = ds
+        else:
+            ds_grouped = ds.groupby(group)
+        ds_grouped = ds_grouped.mean(dim="ref_time").compute(num_workers=4, scheduler="threads")
+        if "init_hour" not in group:
+            ds_grouped = ds_grouped.expand_dims({"init_hour": [-999]})
+        if "season" not in group:
+            ds_grouped = ds_grouped.expand_dims({"season": ["all"]})
+        LOG.info("Aggregated by %s: \n %s", group, ds_grouped)
+        ds_mean.append(ds_grouped)
+    out = xr.merge(ds_mean)
 
     var_transform = {
         d: d.replace("VAR", "STDE").replace("var", "std").replace("MSE", "RMSE")
