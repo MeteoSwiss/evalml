@@ -51,7 +51,7 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
             ds_grouped = ds_grouped.expand_dims({"season": ["all"]})
         LOG.info("Aggregated by %s: \n %s", group, ds_grouped)
         ds_mean.append(ds_grouped)
-    out = xr.merge(ds_mean)
+    out = xr.merge(ds_mean, compat="no_conflicts")
 
     var_transform = {
         d: d.replace("VAR", "STDE").replace("var", "std").replace("MSE", "RMSE")

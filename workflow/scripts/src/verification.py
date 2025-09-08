@@ -57,7 +57,7 @@ def _compute_statistics(
 
 
 def _merge_metrics(ds: xr.Dataset) -> xr.Dataset:
-    out = xr.merge(ds)
+    out = xr.merge(ds, compat="no_conflicts")
     if "ref_time" not in out.dims:
         out = out.expand_dims("ref_time").set_coords("ref_time")
     out = out.compute(num_workers=4, scheduler="threads")
