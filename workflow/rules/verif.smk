@@ -11,7 +11,6 @@ include: "common.smk"
 
 # TODO: make sure the boundaries aren't used
 rule verif_metrics_baseline:
-    localrule: True
     input:
         script="workflow/scripts/verif_baseline.py",
         module="workflow/scripts/src/verification.py",
@@ -29,6 +28,10 @@ rule verif_metrics_baseline:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
     log:
         OUT_ROOT / "logs/verif_metrics_baseline/{baseline_id}-{init_time}.log",
+    resources:
+        cpus_per_task=16,
+        mem_mb=50_000,
+        runtime="20m",
     shell:
         """
         uv run {input.script} \
@@ -50,7 +53,6 @@ def _get_no_none(dict, key, replacement):
 
 
 rule verif_metrics:
-    localrule: True
     input:
         script="workflow/scripts/verif_from_grib.py",
         inference_okfile=_inference_routing_fn,
@@ -67,6 +69,10 @@ rule verif_metrics:
         analysis_label=config["analysis"].get("label"),
     log:
         OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",
+    resources:
+        cpus_per_task=16,
+        mem_mb=50_000,
+        runtime="20m",
     shell:
         """
         uv run {input.script} \
@@ -87,7 +93,6 @@ def _restrict_reftimes_to_hours(reftimes, hours=None):
 
 
 rule verif_metrics_aggregation:
-    localrule: True
     input:
         script="workflow/scripts/verif_aggregation.py",
         verif_nc=lambda wc: expand(
@@ -99,6 +104,10 @@ rule verif_metrics_aggregation:
         OUT_ROOT / "data/runs/{run_id}/verif_aggregated.nc",
     log:
         OUT_ROOT / "logs/verif_metrics_aggregation/{run_id}.log",
+    resources:
+        cpus_per_task=24,
+        mem_mb=250_000,
+        runtime="1h",
     shell:
         """
         uv run {input.script} {input.verif_nc} \
@@ -121,7 +130,6 @@ use rule verif_metrics_aggregation as verif_metrics_aggregation_baseline with:
 
 
 rule verif_metrics_plot:
-    localrule: True
     input:
         script="workflow/scripts/verif_plot_metrics.py",
         verif=list(EXPERIMENT_PARTICIPANTS.values()),
@@ -134,6 +142,10 @@ rule verif_metrics_plot:
         labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
     log:
         OUT_ROOT / "logs/verif_metrics_plot/{experiment}.log",
+    resources:
+        cpus_per_task=8,
+        mem_mb=50_000,
+        runtime="10m",
     shell:
         """
         uv run {input.script} {input.verif} \
