@@ -110,8 +110,7 @@ rule verif_metrics_aggregation:
         runtime="2h",
     shell:
         """
-        uv run {input.script} {input.verif_nc} \
-            --output {output} > {log} 2>&1
+        uv run {input.script} {input.verif_nc} --output {output} > {log} 2>&1
         """
 
 
@@ -143,11 +142,10 @@ rule verif_metrics_plot:
     log:
         OUT_ROOT / "logs/verif_metrics_plot/{experiment}.log",
     resources:
-        cpus_per_task=8,
+        cpus_per_task=16,
         mem_mb=50_000,
-        runtime="10m",
+        runtime="20m",
     shell:
         """
-        uv run {input.script} {input.verif} \
-            --output_dir {output} > {log} 2>&1
+        uv run {input.script} {input.verif} --output_dir {output} > {log} 2>&1
         """
