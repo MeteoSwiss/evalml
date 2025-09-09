@@ -107,7 +107,7 @@ rule verif_metrics_aggregation:
     resources:
         cpus_per_task=24,
         mem_mb=250_000,
-        runtime="1h",
+        runtime="2h",
     shell:
         """
         uv run {input.script} {input.verif_nc} \
