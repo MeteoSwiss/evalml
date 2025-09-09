@@ -106,8 +106,7 @@ rule verif_metrics_aggregation:
         """
 
 
-rule verif_metrics_aggregation_baseline:
-    localrule: True
+use rule verif_metrics_aggregation as verif_metrics_aggregation_baseline with:
     input:
         script="workflow/scripts/verif_aggregation.py",
         verif_nc=lambda wc: expand(
@@ -119,11 +118,6 @@ rule verif_metrics_aggregation_baseline:
         OUT_ROOT / "data/baselines/{baseline_id}/verif_aggregated.nc",
     log:
         OUT_ROOT / "logs/verif_metrics_aggregation_baseline/{baseline_id}.log",
-    shell:
-        """
-        uv run {input.script} {input.verif_nc} \
-            --output {output} > {log} 2>&1
-        """
 
 
 rule verif_metrics_plot:
