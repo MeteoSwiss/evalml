@@ -1,53 +1,109 @@
-import xarray as xr
-import pandas as pd
-import time
 import logging
+import time
+
+import xarray as xr
 
 LOG = logging.getLogger(__name__)
 
 
+def _compute_scores(
+    fcst: xr.DataArray,
+    obs: xr.DataArray,
+    dim=["x", "y"],
+    prefix="",
+    suffix="",
+    source="",
+) -> xr.Dataset:
+    """
+    Compute basic verification metrics between two xarray DataArrays (fcst and obs).
+    Returns a xarray Dataset with the computed metrics.
+    """
+    error = fcst - obs
+    scores = xr.Dataset(
+        {
+            f"{prefix}BIAS{suffix}": error.mean(dim=dim, skipna=True),
+            f"{prefix}MSE{suffix}": (error**2).mean(dim=dim, skipna=True),
+            f"{prefix}MAE{suffix}": abs(error).mean(dim=dim, skipna=True),
+            f"{prefix}VAR{suffix}": error.var(dim=dim, skipna=True),
+            f"{prefix}CORR{suffix}": xr.corr(fcst, obs, dim=dim),
+            f"{prefix}R2{suffix}": xr.corr(fcst, obs, dim=dim) ** 2,
+        }
+    )
+    scores = scores.expand_dims({"source": [source]})
+    return scores
+
+
+def _compute_statistics(
+    data: xr.DataArray,
+    dim=["x", "y"],
+    prefix="",
+    suffix="",
+    source="",
+) -> xr.Dataset:
+    """
+    Compute basic statistics of a xarray DataArray (data).
+    Returns a xarray Dataset with the computed statistics.
+    """
+    stats = xr.Dataset(
+        {
+            f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),
+            f"{prefix}var{suffix}": data.var(dim=dim, skipna=True),
+            f"{prefix}min{suffix}": data.min(dim=dim, skipna=True),
+            f"{prefix}max{suffix}": data.max(dim=dim, skipna=True),
+        }
+    )
+    stats = stats.expand_dims({"source": [source]})
+    return stats
+
+
+def _merge_metrics(ds: xr.Dataset) -> xr.Dataset:
+    out = xr.merge(ds, compat="no_conflicts")
+    if "ref_time" not in out.dims:
+        out = out.expand_dims("ref_time").set_coords("ref_time")
+    out = out.compute(num_workers=4, scheduler="threads")
+    return out
+
+
 def verify(
     fcst: xr.Dataset, obs: xr.Dataset, fcst_label: str, obs_label: str
-) -> pd.DataFrame:
+) -> xr.Dataset:
     """
     Compare two xarray Datasets (fcst and obs) and return pandas DataFrame with
     basic verification metrics and statistics for both fcst and obs.
     """
     start = time.time()
-    fcst_arr = fcst.to_array("param").chunk("auto")
-    obs_arr = obs.to_array("param").chunk("auto")
-    error_arr = fcst_arr - obs_arr
 
-    out_fcst = xr.Dataset(
-        {
-            "BIAS": error_arr.mean(dim=["y", "x"]),
-            "MSE": (error_arr**2).mean(dim=["y", "x"]),
-            "MAE": abs(error_arr).mean(dim=["y", "x"]),
-            "VAR": error_arr.var(dim=["y", "x"]),
-            "CORR": xr.corr(fcst_arr, obs_arr, dim=["y", "x"]),
-            "mean": fcst_arr.mean(dim=["y", "x"]),
-            "var": fcst_arr.var(dim=["y", "x"]),
-            "min": fcst_arr.min(dim=["y", "x"]),
-            "max": fcst_arr.max(dim=["y", "x"]),
-        },
-    ).expand_dims({"source": [fcst_label]})
+    # rewrite the verification to use dask and xarray
+    # chunk the data to avoid memory issues
+    # compute the metrics in parallel
+    # return the results as a xarray Dataset
+    scores = []
+    statistics = []
+    for param in fcst.data_vars:
+        if param not in obs.data_vars:
+            LOG.warning("Parameter %s not in obs, skipping", param)
+            continue
+        LOG.info("Verifying parameter %s", param)
+        fcst_param, obs_param = xr.align(fcst[param], obs[param], join="inner")
 
-    out_obs = xr.Dataset(
-        {
-            "mean": obs_arr.mean(dim=["y", "x"]),
-            "var": obs_arr.var(dim=["y", "x"]),
-            "min": obs_arr.min(dim=["y", "x"]),
-            "max": obs_arr.max(dim=["y", "x"]),
-        }
-    ).expand_dims({"source": [obs_label]})
-    out = xr.merge([out_fcst, out_obs]).compute(num_workers=4, scheduler="threads")
-    LOG.info("Computed statistics in %.2f seconds", time.time() - start)
-    LOG.info("Statistics dataset: \n%s", out)
-    out = (
-        out.assign(R2=lambda ds: ds.CORR**2)
-        .to_array("metric")
-        .to_dataframe(name="value")
-        .dropna()
-        .reset_index()
-    )
+        # scores vs time (reduce spatially)
+        score = _compute_scores(
+            fcst_param, obs_param, prefix=param + ".", source=fcst_label
+        )
+        scores.append(score)
+
+        # statistics vs time (reduce spatially)
+        fcst_statistics = _compute_statistics(
+            fcst_param, prefix=param + ".", source=fcst_label
+        )
+        obs_statistics = _compute_statistics(
+            obs_param, prefix=param + ".", source=obs_label
+        )
+        statistics.append(xr.concat([fcst_statistics, obs_statistics], dim="source"))
+
+    scores = _merge_metrics(scores)
+    statistics = _merge_metrics(statistics)
+    out = xr.merge([scores, statistics], join="outer", compat="no_conflicts")
+    LOG.info("Computed metrics in %.2f seconds", time.time() - start)
+    LOG.info("Metrics dataset: \n%s", out)
     return out

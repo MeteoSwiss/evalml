@@ -48,10 +48,12 @@ runs:
       run_id: d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
 
-baseline: COSMO-E
+baselines:
+  - baseline:
+      baseline_id: COSMO-E
+      root: /scratch/mch/bhendj/COSMO-E
+      label: COSMO-E
 
-verification:
-  valid_every: 12
 
 locations:
   output_root: output/

@@ -3,6 +3,7 @@ import itertools
 from argparse import ArgumentParser, Namespace
 import logging
 
+import xarray as xr
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -22,58 +23,39 @@ def subset_df(df, **kwargs):
     return df[mask]
 
 
-def read_verif_file(Path: str) -> pd.DataFrame:
-    """Read a verification file and return it as a DataFrame."""
-
-    df = pd.read_csv(
-        Path, date_format="ISO8601", dtype={"lead_time": str}, index_col=None
-    )
-    df["lead_time"] = pd.to_timedelta(df["lead_time"])
-    return df
-
-
-def _check_same_columns(dfs: list[pd.DataFrame]) -> None:
-    """Check if all DataFrames have the same columns."""
-
-    columns = [set(df.columns) for df in dfs]
-    if not all(col == columns[0] for col in columns):
-        raise ValueError("DataFrames do not have the same columns.")
-
-
-def _check_same_column_values(dfs: list[pd.DataFrame], column: str) -> None:
-    """Check if all DataFrames have the same unique values in a column."""
-    values = [set(df[column].unique()) for df in dfs]
-    if not all(metric == values[0] for metric in values):
-        LOG.warning(
-            f"DataFrames do not have the same unique values in column '{column}'."
-            f" Found: {values}"
-        )
-        # return the intersection of all values
-        return values[0].intersection(*values[1:])
-    return values[0]
-
-
 def main(args: Namespace) -> None:
     """Main function to verify results from KENDA-1 data."""
 
-    dfs = [read_verif_file(file) for file in args.verif_files]
+    # remove duplicated but not identical values from analyses (rounding errors)
+    dfs = [xr.open_dataset(f) for f in args.verif_files]
+    sources = [set(d.source.values.tolist()) for d in dfs]
+    common_sources = list(set.intersection(*sources))
+    for i in range(len(dfs)):
+        if i > 0:
+            dfs[i] = dfs[i].drop_sel(source=common_sources)
+    ds = xr.concat(dfs, dim="source", join="outer")
 
-    _check_same_columns(dfs)
-    metrics = _check_same_column_values(dfs, "metric")
-    params = _check_same_column_values(dfs, "param")
-
-    hours = _check_same_column_values(dfs, "hour") if args.stratify else ["all"]
-    seasons = _check_same_column_values(dfs, "season") if args.stratify else ["all"]
-    init_hours = (
-        _check_same_column_values(dfs, "init_hour") if args.stratify else ["all"]
+    # extract only  non-spatial variables to pd.DataFrame
+    nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
+    all_df = (
+        ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
     )
+    all_df[["param", "metric"]] = all_df["stack"].str.split(".", n=1, expand=True)
+    all_df.drop(columns=["stack"], inplace=True)
+    all_df["lead_time"] = all_df["lead_time"].dt.total_seconds() / 3600
 
-    for metric, param, hour, season, init_hour in itertools.product(
-        metrics, params, hours, seasons, init_hours
+    metrics = all_df["metric"].unique()
+    params = all_df["param"].unique()
+    seasons = all_df["season"].unique() if args.stratify else ["all"]
+    init_hours = (
+        all_df["init_hour"].unique() if args.stratify else [-999]
+    )  # numeric code to indicate all init hours
+
+    for metric, param, season, init_hour in itertools.product(
+        metrics, params, seasons, init_hours
     ):
         LOG.info(
-            f"Processing metric: {metric}, param: {param}, hour: {hour}, "
-            f"season: {season}, init_hour: {init_hour}"
+            f"Processing metric: {metric}, param: {param}, season: {season}, init_hour: {init_hour}"
         )
 
         def _subset_df(df):
@@ -81,23 +63,18 @@ def main(args: Namespace) -> None:
                 df,
                 metric=metric,
                 param=param,
-                hour=hour,
                 season=season,
                 init_hour=init_hour,
             )
 
-        subsets_dfs = [_subset_df(df) for df in dfs]
-        all_df = pd.concat(subsets_dfs, ignore_index=True).dropna()
-        subset_cols = [c for c in all_df.columns if c != "value"]
-        all_df = all_df.drop_duplicates(subset=subset_cols, keep="last")
-        all_df["lead_time"] = all_df["lead_time"].dt.total_seconds() / 3600
+        sub_df = _subset_df(all_df).dropna()
 
         # breakpoint()
         fig, ax = plt.subplots(figsize=(10, 6))
 
         title = f"{metric} - {param}"
-        title += f"- {hour} - {season} - {init_hour}" if args.stratify else ""
-        for source, df in all_df.groupby("source"):
+        title += f"- {season} - {init_hour}" if args.stratify else ""
+        for source, df in sub_df.groupby("source"):
             df.plot(
                 x="lead_time",
                 y="value",
@@ -112,7 +89,7 @@ def main(args: Namespace) -> None:
             )
         args.output_dir.mkdir(parents=True, exist_ok=True)
         fn = f"{metric}_{param}"
-        fn += f"_{hour}_{season}_{init_hour}.png" if args.stratify else ".png"
+        fn += f"_{season}_{init_hour}.png" if args.stratify else ".png"
         plt.savefig(args.output_dir / fn)
         plt.close(fig)
 
@@ -125,7 +102,7 @@ if __name__ == "__main__":
         nargs="+",
         help="Paths to verification files.",
         # "--verif_files", type=Path, nargs="+", help="Paths to verification files.",
-        # default = list(Path("output/data").glob("*/*/verif_aggregated.csv")), required=False
+        # default = list(Path("output/data").glob("*/*/verif_aggregated.nc")), required=False
     )
     parser.add_argument(
         "--stratify",

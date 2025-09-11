@@ -53,6 +53,8 @@ var spec = {
   },
   "spec": {
     "mark": { "type": "line" },
+    "width": 300,
+    "height": 200,
     "encoding": {
       "x": { "field": "lead_time", "type": "ordinal" },
       "y": { "field": "value", "type": "quantitative" , "scale": { "zero": false }},
