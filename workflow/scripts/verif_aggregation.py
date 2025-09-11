@@ -1,9 +1,10 @@
 from pathlib import Path
-import itertools
 from argparse import ArgumentParser, Namespace
 import logging
+import time
 
-import pandas as pd
+import xarray as xr
+import numpy as np
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -23,92 +24,75 @@ def get_season(time):
         return "SON"
 
 
-def read_verif_file(Path: str) -> pd.DataFrame:
-    """Read a verification file and return it as a DataFrame."""
+def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
+    """Compute mean metric values aggregated by season"""
+    LOG.info("Aggregation results")
+    start = time.time()
 
-    df = pd.read_csv(
-        Path,
-        date_format="ISO8601",
-        parse_dates=["ref_time", "valid_time", "time"],
-        dtype={"lead_time": str},
-        index_col=0,
-    )
-    df["lead_time"] = pd.to_timedelta(df["lead_time"])
-    return df
+    # for simplicity we group by season based on ref_time (as this is a dimension of the dataset)
+    ds = ds.assign_coords(
+        season=lambda ds: ds.ref_time.dt.season,
+        init_hour=lambda ds: ds.ref_time.dt.hour,
+    ).drop_vars(["time"])
 
-
-def aggregate_results(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute mean metric values aggregated by all combinations of hour, season, and init_hour."""
-
-    # extract features
-    df = df.copy()
-    df["hour"] = df["time"].dt.hour
-    df["init_hour"] = df["ref_time"].dt.hour
-    df["season"] = df["time"].apply(get_season)
-
-    # generate all combinations of original and "all" for ["hour", "season", "init_hour"]
-    features = ["hour", "season", "init_hour"]
-    groupings = []
-
-    for combination in itertools.product([True, False], repeat=3):
-        modified_df = df.copy()
-        for include_original, col in zip(combination, features):
-            if not include_original:
-                modified_df[col] = "all"
-        groupings.append(modified_df)
-
-    # concatenate all versions
-    df_extended = pd.concat(groupings, ignore_index=True)
-
-    # aggregate
-    aggregated = (
-        df_extended.groupby(
-            ["metric", "source", "lead_time", "param", "hour", "season", "init_hour"],
-            dropna=False,  # optional, ensures NaN values are not dropped
+    # compute mean with grouping by all permutations of season and init_hour
+    ds_mean = []
+    for group in [[], "season", "init_hour", ["season", "init_hour"]]:
+        if group == []:
+            ds_grouped = ds
+        else:
+            ds_grouped = ds.groupby(group)
+        ds_grouped = ds_grouped.mean(dim="ref_time").compute(
+            num_workers=4, scheduler="threads"
         )
-        .agg({"value": "mean"})
-        .reset_index()
-    )
+        if "init_hour" not in group:
+            ds_grouped = ds_grouped.expand_dims({"init_hour": [-999]})
+        if "season" not in group:
+            ds_grouped = ds_grouped.expand_dims({"season": ["all"]})
+        LOG.info("Aggregated by %s: \n %s", group, ds_grouped)
+        ds_mean.append(ds_grouped)
+    out = xr.merge(ds_mean, compat="no_conflicts", join="outer")
 
-    # square root transform MSE and VAR
-    transform_metrics = {"VAR": "STDE", "MSE": "RMSE", "var": "std"}
-    aggregated.loc[aggregated["metric"].isin(transform_metrics.keys()), "value"] = (
-        aggregated.loc[aggregated["metric"].isin(transform_metrics.keys()), "value"]
-        ** 0.5
-    )
-    aggregated["metric"] = aggregated["metric"].replace(transform_metrics)
+    var_transform = {
+        d: d.replace("VAR", "STDE").replace("var", "std").replace("MSE", "RMSE")
+        for d in out.data_vars
+        if "VAR" in d or "var" in d or "MSE" in d
+    }
+    for var in var_transform:
+        out[var] = np.sqrt(out[var])
+    out = out.rename(var_transform)
 
-    return aggregated
+    LOG.info("Computed aggregation in %.2f seconds", time.time() - start)
+    LOG.info("Aggregated results: \n %s", out)
+
+    return out
 
 
 def main(args: Namespace) -> None:
     """Main function to verify results from KENDA-1 data."""
 
+    # grouping by all combinations of hour, season, init_hour may not be supported directly
+    # TODO: implement grouping
+
     LOG.info("Reading %d verification files", len(args.verif_files))
-    df = pd.concat([read_verif_file(f) for f in args.verif_files], ignore_index=True)
+    ds = xr.open_mfdataset(
+        args.verif_files,
+        combine="by_coords",
+        data_vars="minimal",
+        coords="minimal",
+        compat="override",
+        chunks="auto",
+        engine="netcdf4",
+        parallel=False,  # netcdf4 engine fails silently with parallel=True
+    )
 
-    LOG.info("Concatenated DataFrame: \n %s", df.head())
+    LOG.info("Concatenated Dataset: \n %s", ds)
 
-    if args.valid_every:
-        LOG.info("Filtering data based on valid time")
-        df = df[
-            (df["valid_time"].dt.minute == 0)
-            & (df["valid_time"].dt.second == 0)
-            & (df["valid_time"].dt.hour % args.valid_every == 0)
-        ]
-        if df.empty:
-            raise ValueError(
-                f"No data found with valid time every {args.valid_every} hours."
-            )
+    results = aggregate_results(ds)
 
-    LOG.info("Aggregating results")
-    results = aggregate_results(df)
-
-    LOG.info("Aggregated results: \n %s", results.head())
-
-    # Save results to CSV
+    # Save results to NetCDF
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    results.to_csv(args.output, index=False)
+    results.to_netcdf(args.output)
 
     LOG.info("Results saved to %s", args.output)
 
@@ -117,12 +101,6 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="Verify results from KENDA-1 data.")
     parser.add_argument(
         "verif_files", type=Path, nargs="+", help="Paths to verification files."
-    )
-    parser.add_argument(
-        "--valid_every",
-        type=int,
-        default=None,
-        help="Only include data where the hour of the day of the valid time is a multiple of this number of hours.",
     )
     parser.add_argument(
         "--output",
