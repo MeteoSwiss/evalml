@@ -1,0 +1,21 @@
+input:
+  test:
+    use_original_paths: true
+
+allow_nans: true
+
+
+output:
+  tee:
+    outputs:
+    - extract_lam:
+        output:
+          grib:
+            path: grib/{dateTime}_{step:03}.grib
+            encoding:
+              typeOfGeneratingProcess: 2
+            templates:
+              samples: _resources/templates_index_cosmo.yaml
+    - printer
+
+write_initial_state: true
