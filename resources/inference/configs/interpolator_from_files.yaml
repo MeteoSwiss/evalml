@@ -4,6 +4,10 @@ include_forcings: true
 input:
   test:
     use_original_paths: true
+  
+post_processors:
+  - assign_mask:
+      mask: "trimedge_mask"
 
 output:
   grib:
