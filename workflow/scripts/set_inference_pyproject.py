@@ -11,16 +11,15 @@ The script maintains a backup of configuration files and restores them in case o
 
 import logging
 import shutil
+import subprocess
 from pathlib import Path
+
 import requests
 import toml
-import subprocess
-
-from mlflow.tracking import MlflowClient
-from mlflow.exceptions import RestException
-
 from anemoi.utils.mlflow.auth import TokenAuth
 from anemoi.utils.mlflow.client import AnemoiMlflowClient
+from mlflow.exceptions import RestException
+from mlflow.tracking import MlflowClient
 
 logfile = snakemake.log[0]  # type: ignore # noqa: F821
 logging.basicConfig(
@@ -387,12 +386,20 @@ def get_mlflow_id(run_config: dict, run_id: str) -> str:
     Raises:
         ValueError: If the run ID is not found in the configuration
     """
-    all_ids = {
-        r[list(r.keys())[0]]["run_id"]: r[list(r.keys())[0]]["mlflow_id"]
-        for r in run_config
-    }
-    if run_id not in all_ids:
-        raise ValueError(f"Run ID {run_id} not found in configuration")
+    all_ids = {}
+    for run_entry in run_config:
+        for conf in run_entry.values():
+            # Always register the top-level mlflow_id
+            if "mlflow_id" in conf:
+                all_ids[conf["run_id"]] = conf["mlflow_id"]
+            # if the forecaster key exists (interpolator usecase) and is not None (interpolator from analysis), register it too otherwise pyproject does not get created
+            if (
+                "forecaster" in conf
+                and conf["forecaster"] is not None
+                and "mlflow_id" in conf["forecaster"]
+            ):
+                all_ids[conf["forecaster"]["run_id"]] = conf["forecaster"]["mlflow_id"]
+    logger.info("All run IDs with MLflow IDs: %s", all_ids)
     return all_ids[run_id]
 
 
