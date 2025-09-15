@@ -35,6 +35,11 @@ class AnemoiInferenceConfig(RootModel[Dict[str, Any]]):
 class RunConfig(BaseModel):
     run_id: str = Field(
         ...,
+        min_length=1,
+        description="Identifier for the run, e.g. 'interpolator-lam'.",
+    )
+    mlflow_id: str = Field(
+        ...,
         min_length=32,
         max_length=32,
         description="The mlflow run ID, as a 32-character hexadecimal string.",

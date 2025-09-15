@@ -3,16 +3,17 @@ description: |
   Stretched interpolator vs LAM interpolator.
 
 dates:
-  start: 2020-01-01T12:00
+  start: 2020-01-02T00:00
   end: 2020-01-06T12:00
-  frequency: 36h
+  frequency: 24h
 
 lead_time: 120h
 
 runs:
   - interpolator:
-        run_id: 9c18b90074214d769b8b383722fc5a06
-        label: LAM Interpolator (COSMO-E analysis) 
+        run_id: interpolator_lam_from_analysis
+        mlflow_id: 9c18b90074214d769b8b383722fc5a06
+        label: LAM Interpolator (COSMO-E analysis)
         steps: 0/121/1
         config: resources/inference/configs/interpolator_from_files.yaml
         forecaster: null
@@ -21,23 +22,27 @@ runs:
           - torch-geometric==2.6.1
           - anemoi-graphs==0.5.2
   - interpolator:
-      run_id: 9c18b90074214d769b8b383722fc5a06
+      run_id: interpolator_lam
+      mlflow_id: 9c18b90074214d769b8b383722fc5a06
       label: LAM Interpolator (M-1 forecaster)
       steps: 0/121/1
       forecaster:
-        run_id: d0846032fc7248a58b089cbe8fa4c511
+        run_id: forecaster
+        mlflow_id: d0846032fc7248a58b089cbe8fa4c511
         config: resources/inference/configs/forecaster_with_global.yaml
       extra_dependencies:
          - git+https://github.com/MeteoSwiss/anemoi-inference@fix/interp_files
          - torch-geometric==2.6.1
          - anemoi-graphs==0.5.2
   - interpolator:
-      run_id: 07c3d9698db14d859b78bb712a65bbbf
+      run_id: interpolator_sgm
+      mlflow_id: 07c3d9698db14d859b78bb712a65bbbf
       label: SGM Interpolator (M-1 forecaster)
       steps: 0/121/1
       config: resources/inference/configs/interpolator_stretched.yaml
       forecaster:
-        run_id: d0846032fc7248a58b089cbe8fa4c511
+        run_id: forecaster
+        mlflow_id: d0846032fc7248a58b089cbe8fa4c511
         config: resources/inference/configs/forecaster_with_global.yaml
       extra_dependencies:
          - git+https://github.com/MeteoSwiss/anemoi-inference@fix/interp_files
