@@ -401,8 +401,15 @@ def main(snakemake) -> None:
     """
     mlflow_uri = snakemake.config["locations"]["mlflow_uri"]
     run_id = snakemake.wildcards["run_id"]
+    logger.info(snakemake.config["runs"])
     ## TODO: get mlflow_id from config
-    mlflow_id = "something"
+    all_ids = {
+        r[list(r.keys())[0]]["run_id"]: r[list(r.keys())[0]]["mlflow_id"]
+        for r in snakemake.config["runs"]
+    }
+    if run_id not in all_ids:
+        raise ValueError(f"Run ID {run_id} not found in configuration")
+    mlflow_id = all_ids[run_id]
     logger.info("Using MLflow ID %s for run ID %s", mlflow_id, run_id)
     requirements_path_in = Path(snakemake.input[0])
     toml_path_out = Path(snakemake.output[0])
