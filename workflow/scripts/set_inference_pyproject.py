@@ -374,6 +374,25 @@ def update_pyproject_toml(
         raise RuntimeError("Failed to write pyproject.toml") from e
 
 
+def get_mlflow_id(run_config: dict, run_id: str) -> str:
+    """Get the MLflow ID corresponding to a given run ID from the config.
+
+    Args:
+        run_config (dict): Configuration dictionary
+        run_id (str): Run ID to look up
+
+    Returns:
+        str: Corresponding MLflow ID
+
+    Raises:
+        ValueError: If the run ID is not found in the config
+    """
+    ids = {run["run_id"]: run["mlflow_id"] for run in run_config}
+    if run_id not in ids.keys():
+        raise ValueError(f"Run ID {run_id} not found in configuration")
+    return ids[run_id]
+
+
 def main(snakemake) -> None:
     """Main entry point for the script.
 
@@ -382,18 +401,21 @@ def main(snakemake) -> None:
     """
     mlflow_uri = snakemake.config["locations"]["mlflow_uri"]
     run_id = snakemake.wildcards["run_id"]
+    ## TODO: get mlflow_id from config
+    mlflow_id = "something"
+    logger.info("Using MLflow ID %s for run ID %s", mlflow_id, run_id)
     requirements_path_in = Path(snakemake.input[0])
     toml_path_out = Path(snakemake.output[0])
     extra_dependencies = snakemake.params.get("extra_dependencies", [])
     shutil.copy2(requirements_path_in, toml_path_out)
 
-    client = get_mlflow_client_given_runid(mlflow_uri, run_id)
-    anemoi_versions = get_anemoi_versions(client, run_id)
-    other_versions = get_other_versions(client, run_id)
-    python_version = get_python_version(client, run_id)
-    checkpoints_path = get_path_to_checkpoints(client, run_id)
+    client = get_mlflow_client_given_runid(mlflow_uri, mlflow_id)
+    anemoi_versions = get_anemoi_versions(client, mlflow_id)
+    other_versions = get_other_versions(client, mlflow_id)
+    python_version = get_python_version(client, mlflow_id)
+    checkpoints_path = get_path_to_checkpoints(client, mlflow_id)
 
-    run_mlflow_link = client.tracking_uri + "/#/runs/" + run_id
+    run_mlflow_link = client.tracking_uri + "/#/runs/" + mlflow_id
     logger.info(
         "Updating pyproject.toml with versions from MLflow run %s at %s",
         run_id,

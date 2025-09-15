@@ -172,8 +172,12 @@ rule inference_interpolator:
         image=rules.make_squashfs_image.output.image,
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
         forecasts=lambda wc: (
-            [OUT_ROOT / f"logs/inference_forecaster/{RUN_CONFIGS[wc.run_id]['forecaster']['run_id']}-{wc.init_time}.ok"]
-            if RUN_CONFIGS[wc.run_id].get("forecaster") is not None else []
+            [
+                OUT_ROOT
+                / f"logs/inference_forecaster/{RUN_CONFIGS[wc.run_id]['forecaster']['run_id']}-{wc.init_time}.ok"
+            ]
+            if RUN_CONFIGS[wc.run_id].get("forecaster") is not None
+            else []
         ),
     output:
         okfile=touch(OUT_ROOT / "logs/inference_interpolator/{run_id}-{init_time}.ok"),
@@ -187,8 +191,11 @@ rule inference_interpolator:
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
-        forecaster_run_id=lambda wc: "null" if RUN_CONFIGS[wc.run_id].get("forecaster") is None 
-            else RUN_CONFIGS[wc.run_id]["forecaster"]["run_id"],
+        forecaster_run_id=lambda wc: (
+            "null"
+            if RUN_CONFIGS[wc.run_id].get("forecaster") is None
+            else RUN_CONFIGS[wc.run_id]["forecaster"]["run_id"]
+        ),
     log:
         OUT_ROOT / "logs/inference_interpolator/{run_id}-{init_time}.log",
     resources:
