@@ -420,7 +420,7 @@ def main(snakemake) -> None:
     run_mlflow_link = client.tracking_uri + "/#/runs/" + mlflow_id
     logger.info(
         "Updating pyproject.toml with versions from MLflow run %s at %s",
-        run_id,
+        mlflow_id,
         run_mlflow_link,
     )
     update_pyproject_toml(
