@@ -2,10 +2,7 @@ import copy
 from datetime import datetime, timedelta
 import yaml
 import hashlib
-import logging
 import json
-
-logging.basicConfig(level=logging.WARNING)
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
