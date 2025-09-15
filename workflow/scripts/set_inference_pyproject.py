@@ -401,8 +401,6 @@ def main(snakemake) -> None:
     """
     mlflow_uri = snakemake.config["locations"]["mlflow_uri"]
     run_id = snakemake.wildcards["run_id"]
-    logger.info(snakemake.config["runs"])
-    ## TODO: get mlflow_id from config
     all_ids = {
         r[list(r.keys())[0]]["run_id"]: r[list(r.keys())[0]]["mlflow_id"]
         for r in snakemake.config["runs"]
