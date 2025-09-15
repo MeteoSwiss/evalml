@@ -374,25 +374,6 @@ def update_pyproject_toml(
         raise RuntimeError("Failed to write pyproject.toml") from e
 
 
-def get_mlflow_id(run_config: dict, run_id: str) -> str:
-    """Get the MLflow ID corresponding to a given run ID from the config.
-
-    Args:
-        run_config (dict): Configuration dictionary
-        run_id (str): Run ID to look up
-
-    Returns:
-        str: Corresponding MLflow ID
-
-    Raises:
-        ValueError: If the run ID is not found in the config
-    """
-    ids = {run["run_id"]: run["mlflow_id"] for run in run_config}
-    if run_id not in ids.keys():
-        raise ValueError(f"Run ID {run_id} not found in configuration")
-    return ids[run_id]
-
-
 def main(snakemake) -> None:
     """Main entry point for the script.
 
