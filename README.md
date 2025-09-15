@@ -36,16 +36,13 @@ dates:
 lead_time: 120h
 
 runs:
-  # - interpolator:
-  #     run_id: 9c18b90074214d769b8b383722fc5a06
-  #     label: Interpolator (M-1 forecaster)
-  #     forecaster:
-  #       run_id: d0846032fc7248a58b089cbe8fa4c511
   - forecaster:
-      run_id: 2f962c89ff644ca7940072fa9cd088ec
+      run_id: forecaster-stage-d
+      mlflow_id: 2f962c89ff644ca7940072fa9cd088ec
       label: Stage D - N320 global grid with CERRA finetuning
   - forecaster:
-      run_id: d0846032fc7248a58b089cbe8fa4c511
+      run_id: forecaster-stage-d-m1
+      mlflow_id: d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
 
 baselines:
