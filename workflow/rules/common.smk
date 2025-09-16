@@ -76,13 +76,15 @@ def collect_all_runs():
         model_type = next(iter(run_entry))
         run_config = run_entry[model_type]
         run_config["model_type"] = model_type
-        run_id = run_config.pop("run_id")
-        runs[run_id] = run_config
-        runs[run_id] = run_config
+        run_id = run_config["mlflow_id"][0:9]
         if model_type == "interpolator":
-            if "forecaster" in run_config and run_config["forecaster"] is not None:
-                run_id = run_config["forecaster"]["run_id"]
-                runs[run_id] = run_config["forecaster"]
+            if "forecaster" not in run_config or run_config["forecaster"] is None:
+                tail_id = "analysis"
+            else:
+                tail_id = run_config["forecaster"]["mlflow_id"][0:9]
+                runs[tail_id] = run_config["forecaster"]
+            run_id = f"{run_id}-{tail_id}"
+    runs[run_id] = run_config
     return runs
 
 
@@ -97,22 +99,12 @@ def collect_all_baselines():
     return baselines
 
 
-def collect_experiment_participants():
+def collect_experiment_participants(basline_configs, run_configs):
     participants = {}
-    for baseline_entry in config["baselines"]:
-        baseline = next(iter(baseline_entry.values()))
-        baseline_id = baseline["baseline_id"]
-        label = baseline.get("label", baseline_id)
-        participants[baseline_id] = (
-            OUT_ROOT / f"data/baselines/{baseline_id}/verif_aggregated.nc"
-        )
-    for run_entry in config["runs"]:
-        # every run entry is a single-key dict
-        # where the key is the model type ("forecaster", "interpolator", etc.)
-        run = next(iter(run_entry.values()))
-        run_id = run["run_id"]
-        label = run.get("label", run_id)
-        participants[label] = OUT_ROOT / f"data/runs/{run_id}/verif_aggregated.nc"
+    for id in baseline_configs.keys():
+        participants[id] = OUT_ROOT / f"data/baselines/{id}/verif.aggregated.nc"
+    for id in run_configs.keys():
+        participants[id] = OUT_ROOT / f"data/runs/{id}/verif.aggregated.nc"
     return participants
 
 
@@ -132,4 +124,4 @@ def _inference_routing_fn(wc):
 
 RUN_CONFIGS = collect_all_runs()
 BASELINE_CONFIGS = collect_all_baselines()
-EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
+EXPERIMENT_PARTICIPANTS = collect_experiment_participants(BASELINE_CONFIGS, RUN_CONFIGS)
