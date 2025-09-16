@@ -81,9 +81,6 @@ def collect_all_runs():
         runs[run_id] = run_config
         if model_type == "interpolator":
             if "forecaster" not in run_config or run_config["forecaster"] is None:
-                logging.warning(
-                    f"Interpolator '{run_id}' has not been set a 'forecaster' config. Please use the 'interpolator_from_files.yaml' config to run an interpolator without a forecaster."
-                )
             else:
                 run_id = run_config["forecaster"]["run_id"]
                 runs[run_id] = run_config["forecaster"]
