@@ -4,6 +4,7 @@ import yaml
 import hashlib
 import logging
 import json
+
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.WARNING)
 
