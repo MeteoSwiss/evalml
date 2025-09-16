@@ -202,7 +202,7 @@ rule inference_interpolator:
         slurm_partition="short-shared",
         cpus_per_task=24,
         mem_mb_per_cpu=8000,
-        runtime="20m",
+        runtime="30m",
         gres="gpu:1",
         slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment",
     shell:
