@@ -33,11 +33,6 @@ class AnemoiInferenceConfig(RootModel[Dict[str, Any]]):
 
 
 class RunConfig(BaseModel):
-    run_id: str = Field(
-        ...,
-        min_length=1,
-        description="Identifier for the run, e.g. 'interpolator-lam'.",
-    )
     mlflow_id: str = Field(
         ...,
         min_length=32,
