@@ -88,7 +88,7 @@ rule create_inference_sandbox:
         image=rules.make_squashfs_image.output.image,
         pyproject=rules.create_inference_pyproject.output.pyproject,
         lockfile=rules.create_inference_venv.output.lockfile,
-        config=str(Path("config/anemoi_inference.yaml").resolve()),
+        config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
         readme_template="resources/inference/sandbox/readme.md.jinja2",
     output:
         sandbox=OUT_ROOT / "data/runs/{run_id}/sandbox.zip",
