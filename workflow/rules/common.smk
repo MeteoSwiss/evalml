@@ -80,8 +80,7 @@ def collect_all_runs():
         runs[run_id] = run_config
         runs[run_id] = run_config
         if model_type == "interpolator":
-            if "forecaster" not in run_config or run_config["forecaster"] is None:
-            else:
+            if "forecaster" in run_config and run_config["forecaster"] is not None:
                 run_id = run_config["forecaster"]["run_id"]
                 runs[run_id] = run_config["forecaster"]
     return runs
