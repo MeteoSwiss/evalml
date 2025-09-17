@@ -15,6 +15,7 @@ include: "rules/data.smk"
 include: "rules/inference.smk"
 include: "rules/verif.smk"
 include: "rules/report.smk"
+include: "rules/plot.smk"
 
 
 # optional messages, log and error handling
@@ -46,7 +47,11 @@ rule experiment_all:
 rule showcase_all:
     """Target rule for showcase workflow."""
     input:
-        [],
+        expand(
+            OUT_ROOT / "data/runs/{run_id}/{init_time}/plots",
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            run_id=collect_all_runs(),
+        ),
 
 
 rule sandbox_all:
