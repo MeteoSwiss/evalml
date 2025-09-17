@@ -132,6 +132,7 @@ rule inference_forecaster:
         runtime="20m",
         gres="gpu:1",
         slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment",
+        gpus=1,
     shell:
         """
         (
@@ -195,6 +196,7 @@ rule inference_interpolator:
         runtime="20m",
         gres="gpu:1",
         slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment",
+        gpus=1,
     shell:
         """
         (
