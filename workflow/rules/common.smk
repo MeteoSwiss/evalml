@@ -86,7 +86,7 @@ def collect_all_runs():
             else:
                 tail_id = run_config["forecaster"]["mlflow_id"][0:9]
                 # Ensure a proper 'forecaster' entry exists with model_type
-                fore_cfg = copy.deepcopy(run_config["forecaster"])
+                fore_cfg = run_config.pop("forecaster")
                 fore_cfg["model_type"] = "forecaster"
                 runs[tail_id] = fore_cfg
             run_id = f"{run_id}-{tail_id}"
