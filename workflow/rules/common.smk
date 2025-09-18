@@ -4,6 +4,7 @@ import yaml
 import hashlib
 import logging
 import json
+from codenamize import codenamize
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.WARNING)
@@ -68,6 +69,7 @@ def _reftimes():
 
 REFTIMES = _reftimes()
 
+
 def collect_all_runs():
     """Collect all runs defined in the configuration."""
     runs = {}
@@ -75,7 +77,7 @@ def collect_all_runs():
         model_type = next(iter(run_entry))
         run_config = run_entry[model_type]
         run_config["model_type"] = model_type
-        run_id = run_config["mlflow_id"][0:9]
+        run_id = run_config["mlflow_id"]
 
         if model_type == "interpolator":
             if "forecaster" not in run_config or run_config["forecaster"] is None:
@@ -84,18 +86,21 @@ def collect_all_runs():
                     f"Interpolator '{run_id}' has no forecaster; using analysis inputs."
                 )
             else:
-                tail_id = run_config["forecaster"]["mlflow_id"][0:9]
+                tail_id = run_config["forecaster"]["mlflow_id"]
                 # Ensure a proper 'forecaster' entry exists with model_type
                 fore_cfg = copy.deepcopy(run_config["forecaster"])
                 fore_cfg["model_type"] = "forecaster"
-                runs[tail_id] = fore_cfg
+                runs[codenamize(tail_id)] = fore_cfg
             run_id = f"{run_id}-{tail_id}"
 
         # Register this (possibly composite) run inside the loop
-        runs[run_id] = run_config
-        LOG.warning(f"Registered run '{run_id}' (model_type={run_config['model_type']})")
+        runs[codenamize(run_id)] = run_config
+        LOG.warning(
+            f"Registered run '{run_id}' (model_type={run_config['model_type']})"
+        )
 
     return runs
+
 
 def collect_all_baselines():
     """Collect all baselines defined in the configuration."""
