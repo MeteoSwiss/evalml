@@ -163,7 +163,7 @@ rule inference_forecaster:
 
 def _get_forecaster_run_id(run_id):
     """Get the forecaster run ID from the RUN_CONFIGS."""
-    return RUN_CONFIGS[run_id]["forecaster"]["run_id"]
+    return RUN_CONFIGS[run_id]["forecaster"]["mlflow_id"][0:9]
 
 
 rule inference_interpolator:
@@ -175,7 +175,7 @@ rule inference_interpolator:
         forecasts=lambda wc: (
             [
                 OUT_ROOT
-                / f"logs/inference_forecaster/{RUN_CONFIGS[wc.run_id.split("-")[1]]}-{wc.init_time}.ok"
+                / f"logs/inference_forecaster/{_get_forecaster_run_id(wc.run_id)}-{wc.init_time}.ok"
             ]
             if RUN_CONFIGS[wc.run_id].get("forecaster") is not None
             else []
@@ -195,7 +195,7 @@ rule inference_interpolator:
         forecaster_run_id=lambda wc: (
             "null"
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None
-            else RUN_CONFIGS[wc.run_id.split("-")[1]]
+            else _get_forecaster_run_id(wc.run_id)
         ),
     log:
         OUT_ROOT / "logs/inference_interpolator/{run_id}-{init_time}.log",
