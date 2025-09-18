@@ -16,6 +16,7 @@ rule create_inference_pyproject:
         extra_dependencies=lambda wc: RUN_CONFIGS[wc.run_id].get(
             "extra_dependencies", []
         ),
+        mlflow_id=lambda wc: RUN_CONFIGS[wc.run_id].get("mlflow_id"),
     log:
         OUT_ROOT / "logs/create_inference_pyproject/{run_id}.log",
     localrule: True
