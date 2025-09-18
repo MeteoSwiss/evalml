@@ -2,11 +2,7 @@ import copy
 from datetime import datetime, timedelta
 import yaml
 import hashlib
-import logging
 import json
-
-LOG = logging.getLogger(__name__)
-logging.basicConfig(level=logging.WARNING)
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
@@ -68,6 +64,7 @@ def _reftimes():
 
 REFTIMES = _reftimes()
 
+
 def collect_all_runs():
     """Collect all runs defined in the configuration."""
     runs = {}
@@ -80,9 +77,6 @@ def collect_all_runs():
         if model_type == "interpolator":
             if "forecaster" not in run_config or run_config["forecaster"] is None:
                 tail_id = "analysis"
-                LOG.warning(
-                    f"Interpolator '{run_id}' has no forecaster; using analysis inputs."
-                )
             else:
                 tail_id = run_config["forecaster"]["mlflow_id"][0:9]
                 # Ensure a proper 'forecaster' entry exists with model_type
@@ -93,9 +87,9 @@ def collect_all_runs():
 
         # Register this (possibly composite) run inside the loop
         runs[run_id] = run_config
-        LOG.warning(f"Registered run '{run_id}' (model_type={run_config['model_type']})")
 
     return runs
+
 
 def collect_all_baselines():
     """Collect all baselines defined in the configuration."""
