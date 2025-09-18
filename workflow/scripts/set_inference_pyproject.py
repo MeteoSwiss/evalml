@@ -373,6 +373,36 @@ def update_pyproject_toml(
         raise RuntimeError("Failed to write pyproject.toml") from e
 
 
+def get_mlflow_id(run_config: dict, run_id: str) -> str:
+    """Extract the MLflow ID from the run configuration.
+
+    Args:
+        run_config (dict): Run configuration dictionary
+        run_id (str): Run ID to look up
+
+    Returns:
+        str: MLflow ID associated with the run ID
+
+    Raises:
+        ValueError: If the run ID is not found in the configuration
+    """
+    all_ids = {}
+    for run_entry in run_config:
+        for conf in run_entry.values():
+            # Always register the top-level mlflow_id
+            if "mlflow_id" in conf:
+                all_ids[run_id] = conf["mlflow_id"]
+            # if the forecaster key exists (interpolator usecase) and is not None (interpolator from analysis), register it too otherwise pyproject does not get created
+            if (
+                "forecaster" in conf
+                and conf["forecaster"] is not None
+                and "mlflow_id" in conf["forecaster"]
+            ):
+                all_ids[conf["forecaster"]["mlflow_id"][0:9]] = conf["forecaster"]["mlflow_id"]
+    logger.info("All run IDs with MLflow IDs: %s", all_ids)
+    return all_ids[run_id]
+
+
 def main(snakemake) -> None:
     """Main entry point for the script.
 
@@ -381,7 +411,7 @@ def main(snakemake) -> None:
     """
     mlflow_uri = snakemake.config["locations"]["mlflow_uri"]
     run_id = snakemake.wildcards["run_id"]
-    mlflow_id = snakemake.params.get("mlflow_id", [])
+    mlflow_id = get_mlflow_id(snakemake.config["runs"], run_id)
     logger.info("Using MLflow ID %s for run ID %s", mlflow_id, run_id)
     requirements_path_in = Path(snakemake.input[0])
     toml_path_out = Path(snakemake.output[0])
