@@ -102,9 +102,9 @@ def collect_all_baselines():
 def collect_experiment_participants():
     participants = {}
     for id in BASELINE_CONFIGS.keys():
-        participants[id] = OUT_ROOT / f"data/baselines/{id}/verif.aggregated.nc"
+        participants[id] = OUT_ROOT / f"data/baselines/{id}/verif_aggregated.nc"
     for id in RUN_CONFIGS.keys():
-        participants[id] = OUT_ROOT / f"data/runs/{id}/verif.aggregated.nc"
+        participants[id] = OUT_ROOT / f"data/runs/{id}/verif_aggregated.nc"
     return participants
 
 
