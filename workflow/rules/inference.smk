@@ -195,7 +195,7 @@ rule inference_interpolator:
         forecaster_run_id=lambda wc: (
             "null"
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None
-            else RUN_CONFIGS[wc.run_id]["forecaster"]["run_id"]
+            else RUN_CONFIGS[wc.run_id.split("-")[1]]
         ),
     log:
         OUT_ROOT / "logs/inference_interpolator/{run_id}-{init_time}.log",
