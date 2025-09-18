@@ -398,7 +398,9 @@ def get_mlflow_id(run_config: dict, run_id: str) -> str:
                 and conf["forecaster"] is not None
                 and "mlflow_id" in conf["forecaster"]
             ):
-                all_ids[conf["forecaster"]["mlflow_id"][0:9]] = conf["forecaster"]["mlflow_id"]
+                all_ids[conf["forecaster"]["mlflow_id"][0:9]] = conf["forecaster"][
+                    "mlflow_id"
+                ]
     logger.info("All run IDs with MLflow IDs: %s", all_ids)
     return all_ids[run_id]
 
