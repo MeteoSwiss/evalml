@@ -81,7 +81,7 @@ def collect_all_runs():
             if "forecaster" not in run_config or run_config["forecaster"] is None:
                 tail_id = "analysis"
                 LOG.warning(
-                    f"Interpolator '{run_config.get('run_id')}' has no forecaster; using analysis inputs."
+                    f"Interpolator '{run_id}' has no forecaster; using analysis inputs."
                 )
             else:
                 tail_id = run_config["forecaster"]["mlflow_id"][0:9]
@@ -90,7 +90,7 @@ def collect_all_runs():
                 fore_cfg["model_type"] = "forecaster"
                 runs[tail_id] = fore_cfg
             run_id = f"{run_id}-{tail_id}"
-            
+
         # Register this (possibly composite) run inside the loop
         runs[run_id] = run_config
         LOG.warning(f"Registered run '{run_id}' (model_type={run_config['model_type']})")
