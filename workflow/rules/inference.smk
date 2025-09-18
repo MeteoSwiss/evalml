@@ -175,7 +175,7 @@ rule inference_interpolator:
         forecasts=lambda wc: (
             [
                 OUT_ROOT
-                / f"logs/inference_forecaster/{RUN_CONFIGS[wc.run_id]['forecaster']['run_id']}-{wc.init_time}.ok"
+                / f"logs/inference_forecaster/{RUN_CONFIGS[wc.run_id.split("-")[1]]}-{wc.init_time}.ok"
             ]
             if RUN_CONFIGS[wc.run_id].get("forecaster") is not None
             else []
