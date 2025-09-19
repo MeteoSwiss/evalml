@@ -1,4 +1,4 @@
-runner: time-interpolator
+runner: time_interpolator
 
 input:
   cutout:
@@ -90,17 +90,17 @@ patch_metadata:
 output:
   tee:
     outputs:
-    - extract_lam:
-        output:
-          assign_mask:
-            mask: "source0/trimedge_mask"
-            output:
-              grib:
-                path: grib/{dateTime}_{step:03}.grib
-                encoding:
-                  typeOfGeneratingProcess: 2
-                templates:
-                  samples: _resources/templates_index_cosmo.yaml
+      - extract_lam:
+          output:
+            assign_mask:
+              mask: "source0/trimedge_mask"
+              output:
+                grib:
+                  path: grib/{dateTime}_{step:03}.grib
+                  encoding:
+                    typeOfGeneratingProcess: 2
+                  templates:
+                    samples: _resources/templates_index_cosmo.yaml
 
 verbosity: 1
 allow_nans: true

@@ -33,7 +33,7 @@ class AnemoiInferenceConfig(RootModel[Dict[str, Any]]):
 
 
 class RunConfig(BaseModel):
-    run_id: str = Field(
+    mlflow_id: str = Field(
         ...,
         min_length=32,
         max_length=32,
