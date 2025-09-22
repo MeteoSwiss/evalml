@@ -22,5 +22,5 @@ rule plot_forecast:
     shell:
         """
         python workflow/scripts/plot_map.py \
-          --input {input.raw_output}  --date {init_time} --output {output}\
+          --input {input.raw_output}  --date {wildcards.init_time} --output {output[0]}\
         """
