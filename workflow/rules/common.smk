@@ -2,7 +2,11 @@ import copy
 from datetime import datetime, timedelta
 import yaml
 import hashlib
+import logging
 import json
+
+LOG = logging.getLogger(__name__)
+logging.basicConfig(level=logging.WARNING)
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
@@ -80,13 +84,14 @@ def collect_all_runs():
             else:
                 tail_id = run_config["forecaster"]["mlflow_id"][0:9]
                 # Ensure a proper 'forecaster' entry exists with model_type
-                fore_cfg = run_config.pop("forecaster")
+                fore_cfg = copy.deepcopy(run_config["forecaster"])
                 fore_cfg["model_type"] = "forecaster"
                 runs[tail_id] = fore_cfg
             run_id = f"{run_id}-{tail_id}"
 
         # Register this (possibly composite) run inside the loop
         runs[run_id] = run_config
+        LOG.warning(f"Registered run '{run_id}' (model_type={run_config['model_type']})")
 
     return runs
 
