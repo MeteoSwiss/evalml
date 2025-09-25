@@ -16,6 +16,7 @@ rule create_inference_pyproject:
         extra_dependencies=lambda wc: RUN_CONFIGS[wc.run_id].get(
             "extra_dependencies", []
         ),
+        mlflow_id=lambda wc: RUN_CONFIGS[wc.run_id].get("mlflow_id"),
     log:
         OUT_ROOT / "logs/create_inference_pyproject/{run_id}.log",
     localrule: True
@@ -162,7 +163,7 @@ rule inference_forecaster:
 
 def _get_forecaster_run_id(run_id):
     """Get the forecaster run ID from the RUN_CONFIGS."""
-    return RUN_CONFIGS[run_id]["forecaster"]["run_id"]
+    return RUN_CONFIGS[run_id]["forecaster"]["mlflow_id"][0:9]
 
 
 rule inference_interpolator:
@@ -171,8 +172,14 @@ rule inference_interpolator:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
-        forecasts=lambda wc: OUT_ROOT
-        / f"logs/inference_forecaster/{_get_forecaster_run_id(wc.run_id)}-{wc.init_time}.ok",
+        forecasts=lambda wc: (
+            [
+                OUT_ROOT
+                / f"logs/inference_forecaster/{_get_forecaster_run_id(wc.run_id)}-{wc.init_time}.ok"
+            ]
+            if RUN_CONFIGS[wc.run_id].get("forecaster") is not None
+            else []
+        ),
     output:
         okfile=touch(OUT_ROOT / "logs/inference_interpolator/{run_id}-{init_time}.ok"),
     params:
@@ -185,14 +192,18 @@ rule inference_interpolator:
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
-        forecaster_run_id=lambda wc: _get_forecaster_run_id(wc.run_id),
+        forecaster_run_id=lambda wc: (
+            "null"
+            if RUN_CONFIGS[wc.run_id].get("forecaster") is None
+            else _get_forecaster_run_id(wc.run_id)
+        ),
     log:
         OUT_ROOT / "logs/inference_interpolator/{run_id}-{init_time}.log",
     resources:
         slurm_partition="short-shared",
         cpus_per_task=24,
         mem_mb_per_cpu=8000,
-        runtime="20m",
+        runtime="30m",
         gres="gpu:1",
         slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment",
     shell:
@@ -204,11 +215,17 @@ rule inference_interpolator:
         export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
 
         # prepare the working directory
-        FORECASTER_WORKDIR={params.output_root}/runs/{params.forecaster_run_id}/{wildcards.init_time}
         WORKDIR={params.output_root}/runs/{wildcards.run_id}/{wildcards.init_time}
         mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw _resources
         cp {input.config} config.yaml && cp -r {params.resources_root}/templates/* _resources/
-        ln -fns $FORECASTER_WORKDIR/grib forecaster_grib
+
+        # if forecaster_run_id is not "null", link the forecaster grib directory; else, run from files.
+        if [ "{params.forecaster_run_id}" != "null" ]; then
+            FORECASTER_WORKDIR={params.output_root}/runs/{params.forecaster_run_id}/{wildcards.init_time}
+            ln -fns $FORECASTER_WORKDIR/grib forecaster_grib
+        else
+            echo "Forecaster configuration is null; proceeding with file-based inputs."
+        fi
 
         CMD_ARGS=(
             date={params.reftime_to_iso}
