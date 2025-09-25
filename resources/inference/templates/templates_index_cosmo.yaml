@@ -1,12 +1,26 @@
 
-- - {levtype: pl}
+# COSMO-2 templates
+- - {numberOfValues: 226980, levtype: pl}
   - _resources/co2-typeOfLevel=isobaricInhPa.grib
 
-- - {levtype: sfc, param: [T_2M, TD_2M, U_10M, V_10M]}
+- - {numberOfValues: 226980, levtype: sfc, param: [T_2M, TD_2M, U_10M, V_10M]}
   - _resources/co2-typeOfLevel=heightAboveGround.grib
 
-- - {levtype: sfc, param: [FR_LAND, TOC_PREC, PMSL, PS, FIS, T_G]}
+- - {numberOfValues: 226980, levtype: sfc, param: [FR_LAND, TOC_PREC, PMSL, PS, FIS, T_G]}
   - _resources/co2-typeOfLevel=surface.grib
 
-- - {levtype: sfc, param: [TOT_PREC]}
+- - {numberOfValues: 226980, levtype: sfc, param: [TOT_PREC]}
   - _resources/co2-shortName=TOT_PREC.grib
+
+# COSMO-1E templates
+- - {numberOfValues: 919620, levtype: pl}
+  - _resources/co1e-typeOfLevel=isobaricInhPa.grib
+
+- - {numberOfValues: 919620, levtype: sfc, param: [T_2M, TD_2M, U_10M, V_10M]}
+  - _resources/co1e-typeOfLevel=heightAboveGround.grib
+
+- - {numberOfValues: 919620, levtype: sfc, param: [FR_LAND, TOC_PREC, PMSL, PS, FIS, T_G]}
+  - _resources/co1e-typeOfLevel=surface.grib
+
+- - {numberOfValues: 919620, levtype: sfc, param: [TOT_PREC]}
+  - _resources/co1e-shortName=TOT_PREC.grib
