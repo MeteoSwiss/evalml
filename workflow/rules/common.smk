@@ -2,11 +2,7 @@ import copy
 from datetime import datetime, timedelta
 import yaml
 import hashlib
-import logging
 import json
-
-LOG = logging.getLogger(__name__)
-logging.basicConfig(level=logging.WARNING)
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
@@ -91,8 +87,6 @@ def collect_all_runs():
 
         # Register this (possibly composite) run inside the loop
         runs[run_id] = run_config
-        LOG.warning(f"Registered run '{run_id}' (model_type={run_config['model_type']})")
-
     return runs
 
 
