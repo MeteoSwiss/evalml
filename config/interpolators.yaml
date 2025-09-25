@@ -29,6 +29,7 @@ runs:
         config: resources/inference/configs/forecaster_with_global.yaml
       extra_dependencies:
         - git+https://github.com/MeteoSwiss/anemoi-inference@fix/interp_files
+        #  - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
   - interpolator:
@@ -41,6 +42,7 @@ runs:
         config: resources/inference/configs/forecaster_with_global.yaml
       extra_dependencies:
         - git+https://github.com/MeteoSwiss/anemoi-inference@fix/interp_files
+        #  - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
 
@@ -64,9 +66,12 @@ locations:
 
 profile:
   executor: slurm
+  global_resources:
+    gpus: 15
   default_resources:
     slurm_partition: "postproc"
     cpus_per_task: 1
     mem_mb_per_cpu: 1800
     runtime: "1h"
-  jobs: 10
+    gpus: 0
+  jobs: 50
