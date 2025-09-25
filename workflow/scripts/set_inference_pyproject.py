@@ -390,7 +390,7 @@ def get_mlflow_id(run_config: dict, run_id: str) -> str:
     for run_entry in run_config:
         for conf in run_entry.values():
             # Always register the top-level mlflow_id
-            if "mlflow_id" in conf:
+            if "mlflow_id" in conf and run_id[:8] in conf["mlflow_id"]:
                 all_ids[run_id] = conf["mlflow_id"]
             # if the forecaster key exists (interpolator usecase) and is not None (interpolator from analysis), register it too otherwise pyproject does not get created
             if (
