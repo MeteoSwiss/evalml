@@ -220,10 +220,10 @@
       "type": "object"
     },
     "GlobalResources": {
-      "description": "Set global constraints across all submissions (e.g. number of API calls per second).",
+      "description": "Define resource limits that apply across all submissions.\n\nThis model is intended to specify global constraints, such as\nthe maximum number of GPUs that can be allocated in parallel,\nregardless of individual job settings.",
       "properties": {
         "gpus": {
-          "description": "Maximum number of GPUs to be used in parallel.",
+          "description": "Maximum number of GPUs that may be used concurrently across all submissions.",
           "minimum": 1,
           "title": "Gpus",
           "type": "integer"

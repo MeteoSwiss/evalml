@@ -1,10 +1,11 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  This is an experiment to do blabla.
+  Experiment with COSMO-1E emulators finetuned on COSMO-1E analysis
+  (KENDA-1) at 1km resolution.
 
 dates:
-  start: 2020-08-01T12:00
-  end: 2020-08-10T00:00
+  start: 2022-01-01T12:00
+  end: 2022-01-10T00:00
   frequency: 54h
 
 lead_time: 120h
@@ -14,8 +15,6 @@ runs:
       mlflow_id: d4fd4abc832542d6bb7b21c2a0f7e084
       label: Cerra finetuning with N320+COSMO-1E
       config: resources/inference/configs/forecaster_no_trimedge.yaml
-      extra_dependencies:
-        - /users/omiralle/anemoi-inference
 
 baselines:
   - baseline:
@@ -36,9 +35,12 @@ locations:
 
 profile:
   executor: slurm
+  global_resources:
+    gpus: 15
   default_resources:
     slurm_partition: "postproc"
     cpus_per_task: 1
-    mem_mb_per_cpu: 4000
+    mem_mb_per_cpu: 1800
     runtime: "1h"
-  jobs: 10
+    gpus: 0
+  jobs: 50
