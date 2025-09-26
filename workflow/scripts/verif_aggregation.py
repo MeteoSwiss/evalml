@@ -1,15 +1,14 @@
-from pathlib import Path
-from argparse import ArgumentParser, Namespace
 import logging
 import time
+from argparse import ArgumentParser
+from argparse import Namespace
+from pathlib import Path
 
-import xarray as xr
 import numpy as np
+import xarray as xr
 
 LOG = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 
 def get_season(time):
@@ -42,9 +41,7 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
             ds_grouped = ds
         else:
             ds_grouped = ds.groupby(group)
-        ds_grouped = ds_grouped.mean(dim="ref_time").compute(
-            num_workers=4, scheduler="threads"
-        )
+        ds_grouped = ds_grouped.mean(dim="ref_time").compute(num_workers=4, scheduler="threads")
         if "init_hour" not in group:
             ds_grouped = ds_grouped.expand_dims({"init_hour": [-999]})
         if "season" not in group:
@@ -99,9 +96,7 @@ def main(args: Namespace) -> None:
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Verify results from KENDA-1 data.")
-    parser.add_argument(
-        "verif_files", type=Path, nargs="+", help="Paths to verification files."
-    )
+    parser.add_argument("verif_files", type=Path, nargs="+", help="Paths to verification files.")
     parser.add_argument(
         "--output",
         type=Path,
@@ -111,4 +106,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(args)
     # example usage:
+    # uv run workflow/scripts/verif_results.py /users/fzanetta/projects/mch-anemoi-evaluation/output/7c58e59d24e949c9ade3df635bbd37e2/*/verif.csv
     # uv run workflow/scripts/verif_results.py /users/fzanetta/projects/mch-anemoi-evaluation/output/7c58e59d24e949c9ade3df635bbd37e2/*/verif.csv

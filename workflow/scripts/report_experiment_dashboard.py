@@ -1,9 +1,14 @@
-from pathlib import Path
 import argparse
 import logging
+import sys as _sys
+from pathlib import Path
 
-import xarray as xr
 import jinja2
+import xarray as xr
+
+_sys.path.append(str(Path(__file__).parent))
+from verif_plot_metrics import _ensure_unique_lead_time
+from verif_plot_metrics import _select_best_sources
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -26,13 +31,10 @@ def program_summary_log(args):
 def main(args):
     program_summary_log(args)
 
-    # remove duplicated but not identical values from analyses (rounding errors)
+    # Load, de-duplicate lead_time, and keep best provider per source (same logic as verif_plot_metrics)
     dfs = [xr.open_dataset(f) for f in args.verif_files]
-    sources = [set(d.source.values.tolist()) for d in dfs]
-    common_sources = list(set.intersection(*sources))
-    for i in range(len(dfs)):
-        if i > 0:
-            dfs[i] = dfs[i].drop_sel(source=common_sources)
+    dfs = [_ensure_unique_lead_time(d) for d in dfs]
+    dfs = _select_best_sources(dfs)
     ds = xr.concat(dfs, dim="source", join="outer")
     LOG.info("Loaded verification netcdf: \n%s", ds)
 

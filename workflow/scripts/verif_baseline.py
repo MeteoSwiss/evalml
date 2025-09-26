@@ -1,9 +1,10 @@
-from pathlib import Path
-from argparse import ArgumentParser, Namespace
 import logging
-import sys
 import os
+import sys
+from argparse import ArgumentParser
+from argparse import Namespace
 from datetime import datetime
+from pathlib import Path
 from typing import Iterable
 
 eccodes_definition_path = Path(sys.prefix) / "share/eccodes-cosmo-resources/definitions"
@@ -11,24 +12,19 @@ os.environ["ECCODES_DEFINITION_PATH"] = str(eccodes_definition_path)
 
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
-
 from src.verification import verify  # noqa: E402
 
 LOG = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 
-def load_analysis_data_from_zarr(
-    analysis_zarr: Path, times: Iterable[datetime], params: list[str]
-) -> xr.Dataset:
+def load_analysis_data_from_zarr(analysis_zarr: Path, times: Iterable[datetime], params: list[str]) -> xr.Dataset:
     """Load analysis data from an anemoi-generated Zarr dataset
 
     This function loads analysis data from a Zarr dataset, processing it to make it more
     xarray-friendly. It renames variables, sets the time index, and pivots the dataset.
     """
-    PARAMS_MAP = {
+    PARAMS_MAP_COSMO2 = {
         "T_2M": "2t",
         "TD_2M": "2d",
         "U_10M": "10u",
@@ -37,6 +33,8 @@ def load_analysis_data_from_zarr(
         "PMSL": "msl",
         "TOT_PREC": "tp",
     }
+    PARAMS_MAP_COSMO1 = {v: v.replace("TOT_PREC", "TOT_PREC_6H") for v in PARAMS_MAP_COSMO2.keys()}
+    PARAMS_MAP = PARAMS_MAP_COSMO2 if "co2" in analysis_zarr.name else PARAMS_MAP_COSMO1
 
     ds = xr.open_zarr(analysis_zarr, consolidated=False)
 
@@ -61,13 +59,7 @@ def load_analysis_data_from_zarr(
     if "latitudes" in ds and "longitudes" in ds:
         ds = ds.rename({"latitudes": "latitude", "longitudes": "longitude"})
     ds = ds.set_coords(["latitude", "longitude"])
-
-    # pivot (use inverse of PARAMS_MAP)
-    ds = (
-        ds["data"]
-        .to_dataset("variable")
-        .rename({v: k for k, v in PARAMS_MAP.items() if v in ds["variable"].values})
-    )
+    ds = ds["data"].to_dataset("variable").rename({v: k for k, v in PARAMS_MAP.items() if v in ds["variable"].values})
 
     # select valid times
     # (handle special case where some valid times are not in the dataset, e.g. at the end)
@@ -82,8 +74,7 @@ def load_analysis_data_from_zarr(
         ds = ds.sel(time=times[times_included])
     else:
         raise ValueError(
-            "Valid times are not included in the dataset. "
-            "Please check the valid times and the dataset."
+            "Valid times are not included in the dataset. " "Please check the valid times and the dataset."
         )
 
     return ds
@@ -92,13 +83,9 @@ def load_analysis_data_from_zarr(
 def _parse_lead_time(lead_time: str) -> int:
     # check that lead_time is in the format "start/stop/step"
     if "/" not in lead_time:
-        raise ValueError(
-            f"Expected lead_time in format 'start/stop/step', got '{lead_time}'"
-        )
+        raise ValueError(f"Expected lead_time in format 'start/stop/step', got '{lead_time}'")
     if len(lead_time.split("/")) != 3:
-        raise ValueError(
-            f"Expected lead_time in format 'start/stop/step', got '{lead_time}'"
-        )
+        raise ValueError(f"Expected lead_time in format 'start/stop/step', got '{lead_time}'")
 
     return list(range(*map(int, lead_time.split("/"))))
 
@@ -132,13 +119,11 @@ def main(args: ScriptConfig):
     """Main function to verify baseline forecast data."""
 
     # get baseline forecast data
+    import pandas as pd
+
     now = datetime.now()
-    baseline = xr.open_zarr(
-        args.baseline_zarr, consolidated=True, decode_timedelta=True
-    )
-    baseline = baseline.rename(
-        {"forecast_reference_time": "ref_time", "step": "lead_time"}
-    )
+    baseline = xr.open_zarr(args.baseline_zarr, consolidated=True, decode_timedelta=True)
+    baseline = baseline.rename({"forecast_reference_time": "ref_time", "step": "lead_time"}).sortby("lead_time")
     if "TOT_PREC" in baseline.data_vars:
         if baseline.TOT_PREC.units == "kg m-2":
             baseline = baseline.assign(TOT_PREC=lambda x: x.TOT_PREC / 1000)
@@ -146,15 +131,13 @@ def main(args: ScriptConfig):
         ## disaggregate precipitation
         baseline = baseline.assign(
             TOT_PREC=lambda x: (
-                x.TOT_PREC.fillna(0)
-                .diff("lead_time")
-                .pad(lead_time=(1, 0), constant_value=None)
-                .clip(min=0.0)
+                x.TOT_PREC.fillna(0).diff("lead_time").pad(lead_time=(1, 0), constant_value=None).clip(min=0.0)
             )
         )
     baseline = baseline[args.params].sel(
         ref_time=args.reftime,
-        lead_time=np.array(args.lead_time, dtype="timedelta64[h]"), method="nearest",
+        lead_time=np.array(args.lead_time, dtype="timedelta64[h]"),
+        method="nearest",
     )
     baseline = baseline.assign_coords(time=baseline.ref_time + baseline.lead_time)
     LOG.info(
