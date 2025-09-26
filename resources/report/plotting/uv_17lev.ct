@@ -1,0 +1,23 @@
+; Type: COSMO Library Color Table
+; Description: Wind speed representation in 17 levels. This color table
+;   is used in the model browser to plot wind at 10m, 850, 700 and 500hPa
+17
+4.0 6.0 10.0 14.0 18.0 22.0 26.0 30.0 35.0 40.0 45.0 50.0 60.0 70.0 80.0 90.0 100.0
+255 255 255
+239 244 209
+232 244 158
+170 206  99
+226 237  22
+255 237   0
+255 237 130
+244 209 127
+237 165  73
+229 140  61
+219 124  61
+239   7  61
+232  86 163
+155 112 168
+ 99 112 247
+127 150 255
+142 178 255
+181 201 255

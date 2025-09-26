@@ -16,9 +16,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from src.plotting import StatePlotter
-from src.calc import process_augment_state
+#from src.calc import process_augment_state
 from src.compat import load_state_from_raw
-from src.cmaps import FIELD_DEFAULTS
+from src.colormaps import CMAP_DEFAULTS
 
 State = dict[str, np.ndarray | dict[str, np.ndarray]]
 
@@ -57,7 +57,7 @@ def plot_state(
             field=field,
             zorder=1,
             validtime=pred_state["valid_time"].strftime("%Y%m%d%H%M"),
-            **FIELD_DEFAULTS[param],
+            **CMAP_DEFAULTS[param],
         )
 
         validtime = pred_state["valid_time"].strftime("%Y%m%d%H%M")
@@ -82,7 +82,7 @@ def process_plot_leadtime(
     print(pred_state.keys())
 
     LOG.info(f"Augmenting states")
-    pred_state = process_augment_state(pred_state)
+    #pred_state = process_augment_state(pred_state)
 
     LOG.info(f"Initializing plotter")
     plotter = StatePlotter(
