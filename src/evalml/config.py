@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Optional, Any
 
 from pydantic import BaseModel, Field, RootModel, HttpUrl
 
@@ -32,6 +32,29 @@ class AnemoiInferenceConfig(RootModel[Dict[str, Any]]):
     """Configuration for the Anemoi inference workflow."""
 
 
+class InferenceResources(BaseModel):
+    slurm_partition: str | None = Field(
+        None,
+        description="The Slurm partition to use for inference jobs, e.g. 'short-shared'.",
+    )
+    cpus_per_task: int | None = Field(
+        None,
+        description="Number of CPUs per task to request.",
+    )
+    mem_mb_per_cpu: int | None = Field(
+        None,
+        description="Memory (in MB) per CPU to request.",
+    )
+    runtime: str | None = Field(
+        None,
+        description="Maximum runtime for the job, e.g. '20m', '2h', '01:30:00'.",
+    )
+    gpu: int | None = Field(
+        None,
+        description="Number of GPUs to request.",
+    )
+
+
 class RunConfig(BaseModel):
     mlflow_id: str = Field(
         ...,
@@ -51,6 +74,10 @@ class RunConfig(BaseModel):
         default_factory=list,
         description="List of extra dependencies to install for this model. "
         "These will be added to the pyproject.toml file in the run directory.",
+    )
+    inference_resources: InferenceResources | None = Field(
+        None,
+        description="Resource requirements for inference jobs (optional; defaults handled externally).",
     )
 
     config: Dict[str, Any] | str
