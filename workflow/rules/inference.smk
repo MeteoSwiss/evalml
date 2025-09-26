@@ -149,7 +149,7 @@ rule inference_forecaster:
 
         # If scheduler spawns multiple tasks, run non-zero ranks later otherwise CUDA unavailable device error as many torchrun instances start simultaneously
         # TODO maybe optimize this or use srun --ntasks=1 --exclusive ...?
-        
+
         PROCID=${{SLURM_PROCID:-0}}
         if [ "$PROCID" != "0" ]; then
             delay=$((60 * PROCID))

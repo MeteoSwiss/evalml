@@ -9,7 +9,9 @@ import pandas as pd
 import xarray as xr
 
 LOG = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 
 def _ensure_unique_lead_time(ds: xr.Dataset) -> xr.Dataset:
@@ -83,7 +85,9 @@ def main(args: Namespace) -> None:
 
     # extract only  non-spatial variables to pd.DataFrame
     nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
-    all_df = ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
+    all_df = (
+        ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
+    )
     all_df[["param", "metric"]] = all_df["stack"].str.split(".", n=1, expand=True)
     all_df.drop(columns=["stack"], inplace=True)
     all_df["lead_time"] = all_df["lead_time"].dt.total_seconds() / 3600
@@ -91,10 +95,16 @@ def main(args: Namespace) -> None:
     metrics = all_df["metric"].unique()
     params = all_df["param"].unique()
     seasons = all_df["season"].unique() if args.stratify else ["all"]
-    init_hours = all_df["init_hour"].unique() if args.stratify else [-999]  # numeric code to indicate all init hours
+    init_hours = (
+        all_df["init_hour"].unique() if args.stratify else [-999]
+    )  # numeric code to indicate all init hours
 
-    for metric, param, season, init_hour in itertools.product(metrics, params, seasons, init_hours):
-        LOG.info(f"Processing metric: {metric}, param: {param}, season: {season}, init_hour: {init_hour}")
+    for metric, param, season, init_hour in itertools.product(
+        metrics, params, seasons, init_hours
+    ):
+        LOG.info(
+            f"Processing metric: {metric}, param: {param}, season: {season}, init_hour: {init_hour}"
+        )
 
         def _subset_df(df):
             return subset_df(

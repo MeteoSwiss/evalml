@@ -45,7 +45,9 @@ def load_analysis_data_from_zarr(
         "QV": "q",
         "FI": "z",
     }
-    PARAMS_MAP_COSMO1 = {v: v.replace("TOT_PREC", "TOT_PREC_6H") for v in PARAMS_MAP_COSMO2.keys()}
+    PARAMS_MAP_COSMO1 = {
+        v: v.replace("TOT_PREC", "TOT_PREC_6H") for v in PARAMS_MAP_COSMO2.keys()
+    }
     PARAMS_MAP = PARAMS_MAP_COSMO2 if "co2" in analysis_zarr.name else PARAMS_MAP_COSMO1
 
     ds = xr.open_zarr(analysis_zarr, consolidated=False)
@@ -57,9 +59,13 @@ def load_analysis_data_from_zarr(
     ds = ds.assign_coords({"variable": ds.attrs["variables"]})
 
     # select variables and valid time, squeeze ensemble dimension
-    inverse_mapping = {v:k for k,v in PARAMS_MAP.items()}
+    inverse_mapping = {v: k for k, v in PARAMS_MAP.items()}
     prefixes = tuple(PARAMS_MAP.values())
-    vars_to_select = [v for v in ds["variable"].values if any(str(v).startswith(p) for p in prefixes) and inverse_mapping[v] in params]
+    vars_to_select = [
+        v
+        for v in ds["variable"].values
+        if any(str(v).startswith(p) for p in prefixes) and inverse_mapping[v] in params
+    ]
     ds = ds.sel(variable=vars_to_select).squeeze("ensemble", drop=True)
 
     # recover original 2D shape
