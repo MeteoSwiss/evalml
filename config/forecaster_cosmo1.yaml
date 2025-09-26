@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  This is an experiment to do blabla.
+
+dates:
+  start: 2020-08-01T12:00
+  end: 2020-08-10T00:00
+  frequency: 54h
+
+lead_time: 120h
+
+runs:
+  - forecaster:
+      mlflow_id: d4fd4abc832542d6bb7b21c2a0f7e084
+      label: Cerra finetuning with N320+COSMO-1E
+      config: resources/inference/configs/forecaster_no_trimedge.yaml
+      extra_dependencies:
+        - /users/omiralle/anemoi-inference
+
+baselines:
+  - baseline:
+      baseline_id: COSMO-1E
+      label: COSMO-1E
+      root: /scratch/mch/bhendj/COSMO-1E
+      steps: 0/126/6
+
+analysis:
+  label: COSMO KENDA
+  analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co1e-an-archive-0p01-2019-2024-1h-v1-pl13.zarr
+
+locations:
+  output_root: output/
+  mlflow_uri:
+    - https://servicedepl.meteoswiss.ch/mlstore
+    - https://mlflow.ecmwf.int
+
+profile:
+  executor: slurm
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 4000
+    runtime: "1h"
+  jobs: 10

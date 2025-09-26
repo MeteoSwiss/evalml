@@ -1,16 +1,64 @@
-from pathlib import Path
 import itertools
-from argparse import ArgumentParser, Namespace
 import logging
+from argparse import ArgumentParser
+from argparse import Namespace
+from pathlib import Path
 
-import xarray as xr
-import pandas as pd
 import matplotlib.pyplot as plt
+import pandas as pd
+import xarray as xr
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+
+
+def _ensure_unique_lead_time(ds: xr.Dataset) -> xr.Dataset:
+    """Drop duplicate lead_time entries within a Dataset (keep first occurrence)."""
+    try:
+        idx = ds.get_index("lead_time")
+    except Exception:
+        idx = pd.Index(ds["lead_time"].values)
+    if getattr(idx, "has_duplicates", False):
+        keep = ~idx.duplicated(keep="first")
+        ds = ds.isel(lead_time=keep)
+    return ds
+
+
+def _select_best_sources(dfs: list[xr.Dataset]) -> list[xr.Dataset]:
+    """
+    If the same 'source' exists in multiple datasets, keep it only from the dataset
+    that has the largest number of unique lead_time entries. Drop it from others.
+    """
+    # Compute unique sources per dataset
+    src_sets = [set(d.source.values.tolist()) for d in dfs]
+    all_sources = set().union(*src_sets)
+
+    # Decide best provider (dataset index) for each source
+    best = {}
+    for s in all_sources:
+        candidates = []
+        for i, d in enumerate(dfs):
+            if s in d.source.values:
+                di = d.sel(source=s)
+                try:
+                    n = pd.Index(di["lead_time"].values).unique().size
+                except Exception:
+                    n = len(pd.unique(di["lead_time"].values))
+                candidates.append((i, n))
+        if candidates:
+            best_idx, _ = max(candidates, key=lambda t: t[1])
+            best[s] = best_idx
+
+    # Drop non-best occurrences
+    out = []
+    for i, d in enumerate(dfs):
+        drop_src = [s for s, b in best.items() if b != i and s in d.source.values]
+        if drop_src:
+            d = d.drop_sel(source=drop_src)
+        out.append(d)
+    return out
 
 
 def subset_df(df, **kwargs):
@@ -28,11 +76,11 @@ def main(args: Namespace) -> None:
 
     # remove duplicated but not identical values from analyses (rounding errors)
     dfs = [xr.open_dataset(f) for f in args.verif_files]
-    sources = [set(d.source.values.tolist()) for d in dfs]
-    common_sources = list(set.intersection(*sources))
-    for i in range(len(dfs)):
-        if i > 0:
-            dfs[i] = dfs[i].drop_sel(source=common_sources)
+    # 1) Ensure each dataset has unique lead_time values
+    dfs = [_ensure_unique_lead_time(d) for d in dfs]
+    # 2) For sources present in multiple datasets, keep the one with most lead_times
+    dfs = _select_best_sources(dfs)
+    # 3) Concatenate by source; outer join to keep the union of lead_times
     ds = xr.concat(dfs, dim="source", join="outer")
 
     # extract only  non-spatial variables to pd.DataFrame

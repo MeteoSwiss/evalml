@@ -16,5 +16,3 @@ grib_copy -w shortName=PS $ANA_SAMPLE /dev/stdout | grib_set -d 0 - co1e-typeOfL
 
 # template for typeOfLevel=isobaricInhPa
 grib_copy -w shortName=T,level=500 $ANA_SAMPLE /dev/stdout | grib_set -d 0 - co1e-typeOfLevel=isobaricInhPa.grib
-
-
