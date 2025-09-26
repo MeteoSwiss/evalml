@@ -46,9 +46,13 @@ runs:
 baselines:
   - baseline:
       baseline_id: COSMO-E
-      root: /scratch/mch/bhendj/COSMO-E
       label: COSMO-E
+      root: /store_new/mch/msopr/ml/COSMO-E
+      steps: 0/126/6
 
+analysis:
+  label: COSMO KENDA
+  analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr
 
 locations:
   output_root: output/
@@ -58,12 +62,15 @@ locations:
 
 profile:
   executor: slurm
+  global_resources:
+    gpus: 15
   default_resources:
     slurm_partition: "postproc"
     cpus_per_task: 1
     mem_mb_per_cpu: 1800
     runtime: "1h"
-  jobs: 30
+    gpus: 0
+  jobs: 50
 ```
 
 You can then run it with:
