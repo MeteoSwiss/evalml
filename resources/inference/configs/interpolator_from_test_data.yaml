@@ -1,4 +1,5 @@
 runner: time_interpolator
+include_forcings: true
 
 input:
   test:
