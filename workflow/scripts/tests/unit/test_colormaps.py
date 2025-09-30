@@ -9,7 +9,7 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-import colormap_loader, colormap_defaults
+from src import colormap_loader, colormap_defaults
 
 
 def test_load_valid_colormap(monkeypatch, tmp_path):

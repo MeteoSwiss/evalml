@@ -120,3 +120,10 @@ ln -s $SCRATCH/evalenv/output output
 This way data will be written to your scratch, but you will still be able to browse it with your IDE.
 
 If you are using VSCode, we advise that you install the YAML extension, which will enable config validation, autocompletion, hovering support, and more.
+
+## Hints for developers
+
+To run pytest for the code in `workflow/scripts/` call:
+```
+PYTHONPATH=workflow/scripts pytest -s
+```

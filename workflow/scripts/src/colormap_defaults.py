@@ -1,6 +1,6 @@
 """Mapping of field names to good default plotting parameters."""
 from matplotlib import pyplot as plt
-from colormap_loader import load_ncl_colormap
+from .colormap_loader import load_ncl_colormap
 
 
 CMAP_DEFAULTS = {
