@@ -18,7 +18,7 @@ import numpy as np
 from src.plotting import StatePlotter
 #from src.calc import process_augment_state
 from src.compat import load_state_from_raw
-from src.colormaps import CMAP_DEFAULTS
+from src.colormap_defaults import CMAP_DEFAULTS
 
 State = dict[str, np.ndarray | dict[str, np.ndarray]]
 
@@ -91,7 +91,8 @@ def process_plot_leadtime(
         plots_dir,
     )
 
-    for region in ["europe", "globe", "switzerland"]:
+    #for region in ["europe", "globe", "switzerland"]:
+    for region in ["switzerland"]:
         for proj in ["orthographic"]:
             plot_state(
                 plotter,
