@@ -91,8 +91,7 @@ def process_plot_leadtime(
         plots_dir,
     )
 
-    #for region in ["europe", "globe", "switzerland"]:
-    for region in ["switzerland"]:
+    for region in ["europe", "globe", "switzerland"]:
         for proj in ["orthographic"]:
             plot_state(
                 plotter,
