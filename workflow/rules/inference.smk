@@ -108,6 +108,7 @@ rule create_inference_sandbox:
 
 
 rule inference_forecaster:
+    localrule: True
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
@@ -124,91 +125,46 @@ rule inference_forecaster:
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
+        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
     log:
         OUT_ROOT / "logs/inference_forecaster/{run_id}-{init_time}.log",
     resources:
-        slurm_partition="short-shared",
-        runtime="40m",
+        slurm_partition="debug",
+        cpus_per_task=8,
+        mem_mb_per_cpu=8000,
+        runtime="20m",
         gres="gpu:4",
+        tasks=4,
         slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment",
-        gpus=1,
     shell:
-        """
+        r"""
         (
         set -euo pipefail
-        echo "Raw SLURM vars: SLURM_JOB_GPUS='${{SLURM_JOB_GPUS:-}}' SLURM_NTASKS='${{SLURM_NTASKS:-}}' SLURM_PROCID='${{SLURM_PROCID:-}}'"
-
-        # Skip if already finished earlier
-        if [ -f "{output.okfile}" ]; then
-            echo "OK file exists -> skipping."
-            exit 0
-        fi
-
-        DEBUG=${{DEBUG:-0}}
-        [ "$DEBUG" = "1" ] && set -x || true
-
-        # If scheduler spawns multiple tasks, run non-zero ranks later otherwise CUDA unavailable device error as many torchrun instances start simultaneously
-        # TODO maybe optimize this or use srun --ntasks=1 --exclusive ...?
-
-        PROCID=${{SLURM_PROCID:-0}}
-        if [ "$PROCID" != "0" ]; then
-            delay=$((60 * PROCID))
-            echo "Non-zero SLURM_PROCID ($PROCID) -> delaying start by ${{delay}}s"
-            sleep "$delay"
-        fi
-        if [ -n "${{SLURM_JOB_GPUS:-}}" ]; then
-            export CUDA_VISIBLE_DEVICES="${{SLURM_JOB_GPUS}}"
-        fi
-
+        squashfs-mount {params.image_path}:/user-environment -- bash -c '
         export TZ=UTC
         source /user-environment/bin/activate
         export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
-        export OMP_NUM_THREADS=1
-        export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
-        export NCCL_IB_DISABLE=1
-        export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
-        export NCCL_DEBUG=WARN
-        VISIBLE=${{CUDA_VISIBLE_DEVICES:-}}
 
-        # Recompute number of GPUs
-        NGPUS=$(python - <<'PY'
-import os
-cvd=os.environ.get("CUDA_VISIBLE_DEVICES","").strip()
-print(len([x for x in cvd.split(",") if x!=""]))
-PY
-        )
-
-        echo "================= ENV ================="
-        echo "SLURM JOB ID: ${{SLURM_JOB_ID:-unknown}}"
-        echo "HOSTNAME: $(hostname)"
-        echo "CUDA_VISIBLE_DEVICES: $VISIBLE"
-        echo "NGPUS=$NGPUS"
-        echo "=========================================================="
-
+        # prepare the working directory
         WORKDIR={params.output_root}/runs/{wildcards.run_id}/{wildcards.init_time}
-        mkdir -p "$WORKDIR/grib" "$WORKDIR/raw" "$WORKDIR/_resources"
-
-        # Serialize access to WORKDIR (others wait and then re-check OK file)
-        exec 9>"$WORKDIR/.lock"
-        if ! flock -n 9; then
-            echo "Another task active in $WORKDIR; waiting for lock..."
-            flock 9
-        fi
-        if [ -f "{output.okfile}" ]; then
-            echo "OK file exists after waiting -> skipping."
-            exit 0
-        fi
-
-        cd "$WORKDIR"
-        cp {input.config} config.yaml
-        cp -r {params.resources_root}/templates/* _resources/
-
-        CKPT={params.checkpoints_path}/inference-last.ckpt
-        CMD_ARGS=( date={params.reftime_to_iso} checkpoint="$CKPT" lead_time={params.lead_time} )
-        echo "Launching torchrun with args: ${{CMD_ARGS[*]}} (nproc_per_node=$NGPUS)"
-        torchrun --standalone --nnodes=1 --nproc_per_node="$NGPUS" \
-                 --rdzv-backend=c10d --rdzv-endpoint="localhost:0" \
-                 /user-environment/bin/anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+        mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw _resources
+        cp {input.config} config.yaml && cp -r {params.resources_root}/templates/* _resources/
+        CMD_ARGS=(
+            date={params.reftime_to_iso}
+            checkpoint={params.checkpoints_path}/inference-last.ckpt
+            lead_time={params.lead_time}
+            runner=parallel
+        )
+        srun \
+            --partition={resources.slurm_partition} \
+            --cpus-per-task={resources.cpus_per_task} \
+            --mem-per-cpu={resources.mem_mb_per_cpu} \
+            --time={resources.runtime} \
+            --gres={resources.gres} \
+            --ntasks={resources.tasks} \
+            --exclusive \
+            anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+        '
         ) > {log} 2>&1
         """
 
