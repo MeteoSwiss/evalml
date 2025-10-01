@@ -124,14 +124,6 @@ def _inference_routing_fn(wc):
     return OUT_ROOT / input_path
 
 
-def get_resource(wc, field: str, default):
-    """Fetch a resource field from the run config, or return the default."""
-    rc = RUN_CONFIGS[wc.run_id]
-    if rc["inference_resources"] is None:
-        return default
-    return getattr(rc["inference_resources"], field) or default
-
-
 RUN_CONFIGS = collect_all_runs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 
 from pydantic import BaseModel, Field, RootModel, HttpUrl
 
@@ -52,6 +52,10 @@ class InferenceResources(BaseModel):
     gpu: int | None = Field(
         None,
         description="Number of GPUs to request.",
+    )
+    tasks: int | None = Field(
+        None,
+        description="Number of tasks per submission.",
     )
 
 

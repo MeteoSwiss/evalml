@@ -107,6 +107,14 @@ rule create_inference_sandbox:
         """
 
 
+def get_resource(wc, field: str, default):
+    """Fetch a resource field from the run config, or return the default."""
+    rc = RUN_CONFIGS[wc.run_id]
+    if rc["inference_resources"] is None:
+        return default
+    return getattr(rc["inference_resources"], field) or default
+
+
 rule inference_forecaster:
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
@@ -131,7 +139,8 @@ rule inference_forecaster:
         cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
         mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
         runtime=lambda wc: get_resource(wc, "runtime", "20m"),
-        gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
+        gres=lambda wc: f"gpu:{get_resource(wc, 'gpu', 1)}",
+        ntasks=lambda wc: get_resource(wc, "tasks", 1),
         slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment",
         gpus=lambda wc: get_resource(wc, "gpu", 1),
     shell:
