@@ -23,6 +23,7 @@ def test_load_valid_colormap(monkeypatch, tmp_path):
 
     cmap = result["cmap"]
     norm = result["norm"]
+    bounds = result["bounds"]
 
     # cmap has n_levs-1 colors inside
     assert cmap.N == 2
@@ -36,6 +37,7 @@ def test_load_valid_colormap(monkeypatch, tmp_path):
     assert np.allclose(cmap(9999), (100/255, 110/255, 120/255, 1.0))
     # bounds
     assert np.allclose(norm.boundaries, [0, 1, 2])
+    assert np.allclose(bounds, [0, 1, 2])
 
 
 def test_missing_file_raises(monkeypatch, tmp_path):
