@@ -18,7 +18,8 @@ dependencies = [
     "pydantic>=2.11.7",
     "toml>=0.10.2",
     "netcdf4>=1.7.2",
-    "cartopy"
+    "cartopy",
+    "earthkit-plots",
 ]
 
 [project.optional-dependencies]

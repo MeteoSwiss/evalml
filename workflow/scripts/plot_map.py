@@ -1,19 +1,12 @@
-from pathlib import Path
-
-import numpy as np
-import matplotlib.pyplot as plt
-
-State = dict[str, np.ndarray | dict[str, np.ndarray]]
-
 from argparse import ArgumentParser, Namespace
 from functools import partial
 import logging
+import numpy as np
 import os
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 
-import matplotlib.pyplot as plt
-import numpy as np
+import earthkit.plots as ekp
 
 from src.plotting import StatePlotter
 #from src.calc import process_augment_state
@@ -37,11 +30,11 @@ def plot_state(
 
     for param in paramlist:
 
-        # # plot individual fields
-        fig, [gax] = plotter.init_geoaxes(
-            projection=projection, region=region, coastlines=True, zorder=2
+        # plot individual fields
+        fig = plotter.init_geoaxes(
+            nrows=1, ncols=1, projection=projection, region=region, size=(8,8),
         )
-        fig.set_size_inches(10, 10)
+        subplot = fig.add_map(row=0, column=0)
 
         if param == "uv":
             field = np.sqrt(
@@ -53,20 +46,60 @@ def plot_state(
             field = pred_state["fields"][param]
 
         plotter.plot_field(
-            ax=gax,
-            field=field,
-            zorder=1,
-            validtime=pred_state["valid_time"].strftime("%Y%m%d%H%M"),
-            **CMAP_DEFAULTS[param],
+            subplot,
+            field,
+            **get_style(param)
         )
 
         validtime = pred_state["valid_time"].strftime("%Y%m%d%H%M")
         leadtime = int(pred_state["lead_time"].total_seconds() // 3600)
+
+        fig.title(f"{param}, time: {validtime}")
+
         fn = f"{validtime}_{leadtime:03}_{param}_{projection}_{region}.png"
-        plt.savefig(plotter.out_dir / fn, bbox_inches="tight", dpi=400)
-        plt.clf()
-        plt.cla()
-        plt.close()
+        fig.save(plotter.out_dir / fn, bbox_inches="tight", dpi=400)
+
+
+# def plot_state(
+#     plotter: StatePlotter,
+#     pred_state: State,
+#     paramlist: list[str],
+#     projection: str = "orthographic",
+#     region: str = "europe",
+#     ) -> None:
+
+#     for param in paramlist:
+
+#         # # plot individual fields
+#         fig, [gax] = plotter.init_geoaxes(
+#             projection=projection, region=region, coastlines=True, zorder=2
+#         )
+#         fig.set_size_inches(10, 10)
+
+#         if param == "uv":
+#             field = np.sqrt(
+#                 pred_state["fields"]["10u"] ** 2 + pred_state["fields"]["10v"] ** 2
+#             )
+#         elif param == "2t":
+#             field = pred_state["fields"][param] - 273.15
+#         else:
+#             field = pred_state["fields"][param]
+
+#         plotter.plot_field(
+#             ax=gax,
+#             field=field,
+#             zorder=1,
+#             validtime=pred_state["valid_time"].strftime("%Y%m%d%H%M"),
+#             **CMAP_DEFAULTS[param],
+#         )
+
+#         validtime = pred_state["valid_time"].strftime("%Y%m%d%H%M")
+#         leadtime = int(pred_state["lead_time"].total_seconds() // 3600)
+#         fn = f"{validtime}_{leadtime:03}_{param}_{projection}_{region}.png"
+#         plt.savefig(plotter.out_dir / fn, bbox_inches="tight", dpi=400)
+#         plt.clf()
+#         plt.cla()
+#         plt.close()
 
 
 def process_plot_leadtime(
@@ -79,7 +112,7 @@ def process_plot_leadtime(
 
     LOG.info(f"Loading predicted and true states")
     pred_state = load_state_from_raw(file)
-    print(pred_state.keys())
+    #print(pred_state["valid_time"], pred_state["fields"].keys())
 
     LOG.info(f"Augmenting states")
     #pred_state = process_augment_state(pred_state)
@@ -91,7 +124,7 @@ def process_plot_leadtime(
         plots_dir,
     )
 
-    for region in ["europe", "globe", "switzerland"]:
+    for region in ["europe", None, "switzerland"]:
         for proj in ["orthographic"]:
             plot_state(
                 plotter,
@@ -134,6 +167,23 @@ class ScriptConfig(Namespace):
     out_dir: Path
 
 
+def get_style(param):
+    """"Get style and colormap settings for the plot.
+    Needed because cmap/norm does not work in Style(colors=cmap), still needs
+    to be passed as arguments to tripcolor()/tricontourf().
+    """
+    cfg = CMAP_DEFAULTS[param]
+    return {
+        "style": ekp.styles.Style(
+            levels=cfg.get("bounds", None),
+            extend="both",
+            units=cfg.get("units", ""),
+        ),
+        "cmap": cfg["cmap"],
+        "norm": cfg.get("norm", None),
+    }
+
+
 def main(cfg: ScriptConfig) -> None:
 
     LOG.info(f"Plotting inference results for {cfg}")
@@ -160,7 +210,7 @@ def main(cfg: ScriptConfig) -> None:
 
     LOG.info(f"Creating animations")
     for param in cfg.paramlist:
-        for region in ["europe", "globe", "switzerland"]:
+        for region in ["europe", None, "switzerland"]:
             for proj in ["orthographic"]:
                 create_animation(
                     plots_dir,

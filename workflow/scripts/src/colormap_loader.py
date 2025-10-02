@@ -52,4 +52,4 @@ def load_ncl_colormap(filename):
     cmap.set_over(rgb[-1])
     norm = BoundaryNorm(boundaries=bounds, ncolors=cmap.N)
 
-    return {"cmap": cmap, "norm": norm}
+    return {"cmap": cmap, "norm": norm, "bounds": bounds}
