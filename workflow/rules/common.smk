@@ -14,7 +14,7 @@ def short_hash_config():
     for run_id, run_config in RUN_CONFIGS.items():
         with open(run_config["config"], "r") as f:
             configs_to_hash.append(yaml.safe_load(f))
-        if "forecaster" in run_config:
+        if "forecaster" in run_config and run_config["forecaster"] is not None:
             with open(run_config["forecaster"]["config"], "r") as f:
                 configs_to_hash.append(yaml.safe_load(f))
     cfg_str = json.dumps([config, *configs_to_hash], sort_keys=True)
@@ -72,11 +72,21 @@ def collect_all_runs():
         model_type = next(iter(run_entry))
         run_config = run_entry[model_type]
         run_config["model_type"] = model_type
-        run_id = run_config.pop("run_id")
-        runs[run_id] = run_config
+        run_id = run_config["mlflow_id"][0:9]
+
         if model_type == "interpolator":
-            run_id = run_config["forecaster"]["run_id"]
-            runs[run_id] = run_config["forecaster"]
+            if "forecaster" not in run_config or run_config["forecaster"] is None:
+                tail_id = "analysis"
+            else:
+                tail_id = run_config["forecaster"]["mlflow_id"][0:9]
+                # Ensure a proper 'forecaster' entry exists with model_type
+                fore_cfg = copy.deepcopy(run_config["forecaster"])
+                fore_cfg["model_type"] = "forecaster"
+                runs[tail_id] = fore_cfg
+            run_id = f"{run_id}-{tail_id}"
+
+        # Register this (possibly composite) run inside the loop
+        runs[run_id] = run_config
     return runs
 
 
@@ -93,20 +103,10 @@ def collect_all_baselines():
 
 def collect_experiment_participants():
     participants = {}
-    for baseline_entry in config["baselines"]:
-        baseline = next(iter(baseline_entry.values()))
-        baseline_id = baseline["baseline_id"]
-        label = baseline.get("label", baseline_id)
-        participants[baseline_id] = (
-            OUT_ROOT / f"data/baselines/{baseline_id}/verif_aggregated.nc"
-        )
-    for run_entry in config["runs"]:
-        # every run entry is a single-key dict
-        # where the key is the model type ("forecaster", "interpolator", etc.)
-        run = next(iter(run_entry.values()))
-        run_id = run["run_id"]
-        label = run.get("label", run_id)
-        participants[label] = OUT_ROOT / f"data/runs/{run_id}/verif_aggregated.nc"
+    for base in BASELINE_CONFIGS.keys():
+        participants[base] = OUT_ROOT / f"data/baselines/{base}/verif_aggregated.nc"
+    for exp in RUN_CONFIGS.keys():
+        participants[exp] = OUT_ROOT / f"data/runs/{exp}/verif_aggregated.nc"
     return participants
 
 

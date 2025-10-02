@@ -146,11 +146,11 @@
     "ForecasterConfig": {
       "description": "Single training run stored in MLflow.",
       "properties": {
-        "run_id": {
+        "mlflow_id": {
           "description": "The mlflow run ID, as a 32-character hexadecimal string.",
           "maxLength": 32,
           "minLength": 32,
-          "title": "Run Id",
+          "title": "Mlflow Id",
           "type": "string"
         },
         "label": {
@@ -202,7 +202,7 @@
         }
       },
       "required": [
-        "run_id"
+        "mlflow_id"
       ],
       "title": "ForecasterConfig",
       "type": "object"
@@ -219,14 +219,30 @@
       "title": "ForecasterItem",
       "type": "object"
     },
+    "GlobalResources": {
+      "description": "Set global constraints across all submissions (e.g. number of API calls per second).",
+      "properties": {
+        "gpus": {
+          "description": "Maximum number of GPUs to be used in parallel.",
+          "minimum": 1,
+          "title": "Gpus",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "gpus"
+      ],
+      "title": "GlobalResources",
+      "type": "object"
+    },
     "InterpolatorConfig": {
       "description": "Single training run stored in MLflow.",
       "properties": {
-        "run_id": {
+        "mlflow_id": {
           "description": "The mlflow run ID, as a 32-character hexadecimal string.",
           "maxLength": 32,
           "minLength": 32,
-          "title": "Run Id",
+          "title": "Mlflow Id",
           "type": "string"
         },
         "label": {
@@ -290,7 +306,7 @@
         }
       },
       "required": [
-        "run_id"
+        "mlflow_id"
       ],
       "title": "InterpolatorConfig",
       "type": "object"
@@ -343,6 +359,9 @@
           "title": "Executor",
           "type": "string"
         },
+        "global_resources": {
+          "$ref": "#/$defs/GlobalResources"
+        },
         "default_resources": {
           "$ref": "#/$defs/DefaultResources"
         },
@@ -355,6 +374,7 @@
       },
       "required": [
         "executor",
+        "global_resources",
         "default_resources",
         "jobs"
       ],

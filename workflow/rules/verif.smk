@@ -29,9 +29,9 @@ rule verif_metrics_baseline:
     log:
         OUT_ROOT / "logs/verif_metrics_baseline/{baseline_id}-{init_time}.log",
     resources:
-        cpus_per_task=16,
+        cpus_per_task=24,
         mem_mb=50_000,
-        runtime="20m",
+        runtime="60m",
     shell:
         """
         uv run {input.script} \
@@ -70,9 +70,9 @@ rule verif_metrics:
     log:
         OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",
     resources:
-        cpus_per_task=16,
+        cpus_per_task=24,
         mem_mb=50_000,
-        runtime="20m",
+        runtime="60m",
     shell:
         """
         uv run {input.script} \

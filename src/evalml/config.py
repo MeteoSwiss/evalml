@@ -33,7 +33,7 @@ class AnemoiInferenceConfig(RootModel[Dict[str, Any]]):
 
 
 class RunConfig(BaseModel):
-    run_id: str = Field(
+    mlflow_id: str = Field(
         ...,
         min_length=32,
         max_length=32,
@@ -160,10 +160,34 @@ class DefaultResources(BaseModel):
         return [f"{key}={value}" for key, value in self.model_dump().items()]
 
 
+class GlobalResources(BaseModel):
+    """
+    Define resource limits that apply across all submissions.
+
+    This model is intended to specify global constraints, such as
+    the maximum number of GPUs that can be allocated in parallel,
+    regardless of individual job settings.
+    """
+
+    gpus: int = Field(
+        ...,
+        ge=1,
+        description=(
+            "Maximum number of GPUs that may be used concurrently "
+            "across all submissions."
+        ),
+    )
+
+    def parsable(self) -> str:
+        """Convert the global resources to a string of key=value pairs."""
+        return [f"{key}={value}" for key, value in self.model_dump().items()]
+
+
 class Profile(BaseModel):
     """Workflow execution profile."""
 
     executor: str = Field(..., description="Job executor, e.g. 'slurm'.")
+    global_resources: GlobalResources
     default_resources: DefaultResources
     jobs: int = Field(..., ge=1, description="Maximum number of parallel jobs.")
 
@@ -171,6 +195,7 @@ class Profile(BaseModel):
         """Convert the profile to a dictionary of command-line arguments."""
         out = []
         out += ["--executor", self.executor]
+        out += ["--resources"] + self.global_resources.parsable()
         out += ["--default-resources"] + self.default_resources.parsable()
         out += ["--jobs", str(self.jobs)]
         return out
