@@ -1,9 +1,10 @@
-from pathlib import Path
-from argparse import ArgumentParser, Namespace
 import logging
-import sys
 import os
+import sys
+from argparse import ArgumentParser
+from argparse import Namespace
 from datetime import datetime
+from pathlib import Path
 from typing import Iterable
 
 eccodes_definition_path = Path(sys.prefix) / "share/eccodes-cosmo-resources/definitions"
@@ -11,7 +12,6 @@ os.environ["ECCODES_DEFINITION_PATH"] = str(eccodes_definition_path)
 
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
-
 from src.verification import verify  # noqa: E402
 
 LOG = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ def load_analysis_data_from_zarr(
     This function loads analysis data from a Zarr dataset, processing it to make it more
     xarray-friendly. It renames variables, sets the time index, and pivots the dataset.
     """
-    PARAMS_MAP = {
+    PARAMS_MAP_COSMO2 = {
         "T_2M": "2t",
         "TD_2M": "2d",
         "U_10M": "10u",
@@ -37,6 +37,10 @@ def load_analysis_data_from_zarr(
         "PMSL": "msl",
         "TOT_PREC": "tp",
     }
+    PARAMS_MAP_COSMO1 = {
+        v: v.replace("TOT_PREC", "TOT_PREC_6H") for v in PARAMS_MAP_COSMO2.keys()
+    }
+    PARAMS_MAP = PARAMS_MAP_COSMO2 if "co2" in analysis_zarr.name else PARAMS_MAP_COSMO1
 
     ds = xr.open_zarr(analysis_zarr, consolidated=False)
 
@@ -61,8 +65,6 @@ def load_analysis_data_from_zarr(
     if "latitudes" in ds and "longitudes" in ds:
         ds = ds.rename({"latitudes": "latitude", "longitudes": "longitude"})
     ds = ds.set_coords(["latitude", "longitude"])
-
-    # pivot (use inverse of PARAMS_MAP)
     ds = (
         ds["data"]
         .to_dataset("variable")
@@ -132,13 +134,14 @@ def main(args: ScriptConfig):
     """Main function to verify baseline forecast data."""
 
     # get baseline forecast data
+
     now = datetime.now()
     baseline = xr.open_zarr(
         args.baseline_zarr, consolidated=True, decode_timedelta=True
     )
     baseline = baseline.rename(
         {"forecast_reference_time": "ref_time", "step": "lead_time"}
-    )
+    ).sortby("lead_time")
     if "TOT_PREC" in baseline.data_vars:
         if baseline.TOT_PREC.units == "kg m-2":
             baseline = baseline.assign(TOT_PREC=lambda x: x.TOT_PREC / 1000)
@@ -154,7 +157,8 @@ def main(args: ScriptConfig):
         )
     baseline = baseline[args.params].sel(
         ref_time=args.reftime,
-        lead_time=np.array(args.lead_time, dtype="timedelta64[h]"), method="nearest",
+        lead_time=np.array(args.lead_time, dtype="timedelta64[h]"),
+        method="nearest",
     )
     baseline = baseline.assign_coords(time=baseline.ref_time + baseline.lead_time)
     LOG.info(

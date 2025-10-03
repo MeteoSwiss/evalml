@@ -313,6 +313,19 @@
           "default": null,
           "description": "Number of GPUs to request.",
           "title": "Gpu"
+        },
+        "tasks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Number of tasks per submission.",
+          "title": "Tasks"
         }
       },
       "title": "InferenceResources",
