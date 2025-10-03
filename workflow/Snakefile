@@ -48,9 +48,13 @@ rule showcase_all:
     """Target rule for showcase workflow."""
     input:
         expand(
-            OUT_ROOT / "data/runs/{run_id}/{init_time}/plots",
+            OUT_ROOT
+            / "showcases/{run_id}/{init_time}/{init_time}_{param}_{projection}_{region}.gif",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=collect_all_runs(),
+            param="2t",
+            projection="orthographic",
+            region="switzerland",
         ),
 
 
