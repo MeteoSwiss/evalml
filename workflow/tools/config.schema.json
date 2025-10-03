@@ -187,6 +187,18 @@
           "title": "Extra Dependencies",
           "type": "array"
         },
+        "inference_resources": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InferenceResources"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Resource requirements for inference jobs (optional; defaults handled externally)."
+        },
         "config": {
           "anyOf": [
             {
@@ -235,6 +247,90 @@
       "title": "GlobalResources",
       "type": "object"
     },
+    "InferenceResources": {
+      "properties": {
+        "slurm_partition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The Slurm partition to use for inference jobs, e.g. 'short-shared'.",
+          "title": "Slurm Partition"
+        },
+        "cpus_per_task": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Number of CPUs per task to request.",
+          "title": "Cpus Per Task"
+        },
+        "mem_mb_per_cpu": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Memory (in MB) per CPU to request.",
+          "title": "Mem Mb Per Cpu"
+        },
+        "runtime": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum runtime for the job, e.g. '20m', '2h', '01:30:00'.",
+          "title": "Runtime"
+        },
+        "gpu": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Number of GPUs to request.",
+          "title": "Gpu"
+        },
+        "tasks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Number of tasks per submission.",
+          "title": "Tasks"
+        }
+      },
+      "title": "InferenceResources",
+      "type": "object"
+    },
     "InterpolatorConfig": {
       "description": "Single training run stored in MLflow.",
       "properties": {
@@ -278,6 +374,18 @@
           },
           "title": "Extra Dependencies",
           "type": "array"
+        },
+        "inference_resources": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InferenceResources"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Resource requirements for inference jobs (optional; defaults handled externally)."
         },
         "config": {
           "anyOf": [

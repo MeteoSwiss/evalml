@@ -17,7 +17,7 @@ runs:
       config: resources/inference/configs/interpolator_from_test_data.yaml
       forecaster: null
       extra_dependencies:
-        - git+https://github.com/MeteoSwiss/anemoi-inference@fix/interp_files
+        - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
   - interpolator:
@@ -28,8 +28,7 @@ runs:
         mlflow_id: d0846032fc7248a58b089cbe8fa4c511
         config: resources/inference/configs/forecaster_with_global.yaml
       extra_dependencies:
-        - git+https://github.com/MeteoSwiss/anemoi-inference@fix/interp_files
-        #  - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
+        - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
   - interpolator:
@@ -41,7 +40,7 @@ runs:
         mlflow_id: d0846032fc7248a58b089cbe8fa4c511
         config: resources/inference/configs/forecaster_with_global.yaml
       extra_dependencies:
-        - git+https://github.com/MeteoSwiss/anemoi-inference@fix/interp_files
+        - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
 
