@@ -43,7 +43,7 @@ def load_analysis_data_from_zarr(
         "U": "u",
         "V": "v",
         "QV": "q",
-        "FI": "z",
+        "FIS": "z",
     }
     PARAMS_MAP_COSMO1 = {
         v: v.replace("TOT_PREC", "TOT_PREC_6H") for v in PARAMS_MAP_COSMO2.keys()
@@ -59,13 +59,14 @@ def load_analysis_data_from_zarr(
     ds = ds.assign_coords({"variable": ds.attrs["variables"]})
 
     # select variables and valid time, squeeze ensemble dimension
-    inverse_mapping = {v: k for k, v in PARAMS_MAP.items()}
-    prefixes = tuple(PARAMS_MAP.values())
-    vars_to_select = [
-        v
-        for v in ds["variable"].values
-        if any(str(v).startswith(p) for p in prefixes) and inverse_mapping[v] in params
-    ]
+    vars_in_ds = [str(v) for v in ds["variable"].values]
+    vars_mapped = [PARAMS_MAP.get(v, None) for v in params]
+    vars_to_select = [v for v in vars_mapped if v in vars_in_ds]
+    if len(vars_to_select) == 0:
+        raise ValueError(
+            f"None of the requested params {params} are available in the dataset. "
+            f"Available params: {vars_in_ds}"
+        )
     ds = ds.sel(variable=vars_to_select).squeeze("ensemble", drop=True)
 
     # recover original 2D shape

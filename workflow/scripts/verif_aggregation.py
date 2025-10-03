@@ -77,8 +77,9 @@ def main(args: Namespace) -> None:
 
     LOG.info("Reading %d verification files", len(args.verif_files))
     ds = xr.open_mfdataset(
-        args.verif_files,
-        combine="by_coords",
+        sorted(args.verif_files),
+        combine="nested",
+        concat_dim="ref_time",
         data_vars="minimal",
         coords="minimal",
         compat="override",
