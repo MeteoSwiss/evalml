@@ -196,7 +196,6 @@ def main(args: ScriptConfig):
         (datetime.now() - start).total_seconds(),
         fct,
     )
-    print("FCT TIMES", fct.time.values, flush=True)
     # get truth data (aka analysis)
     start = datetime.now()
     if args.analysis_zarr:
