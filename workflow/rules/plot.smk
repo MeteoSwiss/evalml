@@ -22,11 +22,11 @@ rule plot_forecast_frames:
     # localrule: True
     shell:
         """
-        python workflow/scripts/notebook_plot_map.py \
+        python workflow/scripts/plot_forecast_frame.py \
             --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]}\
             --param {wildcards.param} --leadtime {wildcards.leadtime} \
             --projection {wildcards.projection} --region {wildcards.region} \
-        # interactive editing (needs to set localrule: True)
+        # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit workflow/scripts/notebook_plot_map.py -- \
         #     --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]}\
         #     --param {wildcards.param} --leadtime {wildcards.leadtime} \
