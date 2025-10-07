@@ -112,10 +112,14 @@ def get_resource(wc, field: str, default):
     rc = RUN_CONFIGS[wc.run_id]
     if rc["inference_resources"] is None:
         return default
-    return getattr(rc["inference_resources"], field) or default
+    if isinstance(rc["inference_resources"], dict):
+        return rc["inference_resources"].get(field, default) or default
+    else:
+        return getattr(rc["inference_resources"], field) or default
 
 
 rule inference_forecaster:
+    localrule: True
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
@@ -132,6 +136,7 @@ rule inference_forecaster:
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
+        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
     log:
         OUT_ROOT / "logs/inference_forecaster/{run_id}-{init_time}.log",
     resources:
@@ -139,13 +144,15 @@ rule inference_forecaster:
         cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
         mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
         runtime=lambda wc: get_resource(wc, "runtime", "20m"),
-        gres=lambda wc: f"gpu:{get_resource(wc, 'gpu', 1)}",
+        gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
         ntasks=lambda wc: get_resource(wc, "tasks", 1),
         slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment",
         gpus=lambda wc: get_resource(wc, "gpu", 1),
     shell:
-        """
+        r"""
         (
+        set -euo pipefail
+        squashfs-mount {params.image_path}:/user-environment -- bash -c '
         export TZ=UTC
         source /user-environment/bin/activate
         export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
@@ -154,19 +161,26 @@ rule inference_forecaster:
         WORKDIR={params.output_root}/runs/{wildcards.run_id}/{wildcards.init_time}
         mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw _resources
         cp {input.config} config.yaml && cp -r {params.resources_root}/templates/* _resources/
-
         CMD_ARGS=(
             date={params.reftime_to_iso}
             checkpoint={params.checkpoints_path}/inference-last.ckpt
             lead_time={params.lead_time}
         )
-        echo "=========================================================="
-        echo "SLURM JOB ID: $SLURM_JOB_ID"
-        echo "HOSTNAME: $(hostname)"
-        echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
-        echo "=========================================================="
 
-        anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+        # is GPU > 1, add runner=parallel to CMD_ARGS
+        if [ {resources.gpus} -gt 1 ]; then
+            CMD_ARGS+=(runner=parallel)
+        fi
+
+        srun \
+            --partition={resources.slurm_partition} \
+            --cpus-per-task={resources.cpus_per_task} \
+            --mem-per-cpu={resources.mem_mb_per_cpu} \
+            --time={resources.runtime} \
+            --gres={resources.gres} \
+            --ntasks={resources.ntasks} \
+            anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+        '
         ) > {log} 2>&1
         """
 
@@ -215,12 +229,14 @@ rule inference_interpolator:
         mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
         runtime=lambda wc: get_resource(wc, "runtime", "20m"),
         gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
+        ntasks=lambda wc: get_resource(wc, "tasks", 1),
         slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment",
         gpus=lambda wc: get_resource(wc, "gpu", 1),
     shell:
-        """
+        r"""
         (
         set -euo pipefail
+        squashfs-mount {params.image_path}:/user-environment -- bash -c '
         export TZ=UTC
         source /user-environment/bin/activate
         export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
@@ -243,13 +259,21 @@ rule inference_interpolator:
             checkpoint={params.checkpoints_path}/inference-last.ckpt
             lead_time={params.lead_time}
         )
-        echo "=========================================================="
-        echo "SLURM JOB ID: $SLURM_JOB_ID"
-        echo "HOSTNAME: $(hostname)"
-        echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
-        echo "=========================================================="
 
-        anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+        # is GPU > 1, add runner=parallel to CMD_ARGS
+        if [ {resources.gpus} -gt 1 ]; then
+            CMD_ARGS+=(runner=parallel)
+        fi
+
+        srun \
+            --partition={resources.slurm_partition} \
+            --cpus-per-task={resources.cpus_per_task} \
+            --mem-per-cpu={resources.mem_mb_per_cpu} \
+            --time={resources.runtime} \
+            --gres={resources.gres} \
+            --ntasks={resources.ntasks} \
+            anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+        '
         ) > {log} 2>&1
         """
 
