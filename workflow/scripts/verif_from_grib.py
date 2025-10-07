@@ -29,7 +29,7 @@ def load_analysis_data_from_zarr(
     This function loads analysis data from a Zarr dataset, processing it to make it more
     xarray-friendly. It renames variables, sets the time index, and pivots the dataset.
     """
-    PARAMS_MAP = {
+    PARAMS_MAP_COSMO2 = {
         "T_2M": "2t",
         "TD_2M": "2d",
         "U_10M": "10u",
@@ -43,8 +43,12 @@ def load_analysis_data_from_zarr(
         "U": "u",
         "V": "v",
         "QV": "q",
-        "FI": "z",
+        "FIS": "z",
     }
+    PARAMS_MAP_COSMO1 = {
+        v: v.replace("TOT_PREC", "TOT_PREC_6H") for v in PARAMS_MAP_COSMO2.keys()
+    }
+    PARAMS_MAP = PARAMS_MAP_COSMO2 if "co2" in analysis_zarr.name else PARAMS_MAP_COSMO1
 
     ds = xr.open_zarr(analysis_zarr, consolidated=False)
 
@@ -55,7 +59,15 @@ def load_analysis_data_from_zarr(
     ds = ds.assign_coords({"variable": ds.attrs["variables"]})
 
     # select variables and valid time, squeeze ensemble dimension
-    ds = ds.sel(variable=[PARAMS_MAP[p] for p in params]).squeeze("ensemble", drop=True)
+    vars_in_ds = [str(v) for v in ds["variable"].values]
+    vars_mapped = [PARAMS_MAP.get(v, None) for v in params]
+    vars_to_select = [v for v in vars_mapped if v in vars_in_ds]
+    if len(vars_to_select) == 0:
+        raise ValueError(
+            f"None of the requested params {params} are available in the dataset. "
+            f"Available params: {vars_in_ds}"
+        )
+    ds = ds.sel(variable=vars_to_select).squeeze("ensemble", drop=True)
 
     # recover original 2D shape
     if len(ds.attrs["field_shape"]) == 2:
@@ -80,6 +92,7 @@ def load_analysis_data_from_zarr(
     # select valid times
     # (handle special case where some valid times are not in the dataset, e.g. at the end)
     times_included = times.isin(ds.time.values).values.ravel()
+    print("TIMES", times, flush=True)
     if all(times_included):
         ds = ds.sel(time=times)
 
@@ -121,7 +134,6 @@ def load_fct_data_from_grib(
                 .clip(min=0.0)
             )
         )
-
     # make sure time coordinate is available, and valid_time is not
     if "valid_time" in ds.coords:
         ds = ds.rename({"valid_time": "time"})
@@ -184,7 +196,6 @@ def main(args: ScriptConfig):
         (datetime.now() - start).total_seconds(),
         fct,
     )
-
     # get truth data (aka analysis)
     start = datetime.now()
     if args.analysis_zarr:
