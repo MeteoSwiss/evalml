@@ -179,7 +179,6 @@ rule inference_forecaster:
             --time={resources.runtime} \
             --gres={resources.gres} \
             --ntasks={resources.ntasks} \
-            --exclusive \
             anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
         '
         ) > {log} 2>&1
@@ -273,7 +272,6 @@ rule inference_interpolator:
             --time={resources.runtime} \
             --gres={resources.gres} \
             --ntasks={resources.ntasks} \
-            --exclusive \
             anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
         '
         ) > {log} 2>&1
