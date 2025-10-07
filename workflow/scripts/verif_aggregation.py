@@ -1,10 +1,11 @@
-from pathlib import Path
-from argparse import ArgumentParser, Namespace
 import logging
 import time
+from argparse import ArgumentParser
+from argparse import Namespace
+from pathlib import Path
 
-import xarray as xr
 import numpy as np
+import xarray as xr
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -76,8 +77,9 @@ def main(args: Namespace) -> None:
 
     LOG.info("Reading %d verification files", len(args.verif_files))
     ds = xr.open_mfdataset(
-        args.verif_files,
-        combine="by_coords",
+        sorted(args.verif_files),
+        combine="nested",
+        concat_dim="ref_time",
         data_vars="minimal",
         coords="minimal",
         compat="override",

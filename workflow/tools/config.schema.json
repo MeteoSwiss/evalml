@@ -187,6 +187,18 @@
           "title": "Extra Dependencies",
           "type": "array"
         },
+        "inference_resources": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InferenceResources"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Resource requirements for inference jobs (optional; defaults handled externally)."
+        },
         "config": {
           "anyOf": [
             {
@@ -220,10 +232,10 @@
       "type": "object"
     },
     "GlobalResources": {
-      "description": "Set global constraints across all submissions (e.g. number of API calls per second).",
+      "description": "Define resource limits that apply across all submissions.\n\nThis model is intended to specify global constraints, such as\nthe maximum number of GPUs that can be allocated in parallel,\nregardless of individual job settings.",
       "properties": {
         "gpus": {
-          "description": "Maximum number of GPUs to be used in parallel.",
+          "description": "Maximum number of GPUs that may be used concurrently across all submissions.",
           "minimum": 1,
           "title": "Gpus",
           "type": "integer"
@@ -233,6 +245,90 @@
         "gpus"
       ],
       "title": "GlobalResources",
+      "type": "object"
+    },
+    "InferenceResources": {
+      "properties": {
+        "slurm_partition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The Slurm partition to use for inference jobs, e.g. 'short-shared'.",
+          "title": "Slurm Partition"
+        },
+        "cpus_per_task": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Number of CPUs per task to request.",
+          "title": "Cpus Per Task"
+        },
+        "mem_mb_per_cpu": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Memory (in MB) per CPU to request.",
+          "title": "Mem Mb Per Cpu"
+        },
+        "runtime": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum runtime for the job, e.g. '20m', '2h', '01:30:00'.",
+          "title": "Runtime"
+        },
+        "gpu": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Number of GPUs to request.",
+          "title": "Gpu"
+        },
+        "tasks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Number of tasks per submission.",
+          "title": "Tasks"
+        }
+      },
+      "title": "InferenceResources",
       "type": "object"
     },
     "InterpolatorConfig": {
@@ -278,6 +374,18 @@
           },
           "title": "Extra Dependencies",
           "type": "array"
+        },
+        "inference_resources": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InferenceResources"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Resource requirements for inference jobs (optional; defaults handled externally)."
         },
         "config": {
           "anyOf": [
