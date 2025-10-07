@@ -1,7 +1,6 @@
 # ----------------------------------------------------- #
-# REPORTING WORKFLOW                                    #
+# PLOTTING WORKFLOW                                     #
 # ----------------------------------------------------- #
-from datetime import datetime
 
 
 include: "common.smk"
