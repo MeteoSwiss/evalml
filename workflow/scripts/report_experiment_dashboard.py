@@ -1,41 +1,19 @@
-from pathlib import Path
 import argparse
 import logging
+import sys as _sys
+from pathlib import Path
 
-import pandas as pd
 import jinja2
+import xarray as xr
+
+_sys.path.append(str(Path(__file__).parent))
+from verif_plot_metrics import _ensure_unique_lead_time
+from verif_plot_metrics import _select_best_sources
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-
-
-def read_verif_file(Path: str) -> pd.DataFrame:
-    """Read a verification file and return it as a DataFrame."""
-    df = pd.read_csv(
-        Path,
-        dtype={"lead_time": str},
-    )
-    df["lead_time"] = pd.to_timedelta(df["lead_time"])
-    df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600  # convert to hours
-    return df
-
-
-def combine_verif_files(verif_files: Path) -> pd.DataFrame:
-    """
-    Combine multiple verification files into a single DataFrame.
-    Each file is expected to have a 'source' column indicating the forecast name.
-    """
-    df = pd.DataFrame()
-    for i, file in enumerate(verif_files):
-        _df = read_verif_file(file)
-        df = pd.concat([df, _df])
-    subset_cols = [c for c in df.columns if c not in ["value"]]
-    df = df.drop_duplicates(subset=subset_cols)
-    df = df.reset_index(drop=True)
-
-    return df
 
 
 def program_summary_log(args):
@@ -53,14 +31,23 @@ def program_summary_log(args):
 def main(args):
     program_summary_log(args)
 
-    # load and combine verification data
-    df = combine_verif_files(args.verif_files)
+    # Load, de-duplicate lead_time, and keep best provider per source (same logic as verif_plot_metrics)
+    dfs = [xr.open_dataset(f) for f in args.verif_files]
+    dfs = [_ensure_unique_lead_time(d) for d in dfs]
+    dfs = _select_best_sources(dfs)
+    ds = xr.concat(dfs, dim="source", join="outer")
+    LOG.info("Loaded verification netcdf: \n%s", ds)
 
-    # TODO: remove this when we have the logic to handle these groups
-    df = df[
-        (df["hour"] == "all") & (df["season"] == "all") & (df["init_hour"] == "all")
-    ]
-    LOG.info("Loaded verification data: \n%s", df)
+    # extract only  non-spatial variables to pd.DataFrame
+    nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
+    df = ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
+    df[["param", "metric"]] = df["stack"].str.split(".", n=1, expand=True)
+    df.drop(columns=["stack"], inplace=True)
+    df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
+    # select only results for all seasons and init_hours (for now)
+    df = df[(df["season"] == "all") & (df["init_hour"] == -999)]
+    df.dropna(inplace=True)
+    LOG.info("Loaded verification data frame: \n%s", df)
 
     # get unique sources and params
     sources = df["source"].unique()
@@ -89,6 +76,7 @@ def main(args):
         sources=sources,
         params=params,
         metrics=metrics,
+        header_text=args.header_text,
     )
     LOG.info("Size of generated HTML: %d bytes", len(html.encode("utf-8")))
 
@@ -121,6 +109,12 @@ if __name__ == "__main__":
         help="Path to the JavaScript source file for the dashboard.",
     )
     parser.add_argument(
+        "--header_text",
+        type=str,
+        default="",
+        help="Text to display in the header of the dashboard.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("dashboard.html"),
@@ -133,7 +127,7 @@ if __name__ == "__main__":
 """
 Example usage:
 python report_experiment_dashboard.py \
-    --verif_files output/data/*/*/verif_aggregated.csv \
+    --verif_files output/data/*/*/verif_aggregated.nc \
     --template resources/report/dashboard/template.html.jinja2 \
     --script resources/report/dashboard/script.js
 """

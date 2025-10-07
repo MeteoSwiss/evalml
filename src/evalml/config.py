@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 
 from pydantic import BaseModel, Field, RootModel, HttpUrl
 
@@ -32,8 +32,35 @@ class AnemoiInferenceConfig(RootModel[Dict[str, Any]]):
     """Configuration for the Anemoi inference workflow."""
 
 
+class InferenceResources(BaseModel):
+    slurm_partition: str | None = Field(
+        None,
+        description="The Slurm partition to use for inference jobs, e.g. 'short-shared'.",
+    )
+    cpus_per_task: int | None = Field(
+        None,
+        description="Number of CPUs per task to request.",
+    )
+    mem_mb_per_cpu: int | None = Field(
+        None,
+        description="Memory (in MB) per CPU to request.",
+    )
+    runtime: str | None = Field(
+        None,
+        description="Maximum runtime for the job, e.g. '20m', '2h', '01:30:00'.",
+    )
+    gpu: int | None = Field(
+        None,
+        description="Number of GPUs to request.",
+    )
+    tasks: int | None = Field(
+        None,
+        description="Number of tasks per submission.",
+    )
+
+
 class RunConfig(BaseModel):
-    run_id: str = Field(
+    mlflow_id: str = Field(
         ...,
         min_length=32,
         max_length=32,
@@ -43,10 +70,18 @@ class RunConfig(BaseModel):
         None,
         description="The label for the run that will be used in experiment results such as reports and figures.",
     )
+    steps: str | None = Field(
+        None,
+        description="Forecast steps to be used from interpolator, e.g. '0/126/6'.",
+    )
     extra_dependencies: List[str] = Field(
         default_factory=list,
         description="List of extra dependencies to install for this model. "
         "These will be added to the pyproject.toml file in the run directory.",
+    )
+    inference_resources: InferenceResources | None = Field(
+        None,
+        description="Resource requirements for inference jobs (optional; defaults handled externally).",
     )
 
     config: Dict[str, Any] | str
@@ -81,6 +116,46 @@ class InterpolatorConfig(RunConfig):
     )
 
 
+class BaselineConfig(BaseModel):
+    """Configuration for a single baseline to include in the verification."""
+
+    baseline_id: str = Field(
+        ...,
+        min_length=1,
+        description="Identifier for the baseline, e.g. 'COSMO-E'.",
+    )
+    label: str = Field(
+        ...,
+        min_length=1,
+        description="Label for the baseline that will be used in experiment results such as reports and figures.",
+    )
+    root: str = Field(
+        ...,
+        min_length=1,
+        description="Root directory where the baseline data is stored.",
+    )
+    steps: str = Field(
+        ...,
+        description="Forecast steps to be used from baseline, e.g. '10/120/1'.",
+        pattern=r"^\d*/\d*/\d*$",
+    )
+
+
+class AnalysisConfig(BaseModel):
+    """Configuration for the analysis data used in the verification."""
+
+    label: str = Field(
+        ...,
+        min_length=1,
+        description="Label for the analysis that will be used in experiment results such as reports and figures.",
+    )
+    analysis_zarr: str = Field(
+        ...,
+        min_length=1,
+        description="Path to the zarr dataset containing the analysis data.",
+    )
+
+
 class ForecasterItem(BaseModel):
     forecaster: ForecasterConfig
 
@@ -89,21 +164,8 @@ class InterpolatorItem(BaseModel):
     interpolator: InterpolatorConfig
 
 
-class VerifConfig(BaseModel):
-    """Configuration for the verification of the experiment."""
-
-    valid_every: Optional[int] = Field(
-        ge=1,
-        description="Hours between verification times starting from 00:00 UTC. If None, no filtering is applied.",
-    )
-
-
-class Execution(BaseModel):
-    """Configuration for the execution of the experiment."""
-
-    run_group_size: int = Field(
-        ..., ge=1, description="Number of runs to execute in the same SLURM job."
-    )
+class BaselineItem(BaseModel):
+    baseline: BaselineConfig
 
 
 class Locations(BaseModel):
@@ -129,10 +191,34 @@ class DefaultResources(BaseModel):
         return [f"{key}={value}" for key, value in self.model_dump().items()]
 
 
+class GlobalResources(BaseModel):
+    """
+    Define resource limits that apply across all submissions.
+
+    This model is intended to specify global constraints, such as
+    the maximum number of GPUs that can be allocated in parallel,
+    regardless of individual job settings.
+    """
+
+    gpus: int = Field(
+        ...,
+        ge=1,
+        description=(
+            "Maximum number of GPUs that may be used concurrently "
+            "across all submissions."
+        ),
+    )
+
+    def parsable(self) -> str:
+        """Convert the global resources to a string of key=value pairs."""
+        return [f"{key}={value}" for key, value in self.model_dump().items()]
+
+
 class Profile(BaseModel):
     """Workflow execution profile."""
 
     executor: str = Field(..., description="Job executor, e.g. 'slurm'.")
+    global_resources: GlobalResources
     default_resources: DefaultResources
     jobs: int = Field(..., ge=1, description="Maximum number of parallel jobs.")
 
@@ -140,6 +226,7 @@ class Profile(BaseModel):
         """Convert the profile to a dictionary of command-line arguments."""
         out = []
         out += ["--executor", self.executor]
+        out += ["--resources"] + self.global_resources.parsable()
         out += ["--default-resources"] + self.default_resources.parsable()
         out += ["--jobs", str(self.jobs)]
         return out
@@ -160,11 +247,11 @@ class ConfigModel(BaseModel):
         ...,
         description="Dictionary of runs to execute, with run IDs as keys and configurations as values.",
     )
-    baseline: str = Field(
-        ..., description="The label of the NWP baseline run to compare against."
+    baselines: List[BaselineItem] = Field(
+        ...,
+        description="Dictionary of baselines to include in the verification.",
     )
-    verification: Optional[VerifConfig] = None
-    execution: Execution
+    analysis: AnalysisConfig
     locations: Locations
     profile: Profile
 

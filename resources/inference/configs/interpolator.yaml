@@ -10,7 +10,7 @@ post_processors:
 
 input:
   grib:
-    path: grib
+    path: forecaster_grib/20*.grib # TODO: remove dirty fix to only use local files
     namer:
       rules:
         - - shortName: SKT
@@ -50,11 +50,11 @@ input:
 
 output:
   grib:
-    path: interp_grib/{dateTime}_{step:03}.grib
+    path: grib/{dateTime}_{step:03}.grib
     encoding:
       typeOfGeneratingProcess: 2
     templates:
-      samples: /users/fzanetta/projects/ml-pilot-anemoi/inference/configs/templates_index.yaml
+      samples: _resources/templates_index_cosmo.yaml
 
 forcings:
   test:

@@ -16,6 +16,7 @@ _dev
 .snakemake
 output
 _sandbox/
+experiment_report.html
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
@@ -42,6 +43,11 @@ nosetests.xml
 # Sphinx documentation
 docs/_build/
 
+verification.ipynb
+
+# Config
+experiment_report.html
+uv.lock
 # files with secrets
 .env
 *credentials*

@@ -14,7 +14,7 @@ def short_hash_config():
     for run_id, run_config in RUN_CONFIGS.items():
         with open(run_config["config"], "r") as f:
             configs_to_hash.append(yaml.safe_load(f))
-        if "forecaster" in run_config:
+        if "forecaster" in run_config and run_config["forecaster"] is not None:
             with open(run_config["forecaster"]["config"], "r") as f:
                 configs_to_hash.append(yaml.safe_load(f))
     cfg_str = json.dumps([config, *configs_to_hash], sort_keys=True)
@@ -62,24 +62,7 @@ def _reftimes():
     return times
 
 
-def _reftimes_groups():
-    cfg = config["dates"]
-    group_size = config["execution"]["run_group_size"]
-    groups = []
-    for i in range(0, len(REFTIMES), group_size):
-        group = REFTIMES[i : i + group_size]
-        groups.append(group)
-    return groups
-
-
 REFTIMES = _reftimes()
-
-REFTIMES_GROUPS = _reftimes_groups()
-REFTIME_TO_GROUP = {
-    reftime.strftime("%Y%m%d%H%M"): group_index
-    for group_index, group in enumerate(REFTIMES_GROUPS)
-    for reftime in group
-}
 
 
 def collect_all_runs():
@@ -89,42 +72,58 @@ def collect_all_runs():
         model_type = next(iter(run_entry))
         run_config = run_entry[model_type]
         run_config["model_type"] = model_type
-        run_id = run_config.pop("run_id")
-        runs[run_id] = run_config
+        run_id = run_config["mlflow_id"][0:9]
+
         if model_type == "interpolator":
-            run_id = run_config["forecaster"]["run_id"]
-            runs[run_id] = run_config["forecaster"]
+            if "forecaster" not in run_config or run_config["forecaster"] is None:
+                tail_id = "analysis"
+            else:
+                tail_id = run_config["forecaster"]["mlflow_id"][0:9]
+                # Ensure a proper 'forecaster' entry exists with model_type
+                fore_cfg = copy.deepcopy(run_config["forecaster"])
+                fore_cfg["model_type"] = "forecaster"
+                runs[tail_id] = fore_cfg
+            run_id = f"{run_id}-{tail_id}"
+
+        # Register this (possibly composite) run inside the loop
+        runs[run_id] = run_config
     return runs
 
 
 def collect_all_baselines():
     """Collect all baselines defined in the configuration."""
-    baselines = config.get("baseline", {})
-    if isinstance(baselines, list):
-        return baselines
-    elif isinstance(baselines, dict):
-        return list(baselines.keys())
-    elif isinstance(baselines, str):
-        return [baselines]
-    else:
-        raise ValueError("Baselines should be a list, dict, or string.")
+    baselines = {}
+    for baseline_entry in copy.deepcopy(config["baselines"]):
+        baseline_type = next(iter(baseline_entry))
+        baseline_config = baseline_entry[baseline_type]
+        baseline_id = baseline_config.pop("baseline_id")
+        baselines[baseline_id] = baseline_config
+    return baselines
 
 
 def collect_experiment_participants():
     participants = {}
-    for baseline in collect_all_baselines():
-        participants[baseline] = (
-            OUT_ROOT / f"data/baselines/{baseline}/verif_aggregated.csv"
-        )
-    for run_entry in config["runs"]:
-        # every run entry is a single-key dict
-        # where the key is the model type ("forecaster", "interpolator", etc.)
-        run = next(iter(run_entry.values()))
-        run_id = run["run_id"]
-        label = run.get("label", run_id)
-        participants[label] = OUT_ROOT / f"data/runs/{run_id}/verif_aggregated.csv"
+    for base in BASELINE_CONFIGS.keys():
+        participants[base] = OUT_ROOT / f"data/baselines/{base}/verif_aggregated.nc"
+    for exp in RUN_CONFIGS.keys():
+        participants[exp] = OUT_ROOT / f"data/runs/{exp}/verif_aggregated.nc"
     return participants
 
 
+def _inference_routing_fn(wc):
+
+    run_config = RUN_CONFIGS[wc.run_id]
+
+    if run_config["model_type"] == "forecaster":
+        input_path = f"logs/inference_forecaster/{wc.run_id}-{wc.init_time}.ok"
+    elif run_config["model_type"] == "interpolator":
+        input_path = f"logs/inference_interpolator/{wc.run_id}-{wc.init_time}.ok"
+    else:
+        raise ValueError(f"Unsupported model type: {run_config['model_type']}")
+
+    return OUT_ROOT / input_path
+
+
 RUN_CONFIGS = collect_all_runs()
+BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()

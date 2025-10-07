@@ -5,7 +5,7 @@
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Actions status](https://github.com/meteoswiss/evalml/actions/workflows/ci.yaml/badge.svg)](https://github.com/meteoswiss/evalml/actions)
 
-Run evaluation pipelines for anemoi models.
+Run evaluation pipelines for data-driven weather models built with [Anemoi](https://anemoi.readthedocs.io/).
 
 
 ## Getting started
@@ -36,41 +36,42 @@ dates:
 lead_time: 120h
 
 runs:
-  # - interpolator:
-  #     run_id: 9c18b90074214d769b8b383722fc5a06
-  #     label: Interpolator (M-1 forecaster)
-  #     forecaster:
-  #       run_id: d0846032fc7248a58b089cbe8fa4c511
   - forecaster:
-      run_id: 2f962c89ff644ca7940072fa9cd088ec
+      mlflow_id: 2f962c89ff644ca7940072fa9cd088ec
       label: Stage D - N320 global grid with CERRA finetuning
   - forecaster:
-      run_id: d0846032fc7248a58b089cbe8fa4c511
+      mlflow_id: d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
 
-baseline: COSMO-E
 
-execution:
-  run_group_size: 4
+baselines:
+  - baseline:
+      baseline_id: COSMO-E
+      label: COSMO-E
+      root: /store_new/mch/msopr/ml/COSMO-E
+      steps: 0/126/6
 
-verification:
-  valid_every: 12
+analysis:
+  label: COSMO KENDA
+  analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr
 
 locations:
   output_root: output/
   mlflow_uri:
-    - https://service.meteoswiss.ch/mlstore
     - https://servicedepl.meteoswiss.ch/mlstore
     - https://mlflow.ecmwf.int
 
 profile:
   executor: slurm
+  global_resources:
+    gpus: 15
   default_resources:
     slurm_partition: "postproc"
     cpus_per_task: 1
     mem_mb_per_cpu: 1800
     runtime: "1h"
-  jobs: 30
+    gpus: 0
+  jobs: 50
 ```
 
 You can then run it with:
@@ -92,22 +93,6 @@ then, install the project and its dependencies with `uv sync` and activate the v
 environment with `source .venv/bin/activate`.
 
 ## Credentials setup
-
-Environment variables can be used to securely pass username and password to MLflow PROD
-server `https://service.meteoswiss.ch/mlstore`.
-
-```bash
-export MLFLOW_TRACKING_USERNAME=mlflow-username
-export MLFLOW_TRACKING_PASSWORD=mlflow-password
-```
-
-To permanently set these variables within this project, use a `.env` file in the root:
-
-```
-# .env
-MLFLOW_TRACKING_USERNAME=mlflow-user
-MLFLOW_TRACKING_PASSWORD=mlflow-password
-```
 
 Some experiments are stored on the ECMWF-hosted MLflow server:
 [https://mlflow.ecmwf.int](https://mlflow.ecmwf.int). To access these runs in the

@@ -11,16 +11,15 @@ The script maintains a backup of configuration files and restores them in case o
 
 import logging
 import shutil
+import subprocess
 from pathlib import Path
+
 import requests
 import toml
-import subprocess
-
-from mlflow.tracking import MlflowClient
-from mlflow.exceptions import RestException
-
 from anemoi.utils.mlflow.auth import TokenAuth
 from anemoi.utils.mlflow.client import AnemoiMlflowClient
+from mlflow.exceptions import RestException
+from mlflow.tracking import MlflowClient
 
 logfile = snakemake.log[0]  # type: ignore # noqa: F821
 logging.basicConfig(
@@ -374,6 +373,38 @@ def update_pyproject_toml(
         raise RuntimeError("Failed to write pyproject.toml") from e
 
 
+def get_mlflow_id(run_config: dict, run_id: str) -> str:
+    """Extract the MLflow ID from the run configuration.
+
+    Args:
+        run_config (dict): Run configuration dictionary
+        run_id (str): Run ID to look up
+
+    Returns:
+        str: MLflow ID associated with the run ID
+
+    Raises:
+        ValueError: If the run ID is not found in the configuration
+    """
+    all_ids = {}
+    for run_entry in run_config:
+        for conf in run_entry.values():
+            # Always register the top-level mlflow_id
+            if "mlflow_id" in conf and run_id[:8] in conf["mlflow_id"]:
+                all_ids[run_id] = conf["mlflow_id"]
+            # if the forecaster key exists (interpolator usecase) and is not None (interpolator from analysis), register it too otherwise pyproject does not get created
+            if (
+                "forecaster" in conf
+                and conf["forecaster"] is not None
+                and "mlflow_id" in conf["forecaster"]
+            ):
+                all_ids[conf["forecaster"]["mlflow_id"][0:9]] = conf["forecaster"][
+                    "mlflow_id"
+                ]
+    logger.info("All run IDs with MLflow IDs: %s", all_ids)
+    return all_ids[run_id]
+
+
 def main(snakemake) -> None:
     """Main entry point for the script.
 
@@ -382,21 +413,23 @@ def main(snakemake) -> None:
     """
     mlflow_uri = snakemake.config["locations"]["mlflow_uri"]
     run_id = snakemake.wildcards["run_id"]
+    mlflow_id = get_mlflow_id(snakemake.config["runs"], run_id)
+    logger.info("Using MLflow ID %s for run ID %s", mlflow_id, run_id)
     requirements_path_in = Path(snakemake.input[0])
     toml_path_out = Path(snakemake.output[0])
     extra_dependencies = snakemake.params.get("extra_dependencies", [])
     shutil.copy2(requirements_path_in, toml_path_out)
 
-    client = get_mlflow_client_given_runid(mlflow_uri, run_id)
-    anemoi_versions = get_anemoi_versions(client, run_id)
-    other_versions = get_other_versions(client, run_id)
-    python_version = get_python_version(client, run_id)
-    checkpoints_path = get_path_to_checkpoints(client, run_id)
+    client = get_mlflow_client_given_runid(mlflow_uri, mlflow_id)
+    anemoi_versions = get_anemoi_versions(client, mlflow_id)
+    other_versions = get_other_versions(client, mlflow_id)
+    python_version = get_python_version(client, mlflow_id)
+    checkpoints_path = get_path_to_checkpoints(client, mlflow_id)
 
-    run_mlflow_link = client.tracking_uri + "/#/runs/" + run_id
+    run_mlflow_link = client.tracking_uri + "/#/runs/" + mlflow_id
     logger.info(
         "Updating pyproject.toml with versions from MLflow run %s at %s",
-        run_id,
+        mlflow_id,
         run_mlflow_link,
     )
     update_pyproject_toml(

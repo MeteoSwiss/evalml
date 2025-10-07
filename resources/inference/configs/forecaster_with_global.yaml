@@ -1,0 +1,39 @@
+input:
+  test:
+    use_original_paths: true
+
+allow_nans: true
+
+output:
+  tee:
+    outputs:
+    - extract_lam:
+        output:
+          assign_mask:
+            mask: "source0/trimedge_mask"
+            output:
+              grib:
+                path: grib/{dateTime}_{step:03}.grib
+                encoding:
+                  typeOfGeneratingProcess: 2
+                templates:
+                   samples: _resources/templates_index_cosmo.yaml
+    - grib:
+        path: grib/ifs-{dateTime}_{step:03}.grib
+        encoding:
+          typeOfGeneratingProcess: 2
+        templates:
+          samples: _resources/templates_index_ifs.yaml
+        post_processors:
+          - extract_slice: [189699, -1]
+          - assign_mask: "global/cutout_mask"
+
+forcings:
+  test:
+    use_original_paths: true
+
+patch_metadata:
+  dataset:
+    constant_fields: [z, lsm]
+
+write_initial_state: true
