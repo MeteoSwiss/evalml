@@ -192,6 +192,7 @@ def _get_forecaster_run_id(run_id):
 
 rule inference_interpolator:
     """Run the interpolator for a specific run ID."""
+    localrule: True
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
