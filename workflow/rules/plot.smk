@@ -6,8 +6,9 @@
 include: "common.smk"
 
 
-rule plot_forecast_frames:
+rule plot_forecast_frame:
     input:
+        script="workflow/scripts/plot_forecast_frame.mo.py",
         raw_output=rules.inference_routing.output[1],
     output:
         temp(
@@ -21,12 +22,12 @@ rule plot_forecast_frames:
     # localrule: True
     shell:
         """
-        python workflow/notebooks/plot_forecast_frame.py \
+        python {input.script} \
             --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]}\
             --param {wildcards.param} --leadtime {wildcards.leadtime} \
             --projection {wildcards.projection} --region {wildcards.region} \
         # interactive editing (needs to set localrule: True and use only one core)
-        # marimo edit workflow/notebooks/plot_forecast_frame.py -- \
+        # marimo edit {input.script} -- \
         #     --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]}\
         #     --param {wildcards.param} --leadtime {wildcards.leadtime} \
         #     --projection {wildcards.projection} --region {wildcards.region} \
