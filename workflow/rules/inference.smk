@@ -143,7 +143,7 @@ rule inference_forecaster:
         slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
         cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
         mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
-        runtime=lambda wc: get_resource(wc, "runtime", "20m"),
+        runtime=lambda wc: get_resource(wc, "runtime", "40m"),
         gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
         ntasks=lambda wc: get_resource(wc, "tasks", 1),
         slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment",
@@ -192,6 +192,7 @@ def _get_forecaster_run_id(run_id):
 
 rule inference_interpolator:
     """Run the interpolator for a specific run ID."""
+    localrule: True
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         image=rules.make_squashfs_image.output.image,
@@ -221,13 +222,14 @@ rule inference_interpolator:
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None
             else _get_forecaster_run_id(wc.run_id)
         ),
+        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
     log:
         OUT_ROOT / "logs/inference_interpolator/{run_id}-{init_time}.log",
     resources:
         slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
         cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
         mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
-        runtime=lambda wc: get_resource(wc, "runtime", "20m"),
+        runtime=lambda wc: get_resource(wc, "runtime", "40m"),
         gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
         ntasks=lambda wc: get_resource(wc, "tasks", 1),
         slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment",
