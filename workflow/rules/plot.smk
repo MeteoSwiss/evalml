@@ -1,26 +1,54 @@
 # ----------------------------------------------------- #
-# PLOTTING  WORKFLOW                                    #
+# PLOTTING WORKFLOW                                     #
 # ----------------------------------------------------- #
-from datetime import datetime
+
 
 include: "common.smk"
 
-rule plot_forecast:
+
+rule plot_forecast_frames:
     input:
-#        grib_output=rules.map_init_time_to_inference_group.output[0],
         raw_output=rules.inference_routing.output[1],
     output:
-        directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/plots/"),
-    params:
-        sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
-    log:
-        OUT_ROOT / "logs/plot_forecast/{run_id}-{init_time}.log",
+        temp(
+            OUT_ROOT
+            / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{projection}_{region}.png"
+        ),
     resources:
         slurm_partition="postproc",
-        cpus_per_task=24,
-        runtime="20m",
+        cpus_per_task=1,
+        runtime="5m",
+    # localrule: True
     shell:
         """
-        python workflow/scripts/plot_map.py \
-          --input {input.raw_output}  --date {wildcards.init_time} --output {output[0]}\
+        python workflow/scripts/plot_forecast_frame.py \
+            --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]}\
+            --param {wildcards.param} --leadtime {wildcards.leadtime} \
+            --projection {wildcards.projection} --region {wildcards.region} \
+        # interactive editing (needs to set localrule: True and use only one core)
+        # marimo edit workflow/scripts/notebook_plot_map.py -- \
+        #     --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]}\
+        #     --param {wildcards.param} --leadtime {wildcards.leadtime} \
+        #     --projection {wildcards.projection} --region {wildcards.region} \
+        """
+
+
+LEADTIME = int(pd.to_timedelta(config["lead_time"]).total_seconds() // 3600)
+
+
+rule make_forecast_animation:
+    input:
+        expand(
+            OUT_ROOT
+            / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{projection}_{region}.png",
+            leadtime=[f"{i:03}" for i in range(0, LEADTIME + 6, 6)],
+            allow_missing=True,
+        ),
+    output:
+        OUT_ROOT
+        / "showcases/{run_id}/{init_time}/{init_time}_{param}_{projection}_{region}.gif",
+    localrule: True
+    shell:
+        """
+        convert -delay 80 -loop 0 {input} {output}
         """
