@@ -13,7 +13,7 @@ include: "common.smk"
 rule verif_metrics_baseline:
     input:
         script="workflow/scripts/verif_baseline.py",
-        module="workflow/scripts/src/verification.py",
+        module="src/verification/__init__.py",
         baseline_zarr=lambda wc: expand(
             "{root}/FCST{year}.zarr",
             root=BASELINE_CONFIGS[wc.baseline_id].get("root"),
@@ -55,6 +55,7 @@ def _get_no_none(dict, key, replacement):
 rule verif_metrics:
     input:
         script="workflow/scripts/verif_from_grib.py",
+        module="src/verification/__init__.py",
         inference_okfile=_inference_routing_fn,
         grib_output=rules.inference_routing.output[0],
         analysis_zarr=config["analysis"].get("analysis_zarr"),

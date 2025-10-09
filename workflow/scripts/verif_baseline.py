@@ -12,7 +12,8 @@ os.environ["ECCODES_DEFINITION_PATH"] = str(eccodes_definition_path)
 
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
-from src.verification import verify  # noqa: E402
+
+from verification import verify  # noqa: E402
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
