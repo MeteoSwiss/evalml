@@ -21,6 +21,7 @@ REGION_EXTENTS = {  # coordinate reference system: PlateCarree()
     "europe": [-16.0, 25.0, 30.0, 65.0],
     "centraleurope": [-2.6, 19.5, 40.2, 52.3],
     "switzerland": [0, 17.5, 40.5, 53.0],
+    "globe": [-180.0, 180.0, -90.0, 90.0],
 }
 """Mapping of region names to their extents."""
 

@@ -54,7 +54,7 @@ rule showcase_all:
             run_id=collect_all_runs(),
             param="2t",
             projection="orthographic",
-            region="centraleurope",
+            region="globe",
             with_global="true",
         ),
 

@@ -22,7 +22,7 @@ output:
           templates:
             samples: _resources/templates_index_ifs.yaml
           post_processors:
-            - extract_slice: [1147980, -1]
+            - extract_slice: [919619, -1]
             - assign_mask: "global/cutout_mask"
 
 write_initial_state: true
