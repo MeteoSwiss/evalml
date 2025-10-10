@@ -23,7 +23,7 @@ rule plot_forecast_frame:
     # localrule: True
     shell:
         """
-        python workflow/scripts/plot_forecast_frame.py \
+        python workflow/scripts/plot_forecast_frame.mo.py \
             --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} \
             --projection {wildcards.projection} --region {wildcards.region} --with_global {wildcards.with_global} \
