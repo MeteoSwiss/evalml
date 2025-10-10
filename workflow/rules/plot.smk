@@ -5,8 +5,14 @@
 
 include: "common.smk"
 
+import pandas as pd
+
 wildcard_constraints:
-    with_global="true|false"
+    with_global="true|false",
+    region="[^/]+"
+
+# default: no region constraint
+REGIONS = config.get("regions", ["none"])
 
 rule plot_forecast_frame:
     input:
@@ -20,18 +26,12 @@ rule plot_forecast_frame:
         slurm_partition="postproc",
         cpus_per_task=1,
         runtime="5m",
-    # localrule: True
     shell:
         """
         python workflow/scripts/plot_forecast_frame.mo.py \
             --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} \
-            --projection {wildcards.projection} --region {wildcards.region} --with_global {wildcards.with_global} \
-        # interactive editing (needs to set localrule: True and use only one core)
-        # marimo edit workflow/scripts/notebook_plot_map.py -- \
-        #     --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]}\
-        #     --param {wildcards.param} --leadtime {wildcards.leadtime} \
-        #     --projection {wildcards.projection} --region {wildcards.region} \
+            --projection {wildcards.projection} --region {wildcards.region} --with_global {wildcards.with_global}
         """
 
 
@@ -44,6 +44,7 @@ rule make_forecast_animation:
             OUT_ROOT
             / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{projection}_{region}_{with_global}.png",
             leadtime=[f"{i:03}" for i in range(0, LEADTIME + 6, 6)],
+            region=REGIONS,
             with_global="true",
             allow_missing=True,
         ),

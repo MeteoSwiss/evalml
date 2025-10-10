@@ -94,15 +94,18 @@ class StatePlotter:
         proj = PROJECTIONS.get(projection, PROJECTIONS["orthographic"])
 
         domain = None
-        if region:
-            domain = ekp.geo.domains.Domain(
-                bbox=REGION_EXTENTS[region],
-                crs=ccrs.PlateCarree(),  # coordinate reference system of the region coords
-                name=region,
-            )
+        # Use a map domain only if region is set and known; accept "none"/None for no clipping
+        if region is not None and str(region).lower() not in {"none", "", "null"}:
+            bbox = REGION_EXTENTS.get(region)
+            if bbox is not None:
+                domain = ekp.geo.domains.Domain(
+                    bbox=bbox,
+                    crs=ccrs.PlateCarree(),
+                    name=region,
+                )
 
         ekp_fig = ekp.Figure(
-            crs=proj,  # coordinate reference system of the map
+            crs=proj,
             domain=domain,
             rows=nrows,
             columns=ncols,
@@ -193,4 +196,3 @@ class StatePlotter:
         x, y, _ = PROJECTIONS["orthographic"].transform_points(ccrs.PlateCarree(), self.lon, self.lat).T
         mask = ~(np.isnan(x) | np.isnan(y))
         return Triangulation(x[mask], y[mask]), mask
-

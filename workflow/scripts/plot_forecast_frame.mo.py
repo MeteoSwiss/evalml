@@ -48,7 +48,7 @@ def _(ArgumentParser, Path):
     parser.add_argument("--leadtime", type=str, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
     parser.add_argument("--projection", type=str, help="projection")
-    parser.add_argument("--region", type=str, help="region")
+    parser.add_argument("--region", type=str, default="none", help="region (or 'none')")
     parser.add_argument(
         "--with_global", type=str, choices=["true", "false"], default="true", help="include global data (true/false)"
     )
@@ -58,7 +58,7 @@ def _(ArgumentParser, Path):
     outfn = Path(args.outfn)
     leadtime = int(args.leadtime)
     param = args.param
-    region = args.region
+    region = None if (args.region is None or str(args.region).lower() in {"none", "", "null"}) else args.region
     projection = args.projection
     with_global = args.with_global.lower() == "true"
     return args, leadtime, outfn, param, projection, raw_dir, region, with_global
