@@ -1,28 +1,26 @@
-import cartopy.crs as ccrs
 from functools import cached_property
-import numpy as np
-from matplotlib.tri import Triangulation
-import typing as tp
 from pathlib import Path
 
+import cartopy.crs as ccrs
 import earthkit.plots as ekp
-
+import numpy as np
+from matplotlib.tri import Triangulation
 
 State = dict[str, np.ndarray | dict[str, np.ndarray]]
 
 PROJECTIONS: dict[str, ccrs.Projection] = {
-    "plate_carree": ccrs.PlateCarree(),
+    "platecarree": ccrs.PlateCarree(),
     "orthographic": ccrs.Orthographic(central_longitude=5.0, central_latitude=45.0),
     # added some pojections to test the behaviour, can be deleted later
-    "rotated_latlon": ccrs.RotatedPole(pole_longitude=-170.0, pole_latitude=43.0),
-    "azimuthal_equidist": ccrs.AzimuthalEquidistant(),
+    "rotatedlatlon": ccrs.RotatedPole(pole_longitude=-170.0, pole_latitude=43.0),
+    "azimuthalequidist": ccrs.AzimuthalEquidistant(),
 }
 """Mapping of projection names to their cartopy projection objects."""
 
 REGION_EXTENTS = {  # coordinate reference system: PlateCarree()
     "europe": [-16.0, 25.0, 30.0, 65.0],
-    "central_europe": [-2.6, 19.5, 40.2, 52.3],
-    "switzerland": [-1.5, 17.5, 40.5, 53.0],
+    "centraleurope": [-2.6, 19.5, 40.2, 52.3],
+    "switzerland": [0, 17.5, 40.5, 53.0],
 }
 """Mapping of region names to their extents."""
 
@@ -55,7 +53,10 @@ class StatePlotter:
 
         self.lon = lon
         self.lat = lat
-
+        if lon.shape != lat.shape:
+            Z = np.meshgrid(lon, lat)
+            self.lon = Z[0]
+            self.lat = Z[1]
         out_dir.mkdir(exist_ok=True, parents=True)
         self.out_dir = out_dir
 
@@ -68,7 +69,7 @@ class StatePlotter:
         projection: str = "orthographic",
         size: tuple[float] | None = None,
         region: str | None = None,
-        ) -> ekp.Figure:
+    ) -> ekp.Figure:
         """Initialize a figure with GeoAxes for plotting fields.
 
         Parameters
@@ -97,7 +98,7 @@ class StatePlotter:
             domain = ekp.geo.domains.Domain(
                 bbox=REGION_EXTENTS[region],
                 crs=ccrs.PlateCarree(),  # coordinate reference system of the region coords
-                name=region
+                name=region,
             )
 
         ekp_fig = ekp.Figure(
@@ -110,59 +111,13 @@ class StatePlotter:
         self.fig = ekp_fig
         return ekp_fig
 
-    # def init_geoaxes(
-    #     self,
-    #     nrows: int = 1,
-    #     ncols: int = 1,
-    #     projection: str = "orthographic",
-    #     region: str | None = None,
-    #     coastlines: bool = True,
-    #     **kwargs,
-    # ) -> tuple[plt.Figure, tp.Sequence[GeoAxes]]:
-    #     """Initialize a figure with GeoAxes for plotting fields.
-
-    #     Parameters
-    #     ----------
-    #     nrows : int, optional
-    #         The number of rows in the figure, by default 1.
-    #     ncols : int, optional
-    #         The number of columns in the figure, by default 1.
-    #     projection : str, optional
-    #         The projection of the map, by default "orthographic".
-    #     region : str, optional
-    #         The region to plot, by default None.
-    #     coastlines : bool, optional
-    #         Whether to plot coastlines, by default True.
-
-    #     Returns
-    #     -------
-    #     tuple[plt.Figure, tp.Sequence[GeoAxes]]
-    #         The figure and the GeoAxes objects.
-    #     """
-
-    #     proj = PROJECTIONS.get(projection, PROJECTIONS["orthographic"])
-    #     fig, ax = plt.subplots(nrows, ncols, subplot_kw={"projection": proj})
-    #     ax: GeoAxes | tp.Sequence[GeoAxes] = (
-    #         [ax] if nrows == 1 and ncols == 1 else ax.ravel()
-    #     )
-
-    #     for i in range(nrows * ncols):
-    #         ax[i].set_global()
-    #         if coastlines:
-    #             ax[i].coastlines()
-
-    #         if region != "globe":
-    #             ax[i].set_extent(REGION_EXTENTS[region], crs=ccrs.PlateCarree())
-
-    #     return fig, ax
-
     def plot_field(
         self,
         subplot: ekp.Map,
         field: np.ndarray,
         style: ekp.styles.Style | None = None,
         colorbar: bool = True,
-        title: str | None= None,
+        title: str | None = None,
         **kwargs,
     ):
         """Plot a field on a Map object.
@@ -184,20 +139,21 @@ class StatePlotter:
             vmin, vmax, etc.
         """
 
-        proj = subplot.ax.projection
-
+        proj = subplot._crs
         # transform data coordinates to map coordinate reference system outside
         # of the plotting function is a lot faster than letting tricontourf or
         # tripcolor handle it in general, but not sure if using earthkit
         # removed for now to simplify the workflow
-        #if proj == PROJECTIONS["orthographic"]:
-        #    triang, mask = self._ortographic_tri
-        #else:
-        #    triang, mask = self.tri, slice(None, None)
-
+        if proj == PROJECTIONS["orthographic"]:
+            triang, mask = self._orthographic_tri
+        else:
+            triang, mask = self.tri, slice(None, None)
+        x, y = triang.x, triang.y
         # TODO: this is hardcoded for when the initial state has two timesteps
         # need to ditch this later
+        field = field[mask]
         field = field[-1] if field.ndim == 2 else field.squeeze()
+        finite = np.isfinite(field)
 
         # TODO: clip data to domain would make plotting faster (especially tripcolor)
         # tried using Map.domain.extract() but too memory heavy (probably uses
@@ -210,12 +166,16 @@ class StatePlotter:
         # guess is that the earthkit-plots check throwing:
         # "ValueError: x and y arrays must have the same length" is incorrect,
         # therefore using x,y here
-        #subplot.tripcolor(  # also works but is slower
+        # subplot.tripcolor(  # also works but is slower
+        # have to overwrite _plot_kwargs to avoid earthkit-plots trying to pass transform
+        # PlateCarree based on NumpySource
+        subplot._plot_kwargs = lambda source: {}
         subplot.tricontourf(
-            x=self.lon,
-            y=self.lat,
-            z=field,
+            x=x[finite],
+            y=y[finite],
+            z=field[finite],
             style=style,
+            transform=proj,
             **kwargs,  # for earthkit.plots to work properly cmap and norm are needed here
         )
         # TODO: gridlines etc would be nicer to have in the init, but I didn't get
@@ -227,77 +187,10 @@ class StatePlotter:
         if title:
             subplot.title(title)
 
-
-    # def plot_field(
-    #     self,
-    #     ax: GeoAxes,
-    #     field: np.ndarray,
-    #     region: str | None = None,
-    #     validtime: str = "",
-    #     colorbar: dict | bool = True,
-    #     **kwargs,
-    # ):
-    #     """Plot a field on a GeoAxes object.
-
-    #     Parameters
-    #     ----------
-    #     ax : GeoAxes
-    #         The GeoAxes object to plot on.
-    #     field : np.ndarray
-    #         The field to plot.
-    #     region : str, optional
-    #         The region to plot, by default None.
-    #     colorbar : dict | bool, optional
-    #         Whether to plot a colorbar, by default True.
-    #         If a dictionary, it is passed as keyword arguments to plt.colorbar.
-    #     kwargs : dict
-    #         Additional keyword arguments to pass to ax.tripcolor, including cmap,
-    #         vmin, vmax, etc.
-    #     """
-
-    #     proj = ax.projection
-
-    #     if proj == PROJECTIONS["orthographic"]:
-    #         triang, mask = self._ortographic_tri
-    #     else:
-    #         triang, mask = self.tri, slice(None, None)
-
-    #     # TODO: this is hardcoded for when the initial state has two timesteps
-    #     # need to ditch this later
-    #     field = field[-1] if field.ndim == 2 else field.squeeze()
-
-    #     im = ax.tripcolor(triang, field[mask], **kwargs)
-    #     ax.text(
-    #         0.05,
-    #         0.95,
-    #         f"Time: {validtime}",
-    #         transform=ax.transAxes,
-    #         fontsize=12,
-    #         color="white",
-    #         verticalalignment="top",
-    #         bbox=dict(facecolor="black", alpha=0.5),
-    #     )
-
-    #     if region and region != "globe":
-    #         ax.set_extent(REGION_EXTENTS[region], crs=ccrs.PlateCarree())
-
-    #     if colorbar:
-    #         colorbar = {
-    #             "orientation": "horizontal",
-    #             "pad": 0.04,
-    #             "aspect": 45,
-    #             "extend": "both",
-    #             "shrink": 0.75,
-    #         } | (colorbar if isinstance(colorbar, dict) else {})
-    #         plt.colorbar(im, **colorbar)
-
     @cached_property
-    def _ortographic_tri(self) -> Triangulation:
+    def _orthographic_tri(self) -> Triangulation:
         """Compute the triangulation for the orthographic projection."""
-        x, y, _ = (
-            PROJECTIONS["orthographic"]
-            .transform_points(ccrs.PlateCarree(), self.lon, self.lat)
-            .T
-        )
+        x, y, _ = PROJECTIONS["orthographic"].transform_points(ccrs.PlateCarree(), self.lon, self.lat).T
         mask = ~(np.isnan(x) | np.isnan(y))
         return Triangulation(x[mask], y[mask]), mask
+
