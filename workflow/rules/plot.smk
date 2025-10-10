@@ -10,7 +10,6 @@ wildcard_constraints:
 
 rule plot_forecast_frame:
     input:
-        script="workflow/scripts/plot_forecast_frame.mo.py",
         raw_output=rules.inference_routing.output[0],
     output:
         temp(
