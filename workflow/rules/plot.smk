@@ -28,10 +28,15 @@ rule plot_forecast_frame:
         runtime="5m",
     shell:
         """
-        python workflow/scripts/plot_forecast_frame.mo.py \
+        python {input.script} \
             --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} \
-            --projection {wildcards.projection} --region {wildcards.region} --with_global {wildcards.with_global}
+            --projection {wildcards.projection} --region {wildcards.region} --with_global {wildcards.with_global} \
+        # interactive editing (needs to set localrule: True and use only one core)
+        # marimo edit workflow/scripts/notebook_plot_map.py -- \
+        #     --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]}\
+        #     --param {wildcards.param} --leadtime {wildcards.leadtime} \
+        #     --projection {wildcards.projection} --region {wildcards.region} \
         """
 
 
