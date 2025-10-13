@@ -53,10 +53,6 @@ class StatePlotter:
 
         self.lon = lon
         self.lat = lat
-        if lon.shape != lat.shape:
-            Z = np.meshgrid(lon, lat)
-            self.lon = Z[0]
-            self.lat = Z[1]
         out_dir.mkdir(exist_ok=True, parents=True)
         self.out_dir = out_dir
 
