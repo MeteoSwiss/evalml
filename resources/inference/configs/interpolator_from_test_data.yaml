@@ -1,5 +1,4 @@
 runner: time_interpolator
-include_forcings: true
 
 input:
   test:
@@ -16,10 +15,6 @@ output:
       typeOfGeneratingProcess: 2
     templates:
       samples: _resources/templates_index_cosmo.yaml
-
-forcings:
-  test:
-    use_original_paths: true
 
 verbosity: 1
 allow_nans: true
