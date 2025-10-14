@@ -10,7 +10,7 @@ from meteodatalab import grib_decoder
 
 
 def load_state_from_grib(
-    file: Path, paramlist: list[str] | None = None, with_global: bool = False
+    file: Path, paramlist: list[str] | None = None
 ) -> dict[str, np.ndarray | dict[str, np.ndarray]]:
     reftime = datetime.strptime(file.parents[1].name, "%Y%m%d%H%M")
     lead_time_hours = int(file.stem.split("_")[-1])
@@ -27,7 +27,8 @@ def load_state_from_grib(
     for param in paramlist:
         if param in ds:
             state["fields"][param] = ds[param].values.flatten()
-    if with_global:
+    global_file = str(file.parent / f"ifs-{file.stem}.grib")
+    if Path(global_file).exists():
         global_file = str(file.parent / f"ifs-{file.stem}.grib")
         fds_global = ekd.from_source("file", global_file)
         ds_global = {u.metadata("param"): u.values for u in fds_global if u.metadata("param") in paramlist}

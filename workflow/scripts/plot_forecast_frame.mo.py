@@ -49,9 +49,6 @@ def _(ArgumentParser, Path):
     parser.add_argument("--param", type=str, help="parameter")
     parser.add_argument("--projection", type=str, help="projection")
     parser.add_argument("--region", type=str, default="none", help="region (or 'none')")
-    parser.add_argument(
-        "--with_global", type=str, choices=["true", "false"], default="true", help="include global data (true/false)"
-    )
 
     args = parser.parse_args()
     raw_dir = Path(args.input)
@@ -60,8 +57,7 @@ def _(ArgumentParser, Path):
     param = args.param
     region = None if (args.region is None or str(args.region).lower() in {"none", "", "null"}) else args.region
     projection = args.projection
-    with_global = args.with_global.lower() == "true"
-    return args, leadtime, outfn, param, projection, raw_dir, region, with_global
+    return args, leadtime, outfn, param, projection, raw_dir, region
 
 
 @app.cell
@@ -72,11 +68,11 @@ def _(raw_dir):
 
 
 @app.cell
-def _(leadtime, load_state_from_grib, grib_files, param, with_global):
+def _(leadtime, load_state_from_grib, grib_files, param):
     # TODO: do not hardcode leadtimes
     leadtimes = list(range(0, 126, 6))
     file_index = leadtimes.index(leadtime)
-    state = load_state_from_grib(grib_files[file_index], paramlist=[param], with_global=with_global)
+    state = load_state_from_grib(grib_files[file_index], paramlist=[param])
     return (state,)
 
 

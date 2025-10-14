@@ -7,20 +7,14 @@ include: "common.smk"
 
 import pandas as pd
 
-wildcard_constraints:
-    with_global="true|false",
-    region="[^/]+"
-
-# default: no region constraint
-REGIONS = config.get("regions", ["none"])
-
 rule plot_forecast_frame:
     input:
+        script="workflow/scripts/plot_forecast_frame.mo.py",
         raw_output=rules.inference_routing.output[0],
     output:
         temp(
             OUT_ROOT
-            / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{projection}_{region}_{with_global}.png"
+            / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{projection}_{region}.png"
         ),
     resources:
         slurm_partition="postproc",
@@ -31,9 +25,9 @@ rule plot_forecast_frame:
         python {input.script} \
             --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} \
-            --projection {wildcards.projection} --region {wildcards.region} --with_global {wildcards.with_global} \
+            --projection {wildcards.projection} --region {wildcards.region} \
         # interactive editing (needs to set localrule: True and use only one core)
-        # marimo edit workflow/scripts/notebook_plot_map.py -- \
+        # marimo edit {input.script} -- \
         #     --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]}\
         #     --param {wildcards.param} --leadtime {wildcards.leadtime} \
         #     --projection {wildcards.projection} --region {wildcards.region} \
@@ -47,15 +41,13 @@ rule make_forecast_animation:
     input:
         expand(
             OUT_ROOT
-            / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{projection}_{region}_{with_global}.png",
+            / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{projection}_{region}.png",
             leadtime=[f"{i:03}" for i in range(0, LEADTIME + 6, 6)],
-            region=REGIONS,
-            with_global="true",
             allow_missing=True,
         ),
     output:
         OUT_ROOT
-        / "showcases/{run_id}/{init_time}/{init_time}_{param}_{projection}_{region}_{with_global}.gif",
+        / "showcases/{run_id}/{init_time}/{init_time}_{param}_{projection}_{region}.gif",
     localrule: True
     shell:
         """
