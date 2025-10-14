@@ -22,6 +22,7 @@ rule plot_forecast_frame:
         runtime="5m",
     shell:
         """
+        export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
         python {input.script} \
             --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} \
