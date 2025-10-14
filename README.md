@@ -123,3 +123,34 @@ ln -s $SCRATCH/evalenv/output output
 This way data will be written to your scratch, but you will still be able to browse it with your IDE.
 
 If you are using VSCode, we advise that you install the YAML extension, which will enable config validation, autocompletion, hovering support, and more.
+
+## Debugging
+
+Starting an IPython session in the middle of a python script can be useful for debugging
+purposes. You can do so by adding a line to launch IPython at the specific point where
+you want to initiate the debugging session.
+
+You only need to insert the `embed()` function call at the location where you want
+the IPython session to start. This will pause the script execution and launch an IPython
+shell. Here's a simple example to illustrate this:
+
+    def calculate_something(a, b):
+        result = a + b
+        # Launch IPython at this point
+        from IPython import embed; embed()
+        return result
+
+    if __name__ == "__main__":
+        x = 10
+        y = 20
+        print("Before calculation")
+        sum_result = calculate_something(x, y)
+        print(f"After calculation: {sum_result}")
+
+In this example, once the script reaches the `embed()` line, an interactive IPython
+session will open. In this session, you can inspect variables, test expressions, or
+even modify variables before proceeding. To continue script execution, simply exit the
+IPython session by typing exit.
+
+Warning: This is a debugging technique: remember to remove it or comment it out once
+you've resolved the issue you're investigating.
