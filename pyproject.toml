@@ -48,3 +48,9 @@ dev = [
 markers = [
     "longtest: mark tests that take a long time to run, e.g. integration tests",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = [
+  "src/evalml",
+  "src/verification"
+]

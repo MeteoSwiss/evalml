@@ -3,7 +3,9 @@ import numpy as np
 from matplotlib.colors import ListedColormap, BoundaryNorm
 
 # Base directory for colormap files
-BASE_DIR = pathlib.Path(__file__).resolve().parents[3] / "resources" / "report" / "plotting"
+BASE_DIR = (
+    pathlib.Path(__file__).resolve().parents[2] / "resources" / "report" / "plotting"
+)
 
 
 def load_ncl_colormap(filename):
@@ -30,14 +32,14 @@ def load_ncl_colormap(filename):
     try:
         n_levs = int(lines[0])
     except ValueError:
-        raise ValueError(f"Expected number of levels in first non-header line of {cmap_path}")
+        raise ValueError(
+            f"Expected number of levels in first non-header line of {cmap_path}"
+        )
 
     # Colormap bounds on second line
     bounds = [float(x) for x in lines[1].split()]
     if len(bounds) != n_levs:
-        raise ValueError(
-            f"Bounds must have {n_levs} values, got {len(bounds)}"
-        )
+        raise ValueError(f"Bounds must have {n_levs} values, got {len(bounds)}")
 
     # RGB values
     rgb_lines = lines[2:]

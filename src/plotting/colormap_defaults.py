@@ -1,12 +1,15 @@
 """Mapping of field names to good default plotting parameters."""
+
 from collections import defaultdict
 from matplotlib import pyplot as plt
 import warnings
 from .colormap_loader import load_ncl_colormap
 
+
 def _fallback():
     warnings.warn("No colormap found for this parameter, using fallback.", UserWarning)
     return {"cmap": plt.get_cmap("viridis"), "norm": None, "units": ""}
+
 
 _CMAP_DEFAULTS = {
     "sp": {"cmap": plt.get_cmap("coolwarm", 11), "vmin": 800 * 100, "vmax": 1100 * 100},

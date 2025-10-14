@@ -1,20 +1,17 @@
-import pathlib
 import numpy as np
 import pytest
-import sys
 from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 
-# add top-level "src" to sys.path
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from src import colormap_loader, colormap_defaults
+from plotting import colormap_loader, colormap_defaults
 
 
 def test_load_valid_colormap(monkeypatch, tmp_path):
     file = tmp_path / "test_colormap.ct"
-    file.write_text("; test colormap\n3\n0 1 2\n10 20 30\n40 50 60\n70 80 90\n100 110 120\n")
+    file.write_text(
+        "; test colormap\n3\n0 1 2\n10 20 30\n40 50 60\n70 80 90\n100 110 120\n"
+    )
     monkeypatch.setattr(colormap_loader, "BASE_DIR", tmp_path)
 
     result = colormap_loader.load_ncl_colormap("test_colormap.ct")
@@ -30,11 +27,11 @@ def test_load_valid_colormap(monkeypatch, tmp_path):
     # name is stem
     assert cmap.name == "test_colormap"
     # cmap colors
-    assert np.allclose(cmap(0), (40/255, 50/255, 60/255, 1.0))
-    assert np.allclose(cmap(1), (70/255, 80/255, 90/255, 1.0))
+    assert np.allclose(cmap(0), (40 / 255, 50 / 255, 60 / 255, 1.0))
+    assert np.allclose(cmap(1), (70 / 255, 80 / 255, 90 / 255, 1.0))
     # under/over colors
-    assert np.allclose(cmap(-9999), (10/255, 20/255, 30/255, 1.0))
-    assert np.allclose(cmap(9999), (100/255, 110/255, 120/255, 1.0))
+    assert np.allclose(cmap(-9999), (10 / 255, 20 / 255, 30 / 255, 1.0))
+    assert np.allclose(cmap(9999), (100 / 255, 110 / 255, 120 / 255, 1.0))
     # bounds
     assert np.allclose(norm.boundaries, [0, 1, 2])
     assert np.allclose(bounds, [0, 1, 2])

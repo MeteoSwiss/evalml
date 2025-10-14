@@ -12,9 +12,10 @@ def _():
 
     import earthkit.plots as ekp
     import numpy as np
-    from src.colormap_defaults import CMAP_DEFAULTS
-    from src.compat import load_state_from_grib
-    from src.plotting import StatePlotter
+
+    from plotting import StatePlotter
+    from plotting.colormap_defaults import CMAP_DEFAULTS
+    from plotting.compat import load_state_from_grib
 
     return (
         ArgumentParser,

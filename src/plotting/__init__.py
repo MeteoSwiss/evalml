@@ -189,6 +189,10 @@ class StatePlotter:
     @cached_property
     def _orthographic_tri(self) -> Triangulation:
         """Compute the triangulation for the orthographic projection."""
-        x, y, _ = PROJECTIONS["orthographic"].transform_points(ccrs.PlateCarree(), self.lon, self.lat).T
+        x, y, _ = (
+            PROJECTIONS["orthographic"]
+            .transform_points(ccrs.PlateCarree(), self.lon, self.lat)
+            .T
+        )
         mask = ~(np.isnan(x) | np.isnan(y))
         return Triangulation(x[mask], y[mask]), mask

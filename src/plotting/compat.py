@@ -31,7 +31,11 @@ def load_state_from_grib(
     if Path(global_file).exists():
         global_file = str(file.parent / f"ifs-{file.stem}.grib")
         fds_global = ekd.from_source("file", global_file)
-        ds_global = {u.metadata("param"): u.values for u in fds_global if u.metadata("param") in paramlist}
+        ds_global = {
+            u.metadata("param"): u.values
+            for u in fds_global
+            if u.metadata("param") in paramlist
+        }
         global_lats = fds_global.metadata("latitudes")[0]
         global_lons = fds_global.metadata("longitudes")[0]
         if max(global_lons) > 180:
@@ -41,7 +45,9 @@ def load_state_from_grib(
         state["latitudes"] = np.concatenate([state["latitudes"], global_lats[mask]])
         for param in paramlist:
             if param in ds and param in ds_global:
-                state["fields"][param] = np.concatenate([state["fields"][param], ds_global[param][mask]])
+                state["fields"][param] = np.concatenate(
+                    [state["fields"][param], ds_global[param][mask]]
+                )
     return state
 
 
