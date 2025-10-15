@@ -167,17 +167,9 @@
           "title": "Label"
         },
         "steps": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Forecast steps to be used from interpolator, e.g. '0/126/6'.",
-          "title": "Steps"
+          "description": "Forecast lead times in hours, formatted as 'start/end/step'. The range is half-open [start, end), meaning it includes the start  but excludes the end. Example: '0/126/6' for lead times every 6 hours up to 120 hours.",
+          "title": "Steps",
+          "type": "string"
         },
         "extra_dependencies": {
           "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
@@ -214,7 +206,8 @@
         }
       },
       "required": [
-        "mlflow_id"
+        "mlflow_id",
+        "steps"
       ],
       "title": "ForecasterConfig",
       "type": "object"
@@ -355,17 +348,9 @@
           "title": "Label"
         },
         "steps": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Forecast steps to be used from interpolator, e.g. '0/126/6'.",
-          "title": "Steps"
+          "description": "Forecast lead times in hours, formatted as 'start/end/step'. The range is half-open [start, end), meaning it includes the start  but excludes the end. Example: '0/126/6' for lead times every 6 hours up to 120 hours.",
+          "title": "Steps",
+          "type": "string"
         },
         "extra_dependencies": {
           "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
@@ -414,7 +399,8 @@
         }
       },
       "required": [
-        "mlflow_id"
+        "mlflow_id",
+        "steps"
       ],
       "title": "InterpolatorConfig",
       "type": "object"
@@ -509,12 +495,6 @@
       ],
       "title": "Dates"
     },
-    "lead_time": {
-      "description": "Forecast length, e.g. '120h'",
-      "pattern": "^\\d+[hmd]$",
-      "title": "Lead Time",
-      "type": "string"
-    },
     "runs": {
       "description": "Dictionary of runs to execute, with run IDs as keys and configurations as values.",
       "items": {
@@ -551,7 +531,6 @@
   "required": [
     "description",
     "dates",
-    "lead_time",
     "runs",
     "baselines",
     "analysis",

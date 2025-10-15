@@ -118,6 +118,13 @@ def get_resource(wc, field: str, default):
         return getattr(rc["inference_resources"], field) or default
 
 
+def get_leadtime(wc):
+    """Get the lead time from the run config."""
+    start, end, step = RUN_CONFIGS[wc.run_id]["steps"].split("/")
+    end = int(end) - int(step)  # make inclusive
+    return f"{end}h"
+
+
 rule inference_forecaster:
     localrule: True
     input:
@@ -130,7 +137,7 @@ rule inference_forecaster:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
         ),
-        lead_time=config["lead_time"],
+        lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
         reftime_to_iso=lambda wc: datetime.strptime(
@@ -211,7 +218,7 @@ rule inference_interpolator:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
         ),
-        lead_time=config["lead_time"],
+        lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
         reftime_to_iso=lambda wc: datetime.strptime(
