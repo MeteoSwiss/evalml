@@ -79,7 +79,7 @@ input:
             - - shortName: TOT_PREC
               - tp
 
-forcings:
+constant_forcings:
   test:
     use_original_paths: true
 
