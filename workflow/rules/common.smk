@@ -66,12 +66,13 @@ REFTIMES = _reftimes()
 
 
 def collect_all_runs():
-    """Collect all runs defined in the configuration."""
+    """Collect all runs defined in the configuration, including secondary runs."""
     runs = {}
     for run_entry in copy.deepcopy(config["runs"]):
         model_type = next(iter(run_entry))
         run_config = run_entry[model_type]
         run_config["model_type"] = model_type
+        run_config["is_candidate"] = True
         run_id = run_config["mlflow_id"][0:9]
 
         if model_type == "interpolator":
@@ -82,12 +83,23 @@ def collect_all_runs():
                 # Ensure a proper 'forecaster' entry exists with model_type
                 fore_cfg = copy.deepcopy(run_config["forecaster"])
                 fore_cfg["model_type"] = "forecaster"
+                fore_cfg["is_candidate"] = False  # exclude from outputs
                 runs[tail_id] = fore_cfg
             run_id = f"{run_id}-{tail_id}"
 
         # Register this (possibly composite) run inside the loop
         runs[run_id] = run_config
     return runs
+
+
+def collect_all_candidates():
+    """Collect primary runs only."""
+    runs = collect_all_runs()
+    candidates = {}
+    for run_id, run_config in runs.items():
+        if run_config.get("is_candidate", False):
+            candidates[run_id] = run_config
+    return candidates
 
 
 def collect_all_baselines():
@@ -106,7 +118,8 @@ def collect_experiment_participants():
     for base in BASELINE_CONFIGS.keys():
         participants[base] = OUT_ROOT / f"data/baselines/{base}/verif_aggregated.nc"
     for exp in RUN_CONFIGS.keys():
-        participants[exp] = OUT_ROOT / f"data/runs/{exp}/verif_aggregated.nc"
+        if RUN_CONFIGS[exp].get("is_candidate", False):
+            participants[exp] = OUT_ROOT / f"data/runs/{exp}/verif_aggregated.nc"
     return participants
 
 
