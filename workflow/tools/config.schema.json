@@ -478,6 +478,14 @@
           "minimum": 1,
           "title": "Jobs",
           "type": "integer"
+        },
+        "batch_rules": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Define batches of the same rule that shall be executed within one job submission.",
+          "title": "Batch Rules",
+          "type": "object"
         }
       },
       "required": [
