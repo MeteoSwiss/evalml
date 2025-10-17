@@ -160,24 +160,45 @@ rule prepare_inference_forecaster:
     log:
         OUT_ROOT / "logs/prepare_inference_forecaster/{run_id}-{init_time}.log",
     run:
-        import yaml
-        import shutil
+        LOG = setup_logger("prepare_inference_forecaster", log_file=log[0])
+        try:
+            import yaml
+            import shutil
 
-        # prepare working directory
-        workdir = (
-            Path(params.output_root) / "runs" / wildcards.run_id / wildcards.init_time
-        )
-        workdir.mkdir(parents=True, exist_ok=True)
-        (workdir / "grib").mkdir(parents=True, exist_ok=True)
-        shutil.copytree(params.resources_root / "templates", output.resources)
+            L(
+                "Preparing inference forecaster for run_id=%s, init_time=%s",
+                wildcards.run_id,
+                wildcards.init_time,
+            )
 
-        # prepare and write config file
-        config = yaml.safe_load(open(input.config))
-        config["checkpoint"] = f"{params.checkpoints_path}/inference-last.ckpt"
-        config["date"] = params.reftime_to_iso
-        config["lead_time"] = params.lead_time
-        with open(output.config, "w") as f:
-            yaml.safe_dump(config, f)
+            # prepare working directory
+            workdir = (
+                Path(params.output_root)
+                / "runs"
+                / wildcards.run_id
+                / wildcards.init_time
+            )
+            workdir.mkdir(parents=True, exist_ok=True)
+            LOG.info("Created working directory at %s", workdir)
+            (workdir / "grib").mkdir(parents=True, exist_ok=True)
+            LOG.info("Created GRIB output directory at %s", workdir / "grib")
+            shutil.copytree(params.resources_root / "templates", output.resources)
+            LOG.info("Copied resources to %s", output.resources)
+            LOG.info("Resources: \n%s", list(Path(output.resources).rglob("*")))
+
+            # prepare and write config file
+            with open(input.config, "r") as f:
+                config = yaml.safe_load(f)
+            config["checkpoint"] = f"{params.checkpoints_path}/inference-last.ckpt"
+            config["date"] = params.reftime_to_iso
+            config["lead_time"] = params.lead_time
+            with open(output.config, "w") as f:
+                yaml.safe_dump(config, f)
+            LOG.info("Config: \n%s", config)
+            LOG.info("Wrote config file at %s", output.config)
+        except Exception as e:
+            LOG.error("An error occurred: %s", str(e))
+            raise e
 
 
 def _get_forecaster_run_id(run_id):
@@ -187,13 +208,14 @@ def _get_forecaster_run_id(run_id):
 
 rule prepare_inference_interpolator:
     """Run the interpolator for a specific run ID."""
+    localrule: True
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
         forecasts=lambda wc: (
             [
                 OUT_ROOT
-                / f"logs/inference_forecaster/{_get_forecaster_run_id(wc.run_id)}-{wc.init_time}.ok"
+                / f"logs/execute_inference/{_get_forecaster_run_id(wc.run_id)}-{wc.init_time}.ok"
             ]
             if RUN_CONFIGS[wc.run_id].get("forecaster") is not None
             else []
@@ -202,9 +224,7 @@ rule prepare_inference_interpolator:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
         grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
-        forecaster_grib_dir=directory(
-            OUT_ROOT / "data/runs/{run_id}/{init_time}/forecaster_grib"
-        ),
+        forecaster=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/forecaster"),
         okfile=touch(
             OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.ok"
         ),
@@ -226,34 +246,65 @@ rule prepare_inference_interpolator:
     log:
         OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.log",
     run:
-        import yaml
-        import shutil
-
-        fct_run_id = params.forecaster_run_id
-        init_time = wildcards.init_time
-
-        # prepare working directory
-        workdir = (
-            Path(params.output_root) / "runs" / wildcards.run_id / wildcards.init_time
+        LOG = setup_logger(
+            f"prepare_inference_interpolator_{OUT_ROOT.stem}", log_file=log[0]
         )
-        workdir.mkdir(parents=True, exist_ok=True)
-        (workdir / "grib").mkdir(parents=True, exist_ok=True)
-        shutil.copytree(params.resources_root / "templates", output.resources)
+        try:
+            import yaml
+            import shutil
 
-        # if forecaster_run_id is not "null", create symbolic link to forecaster grib directory
-        if fct_run_id != "null":
-            forecaster_workdir = (
-                Path(params.output_root) / "runs" / fct_run_id / init_time
+            fct_run_id = params.forecaster_run_id
+            init_time = wildcards.init_time
+
+            LOG.info(
+                "Preparing inference interpolator for run_id=%s, init_time=%s, forecaster_run_id=%s",
+                wildcards.run_id,
+                wildcards.init_time,
+                fct_run_id,
             )
-            (workdir / "forecaster_grib").symlink_to(forecaster_workdir / "grib")
+            # prepare working directory
+            workdir = (
+                Path(params.output_root)
+                / "runs"
+                / wildcards.run_id
+                / wildcards.init_time
+            )
+            workdir.mkdir(parents=True, exist_ok=True)
+            LOG.info("Created working directory at %s", workdir)
+            (workdir / "grib").mkdir(parents=True, exist_ok=True)
+            LOG.info("Created GRIB output directory at %s", workdir / "grib")
+            shutil.copytree(params.resources_root / "templates", output.resources)
+            LOG.info("Copied resources to %s", output.resources)
+            LOG.info("Resources: \n%s", list(Path(output.resources).rglob("*")))
 
-            # prepare and write config file
-        config = yaml.safe_load(open(input.config))
-        config["checkpoint"] = f"{params.checkpoints_path}/inference-last.ckpt"
-        config["date"] = params.reftime_to_iso
-        config["lead_time"] = params.lead_time
-        with open(output.config, "w") as f:
-            yaml.safe_dump(config, f)
+            # if forecaster_run_id is not "null", create symbolic link to forecaster grib directory
+            if fct_run_id != "null":
+                forecaster_workdir = (
+                    Path(params.output_root) / "runs" / fct_run_id / init_time
+                )
+                (workdir / "forecaster").symlink_to(forecaster_workdir / "grib")
+                LOG.info(
+                    "Created symlink to forecaster GRIB directory at %s",
+                    workdir / "forecaster",
+                )
+            else:
+                (workdir / "forecaster").mkdir(parents=True, exist_ok=True)
+                (workdir / "forecaster/.dataset").touch()
+                LOG.info("No forecaster run ID provided, skipping symlink creation.")
+
+                # prepare and write config file
+            with open(input.config, "r") as f:
+                config = yaml.safe_load(f)
+            config["checkpoint"] = f"{params.checkpoints_path}/inference-last.ckpt"
+            config["date"] = params.reftime_to_iso
+            config["lead_time"] = params.lead_time
+            with open(output.config, "w") as f:
+                yaml.safe_dump(config, f)
+            LOG.info("Config: \n%s", config)
+            LOG.info("Wrote config file at %s", output.config)
+        except Exception as e:
+            LOG.error("An error occurred: %s", str(e))
+            raise e
 
 
 rule execute_inference:
