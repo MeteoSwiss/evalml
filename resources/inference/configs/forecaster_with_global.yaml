@@ -17,13 +17,13 @@ output:
                 encoding:
                   typeOfGeneratingProcess: 2
                 templates:
-                   samples: _resources/templates_index_cosmo.yaml
+                   samples: resources/templates_index_cosmo.yaml
     - grib:
         path: grib/ifs-{dateTime}_{step:03}.grib
         encoding:
           typeOfGeneratingProcess: 2
         templates:
-          samples: _resources/templates_index_ifs.yaml
+          samples: resources/templates_index_ifs.yaml
         post_processors:
           - extract_slice: [189699, -1]
           - assign_mask: "global/cutout_mask"
