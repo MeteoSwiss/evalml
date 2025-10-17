@@ -144,7 +144,9 @@ rule prepare_inference_forecaster:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
         grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
-        okfile=OUT_ROOT / "logs/prepare_inference_forecaster/{run_id}-{init_time}.ok",
+        okfile=touch(
+            OUT_ROOT / "logs/prepare_inference_forecaster/{run_id}-{init_time}.ok"
+        ),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
@@ -167,7 +169,7 @@ rule prepare_inference_forecaster:
         )
         workdir.mkdir(parents=True, exist_ok=True)
         (workdir / "grib").mkdir(parents=True, exist_ok=True)
-        (workdir / "resources").mkdir(parents=True, exist_ok=True)
+        shutil.copytree(params.resources_root / "templates", output.resources)
 
         # prepare and write config file
         config = yaml.safe_load(open(input.config))
@@ -176,9 +178,6 @@ rule prepare_inference_forecaster:
         config["lead_time"] = params.lead_time
         with open(output.config, "w") as f:
             yaml.safe_dump(config, f)
-
-            # copy resources
-        shutil.copytree(params.resources_root / "templates", output.resources)
 
 
 def _get_forecaster_run_id(run_id):
@@ -206,7 +205,9 @@ rule prepare_inference_interpolator:
         forecaster_grib_dir=directory(
             OUT_ROOT / "data/runs/{run_id}/{init_time}/forecaster_grib"
         ),
-        okfile=OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.ok",
+        okfile=touch(
+            OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.ok"
+        ),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
@@ -237,7 +238,7 @@ rule prepare_inference_interpolator:
         )
         workdir.mkdir(parents=True, exist_ok=True)
         (workdir / "grib").mkdir(parents=True, exist_ok=True)
-        (workdir / "resources").mkdir(parents=True, exist_ok=True)
+        shutil.copytree(params.resources_root / "templates", output.resources)
 
         # if forecaster_run_id is not "null", create symbolic link to forecaster grib directory
         if fct_run_id != "null":
@@ -254,29 +255,29 @@ rule prepare_inference_interpolator:
         with open(output.config, "w") as f:
             yaml.safe_dump(config, f)
 
-            # copy resources
-        shutil.copytree(params.resources_root / "templates", output.resources)
-
 
 rule execute_inference:
     localrule: True
     input:
-        _inference_routing_fn,
+        okfile=_inference_routing_fn,
+        image=rules.make_squashfs_image.output.image,
     output:
-        okfile=OUT_ROOT / "logs/execute_inference/{run_id}-{init_time}.ok",
+        okfile=touch(OUT_ROOT / "logs/execute_inference/{run_id}-{init_time}.ok"),
     log:
         OUT_ROOT / "logs/execute_inference/{run_id}-{init_time}.log",
     params:
-        image_path=(OUT_ROOT / "data/runs/{run_id}/venv.squashfs").resolve(),
-        workdir=(OUT_ROOT / "data/runs/{run_id}/{init_time}").resolve(),
+        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
+        workdir=lambda wc: (
+            OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
+        ).resolve(),
     resources:
-        slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "standard"),
-        cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 4),
-        mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 4000),
+        slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
+        cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
+        mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
         runtime=lambda wc: get_resource(wc, "runtime", "40m"),
-        gres=lambda wc: get_resource(wc, "gres", "gpu:1"),
-        ntasks=lambda wc: get_resource(wc, "ntasks", 1),
-        gpus=lambda wc: get_resource(wc, "gpus", 1),
+        gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
+        ntasks=lambda wc: get_resource(wc, "tasks", 1),
+        gpus=lambda wc: get_resource(wc, "gpu", 1),
     shell:
         """
         (

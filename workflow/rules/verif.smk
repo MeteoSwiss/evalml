@@ -66,7 +66,9 @@ rule verif_metrics:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
         fcst_steps=lambda wc: _get_no_none(RUN_CONFIGS[wc.run_id], "steps", "0/126/6"),
         analysis_label=config["analysis"].get("label"),
-        grib_out_dir=(Path(OUT_ROOT) / "data/runs/{run_id}/{init_time}/grib").resolve(),
+        grib_out_dir=lambda wc: (
+            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
+        ).resolve(),
     log:
         OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",
     resources:
