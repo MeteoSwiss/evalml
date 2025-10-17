@@ -56,7 +56,7 @@ output:
     templates:
       samples: resources/templates_index_cosmo.yaml
 
-forcings:
+constant_forcings:
   test:
     use_original_paths: true
 

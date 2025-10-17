@@ -13,7 +13,7 @@ include: "common.smk"
 rule verif_metrics_baseline:
     input:
         script="workflow/scripts/verif_baseline.py",
-        module="workflow/scripts/src/verification.py",
+        module="src/verification/__init__.py",
         baseline_zarr=lambda wc: expand(
             "{root}/FCST{year}.zarr",
             root=BASELINE_CONFIGS[wc.baseline_id].get("root"),

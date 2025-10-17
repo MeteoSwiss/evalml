@@ -17,10 +17,6 @@ output:
     templates:
       samples: resources/templates_index_cosmo.yaml
 
-forcings:
-  test:
-    use_original_paths: true
-
 verbosity: 1
 allow_nans: true
 output_frequency: "1h"

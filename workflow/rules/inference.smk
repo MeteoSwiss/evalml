@@ -243,6 +243,7 @@ rule prepare_inference_interpolator:
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None
             else _get_forecaster_run_id(wc.run_id)
         ),
+        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
     log:
         OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.log",
     run:
