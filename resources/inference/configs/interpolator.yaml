@@ -10,7 +10,7 @@ post_processors:
 
 input:
   grib:
-    path: forecaster_grib/20*.grib # TODO: remove dirty fix to only use local files
+    path: forecaster/20*.grib # TODO: remove dirty fix to only use local files
     namer:
       rules:
         - - shortName: SKT
@@ -59,6 +59,14 @@ output:
 constant_forcings:
   test:
     use_original_paths: true
+
+dynamic_forcings:
+  test:
+    use_original_paths: true
+
+patch_metadata:
+  dataset:
+    constant_fields: [z, lsm]
 
 verbosity: 1
 allow_nans: true

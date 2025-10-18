@@ -160,12 +160,15 @@ rule prepare_inference_forecaster:
     log:
         OUT_ROOT / "logs/prepare_inference_forecaster/{run_id}-{init_time}.log",
     run:
-        LOG = setup_logger("prepare_inference_forecaster", log_file=log[0])
+        logger_name = (
+            f"prepare_inference_forecaster_{wildcards.run_id}_{wildcards.init_time}"
+        )
+        LOG = setup_logger(logger_name, log_file=log[0])
         try:
             import yaml
             import shutil
 
-            L(
+            LOG.info(
                 "Preparing inference forecaster for run_id=%s, init_time=%s",
                 wildcards.run_id,
                 wildcards.init_time,
@@ -193,7 +196,7 @@ rule prepare_inference_forecaster:
             config["date"] = params.reftime_to_iso
             config["lead_time"] = params.lead_time
             with open(output.config, "w") as f:
-                yaml.safe_dump(config, f)
+                yaml.safe_dump(config, f, sort_keys=False)
             LOG.info("Config: \n%s", config)
             LOG.info("Wrote config file at %s", output.config)
         except Exception as e:
@@ -243,13 +246,13 @@ rule prepare_inference_interpolator:
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None
             else _get_forecaster_run_id(wc.run_id)
         ),
-        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
     log:
         OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.log",
     run:
-        LOG = setup_logger(
-            f"prepare_inference_interpolator_{OUT_ROOT.stem}", log_file=log[0]
+        logger_name = (
+            f"prepare_inference_interpolator_{wildcards.run_id}_{wildcards.init_time}"
         )
+        LOG = setup_logger(logger_name, log_file=log[0])
         try:
             import yaml
             import shutil
@@ -300,7 +303,7 @@ rule prepare_inference_interpolator:
             config["date"] = params.reftime_to_iso
             config["lead_time"] = params.lead_time
             with open(output.config, "w") as f:
-                yaml.safe_dump(config, f)
+                yaml.safe_dump(config, f, sort_keys=False)
             LOG.info("Config: \n%s", config)
             LOG.info("Wrote config file at %s", output.config)
         except Exception as e:

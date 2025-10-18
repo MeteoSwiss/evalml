@@ -4,9 +4,9 @@ input:
   cutout:
     lam_0:
       grib:
-        path: forecaster_grib/20*
         pre_processors:
           - extract_mask: "source0/trimedge_mask"
+        path: forecaster/20*
         namer:
           rules:
             - - shortName: T
@@ -43,7 +43,7 @@ input:
               - tp
     global:
       grib:
-        path: forecaster_grib/ifs*
+        path: forecaster/ifs*
         namer:
           rules:
             - - shortName: T
