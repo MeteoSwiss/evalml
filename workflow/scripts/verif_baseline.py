@@ -98,7 +98,7 @@ def _parse_steps(steps: str) -> int:
         raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
     if len(steps.split("/")) != 3:
         raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
-    start, end, step = steps.split("/")
+    start, end, step = map(int, steps.split("/"))
     return list(range(start, end + 1, step))
 
 
