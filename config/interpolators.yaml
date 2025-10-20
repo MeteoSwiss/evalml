@@ -10,29 +10,17 @@ dates:
 runs:
   - interpolator:
       mlflow_id: 9c18b90074214d769b8b383722fc5a06
-      label: LAM Interpolator (COSMO-E analysis)
+      label: M-2 interpolator (KENDA)
       steps: 0/121/1
       config: resources/inference/configs/interpolator_from_test_data.yaml
       forecaster: null
       extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
+        - git+https://github.com/ecmwf/anemoi-inference@14189907b4f4e3b204b7994f828831b8aa51e9b6
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
   - interpolator:
-      mlflow_id: 9c18b90074214d769b8b383722fc5a06
-      label: LAM Interpolator (M-1 forecaster)
-      steps: 0/121/1
-      forecaster:
-        mlflow_id: d0846032fc7248a58b089cbe8fa4c511
-        config: resources/inference/configs/forecaster_with_global.yaml
-        steps: 0/126/6
-      extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
-        - torch-geometric==2.6.1
-        - anemoi-graphs==0.5.2
-  - interpolator:
-      mlflow_id: 07c3d9698db14d859b78bb712a65bbbf
-      label: SGM Interpolator (M-1 forecaster)
+      mlflow_id: 8d1e0410ca7d4f74b368b3079878259a
+      label: M-2 interpolator (M-1 forecaster)
       steps: 0/121/1
       config: resources/inference/configs/interpolator_stretched.yaml
       forecaster:
@@ -40,9 +28,14 @@ runs:
         config: resources/inference/configs/forecaster_with_global.yaml
         steps: 0/126/6
       extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
+        - git+https://github.com/ecmwf/anemoi-inference@14189907b4f4e3b204b7994f828831b8aa51e9b6
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
+  - forecaster:
+      mlflow_id: d0846032fc7248a58b089cbe8fa4c511
+      label: M-1 forecaster
+      config: resources/inference/configs/forecaster_with_global.yaml
+      steps: 0/126/6
 
 baselines:
   - baseline:
