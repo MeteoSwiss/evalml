@@ -41,9 +41,7 @@ def check_reftime_consistency(tarfiles: list[Path], delta_h: int = 12):
     return first_reftime, expected_reftime - timedelta(hours=delta_h)
 
 
-def extract(
-    tar: Path, lead_time: list[int], run_id: str, params: list[str]
-) -> xr.Dataset:
+def extract(tar: Path, lead_times: list[int], run_id: str, params: list[str]) -> xr.Dataset:
     LOG.info(f"Extracting fields from {tar}.")
     reftime = reftime_from_tarfile(tar)
     if "COSMO-E" in tar.parts:
@@ -54,7 +52,7 @@ def extract(
         raise ValueError("Currently only COSMO-E and COSMO-1E are supported.")
     tar_archive = tarfile.open(tar, mode="r:*")
     out = ekd.SimpleFieldList()
-    for lt in lead_time:
+    for lt in lead_times:
         filename = f"{tar.stem}/grib/{gribname}{lt:03}_{run_id}"
         LOG.info(f"Extracting {filename}.")
         stream = tar_archive.extractfile(filename)
@@ -79,23 +77,19 @@ def extract(
 class ScriptConfig(Namespace):
     archive_dir: Path
     output_store: Path
-    lead_time: int
+    steps: list[int]
     run_id: str
     params: list[str]
 
 
-def _parse_lead_time(lead_time: str) -> int:
-    # check that lead_time is in the format "start/stop/step"
-    if "/" not in lead_time:
-        raise ValueError(
-            f"Expected lead_time in format 'start/stop/step', got '{lead_time}'"
-        )
-    if len(lead_time.split("/")) != 3:
-        raise ValueError(
-            f"Expected lead_time in format 'start/stop/step', got '{lead_time}'"
-        )
-
-    return list(range(*map(int, lead_time.split("/"))))
+def _parse_steps(steps: str) -> int:
+    # check that steps is in the format "start/stop/step"
+    if "/" not in steps:
+        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
+    if len(steps.split("/")) != 3:
+        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
+    start, end, step = steps.split("/")
+    return list(range(start, end + 1, step))
 
 
 def main(cfg: ScriptConfig):
@@ -135,7 +129,7 @@ def main(cfg: ScriptConfig):
 
     for i in indices:
         file = tarfiles[i]
-        ds = extract(file, cfg.lead_time, cfg.run_id, cfg.params)
+        ds = extract(file, cfg.steps, cfg.run_id, cfg.params)
 
         LOG.info(f"Extracted: {ds}")
 
@@ -167,7 +161,7 @@ if __name__ == "__main__":
         help="Path to the output zarr store.",
     )
 
-    parser.add_argument("--lead_time", type=_parse_lead_time, default="0/126/6")
+    parser.add_argument("--steps", type=_parse_steps, default="0/120/6")
 
     parser.add_argument("--run_id", type=str, default="000")
 
@@ -193,10 +187,10 @@ Example usage:
 python workflow/scripts/extract_baseline_fct.py \
     --archive_dir /archive/mch/msopr/osm/COSMO-E/FCST20 \
     --output_store /store_new/mch/msopr/ml/COSMO-E/FCST20.zarr \
-    --lead_time 0/126/6
+    --steps 0/120/6
 
 python workflow/scripts/extract_baseline_fct.py \
     --archive_dir /archive/mch/s83/osm/from_GPFS/COSMO-1E/FCST20 \
     --output_store /store_new/mch/msopr/ml/COSMO-1E/FCST20.zarr \
-    --lead_time 0/34/1
+    --steps 0/33/1
 """

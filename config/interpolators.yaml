@@ -26,7 +26,7 @@ runs:
       forecaster:
         mlflow_id: d0846032fc7248a58b089cbe8fa4c511
         config: resources/inference/configs/forecaster_with_global.yaml
-        steps: 0/126/6
+        steps: 0/120/6
       extra_dependencies:
         - git+https://github.com/ecmwf/anemoi-inference@14189907b4f4e3b204b7994f828831b8aa51e9b6
         - torch-geometric==2.6.1
@@ -35,7 +35,7 @@ runs:
       mlflow_id: d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
       config: resources/inference/configs/forecaster_with_global.yaml
-      steps: 0/126/6
+      steps: 0/120/6
 
 baselines:
   - baseline:

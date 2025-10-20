@@ -37,11 +37,11 @@ runs:
   - forecaster:
       mlflow_id: 2f962c89ff644ca7940072fa9cd088ec
       label: Stage D - N320 global grid with CERRA finetuning
-      steps: 0/126/6
+      steps: 0/120/6
   - forecaster:
       mlflow_id: d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
-      steps: 0/126/6
+      steps: 0/120/6
 
 
 baselines:
@@ -49,7 +49,7 @@ baselines:
       baseline_id: COSMO-E
       label: COSMO-E
       root: /store_new/mch/msopr/ml/COSMO-E
-      steps: 0/126/6
+      steps: 0/120/6
 
 analysis:
   label: COSMO KENDA

@@ -92,18 +92,14 @@ def load_analysis_data_from_zarr(
     return ds
 
 
-def _parse_lead_time(lead_time: str) -> int:
-    # check that lead_time is in the format "start/stop/step"
-    if "/" not in lead_time:
-        raise ValueError(
-            f"Expected lead_time in format 'start/stop/step', got '{lead_time}'"
-        )
-    if len(lead_time.split("/")) != 3:
-        raise ValueError(
-            f"Expected lead_time in format 'start/stop/step', got '{lead_time}'"
-        )
-
-    return list(range(*map(int, lead_time.split("/"))))
+def _parse_steps(steps: str) -> int:
+    # check that steps is in the format "start/stop/step"
+    if "/" not in steps:
+        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
+    if len(steps.split("/")) != 3:
+        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
+    start, end, step = steps.split("/")
+    return list(range(start, end + 1, step))
 
 
 class ScriptConfig(Namespace):
@@ -114,7 +110,7 @@ class ScriptConfig(Namespace):
     baseline_zarr: Path = None
     reftime: datetime = None
     params: list[str] = ["T_2M", "TD_2M", "U_10M", "V_10M"]
-    lead_time: list[int] = _parse_lead_time("0/126/6")
+    steps: list[int] = _parse_steps("0/120/6")
 
 
 def program_summary_log(args):
@@ -158,7 +154,7 @@ def main(args: ScriptConfig):
         )
     baseline = baseline[args.params].sel(
         ref_time=args.reftime,
-        lead_time=np.array(args.lead_time, dtype="timedelta64[h]"),
+        lead_time=np.array(args.steps, dtype="timedelta64[h]"),
         method="nearest",
     )
     baseline = baseline.assign_coords(time=baseline.ref_time + baseline.lead_time)
@@ -226,10 +222,10 @@ if __name__ == "__main__":
         default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"],
     )
     parser.add_argument(
-        "--lead_time",
-        type=_parse_lead_time,
-        default="0/126/6",
-        help="Lead time in the format 'start/stop/step' (default: 0/126/6).",
+        "--steps",
+        type=_parse_steps,
+        default="0/120/6",
+        help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
     )
     parser.add_argument(
         "--baseline_label",
