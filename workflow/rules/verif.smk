@@ -66,7 +66,7 @@ rule verif_metrics:
     # TODO: implement logic to use experiment name instead of run_id as wildcard
     params:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
-        fcst_steps=lambda wc: _get_no_none(RUN_CONFIGS[wc.run_id], "steps", "0/126/6"),
+        fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         analysis_label=config["analysis"].get("label"),
     log:
         OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",
