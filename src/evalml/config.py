@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List, Any
 
-from pydantic import BaseModel, Field, RootModel, HttpUrl
+from pydantic import BaseModel, Field, RootModel, HttpUrl, field_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -70,9 +70,13 @@ class RunConfig(BaseModel):
         None,
         description="The label for the run that will be used in experiment results such as reports and figures.",
     )
-    steps: str | None = Field(
-        None,
-        description="Forecast steps to be used from interpolator, e.g. '0/126/6'.",
+    steps: str = Field(
+        ...,
+        description=(
+            "Forecast lead times in hours, formatted as 'start/end/step'. "
+            "The range is half-open [start, end), meaning it includes the start  "
+            "but excludes the end. Example: '0/126/6' for lead times every 6 hours up to 120 hours."
+        ),
     )
     extra_dependencies: List[str] = Field(
         default_factory=list,
@@ -85,6 +89,29 @@ class RunConfig(BaseModel):
     )
 
     config: Dict[str, Any] | str
+
+    @field_validator("steps")
+    def validate_steps(cls, v: str) -> str:
+        if "/" not in v:
+            raise ValueError(
+                f"Steps must follow the format 'start/stop/step', got '{v}'"
+            )
+        parts = v.split("/")
+        if len(parts) != 3:
+            raise ValueError("Steps must be formatted as 'start/end/step'.")
+        try:
+            start, end, step = map(int, parts)
+        except ValueError:
+            raise ValueError("Start, end, and interval must be integers.")
+        if start >= end:
+            raise ValueError(f"Start ({start}) must be less than end ({end}).")
+        if step <= 0:
+            raise ValueError(f"Interval ({step}) must be a positive integer.")
+        if (end - start) % step != 0:
+            raise ValueError(
+                f"The step ({step}) must evenly divide the range ({end - start})."
+            )
+        return v
 
 
 class ForecasterConfig(RunConfig):
@@ -253,9 +280,6 @@ class ConfigModel(BaseModel):
         description="Description of the experiment, e.g. 'Hindcast of the 2023 season.'",
     )
     dates: Dates | ExplicitDates
-    lead_time: str = Field(
-        ..., description="Forecast length, e.g. '120h'", pattern=r"^\d+[hmd]$"
-    )
     runs: List[ForecasterItem | InterpolatorItem] = Field(
         ...,
         description="Dictionary of runs to execute, with run IDs as keys and configurations as values.",

@@ -7,13 +7,12 @@ dates:
   - 2020-02-07T00:00 # Storm Sabine
   - 2020-10-01T00:00 # Storm Brigitte
 
-lead_time: 120h
-
 runs:
   - forecaster:
       mlflow_id: d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
       config: resources/inference/configs/forecaster_with_global.yaml
+      steps: 0/126/6
 
 baselines:
   - baseline:
