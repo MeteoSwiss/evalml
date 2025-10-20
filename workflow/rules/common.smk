@@ -93,7 +93,7 @@ def collect_all_runs():
 
 
 def collect_all_candidates():
-    """Collect primary runs only."""
+    """Collect participating runs ('candidates') only."""
     runs = collect_all_runs()
     candidates = {}
     for run_id, run_config in runs.items():
