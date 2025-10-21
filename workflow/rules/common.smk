@@ -140,36 +140,6 @@ def _inference_routing_fn(wc):
     return OUT_ROOT / input_path
 
 
-def setup_logger(logger_name, log_file, level=logging.INFO):
-    """
-    Set up a logger with a file handler.
-
-    Args:
-        logger_name (str): Name of the logger.
-        log_file (str): Path to the log file.
-        level (int): Logging level (e.g., logging.INFO, logging.DEBUG).
-
-    Returns:
-        logging.Logger: Configured logger.
-    """
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(level)
-
-    # Prevent adding multiple handlers if the logger already exists
-    if not logger.handlers:
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(level)
-
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-        file_handler.setFormatter(formatter)
-
-        logger.addHandler(file_handler)
-
-    return logger
-
-
 RUN_CONFIGS = collect_all_runs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
