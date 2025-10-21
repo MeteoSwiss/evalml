@@ -80,7 +80,13 @@ def _(ArgumentParser, Path):
 def _(grib_dir, init_time, lead_time, load_state_from_grib, param):
     # load grib file
     grib_file = grib_dir / f"{init_time}_{lead_time}.grib"
-    state = load_state_from_grib(grib_file, paramlist=[param])
+    if param == "10sp":
+        paramlist = ["10u", "10v"]
+    elif param == "sp":
+        paramlist = ["u", "v"]
+    else:
+        paramlist = [param]
+    state = load_state_from_grib(grib_file, paramlist=paramlist)
     return (state,)
 
 
@@ -120,17 +126,27 @@ def _(LOG, np):
             except Exception:
                 return arr - 273.15
 
+        def _ms_to_knots(arr):
+            # robust conversion with pint, fallback if dtype unsupported
+            try:
+                return (_ureg.Quantity(arr, _ureg.meter / _ureg.second).to(_ureg.knot)).magnitude
+            except Exception:
+                return arr * 1.943844
+
     except Exception:
-        LOG.warning("pint not available; falling back to K->C by subtracting 273.15")
+        LOG.warning("pint not available; falling back hardcoded conversions")
 
         def _k_to_c(arr):
             return arr - 273.15
 
+        def _ms_to_knots(arr):
+            return arr * 1.943844
+
     def preprocess_field(param: str, state: dict):
         """
         - Temperatures (2t, 2d, t, d): K -> °C
-        - Wind speed at 10m (10sp): sqrt(10u^2 + 10v^2)
-        - Wind speed (sp): sqrt(u^2 + v^2)
+        - Wind speed at 10m (10sp): m/s -> kn, sqrt(10u^2 + 10v^2)
+        - Wind speed (sp): m/s -> kn, sqrt(u^2 + v^2)
         Returns: (field_array, units_override or None)
         """
         fields = state["fields"]
@@ -139,18 +155,14 @@ def _(LOG, np):
             return _k_to_c(fields[param]), "°C"
         # 10m wind speed (allow legacy 'uv' alias)
         if param == "10sp":
-            u = fields.get("10u")
-            v = fields.get("10v")
-            if u is None or v is None:
-                raise KeyError("Required components 10u/10v not in state['fields']")
-            return np.sqrt(u**2 + v**2), "m s$^{-1}$"
+            u = _ms_to_knots(fields["10u"])
+            v = _ms_to_knots(fields["10v"])
+            return np.sqrt(u**2 + v**2), "kn"
         # wind speed from standard-level components
         if param == "sp":
-            u = fields.get("u")
-            v = fields.get("v")
-            if u is None or v is None:
-                raise KeyError("Required components u/v not in state['fields']")
-            return np.sqrt(u**2 + v**2), "m s$^{-1}$"
+            u = _ms_to_knots(fields["u"])
+            v = _ms_to_knots(fields["v"])
+            return np.sqrt(u**2 + v**2), "kn"
         # default: passthrough
         return fields[param], None
     return (preprocess_field,)
