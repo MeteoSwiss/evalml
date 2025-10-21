@@ -16,7 +16,6 @@ def _():
     from plotting import StatePlotter
     from plotting.colormap_defaults import CMAP_DEFAULTS
     from plotting.compat import load_state_from_grib
-
     return (
         ArgumentParser,
         CMAP_DEFAULTS,
@@ -54,9 +53,10 @@ def _(ArgumentParser, Path):
     parser.add_argument("--region", type=str, default="none", help="region (or 'none')")
 
     args = parser.parse_args()
-    raw_dir = Path(args.input)
+    grib_dir = Path(args.input)
+    init_time = args.date
     outfn = Path(args.outfn)
-    leadtime = int(args.leadtime)
+    lead_time = args.leadtime
     param = args.param
     region = (
         None
@@ -64,22 +64,23 @@ def _(ArgumentParser, Path):
         else args.region
     )
     projection = args.projection
-    return args, leadtime, outfn, param, projection, raw_dir, region
+    return (
+        args,
+        grib_dir,
+        init_time,
+        lead_time,
+        outfn,
+        param,
+        projection,
+        region,
+    )
 
 
 @app.cell
-def _(raw_dir):
-    # get all input files
-    grib_files = sorted(raw_dir.glob("*.grib"))
-    return (grib_files,)
-
-
-@app.cell
-def _(leadtime, load_state_from_grib, grib_files, param):
-    # TODO: do not hardcode leadtimes
-    leadtimes = list(range(0, 126, 6))
-    file_index = leadtimes.index(leadtime)
-    state = load_state_from_grib(grib_files[file_index], paramlist=[param])
+def _(grib_dir, init_time, lead_time, load_state_from_grib, param):
+    # load grib file
+    grib_file = grib_dir / f"{init_time}_{lead_time}.grib"
+    state = load_state_from_grib(grib_file, paramlist=[param])
     return (state,)
 
 
@@ -101,7 +102,6 @@ def _(CMAP_DEFAULTS, ekp):
             "cmap": cfg["cmap"],
             "norm": cfg.get("norm", None),
         }
-
     return (get_style,)
 
 
@@ -153,7 +153,6 @@ def _(LOG, np):
             return np.sqrt(u**2 + v**2), "m s$^{-1}$"
         # default: passthrough
         return fields[param], None
-
     return (preprocess_field,)
 
 
@@ -163,13 +162,12 @@ def _(
     StatePlotter,
     args,
     get_style,
-    np,
     outfn,
     param,
+    preprocess_field,
     projection,
     region,
     state,
-    preprocess_field,
 ):
     # plot individual fields
     plotter = StatePlotter(

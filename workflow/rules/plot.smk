@@ -12,7 +12,7 @@ import pandas as pd
 rule plot_forecast_frame:
     input:
         script="workflow/scripts/plot_forecast_frame.mo.py",
-        raw_output=rules.inference_routing.output[0],
+        grib_output=rules.inference_routing.output[0],
     output:
         temp(
             OUT_ROOT
@@ -26,12 +26,12 @@ rule plot_forecast_frame:
         """
         export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
         python {input.script} \
-            --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]} \
+            --input {input.grib_output}  --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} \
             --projection {wildcards.projection} --region {wildcards.region} \
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
-        #     --input {input.raw_output}  --date {wildcards.init_time} --outfn {output[0]}\
+        #     --input {input.grib_output}  --date {wildcards.init_time} --outfn {output[0]}\
         #     --param {wildcards.param} --leadtime {wildcards.leadtime} \
         #     --projection {wildcards.projection} --region {wildcards.region} \
         """
