@@ -167,7 +167,7 @@
           "title": "Label"
         },
         "steps": {
-          "description": "Forecast lead times in hours, formatted as 'start/end/step'. The range is half-open [start, end), meaning it includes the start  but excludes the end. Example: '0/126/6' for lead times every 6 hours up to 120 hours.",
+          "description": "Forecast lead times in hours, formatted as 'start/end/step'. The range includes the start lead time and continues with the given step until reaching or exceeding the end lead time. Example: '0/120/6' for lead times every 6 hours up to 120 h, or '0/33/6' up to 30 h.",
           "title": "Steps",
           "type": "string"
         },
@@ -348,7 +348,7 @@
           "title": "Label"
         },
         "steps": {
-          "description": "Forecast lead times in hours, formatted as 'start/end/step'. The range is half-open [start, end), meaning it includes the start  but excludes the end. Example: '0/126/6' for lead times every 6 hours up to 120 hours.",
+          "description": "Forecast lead times in hours, formatted as 'start/end/step'. The range includes the start lead time and continues with the given step until reaching or exceeding the end lead time. Example: '0/120/6' for lead times every 6 hours up to 120 h, or '0/33/6' up to 30 h.",
           "title": "Steps",
           "type": "string"
         },
