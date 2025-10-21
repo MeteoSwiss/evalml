@@ -37,7 +37,10 @@ rule plot_forecast_frame:
         """
 
 
-LEADTIME = int(pd.to_timedelta(config["lead_time"]).total_seconds() // 3600)
+def get_leadtimes(wc):
+    """Get all lead times from the run config."""
+    start, end, step = map(int, RUN_CONFIGS[wc.run_id]["steps"].split("/"))
+    return [f"{i:03}" for i in range(start, end + 1, step)]
 
 
 rule make_forecast_animation:
@@ -45,7 +48,7 @@ rule make_forecast_animation:
         expand(
             OUT_ROOT
             / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{projection}_{region}.png",
-            leadtime=[f"{i:03}" for i in range(0, LEADTIME + 6, 6)],
+            leadtime=lambda wc: get_leadtimes(wc),
             allow_missing=True,
         ),
     output:
