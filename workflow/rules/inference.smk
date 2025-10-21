@@ -135,6 +135,12 @@ def get_resource(wc, field: str, default):
         return getattr(rc["inference_resources"], field) or default
 
 
+def get_leadtime(wc):
+    """Get the lead time from the run config."""
+    start, end, step = RUN_CONFIGS[wc.run_id]["steps"].split("/")
+    return f"{end}h"
+
+
 rule prepare_inference_forecaster:
     localrule: True
     input:
