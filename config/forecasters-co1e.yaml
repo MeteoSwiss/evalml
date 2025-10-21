@@ -4,8 +4,8 @@ description: |
   (KENDA-1) at 1km resolution.
 
 dates:
-  start: 2020-01-01T12:00
-  end: 2020-01-10T00:00
+  start: 2020-08-01T12:00
+  end: 2020-08-10T00:00
   frequency: 54h
 
 runs:
