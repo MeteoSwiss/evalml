@@ -16,6 +16,7 @@ def _():
     from plotting import StatePlotter
     from plotting.colormap_defaults import CMAP_DEFAULTS
     from plotting.compat import load_state_from_grib
+
     return (
         ArgumentParser,
         CMAP_DEFAULTS,
@@ -108,6 +109,7 @@ def _(CMAP_DEFAULTS, ekp):
             "cmap": cfg["cmap"],
             "norm": cfg.get("norm", None),
         }
+
     return (get_style,)
 
 
@@ -129,7 +131,9 @@ def _(LOG, np):
         def _ms_to_knots(arr):
             # robust conversion with pint, fallback if dtype unsupported
             try:
-                return (_ureg.Quantity(arr, _ureg.meter / _ureg.second).to(_ureg.knot)).magnitude
+                return (
+                    _ureg.Quantity(arr, _ureg.meter / _ureg.second).to(_ureg.knot)
+                ).magnitude
             except Exception:
                 return arr * 1.943844
 
@@ -165,6 +169,7 @@ def _(LOG, np):
             return np.sqrt(u**2 + v**2), "kn"
         # default: passthrough
         return fields[param], None
+
     return (preprocess_field,)
 
 
