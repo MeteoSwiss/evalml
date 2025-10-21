@@ -31,7 +31,7 @@ description: |
 dates:
   start: 2020-01-01T12:00
   end: 2020-01-10T00:00
-  frequency: 54h
+  frequency: 60h
 
 runs:
   - forecaster:
