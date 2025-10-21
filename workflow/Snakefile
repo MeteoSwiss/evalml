@@ -63,7 +63,7 @@ rule sandbox_all:
     input:
         expand(
             rules.create_inference_sandbox.output.sandbox,
-            run_id=collect_all_runs(),
+            run_id=collect_all_candidates(),
         ),
 
 
@@ -73,7 +73,7 @@ rule run_inference_all:
         expand(
             OUT_ROOT / "data/runs/{run_id}/{init_time}/raw",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=collect_all_runs(),
+            run_id=collect_all_candidates(),
         ),
 
 
@@ -82,7 +82,7 @@ rule verif_metrics_all:
         expand(
             rules.verif_metrics.output,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=collect_all_runs(),
+            run_id=collect_all_candidates(),
         ),
 
 

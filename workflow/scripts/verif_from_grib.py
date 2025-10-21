@@ -112,12 +112,12 @@ def load_analysis_data_from_zarr(
 
 
 def load_fct_data_from_grib(
-    grib_output_dir: Path, params: list[str], step: list[int]
+    grib_output_dir: Path, params: list[str], steps: list[int]
 ) -> xr.Dataset:
     """Load forecast data from GRIB files for a specific valid time."""
     files = sorted(grib_output_dir.glob("20*.grib"))
     fds = data_source.FileDataSource(datafiles=files)
-    ds = grib_decoder.load(fds, {"param": params, "step": step})
+    ds = grib_decoder.load(fds, {"param": params, "step": steps})
     for var, da in ds.items():
         if "z" in da.dims and da.sizes["z"] == 1:
             ds[var] = da.squeeze("z", drop=True)
@@ -143,18 +143,14 @@ def load_fct_data_from_grib(
     return ds
 
 
-def _parse_lead_time(lead_time: str) -> int:
-    # check that lead_time is in the format "start/stop/step"
-    if "/" not in lead_time:
-        raise ValueError(
-            f"Expected lead_time in format 'start/stop/step', got '{lead_time}'"
-        )
-    if len(lead_time.split("/")) != 3:
-        raise ValueError(
-            f"Expected lead_time in format 'start/stop/step', got '{lead_time}'"
-        )
-
-    return list(range(*map(int, lead_time.split("/"))))
+def _parse_steps(steps: str) -> int:
+    # check that steps is in the format "start/stop/step"
+    if "/" not in steps:
+        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
+    if len(steps.split("/")) != 3:
+        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
+    start, end, step = map(int, steps.split("/"))
+    return list(range(start, end + 1, step))
 
 
 class ScriptConfig(Namespace):
@@ -164,7 +160,7 @@ class ScriptConfig(Namespace):
     analysis_zarr: Path = None
     forecast_zarr: Path = None
     params: list[str]
-    lead_time: list[int] = _parse_lead_time("0/126/6")
+    steps: list[int] = _parse_steps("0/120/6")
 
 
 def program_summary_log(args):
@@ -189,7 +185,7 @@ def main(args: ScriptConfig):
     # get forecast data
     start = datetime.now()
     fct = load_fct_data_from_grib(
-        grib_output_dir=args.grib_output_dir, params=args.params, step=args.lead_time
+        grib_output_dir=args.grib_output_dir, params=args.params, steps=args.steps
     )
     LOG.info(
         "Loaded forecast data from GRIB files in %.2f seconds: \n%s",
@@ -254,10 +250,10 @@ if __name__ == "__main__":
         help="Comma-separated list of parameters to verify.",
     )
     parser.add_argument(
-        "--lead_time",
-        type=_parse_lead_time,
-        default="0/126/6",
-        help="Lead time in the format 'start/stop/step'.",
+        "--steps",
+        type=_parse_steps,
+        default="0/120/6",
+        help="Forecast steps in the format 'start/stop/step'.",
     )
     parser.add_argument(
         "--fcst_label",

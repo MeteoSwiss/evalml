@@ -121,7 +121,6 @@ def get_resource(wc, field: str, default):
 def get_leadtime(wc):
     """Get the lead time from the run config."""
     start, end, step = RUN_CONFIGS[wc.run_id]["steps"].split("/")
-    end = int(end) - int(step)  # make inclusive
     return f"{end}h"
 
 

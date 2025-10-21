@@ -18,7 +18,7 @@ if "extract_cosmoe" in config.get("include-optional-rules", []):
             runtime="24h",
         params:
             year_postfix=lambda wc: f"FCST{wc.year}",
-            lead_time="0/126/6",
+            steps="0/120/6",
         log:
             OUT_ROOT / "logs/extract-cosmoe-fcts-{year}.log",
         shell:
@@ -26,7 +26,7 @@ if "extract_cosmoe" in config.get("include-optional-rules", []):
             python workflow/scripts/extract_baseline_fct.py \
                 --archive_dir {input.archive}/{params.year_postfix} \
                 --output_store {output.fcts} \
-                --lead_time {params.lead_time} \
+                --steps {params.steps} \
                     > {log} 2>&1
             """
 
@@ -45,7 +45,7 @@ if "extract_cosmo1e" in config.get("include-optional-rules", []):
             runtime="24h",
         params:
             year_postfix=lambda wc: f"FCST{wc.year}",
-            lead_time="0/34/1",
+            steps="0/33/1",
         log:
             OUT_ROOT / "logs/extract-cosmo1e-fcts-{year}.log",
         shell:
@@ -53,6 +53,6 @@ if "extract_cosmo1e" in config.get("include-optional-rules", []):
             python workflow/scripts/extract_baseline_fct.py \
                 --archive_dir {input.archive}/{params.year_postfix} \
                 --output_store {output.fcts} \
-                --lead_time {params.lead_time} \
+                --steps {params.steps} \
                     > {log} 2>&1
             """

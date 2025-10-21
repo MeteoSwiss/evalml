@@ -22,7 +22,7 @@ rule verif_metrics_baseline:
         analysis_zarr=config["analysis"].get("analysis_zarr"),
     params:
         baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
-        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("steps"),
+        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         analysis_label=config["analysis"].get("label"),
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
@@ -38,7 +38,7 @@ rule verif_metrics_baseline:
             --analysis_zarr {input.analysis_zarr} \
             --baseline_zarr {input.baseline_zarr} \
             --reftime {wildcards.init_time} \
-            --lead_time "{params.baseline_steps}" \
+            --steps "{params.baseline_steps}" \
             --baseline_label "{params.baseline_label}" \
             --analysis_label "{params.analysis_label}" \
             --output {output} > {log} 2>&1
@@ -79,7 +79,7 @@ rule verif_metrics:
         uv run {input.script} \
             --grib_output_dir {input.grib_output} \
             --analysis_zarr {input.analysis_zarr} \
-            --lead_time "{params.fcst_steps}" \
+            --steps "{params.fcst_steps}" \
             --fcst_label "{params.fcst_label}" \
             --analysis_label "{params.analysis_label}" \
             --output {output} > {log} 2>&1

@@ -4,16 +4,16 @@ description: |
   (KENDA-1) at 1km resolution.
 
 dates:
-  start: 2024-01-01T12:00
-  end: 2024-01-10T00:00
+  start: 2020-08-01T12:00
+  end: 2020-08-10T00:00
   frequency: 54h
 
 runs:
   - forecaster:
       mlflow_id: 2174c939c8844555a52843b71219d425
       label: Cosmo 1km + era5 N320, finetuned on cerra checkpoint, lam resolution 11
-      config: resources/inference/configs/forecaster_no_trimedge_with_global.yaml
-      steps: 0/126/6
+      config: resources/inference/configs/forecaster_no_trimedge_fromtraining.yaml
+      steps: 0/120/6
       inference_resources:
         gpu: 4
         tasks: 4
@@ -25,7 +25,7 @@ baselines:
       baseline_id: COSMO-1E
       label: COSMO-1E
       root: /scratch/mch/bhendj/COSMO-1E
-      steps: 0/126/6
+      steps: 0/33/6
 
 analysis:
   label: COSMO KENDA

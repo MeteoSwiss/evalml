@@ -12,14 +12,14 @@ runs:
       mlflow_id: d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
       config: resources/inference/configs/forecaster_with_global.yaml
-      steps: 0/126/6
+      steps: 0/120/6
 
 baselines:
   - baseline:
       baseline_id: COSMO-E
       label: COSMO-E
       root: /store_new/mch/msopr/ml/COSMO-E
-      steps: 0/12/6
+      steps: 0/120/6
 
 analysis:
   label: COSMO KENDA

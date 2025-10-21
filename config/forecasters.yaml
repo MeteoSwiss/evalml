@@ -1,30 +1,24 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  This is an experiment to do blabla.
+  Evaluate skill of COSMO-E emulator (M-1 forecaster).
 
 dates:
   start: 2020-01-01T12:00
   end: 2020-01-10T00:00
-  frequency: 36h
+  frequency: 60h
 
 runs:
   - forecaster:
-      mlflow_id: 2f962c89ff644ca7940072fa9cd088ec
-      label: Stage D - N320 global grid with CERRA finetuning
-      config: resources/inference/configs/forecaster_with_global.yaml
-      steps: 0/126/6
-  - forecaster:
       mlflow_id: d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
-      config: resources/inference/configs/forecaster_with_global.yaml
-      steps: 0/126/6
+      steps: 0/120/6
 
 baselines:
   - baseline:
       baseline_id: COSMO-E
       label: COSMO-E
       root: /store_new/mch/msopr/ml/COSMO-E
-      steps: 0/126/6
+      steps: 0/120/6
 
 analysis:
   label: COSMO KENDA
@@ -39,7 +33,7 @@ locations:
 profile:
   executor: slurm
   global_resources:
-    gpus: 15
+    gpus: 16
   default_resources:
     slurm_partition: "postproc"
     cpus_per_task: 1

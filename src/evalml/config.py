@@ -74,8 +74,10 @@ class RunConfig(BaseModel):
         ...,
         description=(
             "Forecast lead times in hours, formatted as 'start/end/step'. "
-            "The range is half-open [start, end), meaning it includes the start  "
-            "but excludes the end. Example: '0/126/6' for lead times every 6 hours up to 120 hours."
+            "The range includes the start lead time and continues with the given step "
+            "until reaching or exceeding the end lead time. "
+            "Example: '0/120/6' for lead times every 6 hours up to 120 h, "
+            "or '0/33/6' up to 30 h."
         ),
     )
     extra_dependencies: List[str] = Field(
@@ -102,15 +104,13 @@ class RunConfig(BaseModel):
         try:
             start, end, step = map(int, parts)
         except ValueError:
-            raise ValueError("Start, end, and interval must be integers.")
-        if start >= end:
-            raise ValueError(f"Start ({start}) must be less than end ({end}).")
-        if step <= 0:
-            raise ValueError(f"Interval ({step}) must be a positive integer.")
-        if (end - start) % step != 0:
+            raise ValueError("Start, end, and step must be integers.")
+        if start > end:
             raise ValueError(
-                f"The step ({step}) must evenly divide the range ({end - start})."
+                f"Start ({start}) must be less than or equal to end ({end})."
             )
+        if step <= 0:
+            raise ValueError(f"Step ({step}) must be a positive integer.")
         return v
 
 

@@ -1,18 +1,18 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Stretched interpolator vs LAM interpolator.
+  Evaluate skill of SGM interpolator (M-2 interpolator).
 
 dates:
   start: 2020-01-01T12:00
   end: 2020-01-10T00:00
-  frequency: 54h
+  frequency: 60h
 
 runs:
   - interpolator:
-      mlflow_id: 9c18b90074214d769b8b383722fc5a06
+      mlflow_id: 8d1e0410ca7d4f74b368b3079878259a
       label: M-2 interpolator (KENDA)
-      steps: 0/121/1
-      config: resources/inference/configs/interpolator_from_test_data.yaml
+      steps: 0/120/1
+      config: resources/inference/configs/interpolator_from_test_data_stretched.yaml
       forecaster: null
       extra_dependencies:
         - git+https://github.com/ecmwf/anemoi-inference@14189907b4f4e3b204b7994f828831b8aa51e9b6
@@ -21,12 +21,12 @@ runs:
   - interpolator:
       mlflow_id: 8d1e0410ca7d4f74b368b3079878259a
       label: M-2 interpolator (M-1 forecaster)
-      steps: 0/121/1
+      steps: 0/120/1
       config: resources/inference/configs/interpolator_stretched.yaml
       forecaster:
         mlflow_id: d0846032fc7248a58b089cbe8fa4c511
         config: resources/inference/configs/forecaster_with_global.yaml
-        steps: 0/126/6
+        steps: 0/120/6
       extra_dependencies:
         - git+https://github.com/ecmwf/anemoi-inference@14189907b4f4e3b204b7994f828831b8aa51e9b6
         - torch-geometric==2.6.1
@@ -35,14 +35,14 @@ runs:
       mlflow_id: d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
       config: resources/inference/configs/forecaster_with_global.yaml
-      steps: 0/126/6
+      steps: 0/120/6
 
 baselines:
   - baseline:
       baseline_id: COSMO-E-1h
       label: COSMO-E
       root: /scratch/mch/bhendj/COSMO-E
-      steps: 0/121/1
+      steps: 0/120/1
 
 analysis:
   label: COSMO KENDA
@@ -58,7 +58,7 @@ locations:
 profile:
   executor: slurm
   global_resources:
-    gpus: 15
+    gpus: 16
   default_resources:
     slurm_partition: "postproc"
     cpus_per_task: 1
