@@ -17,8 +17,6 @@ runs:
       inference_resources:
         gpu: 4
         tasks: 4
-      extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
 
 baselines:
   - baseline:
