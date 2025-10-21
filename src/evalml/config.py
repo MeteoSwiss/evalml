@@ -78,7 +78,6 @@ class RunConfig(BaseModel):
             "until reaching or exceeding the end lead time. "
             "Example: '0/120/6' for lead times every 6 hours up to 120 h, "
             "or '0/33/6' up to 30 h."
-
         ),
     )
     extra_dependencies: List[str] = Field(
@@ -107,7 +106,9 @@ class RunConfig(BaseModel):
         except ValueError:
             raise ValueError("Start, end, and step must be integers.")
         if start > end:
-            raise ValueError(f"Start ({start}) must be less than or equal to end ({end}).")
+            raise ValueError(
+                f"Start ({start}) must be less than or equal to end ({end})."
+            )
         if step <= 0:
             raise ValueError(f"Step ({step}) must be a positive integer.")
         return v

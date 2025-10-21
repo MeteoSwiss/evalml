@@ -41,7 +41,9 @@ def check_reftime_consistency(tarfiles: list[Path], delta_h: int = 12):
     return first_reftime, expected_reftime - timedelta(hours=delta_h)
 
 
-def extract(tar: Path, lead_times: list[int], run_id: str, params: list[str]) -> xr.Dataset:
+def extract(
+    tar: Path, lead_times: list[int], run_id: str, params: list[str]
+) -> xr.Dataset:
     LOG.info(f"Extracting fields from {tar}.")
     reftime = reftime_from_tarfile(tar)
     if "COSMO-E" in tar.parts:
