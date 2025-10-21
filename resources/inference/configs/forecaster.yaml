@@ -6,7 +6,7 @@ allow_nans: true
 
 output:
   tee:
-    outputs: 
+    outputs:
       - extract_lam:
           output:
             assign_mask:

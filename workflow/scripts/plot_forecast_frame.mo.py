@@ -43,7 +43,9 @@ def _(ArgumentParser, Path):
 
     parser = ArgumentParser()
 
-    parser.add_argument("--input", type=str, default=None, help="Directory to grib data")
+    parser.add_argument(
+        "--input", type=str, default=None, help="Directory to grib data"
+    )
     parser.add_argument("--date", type=str, default=None, help="reference datetime")
     parser.add_argument("--outfn", type=str, help="output filename")
     parser.add_argument("--leadtime", type=str, help="leadtime")
@@ -56,7 +58,11 @@ def _(ArgumentParser, Path):
     outfn = Path(args.outfn)
     leadtime = int(args.leadtime)
     param = args.param
-    region = None if (args.region is None or str(args.region).lower() in {"none", "", "null"}) else args.region
+    region = (
+        None
+        if (args.region is None or str(args.region).lower() in {"none", "", "null"})
+        else args.region
+    )
     projection = args.projection
     return args, leadtime, outfn, param, projection, raw_dir, region
 
