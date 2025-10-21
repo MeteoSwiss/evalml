@@ -155,7 +155,6 @@ def main(args: ScriptConfig):
     baseline = baseline[args.params].sel(
         ref_time=args.reftime,
         lead_time=np.array(args.steps, dtype="timedelta64[h]"),
-        method="nearest",
     )
     baseline = baseline.assign_coords(time=baseline.ref_time + baseline.lead_time)
     LOG.info(
