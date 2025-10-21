@@ -151,7 +151,7 @@ rule prepare_inference_forecaster:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
         ),
-        lead_time=config["lead_time"],
+        lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
         reftime_to_iso=lambda wc: datetime.strptime(
@@ -235,7 +235,7 @@ rule prepare_inference_interpolator:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
         ),
-        lead_time=config["lead_time"],
+        lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
         reftime_to_iso=lambda wc: datetime.strptime(
