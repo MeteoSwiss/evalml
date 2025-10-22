@@ -57,5 +57,5 @@ rule make_forecast_animation:
     localrule: True
     shell:
         """
-        convert -delay 40 -loop 0 {input} {output}
+        convert -delay 10 -loop 0 {input} {output}
         """

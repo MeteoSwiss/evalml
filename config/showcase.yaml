@@ -4,15 +4,15 @@ description: |
 
 dates:
   - 2020-02-03T00:00 # Storm Petra
- - 2020-02-07T00:00 # Storm Sabine
- - 2020-10-01T00:00 # Storm Brigitte
+  - 2020-02-07T00:00 # Storm Sabine
+  - 2020-10-01T00:00 # Storm Brigitte
 
 runs:
   - interpolator:
       mlflow_id: 8d1e0410ca7d4f74b368b3079878259a
       label: M-2 interpolator
       steps: 0/120/1
-      config: resources/inference/configs/interpolator_stretched.yaml
+      config: resources/inference/configs/interpolator_stretched_with_global.yaml
       forecaster:
         mlflow_id: d0846032fc7248a58b089cbe8fa4c511
         config: resources/inference/configs/forecaster_with_global.yaml
