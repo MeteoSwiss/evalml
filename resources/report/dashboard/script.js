@@ -1,11 +1,11 @@
 // Tab switching
 document.querySelectorAll(".tab-link").forEach(button => {
-    button.addEventListener("click", () => {
-        document.querySelectorAll(".tab-link").forEach(btn => btn.classList.remove("active"));
-        document.querySelectorAll(".tab-content").forEach(tab => tab.classList.remove("active"));
-        button.classList.add("active");
-        document.getElementById(button.dataset.tab).classList.add("active");
-    });
+  button.addEventListener("click", () => {
+    document.querySelectorAll(".tab-link").forEach(btn => btn.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(tab => tab.classList.remove("active"));
+    button.classList.add("active");
+    document.getElementById(button.dataset.tab).classList.add("active");
+  });
 });
 
 
@@ -13,29 +13,29 @@ document.querySelectorAll(".tab-link").forEach(button => {
 const choicesInstances = {};
 
 choicesInstances["source-select"] = new Choices("#source-select", {
-    searchEnabled: false,
-    removeItemButton: true,
-    shouldSort: false,
-    itemSelectText: "",
-    placeholder: false
+  searchEnabled: false,
+  removeItemButton: true,
+  shouldSort: false,
+  itemSelectText: "",
+  placeholder: false
 });
 document.getElementById("source-select").addEventListener("change", updateChart);
 
 choicesInstances["metric-select"] = new Choices("#metric-select", {
-    searchEnabled: false,
-    removeItemButton: true,
-    shouldSort: false,
-    itemSelectText: "",
-    placeholder: false
+  searchEnabled: false,
+  removeItemButton: true,
+  shouldSort: false,
+  itemSelectText: "",
+  placeholder: false
 });
 document.getElementById("metric-select").addEventListener("change", updateChart);
 
 choicesInstances["param-select"] = new Choices("#param-select", {
-    searchEnabled: false,
-    removeItemButton: true,
-    shouldSort: false,
-    itemSelectText: "",
-    placeholder: false
+  searchEnabled: false,
+  removeItemButton: true,
+  shouldSort: false,
+  itemSelectText: "",
+  placeholder: false
 });
 document.getElementById("param-select").addEventListener("change", updateChart);
 
@@ -44,25 +44,51 @@ data = JSON.parse(document.getElementById("verif-data").textContent)
 
 // Define base spec
 var spec = {
-  "data": {
-    "values": data
-  },
+  "data": { "values": data },
+  "params": [
+    {
+      "name": "xZoom",
+      "select": {
+        "type": "interval",
+        "encodings": ["x"],
+        "zoom": "wheel![!event.shiftKey]"
+      },
+      "bind": "scales"
+    }
+  ],
   "facet": {
     "column": { "field": "param" },
     "row": { "field": "metric" }
   },
   "spec": {
-    "mark": { "type": "line" },
+    "mark": "line",
     "width": 300,
     "height": 200,
     "encoding": {
-      "x": { "field": "lead_time", "type": "ordinal" },
-      "y": { "field": "value", "type": "quantitative" , "scale": { "zero": false }},
-      "color": { "field": "source", "legend": { "orient": "top", "labelLimit": 1000, "symbolSize": 1000 } }
-    }
+      "x": {
+        "field": "lead_time",
+        "type": "quantitative",
+        "axis": { "labels": true, "ticks": true },
+      },
+      "y": {
+        "field": "value",
+        "type": "quantitative",
+        "scale": { "zero": false }
+      },
+      "color": {
+        "field": "source",
+        "legend": { "orient": "top", "labelLimit": 1000, "symbolSize": 1000 }
+      }
+    },
+    "transform": [
+      {
+        "filter": { "param": "xZoom" }
+      }
+    ]
   },
   "resolve": {
     "scale": {
+      "x": "shared",
       "y": "independent"
     }
   }
@@ -72,32 +98,32 @@ var spec = {
 // Define functions
 
 function getSelectedValues(id) {
-    return choicesInstances[id].getValue(true)
+  return choicesInstances[id].getValue(true)
 }
 
 function updateChart() {
-    const selectedSources = getSelectedValues("source-select");
-    const selectedparams = getSelectedValues("param-select");
-    const selectedMetrics = getSelectedValues("metric-select");
+  const selectedSources = getSelectedValues("source-select");
+  const selectedparams = getSelectedValues("param-select");
+  const selectedMetrics = getSelectedValues("metric-select");
 
-    const newSpec = JSON.parse(JSON.stringify(spec));
-    const filters = [];
+  const newSpec = JSON.parse(JSON.stringify(spec));
+  const filters = [];
 
-    if (selectedSources.length > 0) {
-        filters.push({ field: "source", oneOf: selectedSources });
-    }
-    if (selectedparams.length > 0) {
-        filters.push({ field: "param", oneOf: selectedparams });
-    }
-    if (selectedMetrics.length > 0) {
-        filters.push({ field: "metric", oneOf: selectedMetrics });
-    }
+  if (selectedSources.length > 0) {
+    filters.push({ field: "source", oneOf: selectedSources });
+  }
+  if (selectedparams.length > 0) {
+    filters.push({ field: "param", oneOf: selectedparams });
+  }
+  if (selectedMetrics.length > 0) {
+    filters.push({ field: "metric", oneOf: selectedMetrics });
+  }
 
-    if (filters.length > 0) {
-        newSpec.transform = [{ filter: { and: filters } }];
-    }
+  if (filters.length > 0) {
+    newSpec.transform = [{ filter: { and: filters } }];
+  }
 
-    vegaEmbed('#vis', newSpec, { actions: false });
+  vegaEmbed('#vis', newSpec, { actions: false });
 }
 
 // Initial chart
