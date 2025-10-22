@@ -1,3 +1,4 @@
+import logging
 import copy
 from datetime import datetime, timedelta
 import yaml
@@ -128,9 +129,11 @@ def _inference_routing_fn(wc):
     run_config = RUN_CONFIGS[wc.run_id]
 
     if run_config["model_type"] == "forecaster":
-        input_path = f"logs/inference_forecaster/{wc.run_id}-{wc.init_time}.ok"
+        input_path = f"logs/prepare_inference_forecaster/{wc.run_id}-{wc.init_time}.ok"
     elif run_config["model_type"] == "interpolator":
-        input_path = f"logs/inference_interpolator/{wc.run_id}-{wc.init_time}.ok"
+        input_path = (
+            f"logs/prepare_inference_interpolator/{wc.run_id}-{wc.init_time}.ok"
+        )
     else:
         raise ValueError(f"Unsupported model type: {run_config['model_type']}")
 
