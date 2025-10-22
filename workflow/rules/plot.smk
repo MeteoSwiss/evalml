@@ -37,6 +37,33 @@ rule plot_forecast_frame:
         """
 
 
+rule plot_meteogram:
+    input:
+        script="workflow/scripts/plot_meteogram.mo.py",
+        fct_grib=rules.inference_routing.output[0],
+        analysis_zarr=config["analysis"].get("analysis_zarr"),
+    output:
+        OUT_ROOT / "showcases/{run_id}/meteograms/{init_time}_{param}_{sta}.png",
+    # localrule: True
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=1,
+        runtime="5m",
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
+        python {input.script} \
+            --forecast {input.fct_grib}  --analysis {input.analysis_zarr} \
+            --date {wildcards.init_time} --outfn {output[0]} \
+            --param {wildcards.param}  --station {wildcards.sta}
+        # interactive editing (needs to set localrule: True and use only one core)
+        # marimo edit {input.script} -- \
+        #     --forecast {input.fct_grib}  --analysis {input.analysis_zarr} \
+        #     --date {wildcards.init_time} --outfn {output[0]} \
+        #     --param {wildcards.param}  --station {wildcards.sta}
+        """
+
+
 def get_leadtimes(wc):
     """Get all lead times from the run config."""
     start, end, step = map(int, RUN_CONFIGS[wc.run_id]["steps"].split("/"))
