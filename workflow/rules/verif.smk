@@ -24,6 +24,7 @@ rule verif_metrics_baseline:
         baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         analysis_label=config["analysis"].get("label"),
+        regions=REGION_TXT,
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
     log:
@@ -41,6 +42,7 @@ rule verif_metrics_baseline:
             --steps "{params.baseline_steps}" \
             --baseline_label "{params.baseline_label}" \
             --analysis_label "{params.analysis_label}" \
+            --regions "{params.regions}" \
             --output {output} > {log} 2>&1
         """
 
@@ -68,6 +70,7 @@ rule verif_metrics:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         analysis_label=config["analysis"].get("label"),
+        regions=REGION_TXT,
     log:
         OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",
     resources:
@@ -82,6 +85,7 @@ rule verif_metrics:
             --steps "{params.fcst_steps}" \
             --fcst_label "{params.fcst_label}" \
             --analysis_label "{params.analysis_label}" \
+            --regions "{params.regions}" \
             --output {output} > {log} 2>&1
         """
 

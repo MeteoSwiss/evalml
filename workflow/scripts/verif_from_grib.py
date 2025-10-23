@@ -213,7 +213,7 @@ def main(args: ScriptConfig):
     )
 
     # compute metrics and statistics
-    results = verify(fct, analysis, args.fcst_label, args.analysis_label)
+    results = verify(fct, analysis, args.fcst_label, args.analysis_label, args.regions)
 
     # # save results to CSV
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -265,6 +265,11 @@ if __name__ == "__main__":
         type=str,
         help="Label for the analysis data (default: COSMO KENDA).",
         default="COSMO KENDA",
+    )
+    parser.add_argument(
+        "--regions",
+        type=lambda x: x.split(","),
+        help="Comma-separated list of shapefile paths defining regions for stratification.",
     )
     parser.add_argument(
         "--output",

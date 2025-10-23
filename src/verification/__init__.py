@@ -136,7 +136,11 @@ def _compute_masks(ds: xr.Dataset) -> xr.Dataset:
 
 
 def verify(
-    fcst: xr.Dataset, obs: xr.Dataset, fcst_label: str, obs_label: str
+    fcst: xr.Dataset,
+    obs: xr.Dataset,
+    fcst_label: str,
+    obs_label: str,
+    regions: [str] | None = None,
 ) -> xr.Dataset:
     """
     Compare two xarray Datasets (fcst and obs) and return pandas DataFrame with
@@ -149,7 +153,10 @@ def verify(
     # compute the metrics in parallel
     # return the results as a xarray Dataset
     fcst_aligned, obs_aligned = xr.align(fcst, obs, join="inner", copy=False)
-    mask = _compute_masks(fcst_aligned)
+    region_polygons = ShapefileSpatialAggregationMasks(shp=regions)
+    masks = region_polygons.get_masks(
+        lon=fcst_aligned["longitude"], lat=fcst_aligned["latitude"]
+    )
 
     scores = []
     statistics = []
@@ -160,10 +167,10 @@ def verify(
         score = []
         fcst_statistics = []
         obs_statistics = []
-        for region in mask.region.values:
+        for region in masks.region.values:
             LOG.info("Verifying parameter %s for region %s", param, region)
-            fcst_param = fcst_aligned[param].where(mask.sel(region=region))
-            obs_param = obs_aligned[param].where(mask.sel(region=region))
+            fcst_param = fcst_aligned[param].where(masks.sel(region=region))
+            obs_param = obs_aligned[param].where(masks.sel(region=region))
 
             # scores vs time (reduce spatially)
             score.append(
