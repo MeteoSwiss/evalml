@@ -22,7 +22,6 @@ rule plot_forecast_frame:
         slurm_partition="postproc",
         cpus_per_task=1,
         runtime="10m",
-    localrule: True
     shell:
         """
         export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
