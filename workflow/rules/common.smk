@@ -137,6 +137,14 @@ def _inference_routing_fn(wc):
     return OUT_ROOT / input_path
 
 
+def _regions():
+    cfg = config["stratification"]
+    return [f"{cfg.root}/{region}.shp" for region in cfg.regions]
+
+
+REGIONS = _regions()
+
+
 RUN_CONFIGS = collect_all_runs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
