@@ -57,9 +57,7 @@ def _get_no_none(dict, key, replacement):
 rule verif_metrics:
     input:
         script="workflow/scripts/verif_from_grib.py",
-        module="src/verification/__init__.py",
-        inference_okfile=_inference_routing_fn,
-        grib_output=rules.inference_routing.output[0],
+        inference_okfile=rules.execute_inference.output.okfile,
         analysis_zarr=config["analysis"].get("analysis_zarr"),
     output:
         OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.nc",
@@ -71,6 +69,9 @@ rule verif_metrics:
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         analysis_label=config["analysis"].get("label"),
         regions=REGION_TXT,
+        grib_out_dir=lambda wc: (
+            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
+        ).resolve(),
     log:
         OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",
     resources:
@@ -80,7 +81,7 @@ rule verif_metrics:
     shell:
         """
         uv run {input.script} \
-            --grib_output_dir {input.grib_output} \
+            --grib_output_dir {params.grib_out_dir} \
             --analysis_zarr {input.analysis_zarr} \
             --steps "{params.fcst_steps}" \
             --fcst_label "{params.fcst_label}" \
