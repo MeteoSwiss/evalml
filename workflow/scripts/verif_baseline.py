@@ -185,7 +185,9 @@ def main(args: ScriptConfig):
 
     # compute metrics and statistics
 
-    results = verify(baseline, analysis, args.baseline_label, args.analysis_label)
+    results = verify(
+        baseline, analysis, args.baseline_label, args.analysis_label, args.regions
+    )
 
     # save results to NetCDF
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -237,6 +239,11 @@ if __name__ == "__main__":
         type=str,
         default="COSMO KENDA",
         help="Label for the analysis data (default: COSMO KENDA).",
+    )
+    parser.add_argument(
+        "--regions",
+        type=lambda x: x.split(","),
+        help="Comma-separated list of shapefile paths defining regions for stratification.",
     )
     parser.add_argument(
         "--output",

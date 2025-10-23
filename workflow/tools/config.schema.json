@@ -474,6 +474,30 @@
       ],
       "title": "Profile",
       "type": "object"
+    },
+    "Stratification": {
+      "description": "Stratification settings for the analysis.",
+      "properties": {
+        "regions": {
+          "description": "List of region names for stratification.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Regions",
+          "type": "array"
+        },
+        "root": {
+          "description": "Root directory where the region shapefiles are stored.",
+          "title": "Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "regions",
+        "root"
+      ],
+      "title": "Stratification",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -521,6 +545,9 @@
     "analysis": {
       "$ref": "#/$defs/AnalysisConfig"
     },
+    "stratification": {
+      "$ref": "#/$defs/Stratification"
+    },
     "locations": {
       "$ref": "#/$defs/Locations"
     },
@@ -534,6 +561,7 @@
     "runs",
     "baselines",
     "analysis",
+    "stratification",
     "locations",
     "profile"
   ],

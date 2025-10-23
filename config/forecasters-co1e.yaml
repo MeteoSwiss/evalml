@@ -29,6 +29,16 @@ analysis:
   label: COSMO KENDA
   analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co1e-an-archive-0p01-2019-2024-1h-v1-pl13.zarr
 
+stratification:
+  regions:
+    - jura
+    - mittelland
+    - voralpen
+    - alpennordhang
+    - innerealpentaeler
+    - alpensuedseite
+  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+
 locations:
   output_root: output/
   mlflow_uri:
