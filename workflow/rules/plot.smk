@@ -16,24 +16,23 @@ rule plot_forecast_frame:
     output:
         temp(
             OUT_ROOT
-            / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{projection}_{region}.png"
+            / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{region}.png"
         ),
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
-        runtime="5m",
+        runtime="10m",
+    localrule: True
     shell:
         """
         export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
         python {input.script} \
             --input {input.grib_output}  --date {wildcards.init_time} --outfn {output[0]} \
-            --param {wildcards.param} --leadtime {wildcards.leadtime} \
-            --projection {wildcards.projection} --region {wildcards.region} \
+            --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region} \
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
         #     --input {input.grib_output}  --date {wildcards.init_time} --outfn {output[0]}\
-        #     --param {wildcards.param} --leadtime {wildcards.leadtime} \
-        #     --projection {wildcards.projection} --region {wildcards.region} \
+        #     --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region}\
         """
 
 
@@ -47,13 +46,12 @@ rule make_forecast_animation:
     input:
         expand(
             OUT_ROOT
-            / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{projection}_{region}.png",
+            / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{region}.png",
             leadtime=lambda wc: get_leadtimes(wc),
             allow_missing=True,
         ),
     output:
-        OUT_ROOT
-        / "showcases/{run_id}/{init_time}/{init_time}_{param}_{projection}_{region}.gif",
+        OUT_ROOT / "showcases/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
     localrule: True
     shell:
         """

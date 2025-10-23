@@ -8,25 +8,39 @@ from matplotlib.tri import Triangulation
 
 State = dict[str, np.ndarray | dict[str, np.ndarray]]
 
-PROJECTIONS: dict[str, ccrs.Projection] = {
+_PROJECTIONS: dict[str, ccrs.Projection] = {
     "platecarree": ccrs.PlateCarree(),
     "orthographic": ccrs.Orthographic(central_longitude=5.0, central_latitude=45.0),
     # added some pojections to test the behaviour, can be deleted later
     "rotatedlatlon": ccrs.RotatedPole(pole_longitude=-170.0, pole_latitude=43.0),
     "azimuthalequidist": ccrs.AzimuthalEquidistant(),
 }
-"""Mapping of projection names to their cartopy projection objects."""
 
-REGION_EXTENTS = {  # coordinate reference system: PlateCarree()
-    "europe": [-16.0, 25.0, 30.0, 65.0],
-    "centraleurope": [-2.6, 19.5, 40.2, 52.3],
-    "switzerland": [0, 17.5, 40.5, 53.0],
+
+# Mapping of region names to their geographic extent and projection
+# extent [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates
+REGIONS = {
+    "globe": {
+        "extent": None,  # full globe view
+        "projection": _PROJECTIONS["orthographic"],
+    },
+    "europe": {
+        "extent": [-16.0, 25.0, 30.0, 65.0],
+        "projection": _PROJECTIONS["orthographic"],
+    },
+    "centraleurope": {
+        "extent": [-2.6, 19.5, 40.2, 52.3],
+        "projection": _PROJECTIONS["orthographic"],
+    },
+    "switzerland": {
+        "extent": [0, 17.5, 40.5, 53.0],
+        "projection": _PROJECTIONS["orthographic"],
+    },
 }
-"""Mapping of region names to their extents."""
 
 
 class StatePlotter:
-    """A class to plot state fields on various map projections and regions."""
+    """A class to plot state fields on various REGIONS."""
 
     def __init__(
         self,
@@ -60,48 +74,49 @@ class StatePlotter:
 
     def init_geoaxes(
         self,
+        projection: ccrs.Projection,
+        bbox: list[float] | None,
         nrows: int = 1,
         ncols: int = 1,
-        projection: str = "orthographic",
         size: tuple[float] | None = None,
-        region: str | None = None,
+        name: str | None = None,
     ) -> ekp.Figure:
         """Initialize a figure with GeoAxes for plotting fields.
 
         Parameters
         ----------
+        projection : cartopy.crs.Projection
+            The projection used for the region.
+        bbox : list[float] or None
+            The bounding box [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates.
+            If None, the full projection extent is used.
+        name : str, optional
+            The name of the region.
         nrows : int, optional
             The number of rows in the figure, by default 1.
         ncols : int, optional
             The number of columns in the figure, by default 1.
-        projection : str, optional
-            The projection of the map, by default "orthographic".
         size : tuple
             size of the figure in inches
-        region : str, optional
-            The region to plot, by default None.
 
         Returns
         -------
         earthkit.plots.Figure
             The figure object.
         """
+        if bbox is not None and len(bbox) != 4:
+            raise ValueError(
+                "bbox must be a list of four floats [lon_min, lon_max, lat_min, lat_max]"
+            )
 
-        proj = PROJECTIONS.get(projection, PROJECTIONS["orthographic"])
-
-        domain = None
-        # Use a map domain only if region is set and known; accept "none"/None for no clipping
-        if region is not None and str(region).lower() not in {"none", "", "null"}:
-            bbox = REGION_EXTENTS.get(region)
-            if bbox is not None:
-                domain = ekp.geo.domains.Domain(
-                    bbox=bbox,
-                    crs=ccrs.PlateCarree(),
-                    name=region,
-                )
+        domain = (
+            ekp.geo.domains.Domain(bbox=bbox, crs=ccrs.PlateCarree(), name=name.title())
+            if bbox is not None
+            else None
+        )
 
         ekp_fig = ekp.Figure(
-            crs=proj,
+            crs=projection,
             domain=domain,
             rows=nrows,
             columns=ncols,
@@ -143,7 +158,7 @@ class StatePlotter:
         # of the plotting function is a lot faster than letting tricontourf or
         # tripcolor handle it in general, but not sure if using earthkit
         # removed for now to simplify the workflow
-        if proj == PROJECTIONS["orthographic"]:
+        if proj == _PROJECTIONS["orthographic"]:
             triang, mask = self._orthographic_tri
         else:
             triang, mask = self.tri, slice(None, None)
@@ -190,7 +205,7 @@ class StatePlotter:
     def _orthographic_tri(self) -> Triangulation:
         """Compute the triangulation for the orthographic projection."""
         x, y, _ = (
-            PROJECTIONS["orthographic"]
+            _PROJECTIONS["orthographic"]
             .transform_points(ccrs.PlateCarree(), self.lon, self.lat)
             .T
         )

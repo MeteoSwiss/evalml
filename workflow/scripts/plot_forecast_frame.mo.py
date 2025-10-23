@@ -13,7 +13,7 @@ def _():
     import earthkit.plots as ekp
     import numpy as np
 
-    from plotting import StatePlotter
+    from plotting import REGIONS, StatePlotter
     from plotting.colormap_defaults import CMAP_DEFAULTS
     from plotting.compat import load_state_from_grib
 
@@ -26,6 +26,7 @@ def _():
         load_state_from_grib,
         logging,
         np,
+        REGIONS,
     )
 
 
@@ -38,7 +39,7 @@ def _(logging):
 
 
 @app.cell
-def _(ArgumentParser, Path):
+def _(ArgumentParser, Path, REGIONS):
     ROOT = Path(__file__).parent
 
     parser = ArgumentParser()
@@ -50,8 +51,7 @@ def _(ArgumentParser, Path):
     parser.add_argument("--outfn", type=str, help="output filename")
     parser.add_argument("--leadtime", type=str, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
-    parser.add_argument("--projection", type=str, help="projection")
-    parser.add_argument("--region", type=str, default="none", help="region (or 'none')")
+    parser.add_argument("--region", type=str, help="name of region")
 
     args = parser.parse_args()
     grib_dir = Path(args.input)
@@ -59,12 +59,7 @@ def _(ArgumentParser, Path):
     outfn = Path(args.outfn)
     lead_time = args.leadtime
     param = args.param
-    region = (
-        None
-        if (args.region is None or str(args.region).lower() in {"none", "", "null"})
-        else args.region
-    )
-    projection = args.projection
+    region = args.region
     return (
         args,
         grib_dir,
@@ -72,7 +67,6 @@ def _(ArgumentParser, Path):
         lead_time,
         outfn,
         param,
-        projection,
         region,
     )
 
@@ -182,9 +176,9 @@ def _(
     outfn,
     param,
     preprocess_field,
-    projection,
     region,
     state,
+    REGIONS,
 ):
     # plot individual fields
     plotter = StatePlotter(
@@ -195,8 +189,9 @@ def _(
     fig = plotter.init_geoaxes(
         nrows=1,
         ncols=1,
-        projection=projection,
-        region=region,
+        projection=REGIONS[region]["projection"],
+        bbox=REGIONS[region]["extent"],
+        name=region,
         size=(8, 8),
     )
     subplot = fig.add_map(row=0, column=0)
