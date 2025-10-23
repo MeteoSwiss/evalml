@@ -7,18 +7,17 @@ allow_nans: true
 output:
   tee:
     outputs:
-      - extract_lam:
-          output:
-            assign_mask:
-              mask: "source0/trimedge_mask"
-              output:
-                grib:
-                  path: grib/{dateTime}_{step:03}.grib
-                  encoding:
-                    typeOfGeneratingProcess: 2
-                  templates:
-                    samples: _resources/templates_index_cosmo.yaml
-      - printer
-      - raw: raw/
+    - extract_lam:
+        output:
+          assign_mask:
+            mask: "source0/trimedge_mask"
+            output:
+              grib:
+                path: grib/{dateTime}_{step:03}.grib
+                encoding:
+                  typeOfGeneratingProcess: 2
+                templates:
+                  samples: _resources/templates_index_cosmo.yaml
+    - printer
 
 write_initial_state: true
