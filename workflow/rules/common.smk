@@ -139,7 +139,7 @@ def _inference_routing_fn(wc):
 
 def _regions():
     cfg = config["stratification"]
-    regions = [f"{cfg.root}/{region}.shp" for region in cfg.regions]
+    regions = [f"{cfg['root']}/{region}.shp" for region in cfg["regions"]]
     # convert list of strings in regions to comma-separated string
     regions_txt = ",".join(regions)
     return regions_txt
