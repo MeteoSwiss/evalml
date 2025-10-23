@@ -155,7 +155,7 @@ def verify(
     fcst_aligned, obs_aligned = xr.align(fcst, obs, join="inner", copy=False)
     region_polygons = ShapefileSpatialAggregationMasks(shp=regions)
     masks = region_polygons.get_masks(
-        lon=fcst_aligned["longitude"], lat=fcst_aligned["latitude"]
+        lon=obs_aligned["longitude"], lat=obs_aligned["latitude"]
     )
 
     scores = []
