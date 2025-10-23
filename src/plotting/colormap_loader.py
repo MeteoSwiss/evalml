@@ -26,7 +26,9 @@ def load_ncl_colormap(filename):
         lines = f.readlines()
 
     # Remove header
-    lines = [l.strip() for l in lines if l.strip() and not l.strip().startswith(";")]
+    lines = [
+        ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith(";")
+    ]
 
     # Number of levels on first line
     try:

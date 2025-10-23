@@ -39,9 +39,7 @@ def _(logging):
 
 
 @app.cell
-def _(ArgumentParser, Path, REGIONS):
-    ROOT = Path(__file__).parent
-
+def _(ArgumentParser, Path):
     parser = ArgumentParser()
 
     parser.add_argument(
@@ -153,14 +151,14 @@ def _(LOG, np):
             return _k_to_c(fields[param]), "°C"
         # 10m wind speed (allow legacy 'uv' alias)
         if param == "10sp":
-            u = _ms_to_knots(fields["10u"])
-            v = _ms_to_knots(fields["10v"])
-            return np.sqrt(u**2 + v**2), "kn"
+            u = fields["10u"]
+            v = fields["10v"]
+            return np.sqrt(u**2 + v**2), "m/s"
         # wind speed from standard-level components
         if param == "sp":
-            u = _ms_to_knots(fields["u"])
-            v = _ms_to_knots(fields["v"])
-            return np.sqrt(u**2 + v**2), "kn"
+            u = fields["u"]
+            v = fields["v"]
+            return np.sqrt(u**2 + v**2), "m/s"
         # default: passthrough
         return fields[param], None
 
