@@ -181,16 +181,14 @@ def verify(
 
             # statistics vs time (reduce spatially)
             fcst_statistics.append(
-                fcst_statistics,
                 _compute_statistics(
                     fcst_param, prefix=param + ".", source=fcst_label
-                ).expand_dims(region=[region]),
+                ).expand_dims(region=[region])
             )
             obs_statistics.append(
-                obs_statistics,
                 _compute_statistics(
                     obs_param, prefix=param + ".", source=obs_label
-                ).expand_dims(region=[region]),
+                ).expand_dims(region=[region])
             )
 
         score = xr.concat(score, dim="region")
