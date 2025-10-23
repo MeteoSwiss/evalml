@@ -140,7 +140,7 @@ def verify(
     obs: xr.Dataset,
     fcst_label: str,
     obs_label: str,
-    regions: [str] | None = None,
+    regions: list[str] | None = None,
 ) -> xr.Dataset:
     """
     Compare two xarray Datasets (fcst and obs) and return pandas DataFrame with
