@@ -190,7 +190,7 @@ def _(
         projection=REGIONS[region]["projection"],
         bbox=REGIONS[region]["extent"],
         name=region,
-        size=(8, 8),
+        size=(6, 6),
     )
     subplot = fig.add_map(row=0, column=0)
 
@@ -204,7 +204,7 @@ def _(
 
     fig.title(f"{param}, time: {validtime}")
 
-    fig.save(outfn, bbox_inches="tight", dpi=400)
+    fig.save(outfn, bbox_inches="tight", dpi=200)
     LOG.info(f"saved: {outfn}")
     return
 
