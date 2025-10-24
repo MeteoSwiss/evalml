@@ -1,0 +1,11 @@
+; Type: COSMO Library Color Table
+; Description: Color table for plotting the relative humidity in % as in NinJo
+6
+30 45 60 75 90 95
+251 155  52
+253 206 102
+254 255 153
+206 254 154
+120 240 116
+ 55 202  51
+ 54 177  52
