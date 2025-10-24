@@ -55,6 +55,13 @@ rule showcase_all:
             param=["2t", "10sp"],
             region=["globe", "europe", "switzerland"],
         ),
+        expand(
+            OUT_ROOT / "showcases/{run_id}/meteograms/{init_time}_{param}_{sta}.png",
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            run_id=collect_all_candidates(),
+            param=["2t"],
+            sta=["GVE", "KLO", "LUG"],
+        ),
 
 
 rule sandbox_all:
