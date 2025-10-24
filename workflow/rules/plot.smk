@@ -12,7 +12,7 @@ import pandas as pd
 rule plot_forecast_frame:
     input:
         script="workflow/scripts/plot_forecast_frame.mo.py",
-        grib_output=rules.inference_routing.output[0],
+        inference_okfile=rules.execute_inference.output.okfile,
     output:
         temp(
             OUT_ROOT
@@ -22,15 +22,19 @@ rule plot_forecast_frame:
         slurm_partition="postproc",
         cpus_per_task=1,
         runtime="10m",
+    params:
+        grib_out_dir=lambda wc: (
+            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
+        ).resolve(),
     shell:
         """
         export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
         python {input.script} \
-            --input {input.grib_output}  --date {wildcards.init_time} --outfn {output[0]} \
+            --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region} \
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
-        #     --input {input.grib_output}  --date {wildcards.init_time} --outfn {output[0]}\
+        #     --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]}\
         #     --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region}\
         """
 
