@@ -57,6 +57,7 @@ def _get_no_none(dict, key, replacement):
 rule verif_metrics:
     input:
         script="workflow/scripts/verif_from_grib.py",
+        module="src/verification/__init__.py",
         inference_okfile=rules.execute_inference.output.okfile,
         analysis_zarr=config["analysis"].get("analysis_zarr"),
     output:
