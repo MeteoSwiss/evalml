@@ -51,6 +51,7 @@ document.getElementById("param-select").addEventListener("change", updateChart);
 
 // Get the data (embedded in the HTML)
 data = JSON.parse(document.getElementById("verif-data").textContent)
+header = document.getElementById("header-text").textContent.trim()
 
 // Define base spec
 var spec = {
@@ -124,6 +125,10 @@ function updateChart() {
 
   if (selectedRegions.length > 0) {
     filters.push({ field: "region", oneOf: selectedRegions });
+    // Set the plot title to the selected region
+    newSpec.title = "Verification for region '" + selectedRegions[0] + "' using " + header;
+  } else {
+    newSpec.title = null;
   }
   if (selectedSources.length > 0) {
     filters.push({ field: "source", oneOf: selectedSources });
