@@ -41,6 +41,10 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
         ).transform
 
         regions = {}
+        # add inner region for ML evaluation
+        regions["all"] = [
+            Polygon(list(zip([1.5, 16, 16, 1.5, 1.5], [43, 43, 49.5, 49.5, 43])))
+        ]
         shp = [shp] if isinstance(shp, str) else shp
         for shapefile in shp:
             region_name = Path(shapefile).stem
