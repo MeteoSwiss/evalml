@@ -14,7 +14,7 @@ const choicesInstances = {};
 
 choicesInstances["region-select"] = new Choices("#region-select", {
   searchEnabled: false,
-  removeItemButton: true,
+  removeItemButton: false, // single-select should not have remove button
   shouldSort: false,
   itemSelectText: "",
   placeholder: false
@@ -112,7 +112,9 @@ function getSelectedValues(id) {
 }
 
 function updateChart() {
-  const selectedRegions = getSelectedValues("region-select");
+  const rawRegions = getSelectedValues("region-select");
+  let selectedRegions = Array.isArray(rawRegions) ? rawRegions : (rawRegions ? [rawRegions] : []);
+
   const selectedSources = getSelectedValues("source-select");
   const selectedparams = getSelectedValues("param-select");
   const selectedMetrics = getSelectedValues("metric-select");
