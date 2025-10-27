@@ -15,7 +15,6 @@ runs:
       config: resources/inference/configs/interpolator_from_test_data_stretched.yaml
       forecaster: null
       extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference@fix/cutout-preprocessors
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
   - interpolator:
@@ -28,7 +27,6 @@ runs:
         config: resources/inference/configs/forecaster_with_global.yaml
         steps: 0/120/6
       extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference@fix/cutout-preprocessors
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
   - forecaster:
