@@ -108,6 +108,14 @@
         </div>
         <div class="controls">
             <div class="control-group">
+                <label>Regions(s)</label>
+                <select id="region-select">
+                    {% for region in regions %}
+                    <option value="{{region}}"{% if region == 'all' %} selected{% endif %}>{{region}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="control-group">
                 <label>Source(s)</label>
                 <select id="source-select" multiple>
                     {% for source in sources %}

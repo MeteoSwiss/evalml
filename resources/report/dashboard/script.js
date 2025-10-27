@@ -12,6 +12,16 @@ document.querySelectorAll(".tab-link").forEach(button => {
 // Initialize selection widgets
 const choicesInstances = {};
 
+choicesInstances["region-select"] = new Choices("#region-select", {
+  searchEnabled: false,
+  removeItemButton: true,
+  shouldSort: false,
+  itemSelectText: "",
+  placeholder: false
+});
+document.getElementById("region-select").addEventListener("change", updateChart);
+
+
 choicesInstances["source-select"] = new Choices("#source-select", {
   searchEnabled: false,
   removeItemButton: true,
@@ -102,6 +112,7 @@ function getSelectedValues(id) {
 }
 
 function updateChart() {
+  const selectedRegions = getSelectedValues("region-select");
   const selectedSources = getSelectedValues("source-select");
   const selectedparams = getSelectedValues("param-select");
   const selectedMetrics = getSelectedValues("metric-select");
@@ -109,6 +120,9 @@ function updateChart() {
   const newSpec = JSON.parse(JSON.stringify(spec));
   const filters = [];
 
+  if (selectedRegions.length > 0) {
+    filters.push({ field: "region", oneOf: selectedRegions });
+  }
   if (selectedSources.length > 0) {
     filters.push({ field: "source", oneOf: selectedSources });
   }
