@@ -57,9 +57,9 @@ def load_state_from_raw(
     reftime = datetime.strptime(file.parents[1].name, "%Y%m%d%H%M")
     validtime = datetime.strptime(file.stem, "%Y%m%d%H%M%S")
     state = {}
-    lons =  _state["longitudes"]
+    lons = _state["longitudes"]
     if max(lons) > 180:
-            lons = ((lons + 180) % 360) - 180
+        lons = ((lons + 180) % 360) - 180
     state["longitudes"] = lons
     state["latitudes"] = _state["latitudes"]
     state["valid_time"] = validtime

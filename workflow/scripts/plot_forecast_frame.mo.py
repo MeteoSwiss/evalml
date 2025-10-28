@@ -185,10 +185,11 @@ def _(
         outfn.parent,
     )
     from cartopy import crs as ccrs
+
     fig = plotter.init_geoaxes(
         nrows=1,
         ncols=1,
-        projection=ccrs.PlateCarree(),#REGIONS[region]["projection"],
+        projection=ccrs.PlateCarree(),  # REGIONS[region]["projection"],
         bbox=REGIONS[region]["extent"],
         name=region,
         size=(6, 6),
