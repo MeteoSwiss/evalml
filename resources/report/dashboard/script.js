@@ -107,6 +107,7 @@ var spec = {
       "strokeDash": {
         "field": "region",
         "type": "nominal",
+        "legend": null
       },
       "tooltip": [
         { "field": "region", "type": "nominal", "title": "Region" },
