@@ -4,7 +4,6 @@ from pathlib import Path
 import earthkit.data as ekd
 import numpy as np
 import pandas as pd
-from anemoi.datasets.grids import cutout_mask
 from meteodatalab import data_source
 from meteodatalab import grib_decoder
 
@@ -40,7 +39,7 @@ def load_state_from_grib(
         global_lons = fds_global.metadata("longitudes")[0]
         if max(global_lons) > 180:
             global_lons = ((global_lons + 180) % 360) - 180
-        mask = cutout_mask(lats, lons, global_lats, global_lons, cropping_distance=0)
+        mask = np.where(~np.isnan(ds_global[paramlist[0]]))[0]
         state["longitudes"] = np.concatenate([state["longitudes"], global_lons[mask]])
         state["latitudes"] = np.concatenate([state["latitudes"], global_lats[mask]])
         for param in paramlist:
@@ -58,7 +57,10 @@ def load_state_from_raw(
     reftime = datetime.strptime(file.parents[1].name, "%Y%m%d%H%M")
     validtime = datetime.strptime(file.stem, "%Y%m%d%H%M%S")
     state = {}
-    state["longitudes"] = _state["longitudes"]
+    lons =  _state["longitudes"]
+    if max(lons) > 180:
+            lons = ((lons + 180) % 360) - 180
+    state["longitudes"] = lons
     state["latitudes"] = _state["latitudes"]
     state["valid_time"] = validtime
     state["lead_time"] = state["valid_time"] - reftime

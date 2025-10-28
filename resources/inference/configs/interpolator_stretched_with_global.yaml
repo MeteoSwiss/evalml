@@ -4,7 +4,7 @@ input:
   cutout:
     lam_0:
       grib:
-        path: forecaster_grib/20*
+        path: forecaster/20*
         pre_processors:
           - extract_mask: "source0/trimedge_mask"
         namer:
@@ -43,7 +43,7 @@ input:
               - tp
     global:
       grib:
-        path: forecaster_grib/ifs*
+        path: forecaster/ifs*
         namer:
           rules:
             - - shortName: T
@@ -100,16 +100,21 @@ output:
                   encoding:
                     typeOfGeneratingProcess: 2
                   templates:
-                    samples: _resources/templates_index_cosmo.yaml
+                    samples: resources/templates_index_cosmo.yaml
       - grib:
           path: grib/ifs-{dateTime}_{step:03}.grib
           encoding:
             typeOfGeneratingProcess: 2
           templates:
-            samples: _resources/templates_index_ifs.yaml
+            samples: resources/templates_index_ifs.yaml
           post_processors:
-            - extract_slice: [189699, -1]
-            - assign_mask: "global/cutout_mask"
+          - extract_mask: 
+              mask: "lam_0/cutout_mask" 
+              as_slice: true
+              inverse: true # removes lam points 
+          - assign_mask:
+              mask: "global/cutout_mask" # fill local/global overlapping points with nan
+
 
 verbosity: 1
 allow_nans: true

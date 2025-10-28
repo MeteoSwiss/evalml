@@ -18,7 +18,7 @@ runs:
         config: resources/inference/configs/forecaster_with_global.yaml
         steps: 0/120/6
       extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference@14189907b4f4e3b204b7994f828831b8aa51e9b6
+        - git+https://github.com/ecmwf/anemoi-inference@add-inverse-option-extract
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
 
