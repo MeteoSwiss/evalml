@@ -104,7 +104,7 @@
         <div class="controls">
             <div class="control-group">
                 <label>Region</label>
-                <select id="region-select">
+                <select id="region-select" multiple>
                     {% for region in regions %}
                     <option value="{{region}}"{% if region == 'all' %} selected{% endif %}>{{region}}</option>
                     {% endfor %}
