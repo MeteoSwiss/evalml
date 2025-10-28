@@ -17,6 +17,8 @@ runs:
         mlflow_id: d0846032fc7248a58b089cbe8fa4c511
         config: resources/inference/configs/forecaster_with_global.yaml
         steps: 0/120/6
+        extra_dependencies:
+          - git+https://github.com/ecmwf/anemoi-inference@add-inverse-option-extract
       extra_dependencies:
         - git+https://github.com/ecmwf/anemoi-inference@add-inverse-option-extract
         - torch-geometric==2.6.1

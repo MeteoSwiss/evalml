@@ -2,15 +2,17 @@ from datetime import datetime
 from pathlib import Path
 
 import earthkit.data as ekd
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 from meteodatalab import data_source
 from meteodatalab import grib_decoder
+from shapely.geometry import MultiPoint
 
 
 def load_state_from_grib(
     file: Path, paramlist: list[str] | None = None
-) -> dict[str, np.ndarray | dict[str, np.ndarray]]:
+) -> dict[str, np.ndarray | dict[str, np.ndarray] | gpd.GeoSeries]:
     reftime = datetime.strptime(file.parents[1].name, "%Y%m%d%H%M")
     lead_time_hours = int(file.stem.split("_")[-1])
     fds = data_source.FileDataSource(datafiles=[str(file)])
@@ -22,6 +24,9 @@ def load_state_from_grib(
     state["valid_time"] = reftime + pd.to_timedelta(lead_time_hours, unit="h")
     state["longitudes"] = lons
     state["latitudes"] = lats
+    # Add the limited-area model envelope polygon (convex hull) before global coords are added
+    lam_hull = MultiPoint(list(zip(lons.tolist(), lats.tolist()))).convex_hull
+    state["lam_envelope"] = gpd.GeoSeries([lam_hull], crs="EPSG:4326")
     state["fields"] = {}
     for param in paramlist:
         if param in ds:

@@ -10,10 +10,12 @@ def _():
     from argparse import ArgumentParser
     from pathlib import Path
 
+    import cartopy.crs as ccrs
     import earthkit.plots as ekp
     import numpy as np
 
-    from plotting import REGIONS, StatePlotter
+    from plotting import REGIONS
+    from plotting import StatePlotter
     from plotting.colormap_defaults import CMAP_DEFAULTS
     from plotting.compat import load_state_from_grib
 
@@ -27,6 +29,7 @@ def _():
         logging,
         np,
         REGIONS,
+        ccrs,
     )
 
 
@@ -177,6 +180,7 @@ def _(
     region,
     state,
     REGIONS,
+    ccrs,
 ):
     # plot individual fields
     plotter = StatePlotter(
@@ -198,7 +202,12 @@ def _(
     field, units_override = preprocess_field(param, state)
 
     plotter.plot_field(subplot, field, **get_style(args.param, units_override))
-
+    subplot.ax.add_geometries(
+        state["lam_envelope"],
+        edgecolor="black",
+        facecolor="none",
+        crs=ccrs.PlateCarree(),
+    )
     validtime = state["valid_time"].strftime("%Y%m%d%H%M")
     # leadtime = int(state["lead_time"].total_seconds() // 3600)
 
