@@ -28,12 +28,7 @@ rule report_experiment_dashboard:
         ),
     params:
         sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
-        header_text="initializations from "
-        + config.get("dates").get("start")
-        + " to "
-        + config.get("dates").get("end")
-        + " by "
-        + config.get("dates").get("frequency"),
+        header_text=make_header_text(),
     log:
         OUT_ROOT / "logs/report_experiment_dashboard/{experiment}.log",
     shell:
