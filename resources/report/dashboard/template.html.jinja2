@@ -101,12 +101,15 @@
 
     <!-- First tab -->
     <div id="tab1" class="tab-content active">
-        <div class="header">
-            <p>
-            {{header_text}}
-            </p>
-        </div>
         <div class="controls">
+            <div class="control-group">
+                <label>Region</label>
+                <select id="region-select" multiple>
+                    {% for region in regions %}
+                    <option value="{{region}}"{% if region == 'all' %} selected{% endif %}>{{region}}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <div class="control-group">
                 <label>Source(s)</label>
                 <select id="source-select" multiple>
@@ -142,6 +145,10 @@
 
     <script id="verif-data" type="application/json">
         {{ verif_data | safe | indent(8, false)}}
+    </script>
+
+    <script id="header-text" type="text">
+        {{ header_text }}
     </script>
 
     <script>
