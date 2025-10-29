@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Basic config for showcasing M-1 forecaster.
+  Basic config for showcasing M-2 interpolator on M-1 forecaster.
 
 dates:
   - 2020-02-03T00:00 # Storm Petra
