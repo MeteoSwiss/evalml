@@ -3,15 +3,18 @@ description: |
   Evaluate skill of COSMO-E emulator (M-1 forecaster).
 
 dates:
-  start: 2020-01-01T12:00
-  end: 2020-01-10T00:00
-  frequency: 60h
+  - 2020-02-03T00:00 # Storm Petra
+  - 2020-02-07T00:00 # Storm Sabine
+  - 2020-10-01T00:00 # Storm Brigitte
 
 runs:
   - forecaster:
       mlflow_id: d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
       steps: 0/120/6
+      config: resources/inference/configs/forecaster_with_global.yaml
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference@add-inverse-option-extract
 
 baselines:
   - baseline:
