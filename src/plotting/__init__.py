@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from functools import cached_property
 from pathlib import Path
 
@@ -19,7 +20,7 @@ _PROJECTIONS: dict[str, ccrs.Projection] = {
 
 # Mapping of region names to their geographic extent and projection
 # extent [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates
-REGIONS = {
+DOMAINS = {
     "globe": {
         "extent": None,  # full globe view
         "projection": _PROJECTIONS["orthographic"],
@@ -40,7 +41,7 @@ REGIONS = {
 
 
 class StatePlotter:
-    """A class to plot state fields on various REGIONS."""
+    """A class to plot state fields on various DOMAINS."""
 
     def __init__(
         self,
@@ -168,7 +169,6 @@ class StatePlotter:
         field = field[mask]
         field = field[-1] if field.ndim == 2 else field.squeeze()
         finite = np.isfinite(field)
-
         # TODO: clip data to domain would make plotting faster (especially tripcolor)
         # tried using Map.domain.extract() but too memory heavy (probably uses
         # meshgrid in the background), implement clipping with e.g.
@@ -183,23 +183,71 @@ class StatePlotter:
         # subplot.tripcolor(  # also works but is slower
         # have to overwrite _plot_kwargs to avoid earthkit-plots trying to pass transform
         # PlateCarree based on NumpySource
-        subplot._plot_kwargs = lambda source: {}
-        subplot.tricontourf(
-            x=x[finite],
-            y=y[finite],
-            z=field[finite],
-            style=style,
-            transform=proj,
-            **kwargs,  # for earthkit.plots to work properly cmap and norm are needed here
-        )
+
+        # Normalize style and color-related kwargs
+        style_to_use, plot_kwargs = self._prepare_plot_kwargs(style, kwargs)
+
+        # Temporarily suppress earthkit-plots internal source-based kwargs
+        with self._temporary_plot_kwargs_override(subplot):
+            subplot.tricontourf(
+                x=x[finite],
+                y=y[finite],
+                z=field[finite],
+                style=style_to_use,
+                transform=proj,
+                **plot_kwargs,
+            )  # for earthkit.plots to work properly cmap and norm are needed here
         # TODO: gridlines etc would be nicer to have in the init, but I didn't get
         # them to overlay the plot layer
+
         subplot.standard_layers()
 
         if colorbar:
             subplot.legend()
         if title:
             subplot.title(title)
+
+    def _prepare_plot_kwargs(
+        self,
+        style: ekp.styles.Style | None,
+        kwargs: dict,
+    ) -> tuple[ekp.styles.Style | None, dict]:
+        """Return a cleaned style and plot kwargs without mutating the input."""
+        plot_kwargs = dict(kwargs)
+
+        # Discrete colors mode: if explicit 'colors' provided, drop cmap
+        colors = plot_kwargs.get("colors", None)
+        if colors is not None:
+            plot_kwargs.pop("cmap", None)
+            plot_kwargs.setdefault(
+                "no_style", True
+            )  # avoid interpolation being performed by earthkit-plots resulting in an error
+            return style, plot_kwargs
+
+        # Continuous mode: remove None entries to avoid matplotlib errors
+        if plot_kwargs.get("colors", None) is None:
+            plot_kwargs.pop("colors", None)
+        if plot_kwargs.get("levels", None) is None:
+            plot_kwargs.pop("levels", None)
+
+        return style, plot_kwargs
+
+    @contextmanager
+    def _temporary_plot_kwargs_override(self, subplot: ekp.Map):
+        """Temporarily override internal _plot_kwargs to avoid transform issues."""
+        has_attr = hasattr(subplot, "_plot_kwargs")
+        old = getattr(subplot, "_plot_kwargs", None)
+        subplot._plot_kwargs = lambda source: {}
+        try:
+            yield
+        finally:
+            if has_attr:
+                subplot._plot_kwargs = old
+            else:
+                try:
+                    delattr(subplot, "_plot_kwargs")
+                except Exception:
+                    pass
 
     @cached_property
     def _orthographic_tri(self) -> Triangulation:

@@ -14,7 +14,7 @@ def _():
     import earthkit.plots as ekp
     import numpy as np
 
-    from plotting import REGIONS
+    from plotting import DOMAINS
     from plotting import StatePlotter
     from plotting.colormap_defaults import CMAP_DEFAULTS
     from plotting.compat import load_state_from_grib
@@ -28,7 +28,7 @@ def _():
         load_state_from_grib,
         logging,
         np,
-        REGIONS,
+        DOMAINS,
         ccrs,
     )
 
@@ -97,12 +97,17 @@ def _(CMAP_DEFAULTS, ekp):
         units = units_override if units_override is not None else cfg.get("units", "")
         return {
             "style": ekp.styles.Style(
-                levels=cfg.get("bounds", None),
+                levels=cfg.get("bounds", cfg.get("levels", None)),
                 extend="both",
                 units=units,
+                colors=cfg.get("colors", None),
             ),
-            "cmap": cfg["cmap"],
             "norm": cfg.get("norm", None),
+            "cmap": cfg.get("cmap", None),
+            "levels": cfg.get("levels", None),
+            "vmin": cfg.get("vmin", None),
+            "vmax": cfg.get("vmax", None),
+            "colors": cfg.get("colors", None),
         }
 
     return (get_style,)
@@ -132,6 +137,13 @@ def _(LOG, np):
             except Exception:
                 return arr * 1.943844
 
+        def _m_to_mm(arr):
+            # robust conversion with pint, fallback if dtype unsupported
+            try:
+                return (_ureg.Quantity(arr, _ureg.meter).to(_ureg.millimeter)).magnitude
+            except Exception:
+                return arr * 1000
+
     except Exception:
         LOG.warning("pint not available; falling back hardcoded conversions")
 
@@ -140,6 +152,9 @@ def _(LOG, np):
 
         def _ms_to_knots(arr):
             return arr * 1.943844
+
+        def _m_to_mm(arr):
+            return arr * 1000
 
     def preprocess_field(param: str, state: dict):
         """
@@ -162,6 +177,8 @@ def _(LOG, np):
             u = fields["u"]
             v = fields["v"]
             return np.sqrt(u**2 + v**2), "m/s"
+        if param == "tp":
+            return _m_to_mm(fields[param]), "mm"  # convert m to mm
         # default: passthrough
         return fields[param], None
 
@@ -179,7 +196,7 @@ def _(
     preprocess_field,
     region,
     state,
-    REGIONS,
+    DOMAINS,
     ccrs,
 ):
     # plot individual fields
@@ -191,8 +208,8 @@ def _(
     fig = plotter.init_geoaxes(
         nrows=1,
         ncols=1,
-        projection=REGIONS[region]["projection"],
-        bbox=REGIONS[region]["extent"],
+        projection=DOMAINS[region]["projection"],
+        bbox=DOMAINS[region]["extent"],
         name=region,
         size=(6, 6),
     )
