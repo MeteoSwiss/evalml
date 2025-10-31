@@ -48,6 +48,7 @@ def get_leadtimes(wc):
 
 
 rule make_forecast_animation:
+    localrule: True
     input:
         expand(
             OUT_ROOT
@@ -57,8 +58,9 @@ rule make_forecast_animation:
         ),
     output:
         OUT_ROOT / "showcases/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
-    localrule: True
+    params:
+        delay=lambda wc: int(10*RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
     shell:
         """
-        convert -delay 10 -loop 0 {input} {output}
+        convert -delay {params.delay} -loop 0 {input} {output}
         """
