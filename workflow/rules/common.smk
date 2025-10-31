@@ -52,6 +52,8 @@ def _parse_timedelta(td):
 
 def _reftimes():
     cfg = config["dates"]
+    if isinstance(cfg, list):
+        return [datetime.strptime(t, "%Y-%m-%dT%H:%M") for t in cfg]
     start = datetime.strptime(cfg["start"], "%Y-%m-%dT%H:%M")
     end = datetime.strptime(cfg["end"], "%Y-%m-%dT%H:%M")
     freq = _parse_timedelta(cfg["frequency"])

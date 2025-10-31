@@ -25,8 +25,12 @@ output:
         templates:
           samples: resources/templates_index_ifs.yaml
         post_processors:
-          - extract_slice: [189699, -1]
-          - assign_mask: "global/cutout_mask"
+          - extract_mask:
+              mask: "lam_0/cutout_mask"
+              as_slice: true
+              inverse: true # removes lam points
+          - assign_mask:
+              mask: "global/cutout_mask" # fill local/global overlapping points with nan
 
 constant_forcings:
   test:
