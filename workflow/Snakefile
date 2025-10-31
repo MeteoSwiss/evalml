@@ -52,7 +52,7 @@ rule showcase_all:
             / "showcases/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=collect_all_candidates(),
-            param=["tp", "2t", "10sp"],
+            param=["tp", "2t", "10si"],
             region=["globe", "europe", "switzerland"],
         ),
 
