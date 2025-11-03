@@ -28,7 +28,7 @@ rule plot_forecast_frame:
         ).resolve(),
     shell:
         """
-        export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         python {input.script} \
             --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region} \
