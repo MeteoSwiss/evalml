@@ -205,6 +205,19 @@ class Locations(BaseModel):
     )
 
 
+class Stratification(BaseModel):
+    """Stratification settings for the analysis."""
+
+    regions: List[str] = Field(
+        ...,
+        description="List of region names for stratification.",
+    )
+    root: str = Field(
+        ...,
+        description="Root directory where the region shapefiles are stored.",
+    )
+
+
 class DefaultResources(BaseModel):
     """Default resource settings for job execution."""
 
@@ -289,6 +302,7 @@ class ConfigModel(BaseModel):
         description="Dictionary of baselines to include in the verification.",
     )
     analysis: AnalysisConfig
+    stratification: Stratification
     locations: Locations
     profile: Profile
 

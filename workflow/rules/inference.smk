@@ -8,6 +8,13 @@ from datetime import datetime
 
 
 rule create_inference_pyproject:
+    """
+    Generate a pyproject.toml that contains the information needed
+    to set up a virtual environment for inference of a specific checkpoint.
+    The list of dependencies is taken from the checkpoint's MLFlow run metadata,
+    and additional dependencies can be specified under a run entry in the main
+    config file.
+    """
     input:
         toml="workflow/envs/anemoi_inference.toml",
     output:
@@ -25,6 +32,11 @@ rule create_inference_pyproject:
 
 
 rule create_inference_venv:
+    """
+    Create a virtual environment for inference, using the pyproject.toml created above.
+    The virtual environment is managed with uv. The created virtual environment is relocatable,
+    so it can be squashed later. Pre-compilation to bytecode is done to speed up imports.
+    """
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
     output:
@@ -56,11 +68,12 @@ rule create_inference_venv:
         """
 
 
-# optionally, precompile to bytecode to reduce the import times
-# find {output.venv} -exec stat --format='%i' {} + | sort -u | wc -l  # optionally, how many files did I create?
-
-
 rule make_squashfs_image:
+    """
+    Create a squashfs image for the inference virtual environment of
+    a specific checkpoint. Find more about this at
+    https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
+    """
     input:
         venv=rules.create_inference_venv.output.venv,
     output:
@@ -76,7 +89,11 @@ rule make_squashfs_image:
 
 
 rule create_inference_sandbox:
-    """Generate a zipped directory that can be used as a sandbox for running inference jobs.
+    """
+    Create a zipped directory that, when extracted, can be used as a sandbox
+    for running inference jobs for a specific checkpoint. Its main purpose is
+    to serve as a development environment for anemoi-inference and to facilitate
+    sharing with external collaborators.
 
     TO use this sandbox, unzip it to a target directory.
 
@@ -124,14 +141,18 @@ def get_leadtime(wc):
     return f"{end}h"
 
 
-rule inference_forecaster:
+rule prepare_inference_forecaster:
     localrule: True
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
-        image=rules.make_squashfs_image.output.image,
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
     output:
-        okfile=touch(OUT_ROOT / "logs/inference_forecaster/{run_id}-{init_time}.ok"),
+        config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
+        resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
+        grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
+        okfile=touch(
+            OUT_ROOT / "logs/prepare_inference_forecaster/{run_id}-{init_time}.ok"
+        ),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
@@ -142,53 +163,10 @@ rule inference_forecaster:
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
-        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
     log:
-        OUT_ROOT / "logs/inference_forecaster/{run_id}-{init_time}.log",
-    resources:
-        slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
-        cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
-        mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
-        runtime=lambda wc: get_resource(wc, "runtime", "40m"),
-        gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
-        ntasks=lambda wc: get_resource(wc, "tasks", 1),
-        slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment",
-        gpus=lambda wc: get_resource(wc, "gpu", 1),
-    shell:
-        r"""
-        (
-        set -euo pipefail
-        squashfs-mount {params.image_path}:/user-environment -- bash -c '
-        export TZ=UTC
-        source /user-environment/bin/activate
-        export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
-
-        # prepare the working directory
-        WORKDIR={params.output_root}/runs/{wildcards.run_id}/{wildcards.init_time}
-        mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw _resources
-        cp {input.config} config.yaml && cp -r {params.resources_root}/templates/* _resources/
-        CMD_ARGS=(
-            date={params.reftime_to_iso}
-            checkpoint={params.checkpoints_path}/inference-last.ckpt
-            lead_time={params.lead_time}
-        )
-
-        # is GPU > 1, add runner=parallel to CMD_ARGS
-        if [ {resources.gpus} -gt 1 ]; then
-            CMD_ARGS+=(runner=parallel)
-        fi
-
-        srun \
-            --partition={resources.slurm_partition} \
-            --cpus-per-task={resources.cpus_per_task} \
-            --mem-per-cpu={resources.mem_mb_per_cpu} \
-            --time={resources.runtime} \
-            --gres={resources.gres} \
-            --ntasks={resources.ntasks} \
-            anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
-        '
-        ) > {log} 2>&1
-        """
+        OUT_ROOT / "logs/prepare_inference_forecaster/{run_id}-{init_time}.log",
+    script:
+        "../scripts/inference_prepare.py"
 
 
 def _get_forecaster_run_id(run_id):
@@ -196,23 +174,28 @@ def _get_forecaster_run_id(run_id):
     return RUN_CONFIGS[run_id]["forecaster"]["mlflow_id"][0:9]
 
 
-rule inference_interpolator:
+rule prepare_inference_interpolator:
     """Run the interpolator for a specific run ID."""
     localrule: True
     input:
         pyproject=rules.create_inference_pyproject.output.pyproject,
-        image=rules.make_squashfs_image.output.image,
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
         forecasts=lambda wc: (
             [
                 OUT_ROOT
-                / f"logs/inference_forecaster/{_get_forecaster_run_id(wc.run_id)}-{wc.init_time}.ok"
+                / f"logs/execute_inference/{_get_forecaster_run_id(wc.run_id)}-{wc.init_time}.ok"
             ]
             if RUN_CONFIGS[wc.run_id].get("forecaster") is not None
             else []
         ),
     output:
-        okfile=touch(OUT_ROOT / "logs/inference_interpolator/{run_id}-{init_time}.ok"),
+        config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
+        resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
+        grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
+        forecaster=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/forecaster"),
+        okfile=touch(
+            OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.ok"
+        ),
     params:
         checkpoints_path=parse_input(
             input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
@@ -228,9 +211,26 @@ rule inference_interpolator:
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None
             else _get_forecaster_run_id(wc.run_id)
         ),
-        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
     log:
-        OUT_ROOT / "logs/inference_interpolator/{run_id}-{init_time}.log",
+        OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.log",
+    script:
+        "../scripts/inference_prepare.py"
+
+
+rule execute_inference:
+    localrule: True
+    input:
+        okfile=_inference_routing_fn,
+        image=rules.make_squashfs_image.output.image,
+    output:
+        okfile=touch(OUT_ROOT / "logs/execute_inference/{run_id}-{init_time}.ok"),
+    log:
+        OUT_ROOT / "logs/execute_inference/{run_id}-{init_time}.log",
+    params:
+        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
+        workdir=lambda wc: (
+            OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
+        ).resolve(),
     resources:
         slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
         cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
@@ -238,35 +238,19 @@ rule inference_interpolator:
         runtime=lambda wc: get_resource(wc, "runtime", "40m"),
         gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
         ntasks=lambda wc: get_resource(wc, "tasks", 1),
-        slurm_extra=lambda wc, input: f"--uenv={Path(input.image).resolve()}:/user-environment",
         gpus=lambda wc: get_resource(wc, "gpu", 1),
     shell:
-        r"""
+        """
         (
         set -euo pipefail
+
+        cd {params.workdir}
+
         squashfs-mount {params.image_path}:/user-environment -- bash -c '
-        export TZ=UTC
         source /user-environment/bin/activate
         export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
 
-        # prepare the working directory
-        WORKDIR={params.output_root}/runs/{wildcards.run_id}/{wildcards.init_time}
-        mkdir -p $WORKDIR && cd $WORKDIR && mkdir -p grib raw _resources
-        cp {input.config} config.yaml && cp -r {params.resources_root}/templates/* _resources/
-
-        # if forecaster_run_id is not "null", link the forecaster grib directory; else, run from files.
-        if [ "{params.forecaster_run_id}" != "null" ]; then
-            FORECASTER_WORKDIR={params.output_root}/runs/{params.forecaster_run_id}/{wildcards.init_time}
-            ln -fns $FORECASTER_WORKDIR/grib forecaster_grib
-        else
-            echo "Forecaster configuration is null; proceeding with file-based inputs."
-        fi
-
-        CMD_ARGS=(
-            date={params.reftime_to_iso}
-            checkpoint={params.checkpoints_path}/inference-last.ckpt
-            lead_time={params.lead_time}
-        )
+        CMD_ARGS=()
 
         # is GPU > 1, add runner=parallel to CMD_ARGS
         if [ {resources.gpus} -gt 1 ]; then
@@ -274,6 +258,7 @@ rule inference_interpolator:
         fi
 
         srun \
+            --unbuffered \
             --partition={resources.slurm_partition} \
             --cpus-per-task={resources.cpus_per_task} \
             --mem-per-cpu={resources.mem_mb_per_cpu} \
@@ -284,12 +269,3 @@ rule inference_interpolator:
         '
         ) > {log} 2>&1
         """
-
-
-rule inference_routing:
-    localrule: True
-    input:
-        _inference_routing_fn,
-    output:
-        directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
-        directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/raw"),

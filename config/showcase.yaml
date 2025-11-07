@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Basic config for showcasing M-1 forecaster.
+  Basic config for showcasing M-2 interpolator on M-1 forecaster.
 
 dates:
   - 2020-02-03T00:00 # Storm Petra
@@ -17,8 +17,10 @@ runs:
         mlflow_id: d0846032fc7248a58b089cbe8fa4c511
         config: resources/inference/configs/forecaster_with_global.yaml
         steps: 0/120/6
+        extra_dependencies:
+          - git+https://github.com/ecmwf/anemoi-inference.git@main
       extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference@14189907b4f4e3b204b7994f828831b8aa51e9b6
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
 
@@ -29,9 +31,19 @@ baselines:
       root: /store_new/mch/msopr/ml/COSMO-E
       steps: 0/120/6
 
+stratification:
+  regions:
+    - jura
+    - mittelland
+    - voralpen
+    - alpennordhang
+    - innerealpentaeler
+    - alpensuedseite
+  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+
 analysis:
   label: COSMO KENDA
-  analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-1h-v3-pl13.zarr
+  analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr
 
 locations:
   output_root: output/

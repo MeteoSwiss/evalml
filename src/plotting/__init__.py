@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from functools import cached_property
 from pathlib import Path
 
@@ -8,25 +9,39 @@ from matplotlib.tri import Triangulation
 
 State = dict[str, np.ndarray | dict[str, np.ndarray]]
 
-PROJECTIONS: dict[str, ccrs.Projection] = {
+_PROJECTIONS: dict[str, ccrs.Projection] = {
     "platecarree": ccrs.PlateCarree(),
     "orthographic": ccrs.Orthographic(central_longitude=5.0, central_latitude=45.0),
     # added some pojections to test the behaviour, can be deleted later
     "rotatedlatlon": ccrs.RotatedPole(pole_longitude=-170.0, pole_latitude=43.0),
     "azimuthalequidist": ccrs.AzimuthalEquidistant(),
 }
-"""Mapping of projection names to their cartopy projection objects."""
 
-REGION_EXTENTS = {  # coordinate reference system: PlateCarree()
-    "europe": [-16.0, 25.0, 30.0, 65.0],
-    "centraleurope": [-2.6, 19.5, 40.2, 52.3],
-    "switzerland": [0, 17.5, 40.5, 53.0],
+
+# Mapping of region names to their geographic extent and projection
+# extent [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates
+DOMAINS = {
+    "globe": {
+        "extent": None,  # full globe view
+        "projection": _PROJECTIONS["orthographic"],
+    },
+    "europe": {
+        "extent": [-16.0, 25.0, 30.0, 65.0],
+        "projection": _PROJECTIONS["orthographic"],
+    },
+    "centraleurope": {
+        "extent": [-2.6, 19.5, 40.2, 52.3],
+        "projection": _PROJECTIONS["orthographic"],
+    },
+    "switzerland": {
+        "extent": [0, 17.5, 40.5, 53.0],
+        "projection": _PROJECTIONS["orthographic"],
+    },
 }
-"""Mapping of region names to their extents."""
 
 
 class StatePlotter:
-    """A class to plot state fields on various map projections and regions."""
+    """A class to plot state fields on various DOMAINS."""
 
     def __init__(
         self,
@@ -60,48 +75,49 @@ class StatePlotter:
 
     def init_geoaxes(
         self,
+        projection: ccrs.Projection,
+        bbox: list[float] | None,
         nrows: int = 1,
         ncols: int = 1,
-        projection: str = "orthographic",
         size: tuple[float] | None = None,
-        region: str | None = None,
+        name: str | None = None,
     ) -> ekp.Figure:
         """Initialize a figure with GeoAxes for plotting fields.
 
         Parameters
         ----------
+        projection : cartopy.crs.Projection
+            The projection used for the region.
+        bbox : list[float] or None
+            The bounding box [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates.
+            If None, the full projection extent is used.
+        name : str, optional
+            The name of the region.
         nrows : int, optional
             The number of rows in the figure, by default 1.
         ncols : int, optional
             The number of columns in the figure, by default 1.
-        projection : str, optional
-            The projection of the map, by default "orthographic".
         size : tuple
             size of the figure in inches
-        region : str, optional
-            The region to plot, by default None.
 
         Returns
         -------
         earthkit.plots.Figure
             The figure object.
         """
+        if bbox is not None and len(bbox) != 4:
+            raise ValueError(
+                "bbox must be a list of four floats [lon_min, lon_max, lat_min, lat_max]"
+            )
 
-        proj = PROJECTIONS.get(projection, PROJECTIONS["orthographic"])
-
-        domain = None
-        # Use a map domain only if region is set and known; accept "none"/None for no clipping
-        if region is not None and str(region).lower() not in {"none", "", "null"}:
-            bbox = REGION_EXTENTS.get(region)
-            if bbox is not None:
-                domain = ekp.geo.domains.Domain(
-                    bbox=bbox,
-                    crs=ccrs.PlateCarree(),
-                    name=region,
-                )
+        domain = (
+            ekp.geo.domains.Domain(bbox=bbox, crs=ccrs.PlateCarree(), name=name.title())
+            if bbox is not None
+            else None
+        )
 
         ekp_fig = ekp.Figure(
-            crs=proj,
+            crs=projection,
             domain=domain,
             rows=nrows,
             columns=ncols,
@@ -143,7 +159,7 @@ class StatePlotter:
         # of the plotting function is a lot faster than letting tricontourf or
         # tripcolor handle it in general, but not sure if using earthkit
         # removed for now to simplify the workflow
-        if proj == PROJECTIONS["orthographic"]:
+        if proj == _PROJECTIONS["orthographic"]:
             triang, mask = self._orthographic_tri
         else:
             triang, mask = self.tri, slice(None, None)
@@ -153,7 +169,6 @@ class StatePlotter:
         field = field[mask]
         field = field[-1] if field.ndim == 2 else field.squeeze()
         finite = np.isfinite(field)
-
         # TODO: clip data to domain would make plotting faster (especially tripcolor)
         # tried using Map.domain.extract() but too memory heavy (probably uses
         # meshgrid in the background), implement clipping with e.g.
@@ -168,17 +183,23 @@ class StatePlotter:
         # subplot.tripcolor(  # also works but is slower
         # have to overwrite _plot_kwargs to avoid earthkit-plots trying to pass transform
         # PlateCarree based on NumpySource
-        subplot._plot_kwargs = lambda source: {}
-        subplot.tricontourf(
-            x=x[finite],
-            y=y[finite],
-            z=field[finite],
-            style=style,
-            transform=proj,
-            **kwargs,  # for earthkit.plots to work properly cmap and norm are needed here
-        )
+
+        # Normalize style and color-related kwargs
+        style_to_use, plot_kwargs = self._prepare_plot_kwargs(style, kwargs)
+
+        # Temporarily suppress earthkit-plots internal source-based kwargs
+        with self._temporary_plot_kwargs_override(subplot):
+            subplot.tricontourf(
+                x=x[finite],
+                y=y[finite],
+                z=field[finite],
+                style=style_to_use,
+                transform=proj,
+                **plot_kwargs,
+            )  # for earthkit.plots to work properly cmap and norm are needed here
         # TODO: gridlines etc would be nicer to have in the init, but I didn't get
         # them to overlay the plot layer
+
         subplot.standard_layers()
 
         if colorbar:
@@ -186,11 +207,53 @@ class StatePlotter:
         if title:
             subplot.title(title)
 
+    def _prepare_plot_kwargs(
+        self,
+        style: ekp.styles.Style | None,
+        kwargs: dict,
+    ) -> tuple[ekp.styles.Style | None, dict]:
+        """Return a cleaned style and plot kwargs without mutating the input."""
+        plot_kwargs = dict(kwargs)
+
+        # Discrete colors mode: if explicit 'colors' provided, drop cmap
+        colors = plot_kwargs.get("colors", None)
+        if colors is not None:
+            plot_kwargs.pop("cmap", None)
+            plot_kwargs.setdefault(
+                "no_style", True
+            )  # avoid interpolation being performed by earthkit-plots resulting in an error
+            return style, plot_kwargs
+
+        # Continuous mode: remove None entries to avoid matplotlib errors
+        if plot_kwargs.get("colors", None) is None:
+            plot_kwargs.pop("colors", None)
+        if plot_kwargs.get("levels", None) is None:
+            plot_kwargs.pop("levels", None)
+
+        return style, plot_kwargs
+
+    @contextmanager
+    def _temporary_plot_kwargs_override(self, subplot: ekp.Map):
+        """Temporarily override internal _plot_kwargs to avoid transform issues."""
+        has_attr = hasattr(subplot, "_plot_kwargs")
+        old = getattr(subplot, "_plot_kwargs", None)
+        subplot._plot_kwargs = lambda source: {}
+        try:
+            yield
+        finally:
+            if has_attr:
+                subplot._plot_kwargs = old
+            else:
+                try:
+                    delattr(subplot, "_plot_kwargs")
+                except Exception:
+                    pass
+
     @cached_property
     def _orthographic_tri(self) -> Triangulation:
         """Compute the triangulation for the orthographic projection."""
         x, y, _ = (
-            PROJECTIONS["orthographic"]
+            _PROJECTIONS["orthographic"]
             .transform_points(ccrs.PlateCarree(), self.lon, self.lat)
             .T
         )

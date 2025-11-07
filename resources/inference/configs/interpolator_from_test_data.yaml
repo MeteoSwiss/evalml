@@ -14,7 +14,7 @@ output:
     encoding:
       typeOfGeneratingProcess: 2
     templates:
-      samples: _resources/templates_index_cosmo.yaml
+      samples: resources/templates_index_cosmo.yaml
 
 verbosity: 1
 allow_nans: true

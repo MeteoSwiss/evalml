@@ -70,7 +70,7 @@ def test_wrong_rgb_count(monkeypatch, tmp_path):
 @pytest.mark.parametrize("field, var", colormap_defaults.CMAP_DEFAULTS.items())
 def test_cmap_defaults_smoke(field, var):
     """Smoke test: can we use every entry in CMAP_DEFAULTS to plot data?"""
-    cmap = var["cmap"]
+    cmap = var.get("cmap", None)
     norm = var.get("norm", None)
     vmin = var.get("vmin", None)
     vmax = var.get("vmax", None)

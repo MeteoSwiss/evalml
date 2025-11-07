@@ -10,9 +10,11 @@ def _():
     from argparse import ArgumentParser
     from pathlib import Path
 
+    import cartopy.crs as ccrs
     import earthkit.plots as ekp
     import numpy as np
 
+    from plotting import DOMAINS
     from plotting import StatePlotter
     from plotting.colormap_defaults import CMAP_DEFAULTS
     from plotting.compat import load_state_from_grib
@@ -26,6 +28,8 @@ def _():
         load_state_from_grib,
         logging,
         np,
+        DOMAINS,
+        ccrs,
     )
 
 
@@ -39,8 +43,6 @@ def _(logging):
 
 @app.cell
 def _(ArgumentParser, Path):
-    ROOT = Path(__file__).parent
-
     parser = ArgumentParser()
 
     parser.add_argument(
@@ -50,8 +52,7 @@ def _(ArgumentParser, Path):
     parser.add_argument("--outfn", type=str, help="output filename")
     parser.add_argument("--leadtime", type=str, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
-    parser.add_argument("--projection", type=str, help="projection")
-    parser.add_argument("--region", type=str, default="none", help="region (or 'none')")
+    parser.add_argument("--region", type=str, help="name of region")
 
     args = parser.parse_args()
     grib_dir = Path(args.input)
@@ -59,12 +60,7 @@ def _(ArgumentParser, Path):
     outfn = Path(args.outfn)
     lead_time = args.leadtime
     param = args.param
-    region = (
-        None
-        if (args.region is None or str(args.region).lower() in {"none", "", "null"})
-        else args.region
-    )
-    projection = args.projection
+    region = args.region
     return (
         args,
         grib_dir,
@@ -72,7 +68,6 @@ def _(ArgumentParser, Path):
         lead_time,
         outfn,
         param,
-        projection,
         region,
     )
 
@@ -81,10 +76,10 @@ def _(ArgumentParser, Path):
 def _(grib_dir, init_time, lead_time, load_state_from_grib, param):
     # load grib file
     grib_file = grib_dir / f"{init_time}_{lead_time}.grib"
-    if param == "10sp":
-        paramlist = ["10u", "10v"]
-    elif param == "sp":
-        paramlist = ["u", "v"]
+    if param == "SP_10M":
+        paramlist = ["U_10M", "V_10M"]
+    elif param == "SP":
+        paramlist = ["U", "V"]
     else:
         paramlist = [param]
     state = load_state_from_grib(grib_file, paramlist=paramlist)
@@ -102,12 +97,17 @@ def _(CMAP_DEFAULTS, ekp):
         units = units_override if units_override is not None else cfg.get("units", "")
         return {
             "style": ekp.styles.Style(
-                levels=cfg.get("bounds", None),
+                levels=cfg.get("bounds", cfg.get("levels", None)),
                 extend="both",
                 units=units,
+                colors=cfg.get("colors", None),
             ),
-            "cmap": cfg["cmap"],
             "norm": cfg.get("norm", None),
+            "cmap": cfg.get("cmap", None),
+            "levels": cfg.get("levels", None),
+            "vmin": cfg.get("vmin", None),
+            "vmax": cfg.get("vmax", None),
+            "colors": cfg.get("colors", None),
         }
 
     return (get_style,)
@@ -137,6 +137,13 @@ def _(LOG, np):
             except Exception:
                 return arr * 1.943844
 
+        def _m_to_mm(arr):
+            # robust conversion with pint, fallback if dtype unsupported
+            try:
+                return (_ureg.Quantity(arr, _ureg.meter).to(_ureg.millimeter)).magnitude
+            except Exception:
+                return arr * 1000
+
     except Exception:
         LOG.warning("pint not available; falling back hardcoded conversions")
 
@@ -146,27 +153,32 @@ def _(LOG, np):
         def _ms_to_knots(arr):
             return arr * 1.943844
 
+        def _m_to_mm(arr):
+            return arr * 1000
+
     def preprocess_field(param: str, state: dict):
         """
-        - Temperatures (2t, 2d, t, d): K -> °C
-        - Wind speed at 10m (10sp): m/s -> kn, sqrt(10u^2 + 10v^2)
-        - Wind speed (sp): m/s -> kn, sqrt(u^2 + v^2)
+        - Temperatures: K -> °C
+        - Wind speed: sqrt(u^2 + v^2)
+        - Precipitation: m -> mm
         Returns: (field_array, units_override or None)
         """
         fields = state["fields"]
         # temperature variables
-        if param in ("2t", "2d", "t", "d"):
+        if param in ("T_2M", "TD_2M", "T", "TD"):
             return _k_to_c(fields[param]), "°C"
         # 10m wind speed (allow legacy 'uv' alias)
-        if param == "10sp":
-            u = _ms_to_knots(fields["10u"])
-            v = _ms_to_knots(fields["10v"])
-            return np.sqrt(u**2 + v**2), "kn"
+        if param == "SP_10M":
+            u = fields["U_10M"]
+            v = fields["V_10M"]
+            return np.sqrt(u**2 + v**2), "m/s"
         # wind speed from standard-level components
-        if param == "sp":
-            u = _ms_to_knots(fields["u"])
-            v = _ms_to_knots(fields["v"])
-            return np.sqrt(u**2 + v**2), "kn"
+        if param == "SP":
+            u = fields["U"]
+            v = fields["V"]
+            return np.sqrt(u**2 + v**2), "m/s"
+        if param == "TOT_PREC":
+            return _m_to_mm(fields[param]), "mm"
         # default: passthrough
         return fields[param], None
 
@@ -182,9 +194,10 @@ def _(
     outfn,
     param,
     preprocess_field,
-    projection,
     region,
     state,
+    DOMAINS,
+    ccrs,
 ):
     # plot individual fields
     plotter = StatePlotter(
@@ -195,9 +208,10 @@ def _(
     fig = plotter.init_geoaxes(
         nrows=1,
         ncols=1,
-        projection=projection,
-        region=region,
-        size=(8, 8),
+        projection=DOMAINS[region]["projection"],
+        bbox=DOMAINS[region]["extent"],
+        name=region,
+        size=(6, 6),
     )
     subplot = fig.add_map(row=0, column=0)
 
@@ -205,13 +219,18 @@ def _(
     field, units_override = preprocess_field(param, state)
 
     plotter.plot_field(subplot, field, **get_style(args.param, units_override))
-
+    subplot.ax.add_geometries(
+        state["lam_envelope"],
+        edgecolor="black",
+        facecolor="none",
+        crs=ccrs.PlateCarree(),
+    )
     validtime = state["valid_time"].strftime("%Y%m%d%H%M")
     # leadtime = int(state["lead_time"].total_seconds() // 3600)
 
     fig.title(f"{param}, time: {validtime}")
 
-    fig.save(outfn, bbox_inches="tight", dpi=400)
+    fig.save(outfn, bbox_inches="tight", dpi=200)
     LOG.info(f"saved: {outfn}")
     return
 
