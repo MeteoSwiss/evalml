@@ -2,82 +2,82 @@ runner: time_interpolator
 
 input:
   cutout:
-    lam_0:
-      grib:
-        path: forecaster/20*
-        pre_processors:
-          - extract_mask: "source0/trimedge_mask"
-        namer:
-          rules:
-            - - shortName: T
-              - t_{level}
-            - - shortName: U
-              - u_{level}
-            - - shortName: V
-              - v_{level}
-            - - shortName: W
-              - w_{level}
-            - - shortName: QV
-              - q_{level}
-            - - shortName: FI
-              - z_{level}
-            - - shortName: PMSL
-              - msl
-            - - shortName: FIS
-              - z
-            - - shortName: PS
-              - sp
-            - - shortName: T_2M
-              - 2t
-            - - shortName: TD_2M
-              - 2d
-            - - shortName: T_G
-              - skt
-            - - shortName: U_10M
-              - 10u
-            - - shortName: V_10M
-              - 10v
-            - - shortName: FR_LAND
-              - lsm
-            - - shortName: TOT_PREC
-              - tp
-    global:
-      grib:
-        path: forecaster/ifs*
-        namer:
-          rules:
-            - - shortName: T
-              - t_{level}
-            - - shortName: U
-              - u_{level}
-            - - shortName: V
-              - v_{level}
-            - - shortName: W
-              - w_{level}
-            - - shortName: QV
-              - q_{level}
-            - - shortName: FI
-              - z_{level}
-            - - shortName: PMSL
-              - msl
-            - - shortName: FIS
-              - z
-            - - shortName: PS
-              - sp
-            - - shortName: T_2M
-              - 2t
-            - - shortName: TD_2M
-              - 2d
-            - - shortName: T_G
-              - skt
-            - - shortName: U_10M
-              - 10u
-            - - shortName: V_10M
-              - 10v
-            - - shortName: FR_LAND
-              - lsm
-            - - shortName: TOT_PREC
-              - tp
+    - lam_0:
+        grib:
+          path: forecaster/20*
+          pre_processors:
+            - extract_mask: "source0/trimedge_mask"
+          namer:
+            rules:
+              - - shortName: T
+                - t_{level}
+              - - shortName: U
+                - u_{level}
+              - - shortName: V
+                - v_{level}
+              - - shortName: W
+                - w_{level}
+              - - shortName: QV
+                - q_{level}
+              - - shortName: FI
+                - z_{level}
+              - - shortName: PMSL
+                - msl
+              - - shortName: FIS
+                - z
+              - - shortName: PS
+                - sp
+              - - shortName: T_2M
+                - 2t
+              - - shortName: TD_2M
+                - 2d
+              - - shortName: T_G
+                - skt
+              - - shortName: U_10M
+                - 10u
+              - - shortName: V_10M
+                - 10v
+              - - shortName: FR_LAND
+                - lsm
+              - - shortName: TOT_PREC
+                - tp
+    - global:
+        grib:
+          path: forecaster/ifs*
+          namer:
+            rules:
+              - - shortName: T
+                - t_{level}
+              - - shortName: U
+                - u_{level}
+              - - shortName: V
+                - v_{level}
+              - - shortName: W
+                - w_{level}
+              - - shortName: QV
+                - q_{level}
+              - - shortName: FI
+                - z_{level}
+              - - shortName: PMSL
+                - msl
+              - - shortName: FIS
+                - z
+              - - shortName: PS
+                - sp
+              - - shortName: T_2M
+                - 2t
+              - - shortName: TD_2M
+                - 2d
+              - - shortName: T_G
+                - skt
+              - - shortName: U_10M
+                - 10u
+              - - shortName: V_10M
+                - 10v
+              - - shortName: FR_LAND
+                - lsm
+              - - shortName: TOT_PREC
+                - tp
 
 constant_forcings:
   test:
