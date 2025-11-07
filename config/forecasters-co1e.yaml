@@ -18,7 +18,7 @@ runs:
         gpu: 4
         tasks: 4
       extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference@add-inverse-option-extract
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
 
 baselines:
   - baseline:

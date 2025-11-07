@@ -14,7 +14,7 @@ runs:
       steps: 0/120/6
       config: resources/inference/configs/forecaster_with_global.yaml
       extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference@add-inverse-option-extract
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
 
 baselines:
   - baseline:
