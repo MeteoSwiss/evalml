@@ -261,6 +261,10 @@ class Profile(BaseModel):
     global_resources: GlobalResources
     default_resources: DefaultResources
     jobs: int = Field(..., ge=1, description="Maximum number of parallel jobs.")
+    batch_rules: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Define batches of the same rule that shall be executed within one job submission.",
+    )
 
     def parsable(self) -> Dict[str, str]:
         """Convert the profile to a dictionary of command-line arguments."""
@@ -269,6 +273,15 @@ class Profile(BaseModel):
         out += ["--resources"] + self.global_resources.parsable()
         out += ["--default-resources"] + self.default_resources.parsable()
         out += ["--jobs", str(self.jobs)]
+
+        # Add rule grouping options if specified
+        if self.batch_rules:
+            # Groups: rule=rule
+            groups = [f"{rule}={rule}" for rule in self.batch_rules.keys()]
+            # Group components: rule=<n>
+            components = [f"{rule}={n}" for rule, n in self.batch_rules.items()]
+            out += ["--groups"] + groups
+            out += ["--group-components"] + components
         return out
 
 
