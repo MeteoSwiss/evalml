@@ -12,17 +12,17 @@ def _fallback():
 
 
 _CMAP_DEFAULTS = {
-    "sp": {"cmap": plt.get_cmap("coolwarm", 11), "vmin": 800 * 100, "vmax": 1100 * 100},
-    "2d": load_ncl_colormap("t2m_29lev.ct"),
-    "2t": load_ncl_colormap("t2m_29lev.ct") | {"units": "degC"},
-    "10v": load_ncl_colormap("modified_uv_17lev.ct") | {"units": "m/s"},
-    "10u": load_ncl_colormap("modified_uv_17lev.ct") | {"units": "m/s"},
-    "10si": load_ncl_colormap("modified_uv_17lev.ct") | {"units": "m/s"},
+    "SP": {"cmap": plt.get_cmap("coolwarm", 11), "vmin": 800 * 100, "vmax": 1100 * 100},
+    "TD_2M": load_ncl_colormap("t2m_29lev.ct"),
+    "T_2M": load_ncl_colormap("t2m_29lev.ct") | {"units": "degC"},
+    "V_10M": load_ncl_colormap("modified_uv_17lev.ct") | {"units": "m/s"},
+    "U_10M": load_ncl_colormap("modified_uv_17lev.ct") | {"units": "m/s"},
+    "SP_10M": load_ncl_colormap("modified_uv_17lev.ct") | {"units": "m/s"},
     # "10si": {"cmap": plt.get_cmap("GnBu", 11), "vmin": 0, "vmax": 25},
-    "t_850": {"cmap": plt.get_cmap("inferno", 11), "vmin": 220, "vmax": 310},
-    "z_850": {"cmap": plt.get_cmap("coolwarm", 11), "vmin": 8000, "vmax": 17000},
-    "q_925": load_ncl_colormap("RH_6lev.ct"),
-    "tp": {
+    "T_850": {"cmap": plt.get_cmap("inferno", 11), "vmin": 220, "vmax": 310},
+    "FI_850": {"cmap": plt.get_cmap("coolwarm", 11), "vmin": 8000, "vmax": 17000},
+    "QV_925": load_ncl_colormap("RH_6lev.ct"),
+    "TOT_PREC": {
         "colors": [
             "#ffffff",
             "#04e9e7",

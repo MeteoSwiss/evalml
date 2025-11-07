@@ -18,6 +18,8 @@ rule plot_forecast_frame:
             OUT_ROOT
             / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{region}.png"
         ),
+    wildcard_constraints:
+        leadtime="\d+"  # only digits
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,

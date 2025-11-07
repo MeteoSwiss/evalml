@@ -76,10 +76,10 @@ def _(ArgumentParser, Path):
 def _(grib_dir, init_time, lead_time, load_state_from_grib, param):
     # load grib file
     grib_file = grib_dir / f"{init_time}_{lead_time}.grib"
-    if param == "10si":
-        paramlist = ["10u", "10v"]
-    elif param == "si":
-        paramlist = ["u", "v"]
+    if param == "SP_10M":
+        paramlist = ["U_10M", "V_10M"]
+    elif param == "SP":
+        paramlist = ["U", "V"]
     else:
         paramlist = [param]
     state = load_state_from_grib(grib_file, paramlist=paramlist)
@@ -158,27 +158,27 @@ def _(LOG, np):
 
     def preprocess_field(param: str, state: dict):
         """
-        - Temperatures (2t, 2d, t, d): K -> °C
-        - Wind speed at 10m (10si): m/s -> kn, sqrt(10u^2 + 10v^2)
-        - Wind speed (si): m/s -> kn, sqrt(u^2 + v^2)
+        - Temperatures: K -> °C
+        - Wind speed: sqrt(u^2 + v^2)
+        - Precipitation: m -> mm
         Returns: (field_array, units_override or None)
         """
         fields = state["fields"]
         # temperature variables
-        if param in ("2t", "2d", "t", "d"):
+        if param in ("T_2M", "TD_2M", "T", "TD"):
             return _k_to_c(fields[param]), "°C"
         # 10m wind speed (allow legacy 'uv' alias)
-        if param == "10si":
-            u = fields["10u"]
-            v = fields["10v"]
+        if param == "SP_10M":
+            u = fields["U_10M"]
+            v = fields["V_10M"]
             return np.sqrt(u**2 + v**2), "m/s"
         # wind speed from standard-level components
-        if param == "si":
-            u = fields["u"]
-            v = fields["v"]
+        if param == "SP":
+            u = fields["U"]
+            v = fields["V"]
             return np.sqrt(u**2 + v**2), "m/s"
-        if param == "tp":
-            return _m_to_mm(fields[param]), "mm"  # convert m to mm
+        if param == "TOT_PREC":
+            return _m_to_mm(fields[param]), "mm"
         # default: passthrough
         return fields[param], None
 
