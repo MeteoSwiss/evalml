@@ -23,7 +23,7 @@ rule plot_meteogram:
         runtime="5m",
     shell:
         """
-        export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         python {input.script} \
             --forecast {input.fct_grib}  --analysis {input.analysis_zarr} \
             --date {wildcards.init_time} --outfn {output[0]} \

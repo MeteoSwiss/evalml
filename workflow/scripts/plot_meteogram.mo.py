@@ -286,10 +286,10 @@ def _(pd):
 
 @app.cell
 def load_grib_data(data_source, grib_decoder, grib_dir, init_time, param):
-    if param == "10sp":
-        paramlist = ["10u", "10v"]
-    elif param == "sp":
-        paramlist = ["u", "v"]
+    if param == "SP_10M":
+        paramlist = ["U_10M", "V_10M"]
+    elif param == "SP":
+        paramlist = ["U", "V"]
     else:
         paramlist = [param]
 
