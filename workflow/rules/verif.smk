@@ -12,7 +12,7 @@ include: "common.smk"
 # TODO: make sure the boundaries aren't used
 rule verif_metrics_baseline:
     input:
-        script="workflow/scripts/verif_baseline.py",
+        script="workflow/scripts/verif_single_init.py",
         module="src/verification/__init__.py",
         baseline_zarr=lambda wc: expand(
             "{root}/FCST{year}.zarr",
@@ -36,11 +36,11 @@ rule verif_metrics_baseline:
     shell:
         """
         uv run {input.script} \
+            --forecast {input.baseline_zarr} \
             --analysis_zarr {input.analysis_zarr} \
-            --baseline_zarr {input.baseline_zarr} \
             --reftime {wildcards.init_time} \
             --steps "{params.baseline_steps}" \
-            --baseline_label "{params.baseline_label}" \
+            --label "{params.baseline_label}" \
             --analysis_label "{params.analysis_label}" \
             --regions "{params.regions}" \
             --output {output} > {log} 2>&1
@@ -56,7 +56,7 @@ def _get_no_none(dict, key, replacement):
 
 rule verif_metrics:
     input:
-        script="workflow/scripts/verif_from_grib.py",
+        script="workflow/scripts/verif_single_init.py",
         module="src/verification/__init__.py",
         inference_okfile=rules.execute_inference.output.okfile,
         analysis_zarr=config["analysis"].get("analysis_zarr"),
@@ -82,10 +82,11 @@ rule verif_metrics:
     shell:
         """
         uv run {input.script} \
-            --grib_output_dir {params.grib_out_dir} \
+            --forecast {params.grib_out_dir} \
             --analysis_zarr {input.analysis_zarr} \
+            --reftime {wildcards.init_time} \
             --steps "{params.fcst_steps}" \
-            --fcst_label "{params.fcst_label}" \
+            --label "{params.fcst_label}" \
             --analysis_label "{params.analysis_label}" \
             --regions "{params.regions}" \
             --output {output} > {log} 2>&1
