@@ -85,3 +85,11 @@ rule verif_metrics_plot_all:
             rules.verif_metrics_plot.output,
             experiment=EXPERIMENT_HASH,
         ),
+
+rule verif_obs_all:
+    input:
+        expand(
+            rules.run_mec.output,
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            run_id=collect_all_runs(),
+        )
