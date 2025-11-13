@@ -51,7 +51,8 @@ rule run_mec:
         echo 'running mec on namelist:'
         cat {input.namelist}
         ls {input.testcase_dir}
-        podman pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
+        # Note: pull command currently redundant; may not be the case with sarus.
+        #podman pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
         srun --pty -N1 -c 11 -p postproc -t 2:00:00 podman run --mount=type=bind,source={input.testcase_dir},destination=/src/bin2 --mount=type=bind,source=/oprusers/osm/opr.emme/data/,destination=/oprusers/osm/opr.emme/data/ container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
         ls -l {output}
         """
