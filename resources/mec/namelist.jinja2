@@ -1,0 +1,80 @@
+!==============================================================================
+! namelist for MEC
+!==============================================================================
+
+ !===================
+ ! general parameters
+ !===================
+ &run
+   method         = 'GMESTAT'                     ! Model Equivalent Calculator
+   model          = 'ML'                          ! forecast model. One of "COSMO" "ICON" "ML"
+   input          = './input_mod'                 ! input data path
+   data           = '/oprusers/osm/opr.emme/data/'      ! data path for auxiliary data
+   obsinput       = './input_obs'                 ! observation input data path
+   output         = './output'                    ! output data to working directory
+   time_ana       = 20201028000000                  ! analysis date
+   read_fields    = 'ps u t v q geof t2m td2m u_10m v_10m'
+   grib_edition   = 2
+   grib_library   = 2                             ! GRIB-API used: 1=GRIBEX  2=GRIB2-API
+   cosmo_refatm   = 2                             ! reference atmosphere to be used for COSMO:1or2
+   fc_hours       = 0                                             ! Default is 3h. Has to be set to 0 if one wants to verify +0h leadtime
+   nproc1         = 1
+   nproc2         = 1
+ /
+
+ !===============================
+ ! observation related parameters
+ !===============================
+  &observations
+   !---------------------------------------------------
+   ! read from CDFIN files (if not set use mon/cof/ekf)  
+   !---------------------------------------------------
+   read_cdfin   = F      ! (F): dont read COSMO CDFIN files get obs from ekf
+   vint_lin_t   = T      ! linear vertical interpolation for temperature
+   vint_lin_z   = T      ! linear vertical interpolation for geopotential
+   vint_lin_uv  = T      ! linear vertical interpolation for wind
+   ptop_lapse   = 850.
+   pbot_lapse   = 950.
+!  int_nn       = T      ! horizontal interpolation: nearest neighbor 
+ /
+
+ !====================
+ ! Ensemble parameters
+ !====================
+ &ENKF
+  k_enkf        = 0       ! ensemble size (0 for det. run)
+  det_run       = 1       ! set to 1 for deterministic run, 0 for ensemble
+ /
+
+ !================================
+ ! Verification related parameters
+ !================================
+ &veri_obs
+  obstypes      = "SYNOP"      ! "SYNOP TEMP"
+  fc_times      = 0000,1200,2400,3600,4800,6000,7200,8400,9600,10800,12000  ! forecast lead time at reference (hhmm)
+  prefix_in     = 'ekf'                                                                                                                                                                                           
+  prefix_out    = 'ver'               
+  rm_old        = 2                          ! overwrite entries in verification file ?
+  fc_file       = '_FCR_TIME_/lfffDDVVMMSS'  ! template for forecast file name
+  !det_suffix    = '.m000'   ! for ensemble forecast must be set in order to differentiate between the input model files.
+  time_range    = 1                                                                                                                                                                                               
+  ekf_concat    = F                                                                                                                                                                                               
+  !ekf_rm_ve     =  -2 -7   ! special (<0) member ids to remove 
+  !eps_offset    = 40   ! skip the first members up to this value to which is set. The default is 0
+  !ekf_offset    = 40   ! exclude members in ekf-file up to this value => try setting to 40? => no effect => ask Hendrik?
+  ref_runtype   = 'any'  ! accept any runtype for the reference state
+ /
+
+ &report
+  time_b =   -0029                ! (hhmm, inclusive)
+  time_e =    0030                ! (hhmm, exclusive)
+ /
+
+ &cosmo_obs
+   lcd187             = .true.    ! use ground based wind lidar obs
+   verification_start = -29       ! (min, inclusive)
+   verification_end   =  30       ! (min, inclusive)
+ /
+ &synop_obs
+   version = 1   ! Harald: Für version >= 3 werden konsistent die DACE-internen Kontrollvariablen genutzt, mit ggf. Umrechnung tv,rh <-> t,td etc. DACE-Version mind. 2.22 . Random crashes (T=10000 Umrechnungen failen). Need of no undefs for version=3 
+ /
