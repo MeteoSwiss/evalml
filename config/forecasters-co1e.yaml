@@ -24,7 +24,7 @@ baselines:
   - baseline:
       baseline_id: COSMO-1E
       label: COSMO-1E
-      root: /scratch/mch/bhendj/COSMO-1E
+      root: /store_new/mch/msopr/ml/COSMO-1E
       steps: 0/33/6
 
 analysis:
