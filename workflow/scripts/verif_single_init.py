@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 from verification import verify  # noqa: E402
-from io import (
+from data_input import (
     load_baseline_from_zarr,
     load_analysis_data_from_zarr,
     load_fct_data_from_grib,
@@ -68,7 +68,7 @@ def main(args: ScriptConfig):
             steps=args.steps,
             params=args.params,
         )
-    except ValueError:
+    except (ValueError, KeyError):
         LOG.info("Loading forecasts from GRIB files...")
         fcst = load_fct_data_from_grib(
             grib_output_dir=args.forecast,

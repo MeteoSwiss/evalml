@@ -13,7 +13,7 @@ include: "common.smk"
 rule verif_metrics_baseline:
     input:
         "src/verification/__init__.py",
-        "src/io/__init__.py",
+        "src/data_input/__init__.py",
         script="workflow/scripts/verif_single_init.py",
         baseline_zarr=lambda wc: expand(
             "{root}/FCST{year}.zarr",
@@ -58,7 +58,7 @@ def _get_no_none(dict, key, replacement):
 rule verif_metrics:
     input:
         "src/verification/__init__.py",
-        "src/io/__init__.py",
+        "src/data_input/__init__.py",
         script="workflow/scripts/verif_single_init.py",
         inference_okfile=rules.execute_inference.output.okfile,
         analysis_zarr=config["analysis"].get("analysis_zarr"),

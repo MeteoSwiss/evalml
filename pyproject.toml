@@ -56,5 +56,5 @@ markers = [
 packages = [
   "src/evalml",
   "src/verification",
-  "src/io"
+  "src/data_input"
 ]
