@@ -6,7 +6,11 @@ from pathlib import Path
 
 
 from verification import verify  # noqa: E402
-import io
+from io import (
+    load_baseline_from_zarr,
+    load_analysis_data_from_zarr,
+    load_fct_data_from_grib,
+)  # noqa: E402
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -58,7 +62,7 @@ def main(args: ScriptConfig):
 
     # try to open the baselin as a zarr, and if it fails load from grib
     try:
-        fcst = io.load_baseline_from_zarr(
+        fcst = load_baseline_from_zarr(
             zarr_path=args.forecast,
             reftime=args.reftime,
             steps=args.steps,
@@ -66,7 +70,7 @@ def main(args: ScriptConfig):
         )
     except ValueError:
         LOG.info("Loading forecasts from GRIB files...")
-        fcst = io.load_fct_data_from_grib(
+        fcst = load_fct_data_from_grib(
             grib_output_dir=args.forecast,
             reftime=args.reftime,
             steps=args.steps,
@@ -83,7 +87,7 @@ def main(args: ScriptConfig):
     now = datetime.now()
     if args.analysis_zarr:
         analysis = (
-            io.load_analysis_data_from_zarr(
+            load_analysis_data_from_zarr(
                 analysis_zarr=args.analysis_zarr,
                 times=fcst.time,
                 params=args.params,

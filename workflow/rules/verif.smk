@@ -12,8 +12,9 @@ include: "common.smk"
 # TODO: make sure the boundaries aren't used
 rule verif_metrics_baseline:
     input:
+        "src/verification/__init__.py",
+        "src/io/__init__.py",
         script="workflow/scripts/verif_single_init.py",
-        module="src/verification/__init__.py",
         baseline_zarr=lambda wc: expand(
             "{root}/FCST{year}.zarr",
             root=BASELINE_CONFIGS[wc.baseline_id].get("root"),
@@ -56,8 +57,9 @@ def _get_no_none(dict, key, replacement):
 
 rule verif_metrics:
     input:
+        "src/verification/__init__.py",
+        "src/io/__init__.py",
         script="workflow/scripts/verif_single_init.py",
-        module="src/verification/__init__.py",
         inference_okfile=rules.execute_inference.output.okfile,
         analysis_zarr=config["analysis"].get("analysis_zarr"),
     output:
