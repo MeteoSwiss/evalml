@@ -61,7 +61,7 @@ rule make_forecast_animation:
     output:
         OUT_ROOT / "showcases/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
     params:
-        delay=lambda wc: int(10 * RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
+        delay=lambda wc: 10 * int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
     shell:
         """
         convert -delay {params.delay} -loop 0 {input} {output}
