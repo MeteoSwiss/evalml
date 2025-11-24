@@ -64,7 +64,7 @@ def main(args: ScriptConfig):
     if not args.forecast:
         raise ValueError("--forecast must be provided.")
 
-    if args.forecast.glob("*.grib").is_file():
+    if any(args.forecast.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
         fcst = load_fct_data_from_grib(
             grib_output_dir=args.forecast,
