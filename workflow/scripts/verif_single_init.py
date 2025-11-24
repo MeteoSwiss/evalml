@@ -61,17 +61,21 @@ def main(args: ScriptConfig):
     now = datetime.now()
 
     # try to open the baselin as a zarr, and if it fails load from grib
-    try:
-        fcst = load_baseline_from_zarr(
-            zarr_path=args.forecast,
+    if not args.forecast:
+        raise ValueError("--forecast must be provided.")
+
+    if args.forecast.glob("*.grib").is_file():
+        LOG.info("Loading forecasts from GRIB files...")
+        fcst = load_fct_data_from_grib(
+            grib_output_dir=args.forecast,
             reftime=args.reftime,
             steps=args.steps,
             params=args.params,
         )
-    except (ValueError, KeyError):
-        LOG.info("Loading forecasts from GRIB files...")
-        fcst = load_fct_data_from_grib(
-            grib_output_dir=args.forecast,
+    else:
+        LOG.info("Loading baseline forecasts from zarr dataset...")
+        fcst = load_baseline_from_zarr(
+            zarr_path=args.forecast,
             reftime=args.reftime,
             steps=args.steps,
             params=args.params,
@@ -116,19 +120,19 @@ def main(args: ScriptConfig):
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description="Verify baseline forecast data.")
+    parser = ArgumentParser(description="Verify forecast or baseline data.")
 
     parser.add_argument(
         "--forecast",
         type=Path,
-        # required=True,
+        required=True,
         default="/store_new/mch/msopr/ml/COSMO-E/FCST20.zarr",
         help="Path to the directory containing the grib forecast or to the zarr dataset containing baseline data.",
     )
     parser.add_argument(
         "--analysis_zarr",
         type=Path,
-        # required=True,
+        required=True,
         default="/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr",
         help="Path to the zarr dataset containing analysis data.",
     )
