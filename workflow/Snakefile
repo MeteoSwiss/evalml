@@ -86,7 +86,7 @@ rule verif_metrics_plot_all:
             experiment=EXPERIMENT_HASH,
         ),
 
-# To run:  snakemake --cores 1 --configfile=config/recasters.yaml verif_obs_all
+# To run:  snakemake --cores 1 --configfile=config/forecasters.yaml verif_obs_all
 rule verif_obs_all:
     input:
         expand(
