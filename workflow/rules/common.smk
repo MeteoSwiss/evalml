@@ -13,12 +13,22 @@ def short_hash_config():
     """Generate a short hash of the configuration file."""
     configs_to_hash = []
     for run_id, run_config in RUN_CONFIGS.items():
-        with open(run_config["config"], "r") as f:
-            configs_to_hash.append(yaml.safe_load(f))
-        if "forecaster" in run_config and run_config["forecaster"] is not None:
-            with open(run_config["forecaster"]["config"], "r") as f:
-                configs_to_hash.append(yaml.safe_load(f))
-    cfg_str = json.dumps([config, *configs_to_hash], sort_keys=True)
+        configs_to_hash.append(config_list(run_config))
+    return hash_config_list(configs_to_hash)
+
+
+def config_list(run_config):
+    config_list = []
+    with open(run_config["config"], "r") as f:
+        config_list.append(yaml.safe_load(f))
+    if "forecaster" in run_config and run_config["forecaster"] is not None:
+        with open(run_config["forecaster"]["config"], "r") as f:
+            config_list.append(yaml.safe_load(f))
+    return config_list
+
+
+def hash_config_list(config_list):
+    cfg_str = json.dumps([config, *config_list], sort_keys=True)
     return hashlib.sha256(cfg_str.encode()).hexdigest()[:8]
 
 
