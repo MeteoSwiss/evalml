@@ -52,7 +52,8 @@ rule create_inference_venv:
     shell:
         """(
         PROJECT_ROOT=$(dirname {input.pyproject})
-        uv venv --project $PROJECT_ROOT --relocatable --link-mode=copy {output.venv}
+        uv venv --project $PROJECT_ROOT --managed-python \
+            --relocatable --link-mode=copy {output.venv}
         source {output.venv}/bin/activate
         cd $(dirname {input.pyproject})
         uv sync
