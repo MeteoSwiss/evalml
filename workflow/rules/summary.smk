@@ -2,7 +2,9 @@
 # CREATE A SUMMARY                                      #
 # ----------------------------------------------------- #
 
+
 include: "common.smk"
+
 
 from pprint import pprint
 
@@ -14,7 +16,7 @@ rule write_summary:
     input:
         configfile=lambda wc: workflow.configfiles[0],
     output:
-        OUT_ROOT / "data/runs/{run_id}/summary.md"
+        OUT_ROOT / "data/runs/{run_id}/summary.md",
     run:
         import yaml
         from datetime import datetime

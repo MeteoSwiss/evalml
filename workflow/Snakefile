@@ -18,6 +18,7 @@ include: "rules/report.smk"
 include: "rules/plot.smk"
 include: "rules/summary.smk"
 
+
 # optional messages, log and error handling
 # -----------------------------------------------------
 onstart:
@@ -45,7 +46,7 @@ rule experiment_all:
         expand(
             OUT_ROOT / "data/runs/{run_id}/summary.md",
             run_id=collect_all_candidates(),
-        )
+        ),
 
 
 rule showcase_all:
