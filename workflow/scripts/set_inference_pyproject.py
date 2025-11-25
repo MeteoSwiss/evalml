@@ -405,6 +405,11 @@ def get_mlflow_id(run_config: dict, run_id: str) -> str:
     return all_ids[run_id]
 
 
+def strip_last_segment(s):
+    parts = s.split("-")
+    return s if len(parts) == 1 else "-".join(parts[:-1])
+
+
 def main(snakemake) -> None:
     """Main entry point for the script.
 
@@ -413,7 +418,7 @@ def main(snakemake) -> None:
     """
     mlflow_uri = snakemake.config["locations"]["mlflow_uri"]
     run_id = snakemake.wildcards["run_id"]
-    mlflow_id = get_mlflow_id(snakemake.config["runs"], run_id)
+    mlflow_id = get_mlflow_id(snakemake.config["runs"], strip_last_segment(run_id))
     logger.info("Using MLflow ID %s for run ID %s", mlflow_id, run_id)
     requirements_path_in = Path(snakemake.input[0])
     toml_path_out = Path(snakemake.output[0])

@@ -90,15 +90,18 @@ def collect_all_runs():
 
         if model_type == "interpolator":
             if "forecaster" not in run_config or run_config["forecaster"] is None:
-                tail_id = "ana"
+                fcst_id = "ana"
             else:
-                tail_id = run_config["forecaster"]["mlflow_id"][0:4]
+                fcst_id = run_config["forecaster"]["mlflow_id"][0:4]
                 # Ensure a proper 'forecaster' entry exists with model_type
                 fore_cfg = copy.deepcopy(run_config["forecaster"])
                 fore_cfg["model_type"] = "forecaster"
                 fore_cfg["is_candidate"] = False  # exclude from outputs
-                runs[tail_id] = fore_cfg
-            run_id = f"{run_id}-{tail_id}"
+                runs[fcst_id] = fore_cfg
+            run_id = f"{run_id}-{fcst_id}"
+
+        # add the hash of the config to the run id
+        run_id = f"{run_id}-{hash_config_list(config_list(run_config))}"
 
         # Register this (possibly composite) run inside the loop
         runs[run_id] = run_config
