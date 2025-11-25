@@ -86,13 +86,13 @@ def collect_all_runs():
         run_config = run_entry[model_type]
         run_config["model_type"] = model_type
         run_config["is_candidate"] = True
-        run_id = run_config["mlflow_id"][0:9]
+        run_id = run_config["mlflow_id"][0:4]
 
         if model_type == "interpolator":
             if "forecaster" not in run_config or run_config["forecaster"] is None:
-                tail_id = "analysis"
+                tail_id = "ana"
             else:
-                tail_id = run_config["forecaster"]["mlflow_id"][0:9]
+                tail_id = run_config["forecaster"]["mlflow_id"][0:4]
                 # Ensure a proper 'forecaster' entry exists with model_type
                 fore_cfg = copy.deepcopy(run_config["forecaster"])
                 fore_cfg["model_type"] = "forecaster"
