@@ -60,6 +60,10 @@ rule showcase_all:
             param=["TOT_PREC", "T_2M", "SP_10M"],
             region=["globe", "europe", "switzerland"],
         ),
+        expand(
+            OUT_ROOT / "data/runs/{run_id}/summary.md",
+            run_id=collect_all_candidates(),
+        ),
 
 
 rule sandbox_all:
