@@ -85,7 +85,6 @@ def collect_all_runs():
         model_type = next(iter(run_entry))
         run_config = run_entry[model_type]
         run_config["model_type"] = model_type
-        run_config["is_candidate"] = True
         run_id = run_config["mlflow_id"][0:4]
 
         if model_type == "interpolator":
@@ -96,13 +95,19 @@ def collect_all_runs():
                 # Ensure a proper 'forecaster' entry exists with model_type
                 fore_cfg = copy.deepcopy(run_config["forecaster"])
                 fore_cfg["model_type"] = "forecaster"
+                # make sure we don't hash the is_candidate status
+                fore_id = hash_config_list(config_list(fore_cfg))
                 fore_cfg["is_candidate"] = False  # exclude from outputs
-                runs[fcst_id] = fore_cfg
+                runs[f"{fcst_id}-{fore_id}"] = fore_cfg
+                # add run_id of forecaster to interpolator config
+                run_config["forecaster"]["run_id"] = f"{fcst_id}-{fore_id}"
             run_id = f"{run_id}-{fcst_id}"
 
         # add the hash of the config to the run id
         run_id = f"{run_id}-{hash_config_list(config_list(run_config))}"
 
+        # make sure we don't hash the is_candidate status
+        run_config["is_candidate"] = True
         # Register this (possibly composite) run inside the loop
         runs[run_id] = run_config
     return runs

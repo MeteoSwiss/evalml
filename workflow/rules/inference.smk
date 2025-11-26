@@ -171,7 +171,7 @@ rule prepare_inference_forecaster:
 
 def _get_forecaster_run_id(run_id):
     """Get the forecaster run ID from the RUN_CONFIGS."""
-    return RUN_CONFIGS[run_id]["forecaster"]["mlflow_id"][0:4]
+    return RUN_CONFIGS[run_id]["forecaster"]["run_id"]
 
 
 rule prepare_inference_interpolator:
