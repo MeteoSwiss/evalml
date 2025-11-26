@@ -9,6 +9,33 @@ include: "common.smk"
 import pandas as pd
 
 
+rule plot_meteogram:
+    input:
+        script="workflow/scripts/plot_meteogram.mo.py",
+        fct_grib=rules.inference_routing.output[0],
+        analysis_zarr=config["analysis"].get("analysis_zarr"),
+    output:
+        OUT_ROOT / "showcases/{run_id}/meteograms/{init_time}_{param}_{sta}.png",
+    # localrule: True
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=1,
+        runtime="5m",
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        python {input.script} \
+            --forecast {input.fct_grib}  --analysis {input.analysis_zarr} \
+            --date {wildcards.init_time} --outfn {output[0]} \
+            --param {wildcards.param}  --station {wildcards.sta}
+        # interactive editing (needs to set localrule: True and use only one core)
+        # marimo edit {input.script} -- \
+        #     --forecast {input.fct_grib}  --analysis {input.analysis_zarr} \
+        #     --date {wildcards.init_time} --outfn {output[0]} \
+        #     --param {wildcards.param}  --station {wildcards.sta}
+        """
+
+
 rule plot_forecast_frame:
     input:
         script="workflow/scripts/plot_forecast_frame.mo.py",
