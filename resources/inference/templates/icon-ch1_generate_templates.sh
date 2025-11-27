@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script to generate GRIB templates for COSMO-1E analysis (KENDA-1)
+# Script to generate GRIB templates for ICON-CH1 model data
 
 # note: data at these paths might be remove in the future
 ANA_SAMPLE=/store_new/mch/msopr/osm/KENDA-CH1/ANA25/det/iaf2025010100
