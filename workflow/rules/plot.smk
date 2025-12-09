@@ -46,7 +46,7 @@ def get_leadtimes(wc):
     start, end, step = map(int, RUN_CONFIGS[wc.run_id]["steps"].split("/"))
     # skip lead time 0 for diagnostic variables
     if wc.param in ["tp", "TOT_PREC"]:  # TODO: make this more general
-        start += step  
+        start += step
     return [f"{i:03}" for i in range(start, end + 1, step)]
 
 
