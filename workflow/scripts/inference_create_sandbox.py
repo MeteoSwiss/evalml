@@ -45,10 +45,10 @@ class ConfigModule(SandboxModule):
             raise ValueError(f"Missing [tool.anemoi] in {self.pyproject}")
 
         self.run_mlflow_link: Optional[str] = tool_cfg.get("run_mlflow_link")
-        checkpoints = tool_cfg.get("checkpoints_path")
+        checkpoints = tool_cfg.get("checkpoint_path")
         if not checkpoints:
-            raise ValueError("'checkpoints_path' not defined in [tool.anemoi] section")
-        self.checkpoint_path = Path(checkpoints) / "inference-last.ckpt"
+            raise ValueError("'checkpoint_path' not defined in [tool.anemoi] section")
+        self.checkpoint_path = Path(checkpoints).resolve()
         super().__init__(work_dir / "config", strict)
 
     def prepare(self) -> Dict[str, Path]:

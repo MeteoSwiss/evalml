@@ -16,19 +16,29 @@ rule create_inference_pyproject:
     config file.
     """
     input:
-        toml="workflow/envs/anemoi_inference.toml",
+        template="workflow/envs/anemoi_inference.toml",
     output:
         pyproject=OUT_ROOT / "data/runs/{run_id}/pyproject.toml",
     params:
-        extra_dependencies=lambda wc: RUN_CONFIGS[wc.run_id].get(
-            "extra_dependencies", []
+        extra_dependencies=lambda wc: ",".join(
+            RUN_CONFIGS[wc.run_id].get("extra_dependencies", [])
         ),
+        mlflow_uri=",".join(config["locations"]["mlflow_uri"]),
         mlflow_id=lambda wc: RUN_CONFIGS[wc.run_id].get("mlflow_id"),
     log:
         OUT_ROOT / "logs/create_inference_pyproject/{run_id}.log",
     localrule: True
-    script:
-        "../scripts/set_inference_pyproject.py"
+    shell:
+        """
+        set -euo pipefail
+        python workflow/scripts/inference_get_requirements.py \
+            --mlflow_uri {params.mlflow_uri} \
+            --mlflow_id {params.mlflow_id} \
+            --pyproject_template {input.template} \
+            --pyproject_out {output.pyproject} \
+            --extra_dependencies {params.extra_dependencies} \
+             > {log} 2>&1
+        """
 
 
 rule create_inference_venv:
@@ -155,8 +165,8 @@ rule prepare_inference_forecaster:
             OUT_ROOT / "logs/prepare_inference_forecaster/{run_id}-{init_time}.ok"
         ),
     params:
-        checkpoints_path=parse_input(
-            input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
+        checkpoint_path=parse_input(
+            input.pyproject, parse_toml, key="tool.anemoi.checkpoint_path"
         ),
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
@@ -198,8 +208,8 @@ rule prepare_inference_interpolator:
             OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.ok"
         ),
     params:
-        checkpoints_path=parse_input(
-            input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
+        checkpoint_path=parse_input(
+            input.pyproject, parse_toml, key="tool.anemoi.checkpoint_path"
         ),
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),

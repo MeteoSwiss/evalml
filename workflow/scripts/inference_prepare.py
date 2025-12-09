@@ -124,7 +124,7 @@ def prepare_forecaster(smk):
 # TODO: just pass a dictionary of config overrides to the rule's params
 def _overrides_from_params(smk) -> dict:
     return {
-        "checkpoint": f"{smk.params.checkpoints_path}/inference-last.ckpt",
+        "checkpoint": f"{smk.params.checkpoint_path}",
         "date": smk.params.reftime_to_iso,
         "lead_time": smk.params.lead_time,
     }
