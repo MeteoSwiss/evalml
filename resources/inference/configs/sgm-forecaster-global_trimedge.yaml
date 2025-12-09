@@ -1,0 +1,43 @@
+write_initial_state: true
+allow_nans: true
+
+patch_metadata:
+  dataset:
+    constant_fields: [z, lsm]
+
+input:
+  test:
+    use_original_paths: true
+
+constant_forcings:
+  test:
+    use_original_paths: true
+
+output:
+  tee:
+    - grib:
+        path: grib/{dateTime}_{step:03}.grib
+        encoding:
+          typeOfGeneratingProcess: 2
+        templates:
+            samples: resources/templates_index_cosmo.yaml
+        post_processors:
+          - extract_mask: # removes global points
+              mask: "lam_0/cutout_mask"
+              as_slice: true
+          - assign_mask:  # fill boundary "trimmed" points with nan
+              mask: "source0/trimedge_mask"
+
+    - grib:
+        path: grib/ifs-{dateTime}_{step:03}.grib
+        encoding:
+          typeOfGeneratingProcess: 2
+        templates:
+          samples: resources/templates_index_ifs.yaml
+        post_processors:
+          - extract_mask: # removes lam points
+              mask: "lam_0/cutout_mask"
+              as_slice: true
+              inverse: true
+          - assign_mask: # fill local/global overlapping points with nan
+              mask: "global/cutout_mask"
