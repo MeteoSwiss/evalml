@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List, Any
 
-from pydantic import BaseModel, Field, RootModel, HttpUrl
+from pydantic import BaseModel, Field, RootModel, HttpUrl, field_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -70,9 +70,15 @@ class RunConfig(BaseModel):
         None,
         description="The label for the run that will be used in experiment results such as reports and figures.",
     )
-    steps: str | None = Field(
-        None,
-        description="Forecast steps to be used from interpolator, e.g. '0/126/6'.",
+    steps: str = Field(
+        ...,
+        description=(
+            "Forecast lead times in hours, formatted as 'start/end/step'. "
+            "The range includes the start lead time and continues with the given step "
+            "until reaching or exceeding the end lead time. "
+            "Example: '0/120/6' for lead times every 6 hours up to 120 h, "
+            "or '0/33/6' up to 30 h."
+        ),
     )
     extra_dependencies: List[str] = Field(
         default_factory=list,
@@ -85,6 +91,27 @@ class RunConfig(BaseModel):
     )
 
     config: Dict[str, Any] | str
+
+    @field_validator("steps")
+    def validate_steps(cls, v: str) -> str:
+        if "/" not in v:
+            raise ValueError(
+                f"Steps must follow the format 'start/stop/step', got '{v}'"
+            )
+        parts = v.split("/")
+        if len(parts) != 3:
+            raise ValueError("Steps must be formatted as 'start/end/step'.")
+        try:
+            start, end, step = map(int, parts)
+        except ValueError:
+            raise ValueError("Start, end, and step must be integers.")
+        if start > end:
+            raise ValueError(
+                f"Start ({start}) must be less than or equal to end ({end})."
+            )
+        if step <= 0:
+            raise ValueError(f"Step ({step}) must be a positive integer.")
+        return v
 
 
 class ForecasterConfig(RunConfig):
@@ -178,6 +205,19 @@ class Locations(BaseModel):
     )
 
 
+class Stratification(BaseModel):
+    """Stratification settings for the analysis."""
+
+    regions: List[str] = Field(
+        ...,
+        description="List of region names for stratification.",
+    )
+    root: str = Field(
+        ...,
+        description="Root directory where the region shapefiles are stored.",
+    )
+
+
 class DefaultResources(BaseModel):
     """Default resource settings for job execution."""
 
@@ -221,6 +261,10 @@ class Profile(BaseModel):
     global_resources: GlobalResources
     default_resources: DefaultResources
     jobs: int = Field(..., ge=1, description="Maximum number of parallel jobs.")
+    batch_rules: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Define batches of the same rule that shall be executed within one job submission.",
+    )
 
     def parsable(self) -> Dict[str, str]:
         """Convert the profile to a dictionary of command-line arguments."""
@@ -229,6 +273,15 @@ class Profile(BaseModel):
         out += ["--resources"] + self.global_resources.parsable()
         out += ["--default-resources"] + self.default_resources.parsable()
         out += ["--jobs", str(self.jobs)]
+
+        # Add rule grouping options if specified
+        if self.batch_rules:
+            # Groups: rule=rule
+            groups = [f"{rule}={rule}" for rule in self.batch_rules.keys()]
+            # Group components: rule=<n>
+            components = [f"{rule}={n}" for rule, n in self.batch_rules.items()]
+            out += ["--groups"] + groups
+            out += ["--group-components"] + components
         return out
 
 
@@ -240,9 +293,6 @@ class ConfigModel(BaseModel):
         description="Description of the experiment, e.g. 'Hindcast of the 2023 season.'",
     )
     dates: Dates | ExplicitDates
-    lead_time: str = Field(
-        ..., description="Forecast length, e.g. '120h'", pattern=r"^\d+[hmd]$"
-    )
     runs: List[ForecasterItem | InterpolatorItem] = Field(
         ...,
         description="Dictionary of runs to execute, with run IDs as keys and configurations as values.",
@@ -252,6 +302,7 @@ class ConfigModel(BaseModel):
         description="Dictionary of baselines to include in the verification.",
     )
     analysis: AnalysisConfig
+    stratification: Stratification
     locations: Locations
     profile: Profile
 

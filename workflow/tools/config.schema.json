@@ -167,17 +167,9 @@
           "title": "Label"
         },
         "steps": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Forecast steps to be used from interpolator, e.g. '0/126/6'.",
-          "title": "Steps"
+          "description": "Forecast lead times in hours, formatted as 'start/end/step'. The range includes the start lead time and continues with the given step until reaching or exceeding the end lead time. Example: '0/120/6' for lead times every 6 hours up to 120 h, or '0/33/6' up to 30 h.",
+          "title": "Steps",
+          "type": "string"
         },
         "extra_dependencies": {
           "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
@@ -214,7 +206,8 @@
         }
       },
       "required": [
-        "mlflow_id"
+        "mlflow_id",
+        "steps"
       ],
       "title": "ForecasterConfig",
       "type": "object"
@@ -355,17 +348,9 @@
           "title": "Label"
         },
         "steps": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Forecast steps to be used from interpolator, e.g. '0/126/6'.",
-          "title": "Steps"
+          "description": "Forecast lead times in hours, formatted as 'start/end/step'. The range includes the start lead time and continues with the given step until reaching or exceeding the end lead time. Example: '0/120/6' for lead times every 6 hours up to 120 h, or '0/33/6' up to 30 h.",
+          "title": "Steps",
+          "type": "string"
         },
         "extra_dependencies": {
           "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
@@ -414,7 +399,8 @@
         }
       },
       "required": [
-        "mlflow_id"
+        "mlflow_id",
+        "steps"
       ],
       "title": "InterpolatorConfig",
       "type": "object"
@@ -478,6 +464,14 @@
           "minimum": 1,
           "title": "Jobs",
           "type": "integer"
+        },
+        "batch_rules": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Define batches of the same rule that shall be executed within one job submission.",
+          "title": "Batch Rules",
+          "type": "object"
         }
       },
       "required": [
@@ -487,6 +481,30 @@
         "jobs"
       ],
       "title": "Profile",
+      "type": "object"
+    },
+    "Stratification": {
+      "description": "Stratification settings for the analysis.",
+      "properties": {
+        "regions": {
+          "description": "List of region names for stratification.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Regions",
+          "type": "array"
+        },
+        "root": {
+          "description": "Root directory where the region shapefiles are stored.",
+          "title": "Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "regions",
+        "root"
+      ],
+      "title": "Stratification",
       "type": "object"
     }
   },
@@ -508,12 +526,6 @@
         }
       ],
       "title": "Dates"
-    },
-    "lead_time": {
-      "description": "Forecast length, e.g. '120h'",
-      "pattern": "^\\d+[hmd]$",
-      "title": "Lead Time",
-      "type": "string"
     },
     "runs": {
       "description": "Dictionary of runs to execute, with run IDs as keys and configurations as values.",
@@ -541,6 +553,9 @@
     "analysis": {
       "$ref": "#/$defs/AnalysisConfig"
     },
+    "stratification": {
+      "$ref": "#/$defs/Stratification"
+    },
     "locations": {
       "$ref": "#/$defs/Locations"
     },
@@ -551,10 +566,10 @@
   "required": [
     "description",
     "dates",
-    "lead_time",
     "runs",
     "baselines",
     "analysis",
+    "stratification",
     "locations",
     "profile"
   ],

@@ -12,8 +12,9 @@ include: "common.smk"
 # TODO: make sure the boundaries aren't used
 rule verif_metrics_baseline:
     input:
-        script="workflow/scripts/verif_baseline.py",
-        module="src/verification/__init__.py",
+        "src/verification/__init__.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/verif_single_init.py",
         baseline_zarr=lambda wc: expand(
             "{root}/FCST{year}.zarr",
             root=BASELINE_CONFIGS[wc.baseline_id].get("root"),
@@ -22,8 +23,9 @@ rule verif_metrics_baseline:
         analysis_zarr=config["analysis"].get("analysis_zarr"),
     params:
         baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
-        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("steps"),
+        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         analysis_label=config["analysis"].get("label"),
+        regions=REGION_TXT,
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
     log:
@@ -35,12 +37,13 @@ rule verif_metrics_baseline:
     shell:
         """
         uv run {input.script} \
+            --forecast {input.baseline_zarr} \
             --analysis_zarr {input.analysis_zarr} \
-            --baseline_zarr {input.baseline_zarr} \
             --reftime {wildcards.init_time} \
-            --lead_time "{params.baseline_steps}" \
-            --baseline_label "{params.baseline_label}" \
+            --steps "{params.baseline_steps}" \
+            --label "{params.baseline_label}" \
             --analysis_label "{params.analysis_label}" \
+            --regions "{params.regions}" \
             --output {output} > {log} 2>&1
         """
 
@@ -54,10 +57,10 @@ def _get_no_none(dict, key, replacement):
 
 rule verif_metrics:
     input:
-        script="workflow/scripts/verif_from_grib.py",
-        module="src/verification/__init__.py",
-        inference_okfile=_inference_routing_fn,
-        grib_output=rules.inference_routing.output[0],
+        "src/verification/__init__.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/verif_single_init.py",
+        inference_okfile=rules.execute_inference.output.okfile,
         analysis_zarr=config["analysis"].get("analysis_zarr"),
     output:
         OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.nc",
@@ -66,8 +69,12 @@ rule verif_metrics:
     # TODO: implement logic to use experiment name instead of run_id as wildcard
     params:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
-        fcst_steps=lambda wc: _get_no_none(RUN_CONFIGS[wc.run_id], "steps", "0/126/6"),
+        fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         analysis_label=config["analysis"].get("label"),
+        regions=REGION_TXT,
+        grib_out_dir=lambda wc: (
+            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
+        ).resolve(),
     log:
         OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",
     resources:
@@ -77,11 +84,13 @@ rule verif_metrics:
     shell:
         """
         uv run {input.script} \
-            --grib_output_dir {input.grib_output} \
+            --forecast {params.grib_out_dir} \
             --analysis_zarr {input.analysis_zarr} \
-            --lead_time "{params.fcst_steps}" \
-            --fcst_label "{params.fcst_label}" \
+            --reftime {wildcards.init_time} \
+            --steps "{params.fcst_steps}" \
+            --label "{params.fcst_label}" \
             --analysis_label "{params.analysis_label}" \
+            --regions "{params.regions}" \
             --output {output} > {log} 2>&1
         """
 

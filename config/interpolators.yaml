@@ -1,59 +1,64 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Stretched interpolator vs LAM interpolator.
+  Evaluate skill of SGM interpolator (M-2 interpolator).
 
 dates:
   start: 2020-01-01T12:00
   end: 2020-01-10T00:00
-  frequency: 54h
-
-lead_time: 120h
+  frequency: 60h
 
 runs:
   - interpolator:
-      mlflow_id: 9c18b90074214d769b8b383722fc5a06
-      label: LAM Interpolator (COSMO-E analysis)
-      steps: 0/121/1
-      config: resources/inference/configs/interpolator_from_test_data.yaml
+      mlflow_id: 8d1e0410ca7d4f74b368b3079878259a
+      label: M-2 interpolator (KENDA)
+      steps: 0/120/1
+      config: resources/inference/configs/interpolator_from_test_data_stretched.yaml
       forecaster: null
       extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
   - interpolator:
-      mlflow_id: 9c18b90074214d769b8b383722fc5a06
-      label: LAM Interpolator (M-1 forecaster)
-      steps: 0/121/1
-      forecaster:
-        mlflow_id: d0846032fc7248a58b089cbe8fa4c511
-        config: resources/inference/configs/forecaster_with_global.yaml
-      extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
-        - torch-geometric==2.6.1
-        - anemoi-graphs==0.5.2
-  - interpolator:
-      mlflow_id: 07c3d9698db14d859b78bb712a65bbbf
-      label: SGM Interpolator (M-1 forecaster)
-      steps: 0/121/1
+      mlflow_id: 8d1e0410ca7d4f74b368b3079878259a
+      label: M-2 interpolator (M-1 forecaster)
+      steps: 0/120/1
       config: resources/inference/configs/interpolator_stretched.yaml
       forecaster:
         mlflow_id: d0846032fc7248a58b089cbe8fa4c511
         config: resources/inference/configs/forecaster_with_global.yaml
+        steps: 0/120/6
       extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference@fix/interp_files
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
+  - forecaster:
+      mlflow_id: d0846032fc7248a58b089cbe8fa4c511
+      label: M-1 forecaster
+      config: resources/inference/configs/forecaster_with_global.yaml
+      steps: 0/120/6
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
 
 baselines:
   - baseline:
       baseline_id: COSMO-E-1h
       label: COSMO-E
-      root: /scratch/mch/bhendj/COSMO-E
-      steps: 0/121/1
+      root: /store_new/mch/msopr/ml/COSMO-E_hourly
+      steps: 0/120/1
 
 analysis:
   label: COSMO KENDA
   analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-1h-v3-pl13.zarr
+
+stratification:
+  regions:
+    - jura
+    - mittelland
+    - voralpen
+    - alpennordhang
+    - innerealpentaeler
+    - alpensuedseite
+  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
 
 locations:
   output_root: output/
@@ -65,7 +70,7 @@ locations:
 profile:
   executor: slurm
   global_resources:
-    gpus: 15
+    gpus: 16
   default_resources:
     slurm_partition: "postproc"
     cpus_per_task: 1
