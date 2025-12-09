@@ -12,10 +12,10 @@ runs:
       mlflow_id: 8d1e0410ca7d4f74b368b3079878259a
       label: M-2 interpolator
       steps: 0/120/1
-      config: resources/inference/configs/interpolator_stretched_with_global.yaml
+      config: resources/inference/configs/sgm-interpolator-global_trimedge.yaml
       forecaster:
         mlflow_id: d0846032fc7248a58b089cbe8fa4c511
-        config: resources/inference/configs/forecaster_with_global.yaml
+        config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
         steps: 0/120/6
         extra_dependencies:
           - git+https://github.com/ecmwf/anemoi-inference.git@main
@@ -63,4 +63,4 @@ profile:
     gpus: 0
   jobs: 50
   batch_rules:
-    plot_forecast_frame: 32
+    plot_forecast_frame: 24
