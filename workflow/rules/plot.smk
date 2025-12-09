@@ -44,8 +44,9 @@ rule plot_forecast_frame:
 def get_leadtimes(wc):
     """Get all lead times from the run config."""
     start, end, step = map(int, RUN_CONFIGS[wc.run_id]["steps"].split("/"))
-    if wc.param == "tp":
-        start += step  # skip lead time 0 for precipitation
+    # skip lead time 0 for diagnostic variables
+    if wc.param in ["tp", "TOT_PREC"]:  # TODO: make this more general
+        start += step  
     return [f"{i:03}" for i in range(start, end + 1, step)]
 
 
