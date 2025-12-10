@@ -13,22 +13,18 @@ def short_hash_config():
     """Generate a short hash of the configuration file."""
     configs_to_hash = []
     for run_id, run_config in RUN_CONFIGS.items():
-        configs_to_hash.append(config_list(run_config))
-    return hash_config_list(configs_to_hash)
+        with open(run_config["config"], "r") as f:
+            configs_to_hash.append(yaml.safe_load(f))
+        if "forecaster" in run_config and run_config["forecaster"] is not None:
+            with open(run_config["forecaster"]["config"], "r") as f:
+                configs_to_hash.append(yaml.safe_load(f))
+    cfg_str = json.dumps([config, *configs_to_hash], sort_keys=True)
+    return hashlib.sha256(cfg_str.encode()).hexdigest()[:8]
 
 
-def config_list(run_config):
-    config_list = []
-    with open(run_config["config"], "r") as f:
-        config_list.append(yaml.safe_load(f))
-    if "forecaster" in run_config and run_config["forecaster"] is not None:
-        with open(run_config["forecaster"]["config"], "r") as f:
-            config_list.append(yaml.safe_load(f))
-    return config_list
-
-
-def hash_config_list(config_list):
-    cfg_str = json.dumps([config, *config_list], sort_keys=True)
+def short_hash_runconfig(run_config):
+    """Generate a short hash of the run block in the config file."""
+    cfg_str = json.dumps(run_config, sort_keys=True)
     return hashlib.sha256(cfg_str.encode()).hexdigest()[:8]
 
 
@@ -96,7 +92,7 @@ def collect_all_runs():
                 fore_cfg = copy.deepcopy(run_config["forecaster"])
                 fore_cfg["model_type"] = "forecaster"
                 # make sure we don't hash the is_candidate status
-                fore_id = hash_config_list(config_list(fore_cfg))
+                fore_id = short_hash_runconfig(fore_cfg)
                 fore_cfg["is_candidate"] = False  # exclude from outputs
                 runs[f"{fcst_id}-{fore_id}"] = fore_cfg
                 # add run_id of forecaster to interpolator config
@@ -104,7 +100,7 @@ def collect_all_runs():
             run_id = f"{run_id}-{fcst_id}"
 
         # add the hash of the config to the run id
-        run_id = f"{run_id}-{hash_config_list(config_list(run_config))}"
+        run_id = f"{run_id}-{short_hash_runconfig(run_config)}"
 
         # make sure we don't hash the is_candidate status
         run_config["is_candidate"] = True
