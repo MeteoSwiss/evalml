@@ -33,35 +33,26 @@ OTHER_DEPENDENCIES = [
     "torch-geometric",
 ]
 
+# NOTE: the order matters! First look for ECMWF repos, then MeteoSwiss ones
 _GIT_DEPENDENCIES_CONFIG = {
     "anemoi-models": {
-        "meteoswiss": {
-            "url": "https://github.com/MeteoSwiss/anemoi-core.git",
-            "subdirectory": "models",
-        },
         "ecmwf": {
             "url": "https://github.com/ecmwf/anemoi-core.git",
+            "subdirectory": "models",
+        },
+        "meteoswiss": {
+            "url": "https://github.com/MeteoSwiss/anemoi-core.git",
             "subdirectory": "models",
         },
     },
     "anemoi-graphs": {
-        "meteoswiss": {
-            "url": "https://github.com/MeteoSwiss/anemoi-core.git",
-            "subdirectory": "graphs",
-        },
         "ecmwf": {
             "url": "https://github.com/ecmwf/anemoi-core.git",
             "subdirectory": "graphs",
         },
-    },
-    "anemoi-training": {
         "meteoswiss": {
             "url": "https://github.com/MeteoSwiss/anemoi-core.git",
-            "subdirectory": "training",
-        },
-        "ecmwf": {
-            "url": "https://github.com/ecmwf/anemoi-core.git",
-            "subdirectory": "training",
+            "subdirectory": "graphs",
         },
     },
     "anemoi-datasets": {
@@ -390,7 +381,7 @@ def get_mlflow_id(run_config: dict, run_id: str) -> str:
     for run_entry in run_config:
         for conf in run_entry.values():
             # Always register the top-level mlflow_id
-            if "mlflow_id" in conf and run_id[:8] in conf["mlflow_id"]:
+            if "mlflow_id" in conf and run_id[0:4] in conf["mlflow_id"]:
                 all_ids[run_id] = conf["mlflow_id"]
             # if the forecaster key exists (interpolator usecase) and is not None (interpolator from analysis), register it too otherwise pyproject does not get created
             if (
@@ -398,11 +389,16 @@ def get_mlflow_id(run_config: dict, run_id: str) -> str:
                 and conf["forecaster"] is not None
                 and "mlflow_id" in conf["forecaster"]
             ):
-                all_ids[conf["forecaster"]["mlflow_id"][0:9]] = conf["forecaster"][
+                all_ids[conf["forecaster"]["mlflow_id"][0:4]] = conf["forecaster"][
                     "mlflow_id"
                 ]
     logger.info("All run IDs with MLflow IDs: %s", all_ids)
     return all_ids[run_id]
+
+
+def strip_last_segment(s):
+    parts = s.split("-")
+    return s if len(parts) == 1 else "-".join(parts[:-1])
 
 
 def main(snakemake) -> None:
@@ -413,7 +409,7 @@ def main(snakemake) -> None:
     """
     mlflow_uri = snakemake.config["locations"]["mlflow_uri"]
     run_id = snakemake.wildcards["run_id"]
-    mlflow_id = get_mlflow_id(snakemake.config["runs"], run_id)
+    mlflow_id = get_mlflow_id(snakemake.config["runs"], strip_last_segment(run_id))
     logger.info("Using MLflow ID %s for run ID %s", mlflow_id, run_id)
     requirements_path_in = Path(snakemake.input[0])
     toml_path_out = Path(snakemake.output[0])
