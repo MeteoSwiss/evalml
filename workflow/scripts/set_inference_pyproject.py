@@ -55,16 +55,6 @@ _GIT_DEPENDENCIES_CONFIG = {
             "subdirectory": "graphs",
         },
     },
-    "anemoi-training": {
-        "ecmwf": {
-            "url": "https://github.com/ecmwf/anemoi-core.git",
-            "subdirectory": "training",
-        },
-        "meteoswiss": {
-            "url": "https://github.com/MeteoSwiss/anemoi-core.git",
-            "subdirectory": "training",
-        },
-    },
     "anemoi-datasets": {
         "ecmwf": {"url": "https://github.com/ecmwf/anemoi-datasets.git"}
     },
