@@ -12,7 +12,7 @@ runs:
       mlflow_id: d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
       steps: 0/120/6
-      config: resources/inference/configs/forecaster_with_global.yaml
+      config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
       extra_dependencies:
         - git+https://github.com/ecmwf/anemoi-inference.git@main
 

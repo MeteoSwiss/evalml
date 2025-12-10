@@ -12,7 +12,7 @@ runs:
   - forecaster:
       mlflow_id: 2174c939c8844555a52843b71219d425
       label: Cosmo 1km + era5 N320, finetuned on cerra checkpoint, lam resolution 11
-      config: resources/inference/configs/forecaster_no_trimedge_with_global.yaml
+      config: resources/inference/configs/sgm-forecaster-regional_fromtraining.yaml
       steps: 0/120/6
       inference_resources:
         gpu: 4
