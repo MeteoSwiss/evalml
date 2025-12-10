@@ -33,35 +33,26 @@ OTHER_DEPENDENCIES = [
     "torch-geometric",
 ]
 
+# NOTE: the order matters! First look for ECMWF repos, then MeteoSwiss ones
 _GIT_DEPENDENCIES_CONFIG = {
     "anemoi-models": {
-        "meteoswiss": {
-            "url": "https://github.com/MeteoSwiss/anemoi-core.git",
-            "subdirectory": "models",
-        },
         "ecmwf": {
             "url": "https://github.com/ecmwf/anemoi-core.git",
+            "subdirectory": "models",
+        },
+        "meteoswiss": {
+            "url": "https://github.com/MeteoSwiss/anemoi-core.git",
             "subdirectory": "models",
         },
     },
     "anemoi-graphs": {
-        "meteoswiss": {
-            "url": "https://github.com/MeteoSwiss/anemoi-core.git",
-            "subdirectory": "graphs",
-        },
         "ecmwf": {
             "url": "https://github.com/ecmwf/anemoi-core.git",
             "subdirectory": "graphs",
         },
-    },
-    "anemoi-training": {
         "meteoswiss": {
             "url": "https://github.com/MeteoSwiss/anemoi-core.git",
-            "subdirectory": "training",
-        },
-        "ecmwf": {
-            "url": "https://github.com/ecmwf/anemoi-core.git",
-            "subdirectory": "training",
+            "subdirectory": "graphs",
         },
     },
     "anemoi-datasets": {
