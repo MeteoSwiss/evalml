@@ -6,13 +6,12 @@ dependencies = [
   "torch",
   "torchvision",
   "torchaudio",
-  "anemoi-datasets>=0.5.23,<0.7.0",
-  "anemoi-graphs>=0.5.0,<0.7.0",
-  "anemoi-inference>=0.8.0,<0.9.0",
-  "anemoi-models>=0.4.20,<0.6.0",
-  "anemoi-training>=0.3.3,<0.5.0",
-  "anemoi-transform>=0.1.10,<0.3.0",
-  "anemoi-utils>=0.4.22,<0.5.0",
+  "anemoi-datasets",
+  "anemoi-graphs",
+  "anemoi-inference",
+  "anemoi-models",
+  "anemoi-transform",
+  "anemoi-utils",
   "eccodes==2.38.3",
   "eccodes-cosmo-resources-python"
 ]
@@ -24,5 +23,5 @@ torchaudio  = { index = "pytorch" }
 
 [[tool.uv.index]]
 name = "pytorch"
-url = "https://download.pytorch.org/whl/cu121"  # need to couple torch with the correct cuda driver (cudatoolkit version) otherwise torch will be build but it won't be able to access GPUs. Won't throw any errors though!
+url = "https://download.pytorch.org/whl/cu124"  # need to couple torch with the correct cuda driver (cudatoolkit version) otherwise torch will be build but it won't be able to access GPUs. Won't throw any errors though!
 explicit = true
