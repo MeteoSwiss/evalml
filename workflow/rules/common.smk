@@ -24,6 +24,10 @@ def short_hash_config():
 
 def short_hash_runconfig(run_config):
     """Generate a short hash of the run block in the config file."""
+    # 'label' has no functional impact on the results of a model run, so we exclude it
+    if "label" in run_config:
+        run_config = copy.deepcopy(run_config)
+        run_config.pop("label")
     cfg_str = json.dumps(run_config, sort_keys=True)
     return hashlib.sha256(cfg_str.encode()).hexdigest()[:8]
 
