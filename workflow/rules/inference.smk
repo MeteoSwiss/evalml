@@ -52,7 +52,8 @@ rule create_inference_venv:
     shell:
         """(
         PROJECT_ROOT=$(dirname {input.pyproject})
-        uv venv --project $PROJECT_ROOT --relocatable --link-mode=copy {output.venv}
+        uv venv --project $PROJECT_ROOT --managed-python \
+            --relocatable --link-mode=copy {output.venv}
         source {output.venv}/bin/activate
         cd $(dirname {input.pyproject})
         uv sync
@@ -171,7 +172,7 @@ rule prepare_inference_forecaster:
 
 def _get_forecaster_run_id(run_id):
     """Get the forecaster run ID from the RUN_CONFIGS."""
-    return RUN_CONFIGS[run_id]["forecaster"]["mlflow_id"][0:9]
+    return RUN_CONFIGS[run_id]["forecaster"]["run_id"]
 
 
 rule prepare_inference_interpolator:

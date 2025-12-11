@@ -22,6 +22,16 @@ def short_hash_config():
     return hashlib.sha256(cfg_str.encode()).hexdigest()[:8]
 
 
+def short_hash_runconfig(run_config):
+    """Generate a short hash of the run block in the config file."""
+    # 'label' has no functional impact on the results of a model run, so we exclude it
+    if "label" in run_config:
+        run_config = copy.deepcopy(run_config)
+        run_config.pop("label")
+    cfg_str = json.dumps(run_config, sort_keys=True)
+    return hashlib.sha256(cfg_str.encode()).hexdigest()[:8]
+
+
 def parse_toml(toml_file, key):
     """Parse a key (e.g. 'project.requires-python') from a TOML file handle."""
     import toml
@@ -52,6 +62,8 @@ def _parse_timedelta(td):
 
 def _reftimes():
     cfg = config["dates"]
+    if isinstance(cfg, list):
+        return [datetime.strptime(t, "%Y-%m-%dT%H:%M") for t in cfg]
     start = datetime.strptime(cfg["start"], "%Y-%m-%dT%H:%M")
     end = datetime.strptime(cfg["end"], "%Y-%m-%dT%H:%M")
     freq = _parse_timedelta(cfg["frequency"])
@@ -73,21 +85,29 @@ def collect_all_runs():
         model_type = next(iter(run_entry))
         run_config = run_entry[model_type]
         run_config["model_type"] = model_type
-        run_config["is_candidate"] = True
-        run_id = run_config["mlflow_id"][0:9]
+        run_id = run_config["mlflow_id"][0:4]
 
         if model_type == "interpolator":
             if "forecaster" not in run_config or run_config["forecaster"] is None:
-                tail_id = "analysis"
+                fcst_id = "ana"
             else:
-                tail_id = run_config["forecaster"]["mlflow_id"][0:9]
+                fcst_id = run_config["forecaster"]["mlflow_id"][0:4]
                 # Ensure a proper 'forecaster' entry exists with model_type
                 fore_cfg = copy.deepcopy(run_config["forecaster"])
                 fore_cfg["model_type"] = "forecaster"
+                # make sure we don't hash the is_candidate status
+                fore_id = short_hash_runconfig(fore_cfg)
                 fore_cfg["is_candidate"] = False  # exclude from outputs
-                runs[tail_id] = fore_cfg
-            run_id = f"{run_id}-{tail_id}"
+                runs[f"{fcst_id}-{fore_id}"] = fore_cfg
+                # add run_id of forecaster to interpolator config
+                run_config["forecaster"]["run_id"] = f"{fcst_id}-{fore_id}"
+            run_id = f"{run_id}-{fcst_id}"
 
+        # add the hash of the config to the run id
+        run_id = f"{run_id}-{short_hash_runconfig(run_config)}"
+
+        # make sure we don't hash the is_candidate status
+        run_config["is_candidate"] = True
         # Register this (possibly composite) run inside the loop
         runs[run_id] = run_config
     return runs

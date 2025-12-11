@@ -21,6 +21,9 @@ dependencies = [
     "shapely>=2.1.2",
     "cartopy>=0.25.0",
     "pyproj>=3.7.2",
+    "earthkit-plots",
+    "marimo>=0.16.5",
+    "geopandas>=0.14.0",
 ]
 
 [project.optional-dependencies]
@@ -52,5 +55,6 @@ markers = [
 [tool.hatch.build.targets.wheel]
 packages = [
   "src/evalml",
-  "src/verification"
+  "src/verification",
+  "src/data_input"
 ]

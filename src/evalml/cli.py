@@ -128,9 +128,7 @@ def showcase(configfile, cores, verbose, dry_run, unlock, report, extra_smk_args
     )
 
 
-@cli.command(
-    help="Generate a sandbox for inference for the runs defined in the config YAML file."
-)
+@cli.command(help="Generate a sandbox for inference runs in the YAML config file.")
 @click.argument(
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
@@ -139,6 +137,25 @@ def sandbox(configfile, cores, verbose, dry_run, unlock, report, extra_smk_args)
     execute_workflow(
         configfile,
         "sandbox_all",
+        cores,
+        verbose,
+        dry_run,
+        unlock,
+        report,
+        extra_smk_args,
+    )
+
+
+@cli.command(help="Make a specific file from a workflow defined in the YAML file.")
+@click.argument(
+    "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
+@click.argument("target", type=str)
+@workflow_options
+def make(configfile, target, cores, verbose, dry_run, unlock, report, extra_smk_args):
+    execute_workflow(
+        configfile,
+        target,
         cores,
         verbose,
         dry_run,
