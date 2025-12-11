@@ -1,0 +1,12 @@
+input:
+  test:
+    use_original_paths: true
+
+allow_nans: true
+
+output:
+  grib:
+    path: grib/{date}{time}_{step:03}.grib
+    negative_step_mode: skip
+
+write_initial_state: true

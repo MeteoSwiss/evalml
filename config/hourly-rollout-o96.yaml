@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Evaluate skill of COSMO-E emulator (M-1 forecaster).
+
+dates:
+  - 2022-02-03T00:00 # Some example
+
+runs:
+  - forecaster:
+      mlflow_id: 2bee8f6b7d0048089a5e25cb60def0e5
+      label: Hourly rollout O96 forecaster
+      steps: 0/120/6
+      config: resources/inference/configs/global-forecaster.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+        - git+https://github.com/MeteoSwiss/anemoi-core.git@06e5533f3e8da37c44d887c42b67440b40286cb3#subdirectory=models
+
+baselines: []
+
+analysis:
+  label: ERA5
+  analysis_zarr: /scratch/mch/rradev/datasets/aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v4.zarr
+
+stratification:
+  regions: []
+  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+
+locations:
+  output_root: output/
+  mlflow_uri:
+    - https://servicedepl.meteoswiss.ch/mlstore
+    - https://mlflow.ecmwf.int
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50
