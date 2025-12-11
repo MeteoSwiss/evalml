@@ -232,6 +232,9 @@ rule execute_inference:
         workdir=lambda wc: (
             OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
         ).resolve(),
+        disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
+            "disable_local_eccodes_definitions", False
+        ),
     resources:
         slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
         cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
@@ -249,7 +252,10 @@ rule execute_inference:
 
         squashfs-mount {params.image_path}:/user-environment -- bash -c '
         source /user-environment/bin/activate
-        export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
+
+        if [ "{params.disable_local_definitions}" = "False" ]; then
+            export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
+        fi
 
         CMD_ARGS=()
 
