@@ -17,7 +17,7 @@ include: "rules/verif.smk"
 include: "rules/report.smk"
 include: "rules/plot.smk"
 include: "rules/summary.smk"
-
+include: "rules/verif_obs.smk"
 
 # optional messages, log and error handling
 # -----------------------------------------------------
@@ -103,10 +103,12 @@ rule verif_metrics_plot_all:
         ),
 
 # To run:  snakemake --cores 1 --configfile=config/forecasters.yaml verif_obs_all
+# clean: rm -rf ./output/data/runs/d0846032f/202001040000/mec ./output/data/runs/d0846032f/202001040000/folder_to_delete
+#            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES], 
 rule verif_obs_all:
     input:
         expand(
             rules.run_mec.output,
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            init_time=202001040000,
             run_id=collect_all_runs(),
         )

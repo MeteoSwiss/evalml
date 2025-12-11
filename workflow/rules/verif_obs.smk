@@ -1,11 +1,14 @@
 from pathlib import Path
 
+
 rule collect_mec_input:
     input:
-        inference_dir=rules.prepare_inference_forecaster.output.grib_out_dir
+        inference_dir=rules.prepare_inference_forecaster.output.grib_out_dir,
     output:
         obs=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs"),
         mod=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_mod"),
+    params:
+        steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
     shell:
         """
         # create the input_obs and input_mod dirs
@@ -14,60 +17,43 @@ rule collect_mec_input:
         # extract YYYYMM from init_time (which is YYYYMMDDHHMM) and use it in the paths
         init="{wildcards.init_time}"
         ym="${{init:0:6}}"
-
+        lt="{params.lead_time}" 120h start, end, step
         # collect obs and mod files
+        import config here?  
         cp /store_new/mch/msopr/osm/KENDA-1/EKF/${{ym}}/ekfSYNOP_${{init}}00.nc {output.obs}
         cat {input.inference_dir}/*.grib > {output.mod}/fc_${{init}}
         ls -l {output.mod}  {output.obs}
         """
 
+
 rule generate_mec_namelist:
+    localrule: True
     input:
-        template="resources/mec/namelist.jinja2"
+        script="workflow/scripts/generate_mec_namelist.py",
+        template="resources/mec/namelist.jinja2",
     output:
         namelist=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/namelist",
-    run:
-        import jinja2
-        import re
+    params:
+        steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
+    shell:
+        """
+        uv run {input.script} \
+            --steps {params.steps} \
+            --init_time {wildcards.init_time} \
+            --template {input.template} \
+            --namelist {output.namelist}
+        """
 
-        # Construct the leadtimes list for MEC namelist from config steps
-        steps_str = None
-        cfg_runs = config.get("runs", []) if config else []
-        first = cfg_runs[0] if cfg_runs else {}
-        forecaster = first.get("forecaster") if isinstance(first, dict) else None
-        steps_str = forecaster.get("steps") if isinstance(forecaster, dict) else None
-
-        # Parse steps: start/stop/step (hours). Example: "0/120/6"
-        m = re.match(r"^\s*(\d+)\s*/\s*(\d+)\s*/\s*(\d+)\s*$", str(steps_str))
-        if not m:
-            raise ValueError(f"Invalid steps format: {steps_str}. Expected 'start/stop/step' in hours")
-        start_h, stop_h, step_h = map(int, m.groups())
-
-        # Include stop_h (inclusive). Produce strings like 0000,0600,1200,...,12000
-        lead_hours = range(start_h, stop_h + 1, step_h)
-        leadtimes = ",".join(f"{h:02d}00" for h in lead_hours)
-
-        # Render template with init_time and computed leadtimes
-        context = {"init_time": wildcards.init_time, "leadtimes": leadtimes}
-        template_path = Path(input.template)
-        env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(template_path.parent)))
-        template = env.get_template(template_path.name)
-        namelist = template.render(**context)
-        print(f"MEC namelist created: \n{namelist}")
-        
-        out_path = Path(str(output.namelist))
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with out_path.open("w", encoding="utf-8") as f:
-            f.write(namelist)
 
 rule run_mec:
     input:
         namelist=rules.generate_mec_namelist.output.namelist,
         run_dir=directory(rules.collect_mec_input.output.mod),
         mod_dir=directory(rules.collect_mec_input.output.mod),
-
     output:
-        folder_to_delete=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/folder_to_delete")
+        folder_to_delete=directory(
+            OUT_ROOT / "data/runs/{run_id}/{init_time}/folder_to_delete"
+        ),
     resources:
         cpus_per_task=1,
         runtime="1h",
