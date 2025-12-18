@@ -1,4 +1,23 @@
 from pathlib import Path
+from datetime import datetime, timedelta
+
+
+def get_init_times(wc):
+    """
+    Return list of init times (YYYYMMDDHHMM) from init_time - lead ... init_time
+    stepping by configured frequency (default 12h).
+    """
+    init = wc.init_time
+    lt = get_leadtime(wc)  # expects something like "48h"
+    lead_h = int(str(lt).rstrip("h"))
+    freq_cfg = RUN_CONFIGS[wc.run_id].get("frequency", "12h")
+    freq_h = int(str(freq_cfg).rstrip("h"))
+    base = datetime.strptime(init, "%Y%m%d%H%M")
+    times = []
+    for h in range(lead_h, -1, -freq_h):
+        t = base - timedelta(hours=h)
+        times.append(t.strftime("%Y%m%d%H%M"))
+    return times
 
 
 rule collect_mec_input:
@@ -9,20 +28,45 @@ rule collect_mec_input:
         mod=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_mod"),
     params:
         steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
+        init_list_str=lambda wc: " ".join(get_init_times(wc)),
+        run_root=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}"),
+    log:
+        OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/{run_id}-{init_time}.log",
     shell:
         """
+        (
+        set -euo pipefail
+
         # create the input_obs and input_mod dirs
         mkdir -p {output.obs} {output.mod}
 
         # extract YYYYMM from init_time (which is YYYYMMDDHHMM) and use it in the paths
         init="{wildcards.init_time}"
         ym="${{init:0:6}}"
-        lt="{params.lead_time}" 120h start, end, step
-        # collect obs and mod files
-        import config here?  
-        cp /store_new/mch/msopr/osm/KENDA-1/EKF/${{ym}}/ekfSYNOP_${{init}}00.nc {output.obs}
-        cat {input.inference_dir}/*.grib > {output.mod}/fc_${{init}}
-        ls -l {output.mod}  {output.obs}
+        ymdh="${{init:0:10}}"
+        echo "init time: ${{init}}, ym: ${{ym}}"
+        
+        # collect observations (ekfSYNOP) and/or (monSYNOP from DWD; includes precip) files
+        cp /store_new/mch/msopr/osm/KENDA-1/EKF/${{ym}}/ekfSYNOP_${{init}}00.nc {output.obs}/efkSYNOP.nc
+        cp /scratch/mch/paa/mec/MEC_ML_input/monFiles2020/hpc/uwork/swahl/temp/feedback/monSYNOP.${{init:0:10}} {output.obs}/monSYNOP.nc
+
+        # For each source init (src_init) produce one output file named fc_<src_init>
+        for src_init in {params.init_list_str}; do
+            src_dir="{params.run_root}/$src_init/grib"
+            out_file="{output.mod}/fc_$src_init"
+            echo "creating $out_file from $src_dir"
+            # create/truncate out_file
+            : > "$out_file"
+            # only concat if matching files exist
+            if compgen -G "$src_dir/2*.grib" > /dev/null; then
+                cat "$src_dir"/2*.grib >> "$out_file"
+            else
+                echo "WARNING: no grib files found in $src_dir" >&2
+            fi
+        done
+
+        ls -l {output.mod} {output.obs}
+        ) > {log} 2>&1
         """
 
 
@@ -51,21 +95,22 @@ rule run_mec:
         run_dir=directory(rules.collect_mec_input.output.mod),
         mod_dir=directory(rules.collect_mec_input.output.mod),
     output:
-        folder_to_delete=directory(
-            OUT_ROOT / "data/runs/{run_id}/{init_time}/folder_to_delete"
-        ),
+        fdbk_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/verSYNOP.nc",
     resources:
         cpus_per_task=1,
         runtime="1h",
+    log:
+        OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/{run_id}-{init_time}_run_mec.log",
     shell:
         #TODO(mmcglohon): Replace podman with sarus if needed.
         """
-        echo 'would run mec on namelist:'
-        cat {input.namelist}
-        ls -l {input.run_dir}
-        mkdir -p {output.folder_to_delete}
+        (
+        set -euo pipefail
+
         # Note: pull command currently redundant; may not be the case with sarus.
         #podman pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
-        #srun --pty -N1 -c 11 -p postproc -t 2:00:00 podman run --mount=type=bind,source={{input.run_dir}},destination=/src/bin2 --mount=type=bind,source=/oprusers/osm/opr.emme/data/,destination=/oprusers/osm/opr.emme/data/ container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
+        srun --pty -N1 -c 1 -p postproc -t 2:00:00 podman run --mount=type=bind,source={{input.run_dir}},destination=/src/bin2 --mount=type=bind,source=/oprusers/osm/opr.emme/data/,destination=/oprusers/osm/opr.emme/data/ container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
         #ls -l {{output}}
+        #TODO: copy output verSYNOP.nc to appropriate location
+        ) > {log} 2>&1
         """
