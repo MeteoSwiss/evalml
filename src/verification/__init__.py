@@ -145,6 +145,7 @@ def verify(
     fcst_label: str,
     obs_label: str,
     regions: list[str] | None = None,
+    dim: list[str] | None = None,
 ) -> xr.Dataset:
     """
     Compare two xarray Datasets (fcst and obs) and return pandas DataFrame with
@@ -179,19 +180,19 @@ def verify(
             # scores vs time (reduce spatially)
             score.append(
                 _compute_scores(
-                    fcst_param, obs_param, prefix=param + ".", source=fcst_label
+                    fcst_param, obs_param, dim=dim, prefix=param + ".", source=fcst_label
                 ).expand_dims(region=[region])
             )
 
             # statistics vs time (reduce spatially)
             fcst_statistics.append(
                 _compute_statistics(
-                    fcst_param, prefix=param + ".", source=fcst_label
+                    fcst_param, dim=dim, prefix=param + ".", source=fcst_label
                 ).expand_dims(region=[region])
             )
             obs_statistics.append(
                 _compute_statistics(
-                    obs_param, prefix=param + ".", source=obs_label
+                    obs_param, dim=dim, prefix=param + ".", source=obs_label
                 ).expand_dims(region=[region])
             )
 

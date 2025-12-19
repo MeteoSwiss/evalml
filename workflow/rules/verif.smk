@@ -26,6 +26,7 @@ rule verif_metrics_baseline:
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         analysis_label=config["analysis"].get("label"),
         regions=REGION_TXT,
+        dim="x,y",
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
     log:
@@ -44,9 +45,21 @@ rule verif_metrics_baseline:
             --label "{params.baseline_label}" \
             --analysis_label "{params.analysis_label}" \
             --regions "{params.regions}" \
+            --dim "{params.dim}" \
             --output {output} > {log} 2>&1
         """
 
+use rule verif_metrics_baseline as verif_field_baseline with:
+    output:
+        OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif_fields.nc", 
+    params:
+        baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
+        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
+        analysis_label=config["analysis"].get("label"),
+        regions="",
+        dim="",
+    log:
+        OUT_ROOT / "logs/verif_field_baseline/{baseline_id}-{init_time}.log",
 
 def _get_no_none(dict, key, replacement):
     out = dict.get(key, replacement)

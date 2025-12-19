@@ -108,9 +108,11 @@ def main(args: ScriptConfig):
     )
 
     # compute metrics and statistics
-
-    results = verify(fcst, analysis, args.label, args.analysis_label, args.regions)
-
+    if args.dim: 
+        results = verify(fcst, analysis, args.label, args.analysis_label, args.regions, args.dim)
+    else: 
+        results = fcst-analysis
+    
     # save results to NetCDF
     args.output.parent.mkdir(parents=True, exist_ok=True)
     results.to_netcdf(args.output)
@@ -169,6 +171,12 @@ if __name__ == "__main__":
         "--regions",
         type=lambda x: x.split(","),
         help="Comma-separated list of shapefile paths defining regions for stratification.",
+        default="",
+    )
+    parser.add_argument(
+        "--dim",
+        type=lambda x: x.split(","),
+        help="Comma-separated list of dimensions to be averaged.",
         default="",
     )
     parser.add_argument(
