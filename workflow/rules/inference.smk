@@ -253,7 +253,7 @@ rule execute_inference:
 
         CMD_ARGS=()
 
-        # is GPU > 1, add runner=parallel to CMD_ARGS
+        # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
         if [ {resources.gpus} -gt 1 ]; then
             CMD_ARGS+=(runner.parallel.cluster=slurm)
         fi
