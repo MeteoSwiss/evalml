@@ -114,6 +114,7 @@ def main(args: ScriptConfig):
     # compute metrics and statistics
 
     results = verify(fcst, analysis, args.label, args.analysis_label, args.regions)
+    LOG.info("Verification results:\n%s", results)
 
     # save results to NetCDF
     args.output.parent.mkdir(parents=True, exist_ok=True)

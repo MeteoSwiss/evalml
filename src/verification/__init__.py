@@ -203,7 +203,11 @@ def verify(
 
     scores = _merge_metrics(scores)
     statistics = _merge_metrics(statistics)
-    out = xr.merge([scores, statistics], join="outer", compat="no_conflicts")
+    out = xr.merge(
+        [scores, statistics, fcst_aligned - obs_aligned],
+        join="outer",
+        compat="no_conflicts",
+    )
     LOG.info("Computed metrics in %.2f seconds", time.time() - start)
     LOG.info("Metrics dataset: \n%s", out)
     return out
