@@ -180,7 +180,11 @@ def verify(
             # scores vs time (reduce spatially)
             score.append(
                 _compute_scores(
-                    fcst_param, obs_param, dim=dim, prefix=param + ".", source=fcst_label
+                    fcst_param,
+                    obs_param,
+                    dim=dim,
+                    prefix=param + ".",
+                    source=fcst_label,
                 ).expand_dims(region=[region])
             )
 

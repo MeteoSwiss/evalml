@@ -59,7 +59,6 @@ def main(args: ScriptConfig):
     # get baseline forecast data
 
     now = datetime.now()
-    LOG.info(now)
 
     # try to open the baselin as a zarr, and if it fails load from grib
     if not args.forecast:

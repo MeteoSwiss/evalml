@@ -50,7 +50,7 @@ rule verif_metrics_baseline:
         """
 
 
-use rule verif_metrics_baseline as verif_field_baseline with:
+use rule verif_metrics_baseline as verif_fields_baseline with:
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif_fields.nc",
     params:
@@ -60,7 +60,7 @@ use rule verif_metrics_baseline as verif_field_baseline with:
         regions="",
         dim="",
     log:
-        OUT_ROOT / "logs/verif_field_baseline/{baseline_id}-{init_time}.log",
+        OUT_ROOT / "logs/verif_fields_baseline/{baseline_id}-{init_time}.log",
 
 
 def _get_no_none(dict, key, replacement):
