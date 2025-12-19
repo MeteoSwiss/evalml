@@ -49,9 +49,10 @@ rule verif_metrics_baseline:
             --output {output} > {log} 2>&1
         """
 
+
 use rule verif_metrics_baseline as verif_field_baseline with:
     output:
-        OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif_fields.nc", 
+        OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif_fields.nc",
     params:
         baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
@@ -60,6 +61,7 @@ use rule verif_metrics_baseline as verif_field_baseline with:
         dim="",
     log:
         OUT_ROOT / "logs/verif_field_baseline/{baseline_id}-{init_time}.log",
+
 
 def _get_no_none(dict, key, replacement):
     out = dict.get(key, replacement)

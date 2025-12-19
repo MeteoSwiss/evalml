@@ -59,6 +59,7 @@ def main(args: ScriptConfig):
     # get baseline forecast data
 
     now = datetime.now()
+    LOG.info(now)
 
     # try to open the baselin as a zarr, and if it fails load from grib
     if not args.forecast:
@@ -108,11 +109,13 @@ def main(args: ScriptConfig):
     )
 
     # compute metrics and statistics
-    if args.dim: 
-        results = verify(fcst, analysis, args.label, args.analysis_label, args.regions, args.dim)
-    else: 
-        results = fcst-analysis
-    
+    if args.dim == [""]:
+        results = fcst - analysis
+    else:
+        results = verify(
+            fcst, analysis, args.label, args.analysis_label, args.regions, args.dim
+        )
+
     # save results to NetCDF
     args.output.parent.mkdir(parents=True, exist_ok=True)
     results.to_netcdf(args.output)
