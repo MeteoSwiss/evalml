@@ -255,7 +255,7 @@ rule execute_inference:
 
         # is GPU > 1, add runner=parallel to CMD_ARGS
         if [ {resources.gpus} -gt 1 ]; then
-            CMD_ARGS+=(runner=parallel)
+            CMD_ARGS+=(runner.parallel.cluster=slurm)
         fi
 
         srun \
