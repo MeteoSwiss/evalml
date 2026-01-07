@@ -84,17 +84,26 @@ def _compute_scores(
     """
     dim = ["x", "y"] if "x" in fcst.dims and "y" in fcst.dims else ["values"]
     error = fcst - obs
-    scores = xr.Dataset(
-        {
-            f"{prefix}BIAS{suffix}": error.mean(dim=dim, skipna=True),
-            f"{prefix}MSE{suffix}": (error**2).mean(dim=dim, skipna=True),
-            f"{prefix}MAE{suffix}": abs(error).mean(dim=dim, skipna=True),
-            f"{prefix}VAR{suffix}": error.var(dim=dim, skipna=True),
-            f"{prefix}CORR{suffix}": xr.corr(fcst, obs, dim=dim),
-            f"{prefix}R2{suffix}": xr.corr(fcst, obs, dim=dim) ** 2,
-        }
-    )
-    scores = scores.expand_dims({"source": [source]})
+    if dim == []:
+        scores = xr.Dataset(
+            {
+                f"{prefix}BIAS{suffix}": error,
+                f"{prefix}MSE{suffix}": (error**2),
+                f"{prefix}MAE{suffix}": abs(error),
+            }
+        )
+    else:
+        scores = xr.Dataset(
+            {
+                f"{prefix}BIAS{suffix}": error.mean(dim=dim, skipna=True),
+                f"{prefix}MSE{suffix}": (error**2).mean(dim=dim, skipna=True),
+                f"{prefix}MAE{suffix}": abs(error).mean(dim=dim, skipna=True),
+                f"{prefix}VAR{suffix}": error.var(dim=dim, skipna=True),
+                f"{prefix}CORR{suffix}": xr.corr(fcst, obs, dim=dim),
+                f"{prefix}R2{suffix}": xr.corr(fcst, obs, dim=dim) ** 2,
+            }
+        )
+    # scores = scores.expand_dims({"source": [source]})
     return scores
 
 
@@ -212,8 +221,6 @@ def verify(
 
     scores = _merge_metrics(scores)
     statistics = _merge_metrics(statistics)
-    LOG.info("Computed scores dataset: \n%s", scores)
-    LOG.info("Computed statistics dataset: \n%s", statistics)
     out = xr.merge(
         [scores, statistics],
         join="outer",
