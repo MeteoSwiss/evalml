@@ -39,7 +39,7 @@ def main(args):
     LOG.info("Loaded verification netcdf: \n%s", ds)
 
     # extract only  non-spatial variables to pd.DataFrame
-    nonspatial_vars = [d for d in ds.data_vars if "x" not in ds[d].dims]
+    nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
     df = ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
     df[["param", "metric"]] = df["stack"].str.split(".", n=1, expand=True)
     df.drop(columns=["stack"], inplace=True)
