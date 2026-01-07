@@ -84,7 +84,7 @@ def main(args: Namespace) -> None:
     ds = xr.concat(dfs, dim="source", join="outer")
 
     # extract only  non-spatial variables to pd.DataFrame
-    nonspatial_vars = [d for d in ds.data_vars if "x" not in ds[d].dims]
+    nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
     all_df = (
         ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
     )
