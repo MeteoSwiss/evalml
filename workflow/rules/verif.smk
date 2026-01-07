@@ -63,7 +63,7 @@ rule verif_metrics:
         inference_okfile=rules.execute_inference.output.okfile,
         analysis_zarr=config["analysis"].get("analysis_zarr"),
     output:
-        OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.nc",
+        temp(OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.nc"),
     # wildcard_constraints:
     # run_id="^" # to avoid ambiguitiy with run_baseline_verif
     # TODO: implement logic to use experiment name instead of run_id as wildcard
@@ -76,7 +76,7 @@ rule verif_metrics:
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
     log:
-        temp(OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log"),
+        OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",
     resources:
         cpus_per_task=24,
         mem_mb=50_000,
