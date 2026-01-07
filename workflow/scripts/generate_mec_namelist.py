@@ -21,8 +21,6 @@ def _parse_steps(steps: str) -> int:
     return list(range(start, end + 1, step))
 
 
-# Note: not currently in use; optional script in case we want to factor it out
-# of the rules file
 def main(args):
 
     # Include stop_h (inclusive). Produce strings like 0000,0600,1200,...,12000

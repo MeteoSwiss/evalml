@@ -31,11 +31,12 @@ rule collect_mec_input:
         init_list_str=lambda wc: " ".join(get_init_times(wc)),
         run_root=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}"),
     log:
-        OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/{run_id}-{init_time}.log",
+        OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/{run_id}-{init_time}_collect_mec_input.log",
     shell:
         """
         (
         set -euo pipefail
+        echo "...time at start of collect_mec_input: $(date)"
 
         # create the input_obs and input_mod dirs
         mkdir -p {output.obs} {output.mod}
@@ -47,7 +48,7 @@ rule collect_mec_input:
         echo "init time: ${{init}}, ym: ${{ym}}"
         
         # collect observations (ekfSYNOP) and/or (monSYNOP from DWD; includes precip) files
-        cp /store_new/mch/msopr/osm/KENDA-1/EKF/${{ym}}/ekfSYNOP_${{init}}00.nc {output.obs}/efkSYNOP.nc
+        cp /store_new/mch/msopr/osm/KENDA-1/EKF/${{ym}}/ekfSYNOP_${{init}}00.nc {output.obs}/ekfSYNOP.nc
         cp /scratch/mch/paa/mec/MEC_ML_input/monFiles2020/hpc/uwork/swahl/temp/feedback/monSYNOP.${{init:0:10}} {output.obs}/monSYNOP.nc
 
         # For each source init (src_init) produce one output file named fc_<src_init>
@@ -58,14 +59,15 @@ rule collect_mec_input:
             # create/truncate out_file
             : > "$out_file"
             # only concat if matching files exist
-            if compgen -G "$src_dir/2*.grib" > /dev/null; then
-                cat "$src_dir"/2*.grib >> "$out_file"
+            if compgen -G "$src_dir/20*.grib" > /dev/null; then
+                cat "$src_dir"/20*.grib >> "$out_file"
             else
                 echo "WARNING: no grib files found in $src_dir" >&2
             fi
         done
 
         ls -l {output.mod} {output.obs}
+        echo "...time at end of collect_mec_input: $(date)"
         ) > {log} 2>&1
         """
 
@@ -93,7 +95,6 @@ rule run_mec:
     input:
         namelist=rules.generate_mec_namelist.output.namelist,
         run_dir=directory(rules.collect_mec_input.output.mod),
-        mod_dir=directory(rules.collect_mec_input.output.mod),
     output:
         fdbk_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/verSYNOP.nc",
     resources:
@@ -106,11 +107,20 @@ rule run_mec:
         """
         (
         set -euo pipefail
-
+        echo "...time at start of run_mec: $(date)"
         # Note: pull command currently redundant; may not be the case with sarus.
         #podman pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
-        srun --pty -N1 -c 1 -p postproc -t 2:00:00 podman run --mount=type=bind,source={{input.run_dir}},destination=/src/bin2 --mount=type=bind,source=/oprusers/osm/opr.emme/data/,destination=/oprusers/osm/opr.emme/data/ container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
-        #ls -l {{output}}
-        #TODO: copy output verSYNOP.nc to appropriate location
+        #srun --pty -N1 -c 1 -p postproc -t 2:00:00 podman run --mount=type=bind,source={{input.run_dir}},destination=/src/bin2 --mount=type=bind,source=/oprusers/osm/opr.emme/data/,destination=/oprusers/osm/opr.emme/data/ container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
+
+        # change to the MEC run directory, set env and run MEC
+        cd {input.run_dir}/..
+        export LM_HOST=balfrin-ln002
+        source /oprusers/osm/opr.emme/abs/mec.env
+        ./mec > ./mec_out.log 2>&1
+
+        # move the output file to the expected location
+        mkdir -p ../../fdbk_files
+        cp verSYNOP.nc ../../fdbk_files/verSYNOP_{wildcards.init_time}.nc
+        echo "...time at end of run_mec: $(date)"
         ) > {log} 2>&1
         """

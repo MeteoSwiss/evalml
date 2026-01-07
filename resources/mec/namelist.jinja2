@@ -11,7 +11,7 @@
    input          = './input_mod'                 ! input data path
    data           = '/oprusers/osm/opr.emme/data/'      ! data path for auxiliary data
    obsinput       = './input_obs'                 ! observation input data path
-   output         = './output'                    ! output data to working directory
+   output         = '.'                           ! output data to working directory
    time_ana       = {{ init_time }}00             ! analysis date YYYYMMDDHHMMSS
    read_fields    = 'ps u t v q geof t2m td2m u_10m v_10m'
    grib_edition   = 2
@@ -50,12 +50,12 @@
  ! Verification related parameters
  !================================
  &veri_obs
-  obstypes      = "SYNOP"      ! "SYNOP TEMP"
+  obstypes      = "SYNOP"         ! "SYNOP TEMP"
   fc_times      = {{ leadtimes }} ! forecast lead time at reference (hhmm) 0000,1200,2400,...  
-  prefix_in     = 'ekf'                                                                                                                                                                                           
+  prefix_in     = 'ekf'           ! prefix for input files. ekf or mon                                                                                                                                                                        
   prefix_out    = 'ver'               
-  rm_old        = 2                          ! overwrite entries in verification file ?
-  fc_file       = 'fc__FCR_TIME'  ! template for forecast file name
+  rm_old        = 2                  ! overwrite entries in verification file ?
+  fc_file       = 'fc__FCR_TIME_00'  ! template for forecast file name
   time_range    = 1                                                                                                                                                                                               
   ekf_concat    = F                                                                                                                                                                                               
   ref_runtype   = 'any'  ! accept any runtype for the reference state
