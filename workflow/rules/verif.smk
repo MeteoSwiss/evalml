@@ -27,7 +27,7 @@ rule verif_metrics_baseline:
         analysis_label=config["analysis"].get("label"),
         regions=REGION_TXT,
     output:
-        OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
+        temp(OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc"),
     log:
         OUT_ROOT / "logs/verif_metrics_baseline/{baseline_id}-{init_time}.log",
     resources:
@@ -76,7 +76,7 @@ rule verif_metrics:
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
     log:
-        OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",
+        temp(OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log"),
     resources:
         cpus_per_task=24,
         mem_mb=50_000,
