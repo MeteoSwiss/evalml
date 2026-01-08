@@ -24,6 +24,7 @@ rule collect_mec_input:
     input:
         inference_dir=rules.prepare_inference_forecaster.output.grib_out_dir,
     output:
+        run=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec"),
         obs=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs"),
         mod=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_mod"),
     params:
@@ -31,7 +32,8 @@ rule collect_mec_input:
         init_list_str=lambda wc: " ".join(get_init_times(wc)),
         run_root=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}"),
     log:
-        OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/{run_id}-{init_time}_collect_mec_input.log",
+        OUT_ROOT
+        / "data/runs/{run_id}/{init_time}/mec/{run_id}-{init_time}_collect_mec_input.log",
     shell:
         """
         (
@@ -39,7 +41,7 @@ rule collect_mec_input:
         echo "...time at start of collect_mec_input: $(date)"
 
         # create the input_obs and input_mod dirs
-        mkdir -p {output.obs} {output.mod}
+        mkdir -p {output.run} {output.obs} {output.mod}
 
         # extract YYYYMM from init_time (which is YYYYMMDDHHMM) and use it in the paths
         init="{wildcards.init_time}"
@@ -94,7 +96,7 @@ rule generate_mec_namelist:
 rule run_mec:
     input:
         namelist=rules.generate_mec_namelist.output.namelist,
-        run_dir=directory(rules.collect_mec_input.output.mod),
+        run_dir=directory(rules.collect_mec_input.output.run),
     output:
         fdbk_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/verSYNOP.nc",
     resources:
@@ -103,24 +105,26 @@ rule run_mec:
     log:
         OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/{run_id}-{init_time}_run_mec.log",
     shell:
-        #TODO(mmcglohon): Replace podman with sarus if needed.
         """
         (
         set -euo pipefail
         echo "...time at start of run_mec: $(date)"
-        # Note: pull command currently redundant; may not be the case with sarus.
-        #podman pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
-        #srun --pty -N1 -c 1 -p postproc -t 2:00:00 podman run --mount=type=bind,source={{input.run_dir}},destination=/src/bin2 --mount=type=bind,source=/oprusers/osm/opr.emme/data/,destination=/oprusers/osm/opr.emme/data/ container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
 
-        # change to the MEC run directory, set env and run MEC
-        cd {input.run_dir}/..
-        export LM_HOST=balfrin-ln002
-        source /oprusers/osm/opr.emme/abs/mec.env
-        ./mec > ./mec_out.log 2>&1
+        # Run MEC inside sarus container
+        # Note: pull command currently needed only once to download the container
+        # sarus pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
+        abs_run_dir=$(realpath {input.run_dir})
+        sarus run --mount=type=bind,source=$abs_run_dir,destination=/src/bin2 --mount=type=bind,source=/oprusers/osm/opr.emme/data/,destination=/oprusers/osm/opr.emme/data/ container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
 
-        # move the output file to the expected location
-        mkdir -p ../../fdbk_files
-        cp verSYNOP.nc ../../fdbk_files/verSYNOP_{wildcards.init_time}.nc
+        # Run MEC using local executable (Alternative to sarus container) 
+        #cd {input.run_dir}
+        #export LM_HOST=balfrin-ln002
+        #source /oprusers/osm/opr.emme/abs/mec.env
+        #./mec > ./mec_out.log 2>&1
+
+        # move the output file to the final location for the Feedback files
+        mkdir -p {input.run_dir}/../../fdbk_files
+        cp {input.run_dir}/verSYNOP.nc {input.run_dir}/../../fdbk_files/verSYNOP_{wildcards.init_time}.nc
         echo "...time at end of run_mec: $(date)"
         ) > {log} 2>&1
         """
