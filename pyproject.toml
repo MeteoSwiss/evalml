@@ -55,5 +55,6 @@ markers = [
 [tool.hatch.build.targets.wheel]
 packages = [
   "src/evalml",
-  "src/verification"
+  "src/verification",
+  "src/data_input"
 ]

@@ -16,6 +16,7 @@ include: "rules/inference.smk"
 include: "rules/verif.smk"
 include: "rules/report.smk"
 include: "rules/plot.smk"
+include: "rules/summary.smk"
 
 
 # optional messages, log and error handling
@@ -42,6 +43,10 @@ rule experiment_all:
     input:
         OUT_ROOT / f"results/{EXPERIMENT_HASH}/metrics/dashboard",
         OUT_ROOT / f"results/{EXPERIMENT_HASH}/metrics/plots",
+        expand(
+            OUT_ROOT / "data/runs/{run_id}/summary.md",
+            run_id=collect_all_candidates(),
+        ),
 
 
 rule showcase_all:
@@ -61,6 +66,10 @@ rule showcase_all:
             run_id=collect_all_candidates(),
             param=["T_2M"],
             sta=["GVE", "KLO", "LUG"],
+        ),
+        expand(
+            OUT_ROOT / "data/runs/{run_id}/summary.md",
+            run_id=collect_all_candidates(),
         ),
 
 
