@@ -13,20 +13,21 @@ def _():
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
-    import xarray as xr
 
     from meteodatalab import data_source, grib_decoder
+
+    from data_input import load_analysis_data_from_zarr
 
     return (
         ArgumentParser,
         Path,
         data_source,
         grib_decoder,
+        load_analysis_data_from_zarr,
         logging,
         np,
         pd,
         plt,
-        xr,
     )
 
 
@@ -40,8 +41,6 @@ def _(logging):
 
 @app.cell
 def _(ArgumentParser, Path):
-    ROOT = Path(__file__).parent
-
     parser = ArgumentParser()
 
     parser.add_argument(
@@ -285,7 +284,15 @@ def _(pd):
 
 
 @app.cell
-def load_grib_data(data_source, grib_decoder, grib_dir, init_time, param):
+def load_grib_data(
+    data_source,
+    grib_decoder,
+    grib_dir,
+    init_time,
+    load_analysis_data_from_zarr,
+    param,
+    zarr_dir,
+):
     if param == "SP_10M":
         paramlist = ["U_10M", "V_10M"]
     elif param == "SP":
@@ -296,45 +303,26 @@ def load_grib_data(data_source, grib_decoder, grib_dir, init_time, param):
     grib_files = sorted(grib_dir.glob(f"{init_time}*.grib"))
     fds = data_source.FileDataSource(datafiles=grib_files)
     ds_grib = grib_decoder.load(fds, {"param": paramlist})
-    ds_grib = ds_grib[param].squeeze()
-    ds_grib
-    return ds_grib, paramlist
+    da_grib = ds_grib[param].squeeze()
+
+    ds_zarr = load_analysis_data_from_zarr(zarr_dir, da_grib.valid_time, paramlist)
+    da_zarr = ds_zarr[param].squeeze()
+    return da_grib, da_zarr
 
 
 @app.cell
-def load_zarr_data(ds_grib, np, param, paramlist, xr, zarr_dir):
-    ds_zarr = xr.open_zarr(zarr_dir, consolidated=False)
-    ds_zarr = ds_zarr.set_index(time="dates")
-    ds_zarr = ds_zarr.sel(time=ds_grib.valid_time.values)
-    ds_zarr = ds_zarr.assign_coords({"variable": ds_zarr.attrs["variables"]})
-    ds_zarr = ds_zarr.sel(variable=[p for p in paramlist]).squeeze(
-        "ensemble", drop=True
-    )
-
-    # recover original 2D shape
-    ny, nx = ds_zarr.attrs["field_shape"]
-    y_idx, x_idx = np.unravel_index(np.arange(ny * nx), shape=(ny, nx))
-    ds_zarr = ds_zarr.assign_coords({"y": ("cell", y_idx), "x": ("cell", x_idx)})
-    ds_zarr = ds_zarr.set_index(cell=("y", "x"))
-    ds_zarr = ds_zarr.unstack("cell")
-
-    # set lat lon as coords
-    ds_zarr = ds_zarr.rename({"latitudes": "lat", "longitudes": "lon"})
-    ds_zarr = ds_zarr.set_coords(["lat", "lon"])
-    ds_zarr = ds_zarr.sel(variable=param).squeeze()["data"]
-    ds_zarr
-    return (ds_zarr,)
-
-
-@app.cell
-def _(ds_grib, ds_zarr, np, pd, stations):
-    def nearest_yx_euclid(ds_grib, lat_s, lon_s):
+def _(da_grib, da_zarr, np, pd, stations):
+    def nearest_yx_euclid(ds, lat_s, lon_s):
         """
         Return (y_idx, x_idx) of the grid point nearest to (lat_s, lon_s)
         using Euclidean distance in degrees.
         """
-        lat2d = ds_grib["lat"]  # (y, x)
-        lon2d = ds_grib["lon"]  # (y, x)
+        try:
+            lat2d = ds["lat"]  # (y, x)
+            lon2d = ds["lon"]  # (y, x)
+        except KeyError:
+            lat2d = ds["latitude"]  # (y, x)
+            lon2d = ds["longitude"]  # (y, x)
 
         dist2 = (lat2d - lat_s) ** 2 + (lon2d - lon_s) ** 2
         flat_idx = np.nanargmin(dist2.values)
@@ -342,13 +330,13 @@ def _(ds_grib, ds_zarr, np, pd, stations):
         return int(y_idx), int(x_idx)
 
     def get_grib_idx_row(row):
-        return nearest_yx_euclid(ds_grib, row["latitude"], row["longitude"])
+        return nearest_yx_euclid(da_grib, row["latitude"], row["longitude"])
 
     idxs_grib = stations.apply(get_grib_idx_row, axis=1, result_type="expand")
     idxs_grib.columns = ["grib_y_idx", "grib_x_idx"]
 
     def get_zarr_idx_row(row):
-        return nearest_yx_euclid(ds_zarr, row["latitude"], row["longitude"])
+        return nearest_yx_euclid(da_zarr, row["latitude"], row["longitude"])
 
     idxs_zarr = stations.apply(get_zarr_idx_row, axis=1, result_type="expand")
     idxs_zarr.columns = ["zarr_y_idx", "zarr_x_idx"]
@@ -359,7 +347,7 @@ def _(ds_grib, ds_zarr, np, pd, stations):
 
 
 @app.cell
-def _(ds_grib, ds_zarr, outfn, plt, sta_idxs, station):
+def _(da_grib, da_zarr, init_time, outfn, plt, sta_idxs, station):
     grib_x_idx, grib_y_idx = (
         sta_idxs.loc[station].grib_x_idx,
         sta_idxs.loc[station].grib_y_idx,
@@ -370,23 +358,18 @@ def _(ds_grib, ds_zarr, outfn, plt, sta_idxs, station):
     )
 
     # analysis
-    ds_zarr.isel(x=zarr_x_idx, y=zarr_y_idx).plot(
+    da_zarr.isel(x=zarr_x_idx, y=zarr_y_idx).plot(
         x="time", label="analysis", color="k", ls="--"
     )
 
-    # TODO: plot actual forecaster data...
-    ds_grib.isel(x=grib_x_idx, y=grib_y_idx).isel(
-        lead_time=list(range(0, 126, 6))
-    ).plot(x="valid_time", marker="o", linestyle="None", color="k", label="forecaster")
-
-    # interpolator
-    ds_grib.isel(x=grib_x_idx, y=grib_y_idx).plot(x="valid_time", label="interpolator")
+    # forecast
+    da_grib.isel(x=grib_x_idx, y=grib_y_idx).plot(x="valid_time", label="interpolator")
 
     plt.legend()
     plt.ylabel(
-        f"{ds_grib.attrs['parameter']['shortName']} ({ds_grib.attrs['parameter']['units']})"
+        f"{da_grib.attrs['parameter']['shortName']} ({da_grib.attrs['parameter']['units']})"
     )
-    plt.title(f"{init_time} {ds_grib.attrs['parameter']['name']} at {station}")
+    plt.title(f"{init_time} {da_grib.attrs['parameter']['name']} at {station}")
     plt.savefig(outfn)
     return
 
