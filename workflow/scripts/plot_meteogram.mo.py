@@ -12,6 +12,7 @@ def _():
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
+    import xarray as xr
 
     from meteodatalab import data_source, grib_decoder
 
@@ -27,6 +28,7 @@ def _():
         np,
         pd,
         plt,
+        xr,
     )
 
 
@@ -287,8 +289,35 @@ def _(pd):
 
 
 @app.cell
-def _():
-    return
+def _(np):
+    def preprocess_ds(ds, param: str):
+        ds = ds.copy()
+        # 10m wind speed
+        if param == "SP_10M":
+            ds[param] = np.sqrt(ds.U_10M**2 + ds.V_10M**2)
+            try:
+                units = ds["U_10M"].attrs["parameter"]["units"]
+            except KeyError:
+                units = None
+            ds[param].attrs["parameter"] = {
+                "shortName": "SP_10M",
+                "units": units,
+                "name": "10m wind speed",
+            }
+            ds = ds.drop_vars(["U_10M", "V_10M"])
+        # wind speed from standard-level components
+        if param == "SP":
+            ds[param] = np.sqrt(ds.U**2 + ds.V**2)
+            units = ds.U.attrs["parameter"]["units"]
+            ds[param].attrs["parameter"] = {
+                "shortName": "SP",
+                "units": units,
+                "name": '"Wind speed',
+            }
+            ds = ds.drop_vars(["U", "V"])
+        return ds
+
+    return (preprocess_ds,)
 
 
 @app.cell
@@ -300,6 +329,8 @@ def load_grib_data(
     load_analysis_data_from_zarr,
     load_baseline_from_zarr,
     param,
+    preprocess_ds,
+    xr,
     zarr_dir_ana,
     zarr_dir_base,
 ):
@@ -312,16 +343,19 @@ def load_grib_data(
 
     grib_files = sorted(grib_dir.glob(f"{init_time}*.grib"))
     fds = data_source.FileDataSource(datafiles=grib_files)
-    ds_fct = grib_decoder.load(fds, {"param": paramlist})
+    ds_fct = xr.Dataset(grib_decoder.load(fds, {"param": paramlist}))
+    ds_fct = preprocess_ds(ds_fct, param)
     da_fct = ds_fct[param].squeeze()
 
     ds_ana = load_analysis_data_from_zarr(zarr_dir_ana, da_fct.valid_time, paramlist)
+    ds_ana = preprocess_ds(ds_ana, param)
     da_ana = ds_ana[param].squeeze()
 
     steps = list(
         range(da_fct.sizes["lead_time"])
     )  # FIX: this will fail if lead_time is not 0,1,2,...
     ds_base = load_baseline_from_zarr(zarr_dir_base, da_fct.ref_time, steps, paramlist)
+    ds_base = preprocess_ds(ds_base, param)
     da_base = ds_base[param].squeeze()
     return da_ana, da_base, da_fct
 
