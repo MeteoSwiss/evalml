@@ -9,11 +9,23 @@ include: "common.smk"
 import pandas as pd
 
 
+def _use_first_baseline_zarr(wc):
+    """Get the first available baseline zarr for the given init time."""
+    for baseline_id in BASELINE_CONFIGS:
+        root = BASELINE_CONFIGS[baseline_id].get("root")
+        year = wc.init_time[2:4]
+        baseline_zarr = f"{root}/FCST{year}.zarr"
+        if Path(baseline_zarr).exists():
+            return baseline_zarr
+    raise ValueError(f"No baseline zarr found for init time {wc.init_time}")
+
+
 rule plot_meteogram:
     input:
         script="workflow/scripts/plot_meteogram.mo.py",
         inference_okfile=rules.execute_inference.output.okfile,
         analysis_zarr=config["analysis"].get("analysis_zarr"),
+        baseline_zarr=lambda wc: _use_first_baseline_zarr(wc),
     output:
         OUT_ROOT / "showcases/{run_id}/{init_time}/{init_time}_{param}_{sta}.png",
     # localrule: True
@@ -30,11 +42,13 @@ rule plot_meteogram:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         python {input.script} \
             --forecast {params.grib_out_dir}  --analysis {input.analysis_zarr} \
+            --baseline {input.baseline_zarr} \
             --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param}  --station {wildcards.sta}
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
         #     --forecast {params.grib_out_dir}  --analysis {input.analysis_zarr} \
+        #     --baseline {input.baseline_zarr} \
         #     --date {wildcards.init_time} --outfn {output[0]} \
         #     --param {wildcards.param}  --station {wildcards.sta}
         """

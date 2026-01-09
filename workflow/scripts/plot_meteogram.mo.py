@@ -15,7 +15,7 @@ def _():
 
     from meteodatalab import data_source, grib_decoder
 
-    from data_input import load_analysis_data_from_zarr
+    from data_input import load_analysis_data_from_zarr, load_baseline_from_zarr
 
     return (
         ArgumentParser,
@@ -23,6 +23,7 @@ def _():
         data_source,
         grib_decoder,
         load_analysis_data_from_zarr,
+        load_baseline_from_zarr,
         np,
         pd,
         plt,
@@ -39,6 +40,9 @@ def _(ArgumentParser, Path):
     parser.add_argument(
         "--analysis", type=str, default=None, help="Path to analysis zarr data"
     )
+    parser.add_argument(
+        "--baseline", type=str, default=None, help="Path to baseline zarr data"
+    )
     parser.add_argument("--date", type=str, default=None, help="reference datetime")
     parser.add_argument("--outfn", type=str, help="output filename")
     parser.add_argument("--param", type=str, help="parameter")
@@ -46,12 +50,21 @@ def _(ArgumentParser, Path):
 
     args = parser.parse_args()
     grib_dir = Path(args.forecast)
-    zarr_dir = Path(args.analysis)
+    zarr_dir_ana = Path(args.analysis)
+    zarr_dir_base = Path(args.baseline)
     init_time = args.date
     outfn = Path(args.outfn)
     station = args.station
     param = args.param
-    return grib_dir, init_time, outfn, param, station, zarr_dir
+    return (
+        grib_dir,
+        init_time,
+        outfn,
+        param,
+        station,
+        zarr_dir_ana,
+        zarr_dir_base,
+    )
 
 
 @app.cell
@@ -274,14 +287,21 @@ def _(pd):
 
 
 @app.cell
+def _():
+    return
+
+
+@app.cell
 def load_grib_data(
     data_source,
     grib_decoder,
     grib_dir,
     init_time,
     load_analysis_data_from_zarr,
+    load_baseline_from_zarr,
     param,
-    zarr_dir,
+    zarr_dir_ana,
+    zarr_dir_base,
 ):
     if param == "SP_10M":
         paramlist = ["U_10M", "V_10M"]
@@ -292,16 +312,22 @@ def load_grib_data(
 
     grib_files = sorted(grib_dir.glob(f"{init_time}*.grib"))
     fds = data_source.FileDataSource(datafiles=grib_files)
-    ds_grib = grib_decoder.load(fds, {"param": paramlist})
-    da_grib = ds_grib[param].squeeze()
+    ds_fct = grib_decoder.load(fds, {"param": paramlist})
+    da_fct = ds_fct[param].squeeze()
 
-    ds_zarr = load_analysis_data_from_zarr(zarr_dir, da_grib.valid_time, paramlist)
-    da_zarr = ds_zarr[param].squeeze()
-    return da_grib, da_zarr
+    ds_ana = load_analysis_data_from_zarr(zarr_dir_ana, da_fct.valid_time, paramlist)
+    da_ana = ds_ana[param].squeeze()
+
+    steps = list(
+        range(da_fct.sizes["lead_time"])
+    )  # FIX: this will fail if lead_time is not 0,1,2,...
+    ds_base = load_baseline_from_zarr(zarr_dir_base, da_fct.ref_time, steps, paramlist)
+    da_base = ds_base[param].squeeze()
+    return da_ana, da_base, da_fct
 
 
 @app.cell
-def _(da_grib, da_zarr, np, pd, stations):
+def _(da_ana, da_base, da_fct, np, pd, stations):
     def nearest_yx_euclid(ds, lat_s, lon_s):
         """
         Return (y_idx, x_idx) of the grid point nearest to (lat_s, lon_s)
@@ -319,47 +345,66 @@ def _(da_grib, da_zarr, np, pd, stations):
         y_idx, x_idx = np.unravel_index(flat_idx, dist2.shape)
         return int(y_idx), int(x_idx)
 
-    def get_grib_idx_row(row):
-        return nearest_yx_euclid(da_grib, row["latitude"], row["longitude"])
+    def get_fct_idx_row(row):
+        return nearest_yx_euclid(da_fct, row["latitude"], row["longitude"])
 
-    idxs_grib = stations.apply(get_grib_idx_row, axis=1, result_type="expand")
-    idxs_grib.columns = ["grib_y_idx", "grib_x_idx"]
+    idxs_fct = stations.apply(get_fct_idx_row, axis=1, result_type="expand")
+    idxs_fct.columns = ["fct_y_idx", "fct_x_idx"]
 
-    def get_zarr_idx_row(row):
-        return nearest_yx_euclid(da_zarr, row["latitude"], row["longitude"])
+    def get_ana_idx_row(row):
+        return nearest_yx_euclid(da_ana, row["latitude"], row["longitude"])
 
-    idxs_zarr = stations.apply(get_zarr_idx_row, axis=1, result_type="expand")
-    idxs_zarr.columns = ["zarr_y_idx", "zarr_x_idx"]
+    idxs_ana = stations.apply(get_ana_idx_row, axis=1, result_type="expand")
+    idxs_ana.columns = ["ana_y_idx", "ana_x_idx"]
 
-    sta_idxs = pd.concat([stations, idxs_grib, idxs_zarr], axis=1).set_index("station")
+    def get_base_idx_row(row):
+        return nearest_yx_euclid(da_base, row["latitude"], row["longitude"])
+
+    idxs_base = stations.apply(get_base_idx_row, axis=1, result_type="expand")
+    idxs_base.columns = ["base_y_idx", "base_x_idx"]
+
+    sta_idxs = pd.concat([stations, idxs_fct, idxs_ana, idxs_base], axis=1).set_index(
+        "station"
+    )
     sta_idxs
     return (sta_idxs,)
 
 
 @app.cell
-def _(da_grib, da_zarr, init_time, outfn, plt, sta_idxs, station):
-    grib_x_idx, grib_y_idx = (
-        sta_idxs.loc[station].grib_x_idx,
-        sta_idxs.loc[station].grib_y_idx,
+def _(da_ana, da_base, da_fct, init_time, outfn, plt, sta_idxs, station):
+    fct_x_idx, fct_y_idx = (
+        sta_idxs.loc[station].fct_x_idx,
+        sta_idxs.loc[station].fct_y_idx,
     )
-    zarr_x_idx, zarr_y_idx = (
-        sta_idxs.loc[station].zarr_x_idx,
-        sta_idxs.loc[station].zarr_y_idx,
+    ana_x_idx, ana_y_idx = (
+        sta_idxs.loc[station].ana_x_idx,
+        sta_idxs.loc[station].ana_y_idx,
+    )
+    base_x_idx, base_y_idx = (
+        sta_idxs.loc[station].base_x_idx,
+        sta_idxs.loc[station].base_y_idx,
     )
 
     # analysis
-    da_zarr.isel(x=zarr_x_idx, y=zarr_y_idx).plot(
+    da_ana.isel(x=ana_x_idx, y=ana_y_idx).plot(
         x="time", label="analysis", color="k", ls="--"
     )
 
+    # baseline
+    da_base.isel(x=base_x_idx, y=base_y_idx).plot(
+        x="time", label="baseline", color="C1"
+    )
+
     # forecast
-    da_grib.isel(x=grib_x_idx, y=grib_y_idx).plot(x="valid_time", label="interpolator")
+    da_fct.isel(x=fct_x_idx, y=fct_y_idx).plot(
+        x="valid_time", label="forecast", color="C0"
+    )
 
     plt.legend()
     plt.ylabel(
-        f"{da_grib.attrs['parameter']['shortName']} ({da_grib.attrs['parameter']['units']})"
+        f"{da_fct.attrs['parameter']['shortName']} ({da_fct.attrs['parameter']['units']})"
     )
-    plt.title(f"{init_time} {da_grib.attrs['parameter']['name']} at {station}")
+    plt.title(f"{init_time} {da_fct.attrs['parameter']['name']} at {station}")
     plt.savefig(outfn)
     return
 
