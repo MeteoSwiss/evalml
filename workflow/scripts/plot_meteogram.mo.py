@@ -6,7 +6,6 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
-    import logging
     from argparse import ArgumentParser
     from pathlib import Path
 
@@ -24,19 +23,10 @@ def _():
         data_source,
         grib_decoder,
         load_analysis_data_from_zarr,
-        logging,
         np,
         pd,
         plt,
     )
-
-
-@app.cell
-def _(logging):
-    LOG = logging.getLogger(__name__)
-    LOG_FMT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    logging.basicConfig(level=logging.INFO, format=LOG_FMT)
-    return
 
 
 @app.cell
