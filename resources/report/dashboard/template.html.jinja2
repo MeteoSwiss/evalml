@@ -94,13 +94,13 @@
 
     <div class="header">
         <div class="tab-buttons">
-            <button class="tab-link active" data-tab="tab1">Standard verification</button>
-            <button class="tab-link" data-tab="tab2">Diagnostic verification</button>
+            <button class="tab-link active" data-tab="tab_scores">Standard verification</button>
+            <button class="tab-link" data-tab="tab_config">Config file</button>
         </div>
     </div>
 
     <!-- First tab -->
-    <div id="tab1" class="tab-content active">
+    <div id="tab_scores" class="tab-content active">
         <div class="controls">
             <div class="control-group">
                 <label>Region</label>
@@ -139,8 +139,13 @@
     </div>
 
 
-    <!-- Second tab -->
-    <div id="tab2" class="tab-content">Coming soon...</div>
+    <!-- Config file tab -->
+    <div id="tab_config" class="tab-content">
+        <h3>Config: {{ configfile_path if configfile_path and configfile_content else '' }}</h3>
+        <pre style="background:#f7f7f7; border:1px solid #ddd; padding:1em; overflow-x:auto; max-height:60vh;">
+{{ configfile_content | e }}
+        </pre>
+    </div>
 
 
     <script id="verif-data" type="application/json">
