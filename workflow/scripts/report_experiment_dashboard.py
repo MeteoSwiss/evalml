@@ -79,8 +79,9 @@ def main(args):
         metrics=metrics,
         regions=regions,
         header_text=args.header_text,
-        configfile_path=args.configfile,
-        configfile_content=open(args.configfile, "r").read(),
+        configfile_content=open(args.configfile, "r").read()
+        if args.configfile.is_file()
+        else "",
     )
     LOG.info("Size of generated HTML: %d bytes", len(html.encode("utf-8")))
 
