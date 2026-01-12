@@ -71,13 +71,10 @@ rule make_forecast_animation:
 
 rule plot_summary_stat_maps:
     input:
-        script="workflow/scripts/plot_forecast_frame.mo.py",
+        script="workflow/scripts/plot_summary_stat_maps.mo.py",
         inference_okfile=rules.execute_inference.output.okfile,
     output:
-        temp(
-            OUT_ROOT
-            / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{region}.png"
-        ),
+        OUT_ROOT / "results/summary_stats/maps/{run_id}/{leadtime}/{metric}_{param}_{region}.png",
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
     resources:
@@ -85,9 +82,7 @@ rule plot_summary_stat_maps:
         cpus_per_task=1,
         runtime="10m",
     params:
-        grib_out_dir=lambda wc: (
-            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
-        ).resolve(),
+        # What do I need here?
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
