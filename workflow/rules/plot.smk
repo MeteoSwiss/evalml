@@ -82,12 +82,14 @@ rule plot_summary_stat_maps:
         cpus_per_task=1,
         runtime="10m",
     params:
-        # What do I need here?
+        nc_out_dir=lambda wc: (
+            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib" # to be adjusted.
+        ).resolve(),
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         python {input.script} \
-            --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]} \
+            --input {params.nc_out_dir}  --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region} \
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
