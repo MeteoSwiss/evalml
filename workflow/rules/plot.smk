@@ -83,7 +83,9 @@ rule plot_summary_stat_maps:
         runtime="10m",
     params:
         nc_out_dir=lambda wc: (
-            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib" # to be adjusted.
+            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib" 
+            # not sure how to do this, because the baselines are in, e.g., output/data/baselines/COSMO-E/verif_aggregated.nc
+            # and the runs are in output/data/runs/runID/verif_aggregated.nc
         ).resolve(),
     shell:
         """

@@ -6,18 +6,30 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    
+    # this sure stays the same.
     import logging
     from argparse import ArgumentParser
     from pathlib import Path
 
+    # this sure stays the same.
     import cartopy.crs as ccrs
     import earthkit.plots as ekp
     import numpy as np
 
+    # this stays the same as well.
     from plotting import DOMAINS
+    
+    # no changes to StatePlotter required according to ChatGPT.
     from plotting import StatePlotter
+
+    # Probably need some new colour maps.
+    # at least one for biases (diverging), maybe different diverging ones for the different variables.
+    # 
     from plotting.colormap_defaults import CMAP_DEFAULTS
-    from plotting.compat import load_state_from_grib
+
+    # need to load nc files...
+    from plotting.compat import load_state_from_grib # TODO: load state from nc?
 
     return (
         ArgumentParser,
