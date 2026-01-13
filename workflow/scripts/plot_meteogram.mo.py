@@ -68,6 +68,7 @@ def _(ArgumentParser, Path):
         init_time,
         outfn,
         param,
+        peakweather_dir,
         station,
         zarr_dir_ana,
         zarr_dir_base,
