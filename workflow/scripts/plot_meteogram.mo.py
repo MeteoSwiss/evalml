@@ -13,14 +13,15 @@ def _():
     import numpy as np
     import pandas as pd
     import xarray as xr
-
     from meteodatalab import data_source, grib_decoder
+    from peakweather import PeakWeatherDataset
 
     from data_input import load_analysis_data_from_zarr, load_baseline_from_zarr
 
     return (
         ArgumentParser,
         Path,
+        PeakWeatherDataset,
         data_source,
         grib_decoder,
         load_analysis_data_from_zarr,
@@ -45,6 +46,9 @@ def _(ArgumentParser, Path):
     parser.add_argument(
         "--baseline", type=str, default=None, help="Path to baseline zarr data"
     )
+    parser.add_argument(
+        "--peakweather", type=str, default=None, help="Path to PeakWeather dataset"
+    )
     parser.add_argument("--date", type=str, default=None, help="reference datetime")
     parser.add_argument("--outfn", type=str, help="output filename")
     parser.add_argument("--param", type=str, help="parameter")
@@ -54,6 +58,7 @@ def _(ArgumentParser, Path):
     grib_dir = Path(args.forecast)
     zarr_dir_ana = Path(args.analysis)
     zarr_dir_base = Path(args.baseline)
+    peakweather_dir = Path(args.peakweather)
     init_time = args.date
     outfn = Path(args.outfn)
     station = args.station
@@ -67,225 +72,6 @@ def _(ArgumentParser, Path):
         zarr_dir_ana,
         zarr_dir_base,
     )
-
-
-@app.cell
-def _(pd):
-    stations = pd.DataFrame(
-        [
-            (
-                "BAS",
-                "1_75",
-                1,
-                75,
-                "BAS",
-                "Basel / Binningen",
-                1,
-                "MeteoSchweiz",
-                7.583,
-                47.541,
-                316.14,
-                12.0,
-                0.0,
-            ),
-            (
-                "LUG",
-                "1_47",
-                1,
-                47,
-                "LUG",
-                "Lugano",
-                1,
-                "MeteoSchweiz",
-                8.960,
-                46.004,
-                272.56,
-                10.0,
-                27.34,
-            ),
-            (
-                "GVE",
-                "1_58",
-                1,
-                58,
-                "GVE",
-                "Gen\u00e8ve / Cointrin",
-                1,
-                "MeteoSchweiz",
-                6.122,
-                46.248,
-                415.53,
-                10.0,
-                0.0,
-            ),
-            (
-                "GUT",
-                "1_79",
-                1,
-                79,
-                "GUT",
-                "G\u00fcttingen",
-                1,
-                "MeteoSchweiz",
-                9.279,
-                47.602,
-                439.78,
-                12.0,
-                0.0,
-            ),
-            (
-                "KLO",
-                "1_59",
-                1,
-                59,
-                "KLO",
-                "Z\u00fcrich / Kloten",
-                1,
-                "MeteoSchweiz",
-                8.536,
-                47.48,
-                435.92,
-                10.5,
-                0.0,
-            ),
-            (
-                "SCU",
-                "1_30",
-                1,
-                30,
-                "SCU",
-                "Scuol",
-                1,
-                "MeteoSchweiz",
-                10.283,
-                46.793,
-                1304.42,
-                10.0,
-                0.0,
-            ),
-            (
-                "LUZ",
-                "1_68",
-                1,
-                68,
-                "LUZ",
-                "Luzern",
-                1,
-                "MeteoSchweiz",
-                8.301,
-                47.036,
-                454.0,
-                8.41,
-                32.51,
-            ),
-            (
-                "DIS",
-                "1_54",
-                1,
-                54,
-                "DIS",
-                "Disentis",
-                1,
-                "MeteoSchweiz",
-                8.853,
-                46.707,
-                1198.03,
-                10.0,
-                0.0,
-            ),
-            (
-                "PMA",
-                "1_862",
-                1,
-                862,
-                "PMA",
-                "Piz Martegnas",
-                1,
-                "MeteoSchweiz",
-                9.529,
-                46.577,
-                2668.34,
-                10.0,
-                0.0,
-            ),
-            (
-                "CEV",
-                "1_843",
-                1,
-                843,
-                "CEV",
-                "Cevio",
-                1,
-                "MeteoSchweiz",
-                8.603,
-                46.32,
-                420.0,
-                10.0,
-                6.85,
-            ),
-            (
-                "MLS",
-                "1_38",
-                1,
-                38,
-                "MLS",
-                "Le Mol\u00e9son",
-                1,
-                "MeteoSchweiz",
-                7.018,
-                46.546,
-                1977.0,
-                10.0,
-                13.31,
-            ),
-            (
-                "PAY",
-                "1_32",
-                1,
-                32,
-                "PAY",
-                "Payerne",
-                1,
-                "MeteoSchweiz",
-                6.942,
-                46.811,
-                489.17,
-                10.0,
-                0.0,
-            ),
-            (
-                "NAP",
-                "1_48",
-                1,
-                48,
-                "NAP",
-                "Napf",
-                1,
-                "MeteoSchweiz",
-                7.94,
-                47.005,
-                1404.03,
-                15.0,
-                0.0,
-            ),
-        ],
-        columns=[
-            "station",
-            "name",
-            "type_id",
-            "point_id",
-            "nat_abbr",
-            "fullname",
-            "owner_id",
-            "owner_name",
-            "longitude",
-            "latitude",
-            "height_masl",
-            "pole_height",
-            "roof_height",
-        ],
-    )
-    return (stations,)
 
 
 @app.cell
@@ -361,6 +147,43 @@ def load_grib_data(
 
 
 @app.cell
+def _(PeakWeatherDataset, da_fct, np, param, peakweather_dir, station):
+    if param == "T_2M":
+        parameter = "temperature"
+        offset = 273.15  # K to C
+    elif param == "SP_10M":
+        parameter = "wind_speed"
+        offset = 0
+    elif param == "TOT_PREC":
+        parameter = "precipitation"
+        offset = 0
+    else:
+        raise NotImplementedError(
+            f"The mapping for {param=} to PeakWeather is not implemented"
+        )
+
+    peakweather = PeakWeatherDataset(root=peakweather_dir, freq="1h")
+    obs, mask = peakweather.get_observations(
+        parameters=[parameter],
+        stations=station,
+        first_date=np.datetime_as_string(da_fct.valid_time.values[0]),
+        last_date=np.datetime_as_string(da_fct.valid_time.values[-1]),
+        return_mask=True,
+    )
+    obs = obs.loc[:, mask.iloc[0]].droplevel("name", axis=1)
+    obs
+    return obs, offset, peakweather
+
+
+@app.cell
+def _(peakweather):
+    stations = peakweather.stations_table
+    stations.index.names = ["station"]
+    stations
+    return (stations,)
+
+
+@app.cell
 def _(da_ana, da_base, da_fct, np, pd, stations):
     def nearest_yx_euclid(ds, lat_s, lon_s):
         """
@@ -397,49 +220,74 @@ def _(da_ana, da_base, da_fct, np, pd, stations):
     idxs_base = stations.apply(get_base_idx_row, axis=1, result_type="expand")
     idxs_base.columns = ["base_y_idx", "base_x_idx"]
 
-    sta_idxs = pd.concat([stations, idxs_fct, idxs_ana, idxs_base], axis=1).set_index(
-        "station"
-    )
+    sta_idxs = pd.concat([stations, idxs_fct, idxs_ana, idxs_base], axis=1)
     sta_idxs
     return (sta_idxs,)
 
 
 @app.cell
-def _(da_ana, da_base, da_fct, init_time, outfn, plt, sta_idxs, station):
-    fct_x_idx, fct_y_idx = (
-        sta_idxs.loc[station].fct_x_idx,
-        sta_idxs.loc[station].fct_y_idx,
-    )
-    ana_x_idx, ana_y_idx = (
-        sta_idxs.loc[station].ana_x_idx,
-        sta_idxs.loc[station].ana_y_idx,
-    )
-    base_x_idx, base_y_idx = (
-        sta_idxs.loc[station].base_x_idx,
-        sta_idxs.loc[station].base_y_idx,
+def _(da_ana, da_base, da_fct, init_time, obs, offset, outfn, plt, sta_idxs, station):
+    # station indices
+    row = sta_idxs.loc[station]
+    fct_x_idx, fct_y_idx = row.fct_x_idx, row.fct_y_idx
+    ana_x_idx, ana_y_idx = row.ana_x_idx, row.ana_y_idx
+    base_x_idx, base_y_idx = row.base_x_idx, row.base_y_idx
+
+    fig, ax = plt.subplots()
+
+    # station
+    ax.plot(
+        obs.index.to_pydatetime(),
+        obs.to_numpy() + offset,
+        color="k",
+        ls="--",
+        label=station,
     )
 
     # analysis
-    da_ana.isel(x=ana_x_idx, y=ana_y_idx).plot(
-        x="time", label="analysis", color="k", ls="--"
+    ana2plot = da_ana.isel(x=ana_x_idx, y=ana_y_idx)
+    ax.plot(
+        ana2plot["time"].values,
+        ana2plot.values,
+        color="k",
+        ls="-",
+        label="analysis",
     )
 
     # baseline
-    da_base.isel(x=base_x_idx, y=base_y_idx).plot(
-        x="time", label="baseline", color="C1"
+    base2plot = da_base.isel(x=base_x_idx, y=base_y_idx)
+    ax.plot(
+        base2plot["time"].values,
+        base2plot.values,
+        color="C1",
+        label="baseline",
     )
 
     # forecast
-    da_fct.isel(x=fct_x_idx, y=fct_y_idx).plot(
-        x="valid_time", label="forecast", color="C0"
+    fct2plot = da_fct.isel(x=fct_x_idx, y=fct_y_idx)
+    ax.plot(
+        fct2plot["valid_time"].values,
+        fct2plot.values,
+        color="C0",
+        label="forecast",
     )
 
-    plt.legend()
-    plt.ylabel(
-        f"{da_fct.attrs['parameter']['shortName']} ({da_fct.attrs['parameter']['units']})"
-    )
-    plt.title(f"{init_time} {da_fct.attrs['parameter']['name']} at {station}")
+    ax.legend()
+
+    param2plot = da_fct.attrs.get("parameter", {})
+    short = param2plot.get("shortName", "")
+    units = param2plot.get("units", "")
+    name = param2plot.get("name", "")
+
+    ax.set_ylabel(f"{short} ({units})" if short or units else "")
+    ax.set_title(f"{init_time} {name} at {station}")
+
     plt.savefig(outfn)
+    return
+
+
+@app.cell
+def _():
     return
 
 
