@@ -23,13 +23,12 @@ def _():
     # no changes to StatePlotter required according to ChatGPT.
     from plotting import StatePlotter
 
-    # Probably need some new colour maps.
-    # at least one for biases (diverging), maybe different diverging ones for the different variables.
-    # 
+    # Added some new colour maps for the Bias / MAE / RMSE map plots. 
     from plotting.colormap_defaults import CMAP_DEFAULTS
 
-    # need to load nc files...
-    from plotting.compat import load_state_from_grib # TODO: load state from nc?
+    # need to load nc files. But this statement is not needed any more because 
+    # the .nc files can just be read with xr.open_dataset
+    # from plotting.compat import load_state_from_grib 
 
     return (
         ArgumentParser,
@@ -37,7 +36,7 @@ def _():
         Path,
         StatePlotter,
         ekp,
-        load_state_from_grib,
+        # load_state_from_grib,
         logging,
         np,
         DOMAINS,
@@ -58,25 +57,23 @@ def _(ArgumentParser, Path):
     parser = ArgumentParser()
 
     parser.add_argument(
-        "--input", type=str, default=None, help="Directory to grib data"
+        "--input", type=str, default=None, help="Directory to .nc data containing the error fields"
     )
-    parser.add_argument("--date", type=str, default=None, help="reference datetime")
+
     parser.add_argument("--outfn", type=str, help="output filename")
     parser.add_argument("--leadtime", type=str, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
     parser.add_argument("--region", type=str, help="name of region")
 
     args = parser.parse_args()
-    grib_dir = Path(args.input)
-    init_time = args.date
+    nc_dir = Path(args.input)
     outfn = Path(args.outfn)
     lead_time = args.leadtime
     param = args.param
     region = args.region
     return (
         args,
-        grib_dir,
-        init_time,
+        nc_dir,
         lead_time,
         outfn,
         param,
@@ -85,9 +82,9 @@ def _(ArgumentParser, Path):
 
 
 @app.cell
-def _(grib_dir, init_time, lead_time, load_state_from_grib, param):
+def _(nc_dir, init_time, lead_time, load_state_from_grib, param):
     # load grib file
-    grib_file = grib_dir / f"{init_time}_{lead_time}.grib"
+    grib_file = nc_dir / f"{init_time}_{lead_time}.grib"
     if param == "SP_10M":
         paramlist = ["U_10M", "V_10M"]
     elif param == "SP":
