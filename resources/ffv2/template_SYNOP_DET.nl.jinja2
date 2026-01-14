@@ -1,0 +1,84 @@
+
+# variables to verify.
+varnoContinuous     'T2M,TD2M,RH2M,U10M,V10M,PS,FF,DD,GUST_6h,RR_6h' #,RR_6h,N,N_L,N_M,N_H,RAD_GL_1h
+pecthresholds       list('FF'=list('lower'=c(2),'upper'=c(7))) # hit rates (percent correct forecast) for the forecast to hit the observation within the given limits are calculated.
+catthresholds       list('T2M'=c(282,292),'FF'=c(2.5,5,10)) # no space allowed between variables
+
+# senseful and short description of the model versions to verify.
+# example: 'D-metno,C-metno_rollout,C-cerra_rollout'
+expIds          {{ experiment_ids }}
+
+
+
+# location of the feedback files. All feedback files per model must be stored
+# in one directory and the order must correspond to expIds
+# Example: '/src/ffv2/input/,'
+fdbkDirs   {{ feedback_directories }}
+
+# should be however many models 
+# example: '-1,-1,-1' for 3 models
+veri_ens_member {{ veri_ens_member }}
+
+
+# the (existing!) output directory (absolute or relative to working directory)
+outDir          {{ output_directory }}
+
+# string used to build the filenames of the intermediate scorefiles (one valid date). Only restriction:
+# no other file in the output directory contains that string in the filename
+# example: 'emulator_onPL_ALL_obs_2020'
+expDescr        {{ experiment_description }}
+
+# string used to build the filenames of the final scorefiles.
+# please follow the naming convention explained on the wiki page
+# This should match the output file for this from snakemake rule
+# Example: 'exp_ACOSMO-2-models_C-2E-CTRL_2020'
+fileDescr       {{ file_description }}
+
+
+# string to filter feedback file input. All feedback files that contain the string in their filename are used.
+# regular expressions are allowed, for details see list.files() in R
+filePattern     'verSYNOP'
+
+# switch experiment/routine verification. Set to T. (F only for DWD routine verification)
+experiment      'T'
+
+# switch for testing if two model versions differ significantly (T/F). Set to T only if there are two or more model versions to verify
+sigTest         'T'
+
+# subdomains to verify
+subdomains      'USER'
+# Location of domain table and blacklists. This data should be mounted from balfrin into
+# the container. Recommend using the same path in src/dest, for simplicity.
+# Example: '/users/paa/01_store/02_FFV2/data/7_ML_inner_polygon'
+domainTable   {{ domain_table }}
+# Example:  '/users/paa/01_store/02_FFV2/data/blacklist'
+blacklists     {{ blacklists }}
+
+# time binning steps for valid times (in minutes) relative to the valid time of the feedback file (timestamp in filename) read
+# (time granularity of the verification)
+# does not apply to data of more than one FF (because FF are read sequently)
+timeSteps       '0'
+
+# range of the temporal bins in minutes
+timeBreaks      '30,-30'
+
+# set forecast times for which scores should be calculated.
+# useful filter for lead times with very low LEN. Effect: summary plots slightly different and summary2 plots more readable
+# DONT USE 0H LEADTIMES BECAUSE OF IAU (see OneNote QRM notes from 31.1.2024). What to show: see Verification multilat of 12 March 2024
+#veri_forecast_time  '0000,1200,2400,3600,4800,6000,7200,8400,9600,10800,12000'
+
+# run class(es). See Table 27 in the Feedback File Definition (version of 29 Oct. 2019)
+#veri_run_class  '0,2'  should be 2 for assimilation cycle but is in FF: veri_run_class = _ ; => comment out
+
+# run type(s). See Table 26 in the Feedback File Definition (version of 29 Oct. 2019)
+veri_run_type   '0,4'           # "0" filters model data originating from ekf verification. "4" to include analysis, i.e 0h lead time (present in FF because efk File was used for MEC input)
+
+
+#veri_model   "ML"       # this filters model data originating from ekf verification but also data from opr COSMO-2 FF  (if included in fdbkDirs)!
+
+
+# state(s) of observation to be used. See Table 8 in the Feedback File Definition (version of 29 Oct. 2019)
+#state           '0,1,5,7,13'  # "7" should include all obs rejected by the DA system but actually it doesnt
+
+# state(s) of report to be used. See Table 8 in the Feedback File Definition (version of 29 Oct. 2019)
+#r_state         '0,1,5,7,13'
