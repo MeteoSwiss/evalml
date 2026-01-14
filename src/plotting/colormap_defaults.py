@@ -57,7 +57,8 @@ _CMAP_DEFAULTS = {
     },
 
     # hard-code this for the moment, can still make smarter later on:
-    # RMSE and MAE first (is all the same). Use Reds colormap to indicate 'error'. 
+    # RMSE and MAE first (is all the same). Sequential colour map to reflect the nature of the data (error, all positive).
+    # Red is suggestive of 'bad' (high error).
     # Use a limited number of levels so that absolute values of error can be read from the map. 
     # always start at 0 so that the saturation of the colour corresponds to the error magnitude.
 
@@ -80,6 +81,8 @@ _CMAP_DEFAULTS = {
     "TOT_PREC.MAE.spatial": {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "mm"}, 
 
     # Bias:
+    # diverging colour scheme for the Bias to reflect the nature of the data (can be positive or negative, symmetric).
+    # Red-Blue colour scheme for all variables except precipitation, where a Brown-Green scheme is more suggestive.
     "U_10M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu", 11), "norm": symmetric_boundary_norm(nlevels=11)} | {"units": "m/s"}, 
     "V_10M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu", 11), "norm": symmetric_boundary_norm(nlevels=11)} | {"units": "m/s"},
     "TD_2M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu", 11), "norm": symmetric_boundary_norm(nlevels=11)} | {"units": "°C"},
