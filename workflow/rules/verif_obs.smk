@@ -99,7 +99,9 @@ rule run_mec:
         run_dir=directory(rules.collect_mec_input.output.run),
     output:
         fdbk_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/verSYNOP.nc",
-        final_fdbk_file_dir=directory({input.run_dir}/../../fdbk_files)
+    params:
+        # Question: is this correct?
+        final_fdbk_file_dir=OUT_ROOT / "data/runs/{run_id}/fdbk_files",
     resources:
         cpus_per_task=1,
         runtime="1h",
@@ -113,7 +115,7 @@ rule run_mec:
 
         # Run MEC inside sarus container
         # Note: pull command currently needed only once to download the container
-        # sarus pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
+        sarus pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
         abs_run_dir=$(realpath {input.run_dir})
         sarus run --mount=type=bind,source=$abs_run_dir,destination=/src/bin2 --mount=type=bind,source=/oprusers/osm/opr.emme/data/,destination=/oprusers/osm/opr.emme/data/ container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
 
@@ -124,8 +126,8 @@ rule run_mec:
         #./mec > ./mec_out.log 2>&1
 
         # move the output file to the final location for the Feedback files
-        mkdir -p {output.final_fdbk_file_dir}
-        cp {input.run_dir}/verSYNOP.nc {output.final_fdbk_file_dir}/verSYNOP_{wildcards.init_time}.nc
+        mkdir -p {params.final_fdbk_file_dir}
+        cp {input.run_dir}/verSYNOP.nc {params.final_fdbk_file_dir}/verSYNOP_{wildcards.init_time}.nc
         echo "...time at end of run_mec: $(date)"
         ) > {log} 2>&1
         """
@@ -140,19 +142,20 @@ rule generate_ffv2_namelist:
         # generation script checks that the feedback dirs exist.
         # So blocking is desireable.
         # QUESTION: We may want more than one directory here, if we are comparing models.
-        feedback_directory=rules.run_mec.output.final_fdbk_file_dir
+        feedback_directory=rules.run_mec.params.final_fdbk_file_dir,
     output:
-        namelist=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/template_SYNOP_DET.nl",
+        # Question: Definitely want to aggregate over init time, but will we have 1 run_ffv2 per run_id, or 1 run of ffv2 for all run_ids?
+        namelist=OUT_ROOT / "data/runs/{run_id}/template_SYNOP_DET.nl",
     params:
         # TODO: consider including run_ids here?
-        experiment_ids="SrucMLModel,"
+        experiment_ids="SrucMLModel,",
         # Keeping this as a param. We will create it in run_ffv2 rule.
-        output_directory="{rules.run_mec.output.final_fdbk_file_dir}/scores",
+        output_directory=OUT_ROOT / "data/runs/{run_id}/scores",
         # TODO: update descriptions to something more fitting
-        experiment_description="emulator_onPL_ALL_obs_2020"
-        file_description="exp_ACOSMO-2-models_C-2E-CTRL_2020"
-        domain_table="/users/paa/01_store/02_FFV2/data/7_ML_inner_polygon"
-        blacklists="/users/paa/01_store/02_FFV2/data/blacklist"
+        experiment_description="emulator_onPL_ALL_obs_2020",
+        file_description="exp_ACOSMO-2-models_C-2E-CTRL_2020",
+        domain_table="/users/paa/01_store/02_FFV2/data/7_ML_inner_polygon",
+        blacklists="/users/paa/01_store/02_FFV2/data/blacklist",
     shell:
         """
         uv run {input.script} \
@@ -167,24 +170,25 @@ rule generate_ffv2_namelist:
             --blacklists {params.blacklists}
         """
 
+# Question: one run per run_id? (If not will need to change wildcards around)
 rule run_ffv2:
     input:
         namelist=rules.generate_ffv2_namelist.output.namelist,
         # QUESTION: Will we want to compare with other models?
         # Need to specify this in order to mount it.
-        feedback_directory=rules.generate_ffv2_namelist.input.feedback_directory
+        feedback_directory=rules.generate_ffv2_namelist.input.feedback_directory,
     output:
         scores=directory(rules.generate_ffv2_namelist.params.output_directory),
     params:
         # domain_table and blacklists are locations on Balfrin, that will be
         # mounted into container (with the same filepaths)
-        domain_table=rules.generate_ffv2_namelist.params.domain_table
-        blacklists=rules.generate_ffv2_namelist.params.blacklists
+        domain_table=rules.generate_ffv2_namelist.params.domain_table,
+        blacklists=rules.generate_ffv2_namelist.params.blacklists,
     resources:
         cpus_per_task=1,
         runtime="1h",
     log:
-        OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/{run_id}-{init_time}_run_ffv2.log",
+        OUT_ROOT / "data/runs/{run_id}/run_ffv2.log",
     shell:
         """
         (
