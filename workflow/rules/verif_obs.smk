@@ -98,7 +98,7 @@ rule run_mec:
         namelist=rules.generate_mec_namelist.output.namelist,
         run_dir=directory(rules.collect_mec_input.output.run),
     output:
-        fdbk_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/verSYNOP.nc",
+        fdbk_file=OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}.nc",
     resources:
         cpus_per_task=1,
         runtime="1h",

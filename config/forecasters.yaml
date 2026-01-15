@@ -3,9 +3,9 @@ description: |
   Evaluate skill of COSMO-E emulator (M-1 forecaster).
 
 dates:
-  start: 2020-01-02T00:00
-  end: 2020-01-04T00:00
-  frequency: 12h
+  start: 2020-01-04T00:00
+  end: 2020-01-05T00:00
+  frequency: 6h
 
 runs:
   - forecaster:
