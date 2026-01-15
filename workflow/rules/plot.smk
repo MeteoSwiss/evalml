@@ -67,3 +67,34 @@ rule make_forecast_animation:
         """
         convert -delay {params.delay} -loop 0 {input} {output}
         """
+
+
+rule plot_summary_stat_maps:
+    input:
+        script="workflow/scripts/plot_summary_stat_maps.mo.py",
+        inference_okfile=rules.execute_inference.output.okfile,
+    output:
+        OUT_ROOT / "results/summary_stats/maps/{run_id}/{leadtime}/{metric}_{param}_{region}.png",
+    wildcard_constraints:
+        leadtime=r"\d+",  # only digits
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=1,
+        runtime="10m",
+    params:
+        nc_out_dir=lambda wc: (
+            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib" 
+            # not sure how to do this, because the baselines are in, e.g., output/data/baselines/COSMO-E/verif_aggregated.nc
+            # and the runs are in output/data/runs/runID/verif_aggregated.nc
+        ).resolve(),
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        python {input.script} \
+            --input {params.nc_out_dir}  --date {wildcards.init_time} --outfn {output[0]} \
+            --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region} \
+        # interactive editing (needs to set localrule: True and use only one core)
+        # marimo edit {input.script} -- \
+        #     --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]}\
+        #     --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region}\
+        """
