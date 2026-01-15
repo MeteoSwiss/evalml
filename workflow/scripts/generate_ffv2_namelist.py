@@ -41,6 +41,7 @@ def _check_args(args):
 			raise FileNotFoundError('feedback directory {fdbk_dir} '
                         'does not exist. Check that MEC has run.')
 
+# TODO: Make this a parameter as well.
 def _make_veri_ens_member(experiment_ids: str) -> str:
 	num_ids = len(experiment_ids.split(','))
 	return ','.join(['-1'] * num_ids)
