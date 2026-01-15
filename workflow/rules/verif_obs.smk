@@ -206,7 +206,7 @@ rule run_ffv2:
         domain_table=$(realpath {params.domain_table})
         blacklists=$(realpath {params.blacklists})
         sarus run \
-        --mount=type=bind,source=$namelist,destination=/src/ffv2/namelist.nl \
+        --mount=type=bind,source=$namelist,destination=/src/ffv2/SYNOP_DET.nl \
         --mount=type=bind,source=$domain_table,destination=$domain_table \
         --mount=type=bind,source=$blacklists,destination=$blacklists \
         container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-dev
