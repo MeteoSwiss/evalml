@@ -90,3 +90,79 @@ def load_state_from_raw(
         if key.startswith("field_"):
             state["fields"][key.removeprefix("field_")] = value
     return state
+
+
+def load_state_from_netcdf(
+    file: Path,
+    paramlist: list[str],
+    *,
+    season: str = "all",
+    init_hour: int = -999,
+    lead_time: int | None = None,  # hours
+) -> dict:
+    """
+    NetCDF analogue of load_state_from_grib(), restricted to spatial variables.
+    """
+
+    ds = xr.open_dataset(file)
+
+    # --- normalize lead_time to hours (float) ---
+    if ds["lead_time"].dtype.kind == "m":
+        ds = ds.assign_coords(
+            lead_time=ds["lead_time"].dt.total_seconds() / 3600
+        )
+
+    # --- select season / init_hour / lead_time ---
+    ds = ds.sel(season=season, init_hour=init_hour)
+    if lead_time is not None:
+        ds = ds.sel(lead_time=lead_time)
+
+    # --- infer reference + valid time ---
+    # Assumption: forecast_reference_time is not explicitly stored
+    # We reconstruct something consistent with GRIB usage
+    forecast_reference_time = None
+    valid_time = None
+    if lead_time is not None:
+        valid_time = pd.to_datetime(lead_time, unit="h", origin="unix")
+
+    # --- get lat / lon (assumed present as coordinates) ---
+    lat = ds["lat"].values if "lat" in ds.coords else ds["latitude"].values
+    lon = ds["lon"].values if "lon" in ds.coords else ds["longitude"].values
+
+    lon2d, lat2d = np.meshgrid(lon, lat)
+    lats = lat2d.flatten()
+    lons = lon2d.flatten()
+
+    state = {
+        "forecast_reference_time": forecast_reference_time,
+        "valid_time": valid_time,
+        "latitudes": lats,
+        "longitudes": lons,
+        "fields": {},
+    }
+
+    # --- LAM envelope (convex hull) ---
+    lam_hull = MultiPoint(list(zip(lons.tolist(), lats.tolist()))).convex_hull
+    state["lam_envelope"] = gpd.GeoSeries([lam_hull], crs="EPSG:4326")
+
+    # --- extract spatial fields ---
+    for param in paramlist:
+        # e.g. U_10M.MAE.spatial
+        matching_vars = [
+            v for v in ds.data_vars
+            if v.startswith(f"{param}.") and v.endswith(".spatial")
+        ]
+
+        if not matching_vars:
+            state["fields"][param] = np.full(lats.size, np.nan, dtype=float)
+            continue
+
+        # If multiple metrics exist, concatenate them
+        arrays = []
+        for var in matching_vars:
+            arr = ds[var].values  # (lead_time, y, x) or (y, x)
+            arrays.append(arr.reshape(-1))
+
+        state["fields"][param] = np.concatenate(arrays)
+
+    return state
