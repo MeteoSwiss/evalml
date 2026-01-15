@@ -59,7 +59,7 @@ def _(ArgumentParser, Path):
     parser.add_argument(
         "--input", type=str, default=None, help="Directory to .nc data containing the error fields"
     )
-
+    # parser.add_argument("--date", type=str, default=None, help="reference datetime") # to be deleted?
     parser.add_argument("--outfn", type=str, help="output filename")
     parser.add_argument("--leadtime", type=str, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
@@ -67,6 +67,7 @@ def _(ArgumentParser, Path):
 
     args = parser.parse_args()
     nc_dir = Path(args.input)
+    # init_time = args.date  # to be deleted?
     outfn = Path(args.outfn)
     lead_time = args.leadtime
     param = args.param
@@ -74,6 +75,7 @@ def _(ArgumentParser, Path):
     return (
         args,
         nc_dir,
+        # init_time,  # to be deleted?
         lead_time,
         outfn,
         param,
@@ -83,8 +85,8 @@ def _(ArgumentParser, Path):
 
 @app.cell
 def _(nc_dir, init_time, lead_time, load_state_from_grib, param):
-    # load grib file
-    grib_file = nc_dir / f"{init_time}_{lead_time}.grib"
+    # load .nc verification file
+    nc_file = nc_dir / "verif_aggregated.nc"
     if param == "SP_10M":
         paramlist = ["U_10M", "V_10M"]
     elif param == "SP":
