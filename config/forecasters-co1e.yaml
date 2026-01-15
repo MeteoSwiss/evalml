@@ -58,3 +58,5 @@ profile:
     runtime: "1h"
     gpus: 0
   jobs: 50
+
+include_optional_rules: []

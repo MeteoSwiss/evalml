@@ -561,6 +561,14 @@
     },
     "profile": {
       "$ref": "#/$defs/Profile"
+    },
+    "include_optional_rules": {
+      "description": "List of optional rules to include in the workflow.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Include Optional Rules",
+      "type": "array"
     }
   },
   "required": [
