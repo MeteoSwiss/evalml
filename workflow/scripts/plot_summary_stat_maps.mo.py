@@ -84,16 +84,21 @@ def _(ArgumentParser, Path):
 
 
 @app.cell
-def _(nc_dir, init_time, lead_time, load_state_from_grib, param):
-    # load .nc verification file
-    nc_file = nc_dir / "verif_aggregated.nc"
+def _(nc_file, param, lead_time, load_state_from_netcdf):
+    # load .nc verification file:
     if param == "SP_10M":
         paramlist = ["U_10M", "V_10M"]
     elif param == "SP":
         paramlist = ["U", "V"]
     else:
         paramlist = [param]
-    state = load_state_from_grib(grib_file, paramlist=paramlist)
+
+    state = load_state_from_netcdf(
+        nc_file,
+        paramlist=paramlist,
+        lead_time=lead_time,
+    )
+
     return (state,)
 
 
