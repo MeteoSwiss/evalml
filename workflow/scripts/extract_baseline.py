@@ -24,7 +24,7 @@ def get_input(root: Path) -> list[Path]:
     """Get list of tarfiles or directories in root directory."""
     input_files = sorted(root.glob("*.tar"))
     if not input_files:
-        gribfiles = sorted(root.glob("*_*/grib/i1eff00000000_000"))
+        gribfiles = sorted(root.glob("*_*/grib/i?eff00000000_000"))
         input_files = [f.parent.parent for f in gribfiles]
     if not input_files:
         raise ValueError(f"No files found in {root}.")
