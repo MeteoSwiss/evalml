@@ -64,5 +64,3 @@ profile:
   jobs: 50
   batch_rules:
     plot_forecast_frame: 24
-
-include_optional_rules: []

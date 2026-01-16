@@ -311,7 +311,7 @@ class ConfigModel(BaseModel):
         "populate_by_name": True,
     }
 
-    include_optional_rules: List[str] = Field(
+    include_optional_rules: List[str] | None = Field(
         default_factory=list,
         description="List of optional rules to include in the workflow.",
     )
