@@ -74,7 +74,7 @@ if "extract_icon1" in config.get("include_optional_rules", []):
             year_postfix=lambda wc: f"FCST{wc.year}",
             steps="0/33/1",
         log:
-            OUT_ROOT / "logs/extract-icon1-fcts-{year}.log",
+            OUT_ROOT / "logs/extract-icon1/year={year}.log",
         shell:
             """
             python workflow/scripts/extract_baseline.py \
