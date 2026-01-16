@@ -56,3 +56,14 @@ if "extract_cosmo1e" in config.get("include-optional-rules", []):
                 --steps {params.steps} \
                     > {log} 2>&1
             """
+
+
+rule download_obs_from_peakweather:
+    localrule: True
+    output:
+        peakweather=directory(OUT_ROOT / "data/observations/peakweather"),
+    run:
+        from peakweather.dataset import PeakWeatherDataset
+
+        # Download the data from Huggingface
+        ds = PeakWeatherDataset(root=output.peakweather)
