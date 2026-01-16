@@ -90,6 +90,11 @@ class RunConfig(BaseModel):
         description="Resource requirements for inference jobs (optional; defaults handled externally).",
     )
 
+    disable_local_eccodes_definitions: bool = Field(
+        False,
+        description="If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
+    )
+
     config: Dict[str, Any] | str
 
     @field_validator("steps")
