@@ -48,7 +48,7 @@ rule collect_mec_input:
         ym="${{init:0:6}}"
         ymdh="${{init:0:10}}"
         echo "init time: ${{init}}, ym: ${{ym}}"
-        
+
         # collect observations (ekfSYNOP) and/or (monSYNOP from DWD; includes precip) files
         cp /store_new/mch/msopr/osm/KENDA-1/EKF/${{ym}}/ekfSYNOP_${{init}}00.nc {output.obs}/ekfSYNOP.nc
         cp /scratch/mch/paa/mec/MEC_ML_input/monFiles2020/hpc/uwork/swahl/temp/feedback/monSYNOP.${{init:0:10}} {output.obs}/monSYNOP.nc
@@ -116,7 +116,7 @@ rule run_mec:
         abs_run_dir=$(realpath {input.run_dir})
         sarus run --mount=type=bind,source=$abs_run_dir,destination=/src/bin2 --mount=type=bind,source=/oprusers/osm/opr.emme/data/,destination=/oprusers/osm/opr.emme/data/ container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
 
-        # Run MEC using local executable (Alternative to sarus container) 
+        # Run MEC using local executable (Alternative to sarus container)
         #cd {input.run_dir}
         #export LM_HOST=balfrin-ln002
         #source /oprusers/osm/opr.emme/abs/mec.env

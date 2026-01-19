@@ -27,7 +27,7 @@
  !===============================
   &observations
    !---------------------------------------------------
-   ! read from CDFIN files (if not set use mon/cof/ekf)  
+   ! read from CDFIN files (if not set use mon/cof/ekf)
    !---------------------------------------------------
    read_cdfin   = F      ! (F): dont read COSMO CDFIN files get obs from ekf
    vint_lin_t   = T      ! linear vertical interpolation for temperature
@@ -35,7 +35,7 @@
    vint_lin_uv  = T      ! linear vertical interpolation for wind
    ptop_lapse   = 850.
    pbot_lapse   = 950.
-!  int_nn       = T      ! horizontal interpolation: nearest neighbor 
+!  int_nn       = T      ! horizontal interpolation: nearest neighbor
  /
 
  !====================
@@ -51,13 +51,13 @@
  !================================
  &veri_obs
   obstypes      = "SYNOP"         ! "SYNOP TEMP"
-  fc_times      = {{ leadtimes }} ! forecast lead time at reference (hhmm) 0000,1200,2400,...  
-  prefix_in     = 'ekf'           ! prefix for input files. ekf or mon                                                                                                                                                                        
-  prefix_out    = 'ver'               
+  fc_times      = {{ leadtimes }} ! forecast lead time at reference (hhmm) 0000,1200,2400,...
+  prefix_in     = 'ekf'           ! prefix for input files. ekf or mon
+  prefix_out    = 'ver'
   rm_old        = 2                  ! overwrite entries in verification file ?
   fc_file       = 'fc__FCR_TIME_00'  ! template for forecast file name
-  time_range    = 1                                                                                                                                                                                               
-  ekf_concat    = F                                                                                                                                                                                               
+  time_range    = 1
+  ekf_concat    = F
   ref_runtype   = 'any'  ! accept any runtype for the reference state
  /
 
@@ -72,6 +72,5 @@
    verification_end   =  30       ! (min, inclusive)
  /
  &synop_obs
-   version = 1  
+   version = 1
  /
- 
