@@ -86,6 +86,8 @@ def collect_all_runs():
         run_config = run_entry[model_type]
         run_config["model_type"] = model_type
         run_id = run_config["mlflow_id"][0:4]
+        run_label = run_config.get("label", model_type)
+        run_label = run_label.replace(" ", "_")
 
         if model_type == "interpolator":
             if "forecaster" not in run_config or run_config["forecaster"] is None:
@@ -98,10 +100,14 @@ def collect_all_runs():
                 # make sure we don't hash the is_candidate status
                 fore_id = short_hash_runconfig(fore_cfg)
                 fore_cfg["is_candidate"] = False  # exclude from outputs
-                runs[f"{fcst_id}-{fore_id}"] = fore_cfg
+                runs[f"{run_label}-{fcst_id}-{fore_id}"] = fore_cfg
                 # add run_id of forecaster to interpolator config
-                run_config["forecaster"]["run_id"] = f"{fcst_id}-{fore_id}"
-            run_id = f"{run_id}-{fcst_id}"
+                run_config["forecaster"]["run_id"] = f"{run_label}-{fcst_id}-{fore_id}"
+            run_id = f"{run_label}-{run_id}-{fcst_id}"
+        elif model_type == "forecaster":
+            run_id = f"{run_label}-{run_id}"
+        else:
+            raise ValueError(f"Unsupported model type: {model_type}")
 
         # add the hash of the config to the run id
         run_id = f"{run_id}-{short_hash_runconfig(run_config)}"
