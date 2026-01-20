@@ -37,7 +37,9 @@ onerror:
 # -----------------------------------------------------
 EXPERIMENT_HASH = short_hash_config()
 EXPERIMENT_DATE = datetime.now().strftime("%Y%m%d")
-EXPERIMENT_LABEL = config["label"] or workflow.config_settings.configfiles[0].stem
+EXPERIMENT_LABEL = (
+    config["experiment_label"] or workflow.config_settings.configfiles[0].stem
+)
 EXPERIMENT_DIRNAME = f"{EXPERIMENT_DATE}_{EXPERIMENT_LABEL}_{EXPERIMENT_HASH}"
 
 

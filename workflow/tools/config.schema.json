@@ -528,7 +528,7 @@
       "title": "Description",
       "type": "string"
     },
-    "label": {
+    "experiment_label": {
       "anyOf": [
         {
           "type": "string"
@@ -539,7 +539,7 @@
       ],
       "default": null,
       "description": "Optional label for the experiment that will be used in the experiment directory name. Defaults to the config file name if not provided.",
-      "title": "Label"
+      "title": "Experiment Label"
     },
     "dates": {
       "anyOf": [
