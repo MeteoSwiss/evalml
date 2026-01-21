@@ -22,7 +22,6 @@ def _parse_steps(steps: str) -> int:
 
 
 def main(args):
-
     # Include stop_h (inclusive). Produce strings like 0000,0600,1200,...,12000
     lead_hours = args.steps
     leadtimes = ",".join(f"{h:02d}00" for h in lead_hours)
@@ -42,7 +41,6 @@ def main(args):
 
 
 if __name__ == "__main__":
-
     parser = ArgumentParser()
 
     parser.add_argument("--steps", type=_parse_steps, default="0/120/6")
