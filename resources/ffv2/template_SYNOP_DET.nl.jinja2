@@ -6,33 +6,33 @@ catthresholds       list('T2M'=c(282,292),'FF'=c(2.5,5,10)) # no space allowed b
 
 # senseful and short description of the model versions to verify.
 # example: 'D-metno,C-metno_rollout,C-cerra_rollout'
-expIds          {{ experiment_ids }}
+expIds          '{{ experiment_ids }}'
 
 
 
 # location of the feedback files. All feedback files per model must be stored
 # in one directory and the order must correspond to expIds
 # Example: '/src/ffv2/input/,'
-fdbkDirs   {{ feedback_directories }}
+fdbkDirs   '{{ feedback_directories }}'
 
 # should be however many models 
 # example: '-1,-1,-1' for 3 models
-veri_ens_member {{ veri_ens_member }}
+veri_ens_member '{{ veri_ens_member }}'
 
 
 # the (existing!) output directory (absolute or relative to working directory)
-outDir          {{ output_directory }}
+outDir          '{{ output_directory }}'
 
 # string used to build the filenames of the intermediate scorefiles (one valid date). Only restriction:
 # no other file in the output directory contains that string in the filename
 # example: 'emulator_onPL_ALL_obs_2020'
-expDescr        {{ experiment_description }}
+expDescr        '{{ experiment_description }}'
 
 # string used to build the filenames of the final scorefiles.
 # please follow the naming convention explained on the wiki page
 # This should match the output file for this from snakemake rule
 # Example: 'exp_ACOSMO-2-models_C-2E-CTRL_2020'
-fileDescr       {{ file_description }}
+fileDescr       '{{ file_description }}'
 
 
 # string to filter feedback file input. All feedback files that contain the string in their filename are used.
@@ -50,9 +50,9 @@ subdomains      'USER'
 # Location of domain table and blacklists. This data should be mounted from balfrin into
 # the container. Recommend using the same path in src/dest, for simplicity.
 # Example: '/users/paa/01_store/02_FFV2/data/7_ML_inner_polygon'
-domainTable   {{ domain_table }}
+domainTable   '{{ domain_table }}'
 # Example:  '/users/paa/01_store/02_FFV2/data/blacklist'
-blacklists     {{ blacklists }}
+blacklists     '{{ blacklists }}'
 
 # time binning steps for valid times (in minutes) relative to the valid time of the feedback file (timestamp in filename) read
 # (time granularity of the verification)
