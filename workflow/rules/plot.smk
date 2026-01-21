@@ -70,11 +70,12 @@ rule make_forecast_animation:
 
 
 rule plot_summary_stat_maps:
+    localrule: True
     input:
         script="workflow/scripts/plot_summary_stat_maps.mo.py",
-        inference_okfile=rules.execute_inference.output.okfile,
+        verif_file=OUT_ROOT / "data/runs/{run_id}/verif_aggregated.nc"
     output:
-        OUT_ROOT / "results/summary_stats/maps/{run_id}/{leadtime}/{metric}_{param}_{region}.png",
+        OUT_ROOT / "results/experiment/metrics_spatial/{run_id}/{param}_{metric}_{leadtime}.png",
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
     resources:
@@ -83,18 +84,18 @@ rule plot_summary_stat_maps:
         runtime="10m",
     params:
         nc_out_dir=lambda wc: (
-            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib" 
+            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/verif_aggregated.nc"
             # not sure how to do this, because the baselines are in, e.g., output/data/baselines/COSMO-E/verif_aggregated.nc
             # and the runs are in output/data/runs/runID/verif_aggregated.nc
         ).resolve(),
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
-        python {input.script} \
-            --input {params.nc_out_dir}  --date {wildcards.init_time} --outfn {output[0]} \
-            --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region} \
+        # python {input.script} \
+        #     --input {input.verif_file} --outfn {output[0]} \
+        #     --param {wildcards.param} --leadtime {wildcards.leadtime} --metric {wildcards.metric}
         # interactive editing (needs to set localrule: True and use only one core)
-        # marimo edit {input.script} -- \
-        #     --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]}\
-        #     --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region}\
+        marimo edit {input.script} -- \
+            --input {input.verif_file} --outfn {output[0]}\
+            --param {wildcards.param} --leadtime {wildcards.leadtime} --metric {wildcards.metric}
         """

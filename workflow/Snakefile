@@ -52,6 +52,13 @@ rule experiment_all:
             OUT_ROOT / "data/runs/{run_id}/summary.md",
             run_id=collect_all_candidates(),
         ),
+        expand(
+            OUT_ROOT / "results/experiment/metrics_spatial/{run_id}/{param}_{metric}_{leadtime}.png",
+            run_id=collect_all_candidates(),
+            leadtime=[6, 12],
+            metric=["BIAS", "RMSE", "MAE"],
+            param=["TOT_PREC", "T_2M"],
+        )
 
 
 rule showcase_all:
