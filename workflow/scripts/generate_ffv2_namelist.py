@@ -12,7 +12,9 @@ logging.basicConfig(
 
 
 def _check_args(args):
-	ids = len(args.experiment_ids.split(','))
+	print('ids are ' + args.experiment_ids)
+	ids = args.experiment_ids.split(',')
+	print('fdbk dirs are ' + args.feedback_directories)
 	fdbk_dirs = args.feedback_directories.split(',')
 	# Allow list to end with comma
 	if ids[-1] == '':
@@ -26,19 +28,19 @@ def _check_args(args):
             f'{len(fdbk_dirs)} {args.feedback_directories}'
 		)
 	if not os.path.exists(args.output_directory) or not os.path.isdir(args.output_directory):
-		raise FileNotFoundError('output directory {args.output_directory} '
+		raise FileNotFoundError(f'output directory {args.output_directory} '
 						  'does not exist (or is not a directory)')
 	if not os.path.exists(args.domain_table):
-		raise FileNotFoundError('domain table location {args.domain_table} '
+		raise FileNotFoundError(f'domain table location {args.domain_table} '
 						  'does not exist. Check that it is mounted correctly '
 						  ' in container.')
 	if not os.path.exists(args.blacklists):
-		raise FileNotFoundError('blacklists location {args.blacklists} '
+		raise FileNotFoundError(f'blacklists location {args.blacklists} '
 						  'does not exist. Check that it is mounted correctly '
 						  ' in container.')
 	for fdbk_dir in fdbk_dirs:
 		if not os.path.exists(fdbk_dir) or not os.path.isdir(fdbk_dir):
-			raise FileNotFoundError('feedback directory {fdbk_dir} '
+			raise FileNotFoundError(f'feedback directory {fdbk_dir} '
                         'does not exist. Check that MEC has run.')
 
 # TODO: Make this a parameter as well.
@@ -131,6 +133,7 @@ if __name__ == "__main__":
 	)
 
 	args = parser.parse_args()
+	print(args)
 	_check_args(args)
 
 	main(args)
