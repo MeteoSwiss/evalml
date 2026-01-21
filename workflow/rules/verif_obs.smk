@@ -99,6 +99,7 @@ rule run_mec:
         run_dir=directory(rules.collect_mec_input.output.run),
     output:
         fdbk_file=OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}.nc",
+    params:
         final_fdbk_file_dir=OUT_ROOT / "data/runs/{run_id}/fdbk_files",
     resources:
         cpus_per_task=1,
@@ -113,7 +114,7 @@ rule run_mec:
 
         # Run MEC inside sarus container
         # Note: pull command currently needed only once to download the container
-        sarus pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
+        #### sarus pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
         abs_run_dir=$(realpath {input.run_dir})
         sarus run --mount=type=bind,source=$abs_run_dir,destination=/src/bin2 --mount=type=bind,source=/oprusers/osm/opr.emme/data/,destination=/oprusers/osm/opr.emme/data/ container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
 
