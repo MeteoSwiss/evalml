@@ -36,13 +36,18 @@ onerror:
 # target rules
 # -----------------------------------------------------
 EXPERIMENT_HASH = short_hash_config()
+EXPERIMENT_DATE = datetime.now().strftime("%Y%m%d")
+EXPERIMENT_LABEL = (
+    config["experiment_label"] or workflow.config_settings.configfiles[0].stem
+)
+EXPERIMENT_DIRNAME = f"{EXPERIMENT_DATE}_{EXPERIMENT_LABEL}_{EXPERIMENT_HASH}"
 
 
 rule experiment_all:
     """Target rule for experiment workflow."""
     input:
-        OUT_ROOT / f"results/{EXPERIMENT_HASH}/metrics/dashboard",
-        OUT_ROOT / f"results/{EXPERIMENT_HASH}/metrics/plots",
+        OUT_ROOT / f"results/experiment/{EXPERIMENT_DIRNAME}/metrics/dashboard",
+        OUT_ROOT / f"results/experiment/{EXPERIMENT_DIRNAME}/metrics/plots",
         expand(
             OUT_ROOT / "data/runs/{run_id}/summary.md",
             run_id=collect_all_candidates(),

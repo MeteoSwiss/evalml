@@ -90,6 +90,11 @@ class RunConfig(BaseModel):
         description="Resource requirements for inference jobs (optional; defaults handled externally).",
     )
 
+    disable_local_eccodes_definitions: bool = Field(
+        False,
+        description="If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
+    )
+
     config: Dict[str, Any] | str
 
     @field_validator("steps")
@@ -291,6 +296,10 @@ class ConfigModel(BaseModel):
     description: str = Field(
         ...,
         description="Description of the experiment, e.g. 'Hindcast of the 2023 season.'",
+    )
+    experiment_label: str | None = Field(
+        None,
+        description="Optional label for the experiment that will be used in the experiment directory name. Defaults to the config file name if not provided.",
     )
     dates: Dates | ExplicitDates
     runs: List[ForecasterItem | InterpolatorItem] = Field(
