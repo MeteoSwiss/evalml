@@ -205,16 +205,18 @@ rule run_ffv2:
         # TODO(mmcglohon): Update from dev to main once things work
         sarus pull container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-dev
         namelist=$(realpath {input.namelist})
-        domain_table=$(realpath {params.domain_table})
-        blacklists=$(realpath {params.blacklists})
+        domain_table={params.domain_table}
+        blacklists={params.blacklists}
         # Mount needs to have source as absolute path
         feedback_dir_abs=$(realpath {input.feedback_directory})
+        output_dir_abs=$(realpath {output.scores})
         # DO NOT SUBMIT: Need to mount feedback files, with absolute path
         sarus run \
         --mount=type=bind,source=$namelist,destination=/src/ffv2/SYNOP_DET.nl \
         --mount=type=bind,source=$domain_table,destination=$domain_table \
         --mount=type=bind,source=$blacklists,destination=$blacklists \
-        --mount=type=bind,source=$feedback_dir_abs,destination={input.feedback_directory} \
+        --mount=type=bind,source=$feedback_dir_abs,destination=/src/ffv2/input \
+        --mount=type=bind,source=$output_dir_abs,destination=/src/ffv2/output \
         container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-dev
 
         echo "...time at end of run_ffv2: $(date)"

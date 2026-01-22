@@ -5,7 +5,7 @@ description: |
 dates:
   start: 2020-01-04T00:00
   end: 2020-01-05T00:00
-  frequency: 6h
+  frequency: 12h
 
 runs:
   - forecaster:
