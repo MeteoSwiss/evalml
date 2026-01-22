@@ -100,7 +100,7 @@ rule run_mec:
     output:
         fdbk_file=OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}.nc",
     params:
-        final_fdbk_file_dir=OUT_ROOT / "data/runs/{run_id}/fdbk_files",
+        final_fdbk_file_dir=OUT_ROOT / "data/runs/{wc.run_id}/fdbk_files",
     resources:
         cpus_per_task=1,
         runtime="1h",
