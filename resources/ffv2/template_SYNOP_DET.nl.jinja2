@@ -13,7 +13,10 @@ expIds          '{{ experiment_ids }}'
 # location of the feedback files. All feedback files per model must be stored
 # in one directory and the order must correspond to expIds
 # Example: '/src/ffv2/input/,'
-fdbkDirs   '{{ feedback_directories }}'
+# fdbkDirs   '{{ feedback_directories }}'
+# Use a path in the container, to avoid mixups between absolute/relative paths.
+# TODO: Change this once we support having more than one directory.
+fdbkDirs   '/src/ffv2/input'
 
 # should be however many models 
 # example: '-1,-1,-1' for 3 models
@@ -21,7 +24,9 @@ veri_ens_member '{{ veri_ens_member }}'
 
 
 # the (existing!) output directory (absolute or relative to working directory)
-outDir          '{{ output_directory }}'
+#outDir          '{{ output_directory }}'
+# Use a path in the container, to avoid mixups between absolute/relative paths.
+outDir			 '/src/ffv2/output'
 
 # string used to build the filenames of the intermediate scorefiles (one valid date). Only restriction:
 # no other file in the output directory contains that string in the filename
