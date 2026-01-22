@@ -32,6 +32,9 @@ def main(args):
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(template_path.parent)))
     template = env.get_template(template_path.name)
     namelist = template.render(**context)
+    # Ensure file ends with a newline (prevent editors/tools from removing final RETURN)
+    if not namelist.endswith("\n"):
+        namelist += "\n"
     LOG.info(f"MEC namelist created: {namelist}")
 
     out_path = Path(str(args.namelist))
