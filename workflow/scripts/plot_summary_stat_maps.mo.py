@@ -26,9 +26,6 @@ def _():
 
     # Added some new colour maps for the Bias / MAE / RMSE map plots. 
     from plotting.colormap_defaults import CMAP_DEFAULTS
-
-    # need to load nc files. But this statement is not needed any more because 
-    # the .nc files can just be read with xr.open_dataset
     return (
         ArgumentParser,
         CMAP_DEFAULTS,
@@ -47,7 +44,7 @@ def _(logging):
     LOG = logging.getLogger(__name__)
     LOG_FMT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     logging.basicConfig(level=logging.INFO, format=LOG_FMT)
-    return
+    return (LOG,)
 
 
 @app.cell
@@ -121,7 +118,18 @@ def _(CMAP_DEFAULTS, ekp):
 
 
 @app.cell
-def _(DOMAINS, StatePlotter, ds, get_style, outfn, var):
+def _(
+    DOMAINS,
+    LOG,
+    StatePlotter,
+    ds,
+    get_style,
+    lead_time,
+    metric,
+    outfn,
+    param,
+    var,
+):
     # plot individual fields
     import matplotlib.pyplot as plt
 
@@ -150,11 +158,11 @@ def _(DOMAINS, StatePlotter, ds, get_style, outfn, var):
     #     facecolor="none",
     #     crs=ccrs.PlateCarree(),
     # )
-    plt.show()
+
     # validtime = state["valid_time"].strftime("%Y%m%d%H%M")
     # # leadtime = int(state["lead_time"].total_seconds() // 3600)
 
-    # fig.title(f"{param}, time: {validtime}")
+    fig.title(f"{metric} of {param}, Lead Time: {lead_time}")
 
     # fig.save(outfn, bbox_inches="tight", dpi=200)
     # LOG.info(f"saved: {outfn}")
