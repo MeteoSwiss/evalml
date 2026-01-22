@@ -57,7 +57,7 @@ rule experiment_all:
             run_id=collect_all_candidates(),
             leadtime=[6, 12],
             metric=["BIAS", "RMSE", "MAE"],
-            param=["TOT_PREC", "T_2M"],
+            param=["TD_2M", "T_2M", "PMSL", "PS", "TOT_PREC"],
         )
 
 
