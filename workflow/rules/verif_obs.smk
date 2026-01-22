@@ -100,7 +100,7 @@ rule run_mec:
     output:
         fdbk_file=OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}.nc",
     params:
-        final_fdbk_file_dir=OUT_ROOT / "data/runs/{wc.run_id}/fdbk_files",
+        final_fdbk_file_dir=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}/fdbk_files"),
     resources:
         cpus_per_task=1,
         runtime="1h",
@@ -144,12 +144,12 @@ rule generate_ffv2_namelist:
         feedback_directory=rules.run_mec.params.final_fdbk_file_dir,
     output:
         # Question: Definitely want to aggregate over init time, but will we have 1 run_ffv2 per run_id, or 1 run of ffv2 for all run_ids?
-        namelist=OUT_ROOT / "data/runs/{run_id}/template_SYNOP_DET.nl",
+        namelist=OUT_ROOT / "data/runs/{run_id}/SYNOP_DET.nl",
     params:
         # TODO: consider including run_ids here?
         experiment_ids="SrucMLModel,",
         # Keeping this as a param. We will create it in run_ffv2 rule.
-        output_directory=OUT_ROOT / "data/runs/{run_id}/scores",
+        output_directory=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}/scores"),
         # TODO: update descriptions to something more fitting
         experiment_description="emulator_onPL_ALL_obs_2020",
         file_description="exp_ACOSMO-2-models_C-2E-CTRL_2020",
@@ -157,15 +157,16 @@ rule generate_ffv2_namelist:
         blacklists="/users/paa/01_store/02_FFV2/data/blacklist",
     shell:
         """
+        mkdir -p {params.output_directory}
         uv run {input.script} \
             --template {input.template} \
             --namelist {output.namelist} \
-            --experiment_ids {params.experiment_ids}
-            --feedback_directories {input.feedback_directory}
-            --output_directory {params.output_directory}
-            --experiment_description {params.experiment_description}
-            --file_description {params.file_description}
-            --domain_table {params.domain_table}
+            --experiment_ids {params.experiment_ids} \
+            --feedback_directories {input.feedback_directory} \
+            --output_directory {params.output_directory} \
+            --experiment_description {params.experiment_description} \
+            --file_description {params.file_description} \
+            --domain_table {params.domain_table} \
             --blacklists {params.blacklists}
         """
 
@@ -177,7 +178,9 @@ rule run_ffv2:
         # Need to specify this in order to mount it.
         feedback_directory=rules.generate_ffv2_namelist.input.feedback_directory,
     output:
-        scores=directory(rules.generate_ffv2_namelist.params.output_directory),
+        # DO NOT SUBMIT: Fix to use directly.
+        scores=directory(OUT_ROOT / "data/runs/{run_id}/scores")
+        #scores=directory(rules.generate_ffv2_namelist.params.output_directory),
     params:
         # domain_table and blacklists are locations on Balfrin, that will be
         # mounted into container (with the same filepaths)
@@ -204,10 +207,14 @@ rule run_ffv2:
         namelist=$(realpath {input.namelist})
         domain_table=$(realpath {params.domain_table})
         blacklists=$(realpath {params.blacklists})
+        # Mount needs to have source as absolute path
+        feedback_dir_abs=$(realpath {input.feedback_directory})
+        # DO NOT SUBMIT: Need to mount feedback files, with absolute path
         sarus run \
         --mount=type=bind,source=$namelist,destination=/src/ffv2/SYNOP_DET.nl \
         --mount=type=bind,source=$domain_table,destination=$domain_table \
         --mount=type=bind,source=$blacklists,destination=$blacklists \
+        --mount=type=bind,source=$feedback_dir_abs,destination={input.feedback_directory} \
         container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-dev
 
         echo "...time at end of run_ffv2: $(date)"
