@@ -74,11 +74,8 @@ rule plot_summary_stat_maps:
     input:
         script="workflow/scripts/plot_summary_stat_maps.mo.py",
         verif_file=OUT_ROOT / "data/runs/{run_id}/verif_aggregated.nc",
-        # verif_file=EXPERIMENT_PARTICIPANTS.values(), 
-        # copied from rule report_experiment_dashboard - should be correct here, 
-        # but needs adjustments in the output as well - tbd.
     output:
-        OUT_ROOT / "results/experiment/metrics_spatial/{run_id}/{param}_{metric}_{leadtime}_{region}.png",
+        OUT_ROOT / "results/{experiment}/metrics/spatial/{run_id}/{param}_{metric}_{leadtime}_{region}.png",
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
     resources:

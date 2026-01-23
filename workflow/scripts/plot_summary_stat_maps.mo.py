@@ -79,7 +79,16 @@ def _(ArgumentParser, Path, np):
             raise ValueError("init_hour must be 'all' or an integer hour")
 
     lead_time = np.timedelta64(lead_time, 'h')
-    return init_hour, lead_time, metric, outfn, param, season, verif_file
+    return (
+        init_hour,
+        lead_time,
+        metric,
+        outfn,
+        param,
+        region,
+        season,
+        verif_file,
+    )
 
 
 @app.cell
