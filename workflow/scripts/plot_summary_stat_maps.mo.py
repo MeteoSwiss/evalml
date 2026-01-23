@@ -67,7 +67,7 @@ def _(ArgumentParser, Path, np):
     outfn = Path(args.outfn)
     lead_time = args.leadtime
     param = args.param
-    # region = args.region
+    region = args.region
     season = args.season
     init_hour = args.init_hour
     metric = args.metric
