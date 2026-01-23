@@ -9,6 +9,7 @@ if "extract_cosmoe" in config.get("include_optional_rules", []):
     rule extract_cosmoe:
         input:
             archive=Path("/archive/mch/msopr/osm/COSMO-E"),
+            script="workflow/scripts/extract_baseline.py",
         output:
             fcts=protected(
                 directory(Path("/store_new/mch/msopr/ml/COSMO-E/FCST{year}.zarr"))
@@ -23,7 +24,7 @@ if "extract_cosmoe" in config.get("include_optional_rules", []):
             OUT_ROOT / "logs/extract-cosmoe-fcts-{year}.log",
         shell:
             """
-            python workflow/scripts/extract_baseline.py \
+            python {input.script} \
                 --archive_dir {input.archive}/{params.year_postfix} \
                 --output_store {output.fcts} \
                 --steps {params.steps} \
@@ -36,6 +37,7 @@ if "extract_cosmo1e" in config.get("include_optional_rules", []):
     rule extract_cosmo1e:
         input:
             archive=Path("/archive/mch/s83/osm/from_GPFS/COSMO-1E"),
+            script="workflow/scripts/extract_baseline.py",
         output:
             fcts=protected(
                 directory(Path("/store_new/mch/msopr/ml/COSMO-1E/FCST{year}.zarr"))
@@ -50,7 +52,7 @@ if "extract_cosmo1e" in config.get("include_optional_rules", []):
             OUT_ROOT / "logs/extract-cosmo1e-fcts-{year}.log",
         shell:
             """
-            python workflow/scripts/extract_baseline.py \
+            python {input.script} \
                 --archive_dir {input.archive}/{params.year_postfix} \
                 --output_store {output.fcts} \
                 --steps {params.steps} \
@@ -63,6 +65,7 @@ if "extract_icon1" in config.get("include_optional_rules", []):
     rule extract_icon1:
         input:
             archive=Path("/store_new/mch/msopr/osm/ICON-CH1-EPS"),
+            script="workflow/scripts/extract_baseline.py",
         output:
             fcts=protected(
                 directory(Path("/store_new/mch/msopr/ml/ICON-CH1-EPS/FCST{year}.zarr"))
@@ -77,7 +80,7 @@ if "extract_icon1" in config.get("include_optional_rules", []):
             OUT_ROOT / "logs/extract-icon1/year={year}.log",
         shell:
             """
-            python workflow/scripts/extract_baseline.py \
+            python {input.script} \
                 --archive_dir {input.archive}/{params.year_postfix} \
                 --output_store {output.fcts} \
                 --steps {params.steps} \
