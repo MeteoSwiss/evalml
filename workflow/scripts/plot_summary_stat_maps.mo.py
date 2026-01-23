@@ -57,7 +57,7 @@ def _(ArgumentParser, Path, np):
     parser.add_argument("--outfn", type=str, help="output filename")
     parser.add_argument("--leadtime", type=str, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
-    # parser.add_argument("--region", type=str, help="name of region")
+    parser.add_argument("--region", type=str, help="name of region")
     parser.add_argument("--metric", type=str, help = "Evaluation Metric. So far Bias, RMSE or MAE are implemented.")
     parser.add_argument("--season", type=str, default="all", help="season filter")
     parser.add_argument("--init_hour", type=str, default="all", help="initialization hour filter")
@@ -128,6 +128,7 @@ def _(
     metric,
     outfn,
     param,
+    region, 
     var,
 ):
     # plot individual fields
@@ -141,9 +142,9 @@ def _(
     fig = plotter.init_geoaxes(
         nrows=1,
         ncols=1,
-        projection=DOMAINS["switzerland"]["projection"],
-        bbox=DOMAINS["switzerland"]["extent"],
-        name="switzerland",
+        projection=DOMAINS[region]["projection"],
+        bbox=DOMAINS[region]["extent"],
+        name=region,
         size=(6, 6),
     )
     subplot = fig.add_map(row=0, column=0)
@@ -164,8 +165,8 @@ def _(
 
     fig.title(f"{metric} of {param}, Lead Time: {lead_time}")
 
-    # fig.save(outfn, bbox_inches="tight", dpi=200)
-    # LOG.info(f"saved: {outfn}")
+    fig.save(outfn, bbox_inches="tight", dpi=200)
+    LOG.info(f"saved: {outfn}")
     return
 
 

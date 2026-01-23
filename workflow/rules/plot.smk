@@ -73,9 +73,12 @@ rule plot_summary_stat_maps:
     localrule: True
     input:
         script="workflow/scripts/plot_summary_stat_maps.mo.py",
-        verif_file=OUT_ROOT / "data/runs/{run_id}/verif_aggregated.nc"
+        verif_file=OUT_ROOT / "data/runs/{run_id}/verif_aggregated.nc",
+        # verif_file=EXPERIMENT_PARTICIPANTS.values(), 
+        # copied from rule report_experiment_dashboard - should be correct here, 
+        # but needs adjustments in the output as well - tbd.
     output:
-        OUT_ROOT / "results/experiment/metrics_spatial/{run_id}/{param}_{metric}_{leadtime}.png",
+        OUT_ROOT / "results/experiment/metrics_spatial/{run_id}/{param}_{metric}_{leadtime}_{region}.png",
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
     resources:
@@ -91,11 +94,11 @@ rule plot_summary_stat_maps:
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
-        # python {input.script} \
-        #     --input {input.verif_file} --outfn {output[0]} \
-        #     --param {wildcards.param} --leadtime {wildcards.leadtime} --metric {wildcards.metric}
+        python {input.script} \
+            --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
+            --param {wildcards.param} --leadtime {wildcards.leadtime} --metric {wildcards.metric} \
         # interactive editing (needs to set localrule: True and use only one core)
-        marimo edit {input.script} -- \
-            --input {input.verif_file} --outfn {output[0]}\
-            --param {wildcards.param} --leadtime {wildcards.leadtime} --metric {wildcards.metric}
+        # marimo edit {input.script} -- \
+        #     --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
+        #     --param {wildcards.param} --leadtime {wildcards.leadtime} --metric {wildcards.metric} \
         """
