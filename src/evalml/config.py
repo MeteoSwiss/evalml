@@ -311,11 +311,6 @@ class ConfigModel(BaseModel):
         "populate_by_name": True,
     }
 
-    include_optional_rules: List[str] | None = Field(
-        default_factory=list,
-        description="List of optional rules to include in the workflow.",
-    )
-
 
 def generate_config_schema() -> str:
     """Generate the JSON schema for the ConfigModel."""
