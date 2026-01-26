@@ -58,7 +58,7 @@ rule experiment_all:
             leadtime=[6, 12],
             metric=["BIAS", "RMSE", "MAE"],
             param=["TD_2M", "T_2M", "PMSL", "PS", "TOT_PREC"],
-            region=["europe", "switzerland"], 
+            region=["switzerland", "switzerland_small"], 
             experiment=EXPERIMENT_HASH
         )
 

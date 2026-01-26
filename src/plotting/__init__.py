@@ -37,6 +37,10 @@ DOMAINS = {
         "extent": [0, 17.5, 40.5, 53.0],
         "projection": _PROJECTIONS["orthographic"],
     },
+    "switzerland_small": {
+        "extent": [5.5, 11.0, 45.5, 48.0],
+        "projection": _PROJECTIONS["orthographic"],
+    },
 }
 
 
