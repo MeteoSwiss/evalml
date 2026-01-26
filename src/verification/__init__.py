@@ -82,7 +82,7 @@ def _compute_scores(
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
     Returns a xarray Dataset with the computed metrics.
     """
-    dim = ["x", "y"] if "x" in fcst.dims and "y" in fcst.dims else ["cell"]
+    dim = ["x", "y"] if "x" in fcst.dims and "y" in fcst.dims else ["values"]
     error = fcst - obs
     scores = xr.Dataset(
         {
@@ -108,7 +108,7 @@ def _compute_statistics(
     Compute basic statistics of a xarray DataArray (data).
     Returns a xarray Dataset with the computed statistics.
     """
-    dim = ["x", "y"] if "x" in data.dims and "y" in data.dims else ["cell"]
+    dim = ["x", "y"] if "x" in data.dims and "y" in data.dims else ["values"]
     stats = xr.Dataset(
         {
             f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),
