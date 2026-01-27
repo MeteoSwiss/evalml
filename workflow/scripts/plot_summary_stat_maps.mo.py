@@ -102,25 +102,38 @@ def _(init_hour, lead_time, metric, param, season, verif_file, xr):
 
 @app.cell
 def _(CMAP_DEFAULTS, ekp):
-    def get_style(param, units_override=None):
+    def get_style(param, metric, units_override=None):
         """Get style and colormap settings for the plot.
         Needed because cmap/norm does not work in Style(colors=cmap),
         still needs to be passed as arguments to tripcolor()/tricontourf().
         """
         cfg = CMAP_DEFAULTS[param]
         units = units_override if units_override is not None else cfg.get("units", "")
+
+        levels = cfg.get("levels", None)
+
+        if (metric == "BIAS"):
+            # For bias, we want to use a diverging colormap with symmetric bounds around zero.
+            max_abs_val = max(abs(levels))
+            levels = numpy.arange(-max_abs_val, max_abs_val, dtype=None)
+            vmin = -max_abs_val
+            vmax =  max_abs_val
+        else:
+            vmin = cfg.get("vmin", None)
+            vmax = cfg.get("vmax", None)
+
         return {
             "style": ekp.styles.Style(
-                levels=cfg.get("bounds", cfg.get("levels", None)),
+                levels=cfg.get("bounds", levels),
                 extend="both",
                 units=units,
                 colors=cfg.get("colors", None),
             ),
             "norm": cfg.get("norm", None),
             "cmap": cfg.get("cmap", None),
-            "levels": cfg.get("levels", None),
-            "vmin": cfg.get("vmin", None),
-            "vmax": cfg.get("vmax", None),
+            "levels": levels,
+            "vmin": vmin,
+            "vmax": vmax,
             "colors": cfg.get("colors", None),
         }
     return (get_style,)
@@ -161,7 +174,7 @@ def _(
     # # preprocess field (unit conversion, derived quantities)
     # field, units_override = preprocess_field(param, state)
 
-    plotter.plot_field(subplot, ds.values.ravel(), **get_style(var))
+    plotter.plot_field(subplot, ds.values.ravel(), **get_style(var, metric))
     # subplot.ax.add_geometries(
     #     state["lam_envelope"],
     #     edgecolor="black",
