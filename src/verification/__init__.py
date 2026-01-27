@@ -77,12 +77,13 @@ def _compute_scores(
     prefix="",
     suffix="",
     source="",
+    dim=["x", "y"],
 ) -> xr.Dataset:
     """
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
     Returns a xarray Dataset with the computed metrics.
     """
-    dim = ["x", "y"] if "x" in fcst.dims and "y" in fcst.dims else ["values"]
+    
     error = fcst - obs
     if dim == []:
         scores = xr.Dataset(
@@ -112,12 +113,13 @@ def _compute_statistics(
     prefix="",
     suffix="",
     source="",
+    dim=["x", "y"],
 ) -> xr.Dataset:
     """
     Compute basic statistics of a xarray DataArray (data).
     Returns a xarray Dataset with the computed statistics.
     """
-    dim = ["x", "y"] if "x" in data.dims and "y" in data.dims else ["values"]
+    
     stats = xr.Dataset(
         {
             f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),
@@ -161,6 +163,8 @@ def verify(
     """
     start = time.time()
 
+    dim = ["x", "y"] if "x" in fcst.dims and "y" in fcst.dims else ["values"]
+
     # rewrite the verification to use dask and xarray
     # chunk the data to avoid memory issues
     # compute the metrics in parallel
@@ -188,19 +192,19 @@ def verify(
             # scores vs time (reduce spatially)
             score.append(
                 _compute_scores(
-                    fcst_param, obs_param, prefix=param + ".", source=fcst_label
+                    fcst_param, obs_param, prefix=param + ".", source=fcst_label, dim=dim
                 ).expand_dims(region=[region])
             )
 
             # statistics vs time (reduce spatially)
             fcst_statistics.append(
                 _compute_statistics(
-                    fcst_param, prefix=param + ".", source=fcst_label
+                    fcst_param, prefix=param + ".", source=fcst_label, dim=dim
                 ).expand_dims(region=[region])
             )
             obs_statistics.append(
                 _compute_statistics(
-                    obs_param, prefix=param + ".", source=obs_label
+                    obs_param, prefix=param + ".", source=obs_label, dim=dim
                 ).expand_dims(region=[region])
             )
 
