@@ -6,6 +6,10 @@ dates:
   start: 2020-01-01T12:00
   end: 2020-01-10T00:00
   frequency: 60h
+  # or (for showcases)
+  # - 2020-02-03T00:00 # Storm Petra
+  # - 2020-02-07T00:00 # Storm Sabine
+  # - 2020-10-01T00:00 # Storm Brigitte
 
 runs:
   - interpolator:
@@ -15,7 +19,7 @@ runs:
       config: resources/inference/configs/sgm-interpolator-global_trimedge_fromtest.yaml
       forecaster: null
       extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference.git@main
+        - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
   - interpolator:
@@ -28,7 +32,7 @@ runs:
         config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
         steps: 0/120/6
       extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference.git@main
+        - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
   - forecaster:
@@ -37,7 +41,7 @@ runs:
       config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
       steps: 0/120/6
       extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference.git@main
+        - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
 
 baselines:
   - baseline:
