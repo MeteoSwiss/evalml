@@ -11,16 +11,16 @@ def _fallback():
     warnings.warn("No colormap found for this parameter, using fallback.", UserWarning)
     return {"cmap": plt.get_cmap("viridis"), "norm": None, "units": ""}
 
-def symmetric_boundary_norm(nlevels):
-    """
-    Returns a callable that creates a symmetric BoundaryNorm
-    around zero with `nlevels` discrete colors. Used for creating colormaps for bias.
-    """
-    def _norm(data):
-        vmax = np.nanmax(np.abs(data))
-        boundaries = np.linspace(-vmax, vmax, nlevels + 1)
-        return BoundaryNorm(boundaries=boundaries, ncolors=nlevels)
-    return _norm
+# def symmetric_boundary_norm(nlevels):
+#     """
+#     Returns a callable that creates a symmetric BoundaryNorm
+#     around zero with `nlevels` discrete colors. Used for creating colormaps for bias.
+#     """
+#     def _norm(data):
+#         vmax = np.nanmax(np.abs(data))
+#         boundaries = np.linspace(-vmax, vmax, nlevels + 1)
+#         return BoundaryNorm(boundaries=boundaries, ncolors=nlevels)
+#     return _norm
 
 _CMAP_DEFAULTS = {
     "SP": {"cmap": plt.get_cmap("coolwarm", 11), "vmin": 800 * 100, "vmax": 1100 * 100},
@@ -83,13 +83,13 @@ _CMAP_DEFAULTS = {
     # Bias:
     # diverging colour scheme for the Bias to reflect the nature of the data (can be positive or negative, symmetric).
     # Red-Blue colour scheme for all variables except precipitation, where a Brown-Green scheme is more suggestive.
-    "U_10M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu", 11), "norm": symmetric_boundary_norm(nlevels=11)} | {"units": "m/s"}, 
-    "V_10M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu", 11), "norm": symmetric_boundary_norm(nlevels=11)} | {"units": "m/s"},
-    "TD_2M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu", 11), "norm": symmetric_boundary_norm(nlevels=11)} | {"units": "°C"},
-    "T_2M.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu", 11), "norm": symmetric_boundary_norm(nlevels=11)} | {"units": "°C"},
-    "PMSL.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu", 11), "norm": symmetric_boundary_norm(nlevels=11)} | {"units": "Pa"},
-    "PS.BIAS.spatial":       {"cmap": plt.get_cmap("RdBu", 11), "norm": symmetric_boundary_norm(nlevels=11)} | {"units": "Pa"},
-    "TOT_PREC.BIAS.spatial": {"cmap": plt.get_cmap("BrBG", 11), "norm": symmetric_boundary_norm(nlevels=11)} | {"units": "mm"}
+    "U_10M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "m/s"}, 
+    "V_10M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "m/s"},
+    "TD_2M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "°C"},
+    "T_2M.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "°C"},
+    "PMSL.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "Pa"},
+    "PS.BIAS.spatial":       {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "Pa"},
+    "TOT_PREC.BIAS.spatial": {"cmap": plt.get_cmap("BrBG", 11)} | {"units": "mm"}
 }
 
 CMAP_DEFAULTS = defaultdict(_fallback, _CMAP_DEFAULTS)
