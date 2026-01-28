@@ -25,10 +25,16 @@ def short_hash_config():
 def short_hash_runconfig(run_config):
     """Generate a short hash of the run block in the config file."""
     # 'label' has no functional impact on the results of a model run, so we exclude it
-    if "label" in run_config:
-        run_config = copy.deepcopy(run_config)
-        run_config.pop("label")
-    cfg_str = json.dumps(run_config, sort_keys=True)
+    cfg = copy.deepcopy(run_config)
+    cfg.pop("label", None)
+    cfg.pop("_is_candidate", None)
+
+    cfg_str = json.dumps(
+        cfg,
+        sort_keys=True,
+        separators=(",", ":"),  # consistent separators for hashing
+        ensure_ascii=False,
+    )
     return hashlib.sha256(cfg_str.encode()).hexdigest()[:8]
 
 
@@ -78,44 +84,69 @@ def _reftimes():
 REFTIMES = _reftimes()
 
 
-def collect_all_runs():
+def _run_config(run_entry: dict) -> tuple[str, dict]:
+    model_type = next(iter(run_entry))
+    run_config = copy.deepcopy(run_entry[model_type])
+    run_config["model_type"] = model_type
+    return run_config
+
+
+def _make_run_key(prefix: str, run_config: dict) -> tuple[str, str]:
+    """
+    """
+    hsh = short_hash_runconfig(run_config)
+    return f"{prefix}-{hsh}"
+
+
+def _register_forecaster_dependency(runs: dict, forecaster_cfg: dict) -> str:
+    """
+    Register a forecaster config as a non-candidate dependency.
+    Returns the generated forecaster run_id (key in runs).
+    """
+    fcst_cfg = copy.deepcopy(forecaster_cfg)
+    fcst_cfg["model_type"] = "forecaster"
+
+    run_label = f"forecaster-{fcst_cfg["mlflow_id"][:4]}"
+    fcst_key = _make_run_key(run_label, fcst_cfg)
+    if fcst_key in runs:
+        return fcst_key  # already registered
+
+    fcst_cfg["_is_candidate"] = False  # exclude from outputs
+    runs[fcst_key] = fcst_cfg
+    return fcst_key
+
+
+def collect_all_runs() -> dict:
     """Collect all runs defined in the configuration, including secondary runs."""
-    runs = {}
-    for run_entry in copy.deepcopy(config["runs"]):
-        model_type = next(iter(run_entry))
-        run_config = run_entry[model_type]
-        run_config["model_type"] = model_type
-        run_id = run_config["mlflow_id"][0:4]
-        run_label = run_config.get("label", model_type)
-        run_label = run_label.replace(" ", "_")
+    runs: dict[str, dict] = {}
+    for run_entry in config["runs"]:
+        run_cfg = _run_config(run_entry)
+
+        model_type = run_cfg["model_type"]
+        mlflow_id4 = run_cfg["mlflow_id"][:4]
+        prefix = f"{model_type}-{mlflow_id4}"
 
         if model_type == "interpolator":
-            if "forecaster" not in run_config or run_config["forecaster"] is None:
-                fcst_id = "ana"
+            forecaster = run_cfg.get("forecaster")
+
+            if not forecaster:
+                # "analysis" dependency marker
+                suffix = "ana"
+
             else:
-                fcst_id = run_config["forecaster"]["mlflow_id"][0:4]
-                # Ensure a proper 'forecaster' entry exists with model_type
-                fore_cfg = copy.deepcopy(run_config["forecaster"])
-                fore_cfg["model_type"] = "forecaster"
-                # make sure we don't hash the is_candidate status
-                fore_id = short_hash_runconfig(fore_cfg)
-                fore_cfg["is_candidate"] = False  # exclude from outputs
-                runs[f"{run_label}-{fcst_id}-{fore_id}"] = fore_cfg
-                # add run_id of forecaster to interpolator config
-                run_config["forecaster"]["run_id"] = f"{run_label}-{fcst_id}-{fore_id}"
-            run_id = f"{run_label}-{run_id}-{fcst_id}"
-        elif model_type == "forecaster":
-            run_id = f"{run_label}-{run_id}"
+                fcst_key = _register_forecaster_dependency(runs, forecaster)
+                run_cfg["forecaster"]["run_id"] = fcst_key
+                suffix = f"forecaster-{forecaster['mlflow_id'][:4]}"
+
+            run_label = f"{prefix}-on-{suffix}"
         else:
-            raise ValueError(f"Unsupported model type: {model_type}")
+            run_label = prefix
 
-        # add the hash of the config to the run id
-        run_id = f"{run_id}-{short_hash_runconfig(run_config)}"
+        run_key = _make_run_key(run_label, run_cfg)  # unique run identifier
 
-        # make sure we don't hash the is_candidate status
-        run_config["is_candidate"] = True
-        # Register this (possibly composite) run inside the loop
-        runs[run_id] = run_config
+        run_cfg["_is_candidate"] = True
+        runs[run_key] = run_cfg
+
     return runs
 
 
@@ -124,7 +155,7 @@ def collect_all_candidates():
     runs = collect_all_runs()
     candidates = {}
     for run_id, run_config in runs.items():
-        if run_config.get("is_candidate", False):
+        if run_config.get("_is_candidate", False):
             candidates[run_id] = run_config
     return candidates
 
@@ -145,7 +176,7 @@ def collect_experiment_participants():
     for base in BASELINE_CONFIGS.keys():
         participants[base] = OUT_ROOT / f"data/baselines/{base}/verif_aggregated.nc"
     for exp in RUN_CONFIGS.keys():
-        if RUN_CONFIGS[exp].get("is_candidate", False):
+        if RUN_CONFIGS[exp].get("_is_candidate", False):
             participants[exp] = OUT_ROOT / f"data/runs/{exp}/verif_aggregated.nc"
     return participants
 
