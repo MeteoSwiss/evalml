@@ -278,7 +278,12 @@ def get_path_to_checkpoints(client: MlflowClient, run_id: str) -> str:
         ValueError: If no valid checkpoints path is found
     """
     run = client.get_run(run_id)
+
+    # for legacy runs
     path = run.data.params.get("config.hardware.paths.checkpoints")
+
+    # for newer runs
+    path = path or run.data.params.get("config.system.output.checkpoints.root")
 
     if not path:
         raise ValueError("No valid checkpoints path found in MLflow run")
