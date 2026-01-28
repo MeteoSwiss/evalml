@@ -23,7 +23,7 @@ document.getElementById("region-select").addEventListener("change", updateChart)
 
 choicesInstances["season-select"] = new Choices("#season-select", {
   searchEnabled: false,
-  removeItemButton: true,
+  removeItemButton: false,
   shouldSort: false,
   itemSelectText: "",
   placeholder: false
@@ -32,7 +32,7 @@ document.getElementById("season-select").addEventListener("change", updateChart)
 
 choicesInstances["init-select"] = new Choices("#init-select", {
   searchEnabled: false,
-  removeItemButton: true,
+  removeItemButton: false,
   shouldSort: false,
   itemSelectText: "",
   placeholder: false
