@@ -21,6 +21,23 @@ choicesInstances["region-select"] = new Choices("#region-select", {
 });
 document.getElementById("region-select").addEventListener("change", updateChart);
 
+choicesInstances["init-select"] = new Choices("#init-select", {
+  searchEnabled: false,
+  removeItemButton: true,
+  shouldSort: false,
+  itemSelectText: "",
+  placeholder: false
+});
+document.getElementById("season-select").addEventListener("change", updateChart);
+
+choicesInstances["init-select"] = new Choices("#init-select", {
+  searchEnabled: false,
+  removeItemButton: true,
+  shouldSort: false,
+  itemSelectText: "",
+  placeholder: false
+});
+document.getElementById("init-select").addEventListener("change", updateChart);
 
 choicesInstances["source-select"] = new Choices("#source-select", {
   searchEnabled: false,
