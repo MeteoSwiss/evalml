@@ -21,7 +21,7 @@ choicesInstances["region-select"] = new Choices("#region-select", {
 });
 document.getElementById("region-select").addEventListener("change", updateChart);
 
-choicesInstances["init-select"] = new Choices("#init-select", {
+choicesInstances["season-select"] = new Choices("#season-select", {
   searchEnabled: false,
   removeItemButton: true,
   shouldSort: false,
@@ -147,6 +147,8 @@ function getSelectedValues(id) {
 
 function updateChart() {
   const selectedRegions = getSelectedValues("region-select");
+  const selecttedSeasons = getSelectedValues("season-select");
+  const selectedInits = getSelectedValues("init-select");
   const selectedSources = getSelectedValues("source-select");
   const selectedparams = getSelectedValues("param-select");
   const selectedMetrics = getSelectedValues("metric-select");
@@ -157,6 +159,12 @@ function updateChart() {
   newSpec.title = "Verification using " + header;
   if (selectedRegions.length > 0) {
     filters.push({ field: "region", oneOf: selectedRegions });
+  }
+  if (selecttedSeasons.length > 0) {
+    filters.push({ field: "season", oneOf: selecttedSeasons });
+  }
+  if (selectedInits.length > 0) {
+    filters.push({ field: "init_hour", oneOf: selectedInits });
   }
   if (selectedSources.length > 0) {
     filters.push({ field: "source", oneOf: selectedSources });

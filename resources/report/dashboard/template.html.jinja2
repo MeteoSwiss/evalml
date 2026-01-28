@@ -112,7 +112,7 @@
             </div>
             <div class="control-group">
                 <label>Season</label>
-                <select id="season-select" multiple>
+                <select id="season-select">
                     {% for season in seasons %}
                     <option value="{{season}}"{% if season == 'all' %} selected{% endif %}>{{season}}</option>
                     {% endfor %}
@@ -120,7 +120,7 @@
             </div>
             <div class="control-group">
                 <label>Initialization</label>
-                <select id="init-select" multiple>
+                <select id="init-select">
                     {% for init_hour in init_hours %}
                     <option value="{{init_hour}}"{% if init_hour == 'all' %} selected{% endif %}>{{init_hour}}</option>
                     {% endfor %}
