@@ -1,11 +1,11 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Evaluate skill of COSMO-E emulator (M-1 forecaster).
+  Evaluate skill of ICON-CH1 single.
 
 dates:
-  - 2020-02-03T00:00 # Storm Petra
-  - 2020-02-07T00:00 # Storm Sabine
-  - 2020-10-01T00:00 # Storm Brigitte
+  start: 2024-01-01T00:00
+  end: 2024-01-02T00:00
+  frequency: 6h
 
 runs:
   - forecaster:
@@ -17,7 +17,12 @@ runs:
       extra_dependencies:
         - git+https://github.com/ecmwf/anemoi-inference.git@main
 
-baselines: [] # TODO: add ICON-CH1-EPS baseline when available
+baselines:
+- baseline:
+      baseline_id: ICON-CH1-EPS
+      label: ICON-CH1-EPS
+      root: /store_new/mch/msopr/ml/ICON-CH1-EPS
+      steps: 0/33/6
 
 analysis:
   label: REA-L-CH1

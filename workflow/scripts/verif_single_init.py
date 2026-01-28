@@ -100,7 +100,7 @@ def main(args: ScriptConfig):
             .chunk(
                 {"y": -1, "x": -1}
                 if "y" in fcst.dims and "x" in fcst.dims
-                else {"cell": -1}
+                else {"values": -1}
             )
         )
     else:

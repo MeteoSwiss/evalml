@@ -14,14 +14,14 @@ runs:
       steps: 0/120/6
       config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
       extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference.git@main
+        - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
 
 baselines:
   - baseline:
-      baseline_id: COSMO-E
+      baseline_id: COSMO-E-1h
       label: COSMO-E
-      root: /store_new/mch/msopr/ml/COSMO-E
-      steps: 0/120/6
+      root: /store_new/mch/msopr/ml/COSMO-E_hourly
+      steps: 0/120/1
 
 analysis:
   label: COSMO KENDA
@@ -36,6 +36,10 @@ stratification:
     - innerealpentaeler
     - alpensuedseite
   root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+
+analysis:
+  label: COSMO KENDA
+  analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-1h-v3-pl13.zarr
 
 locations:
   output_root: output/
