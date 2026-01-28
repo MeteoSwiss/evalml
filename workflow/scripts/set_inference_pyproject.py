@@ -231,13 +231,10 @@ def get_other_versions(client: MlflowClient, run_id: str) -> dict:
     """
     versions = {}
     for dep in OTHER_DEPENDENCIES:
-        version, commit_hash = get_version_and_commit_hash(client, run_id, dep)
-        if not version and not commit_hash:
+        version, _ = get_version_and_commit_hash(client, run_id, dep)
+        if not version:
             logger.warning("No commit or version found for %s", dep)
             continue
-        if commit_hash:
-            logger.info("Found commit %s for %s", commit_hash, dep)
-            ref = resolve_dependency_config(commit_hash, dep)
         else:
             logger.info("Using version %s for %s", version, dep)
             ref = version
