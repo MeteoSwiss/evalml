@@ -182,7 +182,7 @@ rule prepare_inference_forecaster:
 
 def _get_forecaster_run_id(run_id):
     """Get the forecaster run ID from the RUN_CONFIGS."""
-    return RUN_CONFIGS[run_id]["forecaster"]["mlflow_id"][0:9]
+    return RUN_CONFIGS[run_id]["forecaster"]["run_id"]
 
 
 rule prepare_inference_interpolator:
@@ -242,6 +242,9 @@ rule execute_inference:
         workdir=lambda wc: (
             OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
         ).resolve(),
+        disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
+            "disable_local_eccodes_definitions", False
+        ),
     resources:
         slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
         cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
@@ -259,13 +262,16 @@ rule execute_inference:
 
         squashfs-mount {params.image_path}:/user-environment -- bash -c '
         source /user-environment/bin/activate
-        export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
+
+        if [ "{params.disable_local_definitions}" = "False" ]; then
+            export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
+        fi
 
         CMD_ARGS=()
 
-        # is GPU > 1, add runner=parallel to CMD_ARGS
+        # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
         if [ {resources.gpus} -gt 1 ]; then
-            CMD_ARGS+=(runner=parallel)
+            CMD_ARGS+=(runner.parallel.cluster=slurm)
         fi
 
         srun \

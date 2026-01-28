@@ -79,6 +79,9 @@ def main(args):
         metrics=metrics,
         regions=regions,
         header_text=args.header_text,
+        configfile_content=open(args.configfile, "r").read()
+        if args.configfile.is_file()
+        else "",
     )
     LOG.info("Size of generated HTML: %d bytes", len(html.encode("utf-8")))
 
@@ -115,6 +118,11 @@ if __name__ == "__main__":
         type=str,
         default="",
         help="Text to display in the header of the dashboard.",
+    )
+    parser.add_argument(
+        "--configfile",
+        type=Path,
+        help="Path to config file for the evalml run.",
     )
     parser.add_argument(
         "--output",
