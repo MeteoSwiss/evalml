@@ -297,7 +297,7 @@ class ConfigModel(BaseModel):
         ...,
         description="Description of the experiment, e.g. 'Hindcast of the 2023 season.'",
     )
-    label: str | None = Field(
+    experiment_label: str | None = Field(
         None,
         description="Optional label for the experiment that will be used in the experiment directory name. Defaults to the config file name if not provided.",
     )

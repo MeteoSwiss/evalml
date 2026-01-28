@@ -43,3 +43,12 @@ output:
             inverse: true
         - assign_mask: # fill local/global overlapping points with nan
             mask: "global/cutout_mask"
+
+patch_metadata:
+  config:
+    dataloader:
+      test:
+        dataset:
+          cutout:
+            - dataset: /store_new/mch/msopr/ml/datasets/mch-realch1-fdb-1km-2005-2025-1h-pl13-ifsnames-v1.0.zarr
+            - dataset: /store_new/mch/msopr/ml/datasets/aifs-ea-an-oper-0001-mars-n320-1979-2024-6h-v1-for-single-v2.zarr
