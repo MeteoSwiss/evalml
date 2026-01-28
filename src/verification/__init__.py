@@ -74,6 +74,7 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
 def _compute_scores(
     fcst: xr.DataArray,
     obs: xr.DataArray,
+    dim,
     prefix="",
     suffix="",
     source="",
@@ -82,7 +83,6 @@ def _compute_scores(
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
     Returns a xarray Dataset with the computed metrics.
     """
-    dim = ["x", "y"] if "x" in fcst.dims and "y" in fcst.dims else ["values"]
     error = fcst - obs
     scores = xr.Dataset(
         {
@@ -100,6 +100,7 @@ def _compute_scores(
 
 def _compute_statistics(
     data: xr.DataArray,
+    dim,
     prefix="",
     suffix="",
     source="",
@@ -108,7 +109,6 @@ def _compute_statistics(
     Compute basic statistics of a xarray DataArray (data).
     Returns a xarray Dataset with the computed statistics.
     """
-    dim = ["x", "y"] if "x" in data.dims and "y" in data.dims else ["values"]
     stats = xr.Dataset(
         {
             f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),
@@ -145,6 +145,7 @@ def verify(
     fcst_label: str,
     obs_label: str,
     regions: list[str] | None = None,
+    dim=["x", "y"],
 ) -> xr.Dataset:
     """
     Compare two xarray Datasets (fcst and obs) and return pandas DataFrame with
@@ -179,19 +180,19 @@ def verify(
             # scores vs time (reduce spatially)
             score.append(
                 _compute_scores(
-                    fcst_param, obs_param, prefix=param + ".", source=fcst_label
+                    fcst_param, obs_param, prefix=param + ".", source=fcst_label, dim=dim
                 ).expand_dims(region=[region])
             )
 
             # statistics vs time (reduce spatially)
             fcst_statistics.append(
                 _compute_statistics(
-                    fcst_param, prefix=param + ".", source=fcst_label
+                    fcst_param, prefix=param + ".", source=fcst_label, dim=dim
                 ).expand_dims(region=[region])
             )
             obs_statistics.append(
                 _compute_statistics(
-                    obs_param, prefix=param + ".", source=obs_label
+                    obs_param, prefix=param + ".", source=obs_label, dim=dim
                 ).expand_dims(region=[region])
             )
 

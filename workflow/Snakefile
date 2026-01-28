@@ -13,6 +13,7 @@ update_config(config, ConfigModel.model_validate(dict(config)).model_dump(mode="
 include: "rules/common.smk"
 include: "rules/data.smk"
 include: "rules/inference.smk"
+include: "rules/nudging.smk"
 include: "rules/verif.smk"
 include: "rules/report.smk"
 include: "rules/plot.smk"
@@ -23,7 +24,8 @@ include: "rules/summary.smk"
 # -----------------------------------------------------
 onstart:
     print("\n--- Analysis started ---\n")
-
+    print(f"Experiment hash: {EXPERIMENT_HASH}\n")
+    print(f"Participating runs: {list(collect_all_candidates().keys())}\n")
 
 onsuccess:
     print("\n--- Workflow finished! ---\n")
@@ -70,7 +72,7 @@ rule showcase_all:
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=collect_all_candidates(),
             param=["T_2M", "SP_10M"],
-            sta=["GVE", "KLO", "LUG"],
+            sta=["GVE", "KLO", "LUG", "BRL"],
         ),
         expand(
             OUT_ROOT / "data/runs/{run_id}/summary.md",

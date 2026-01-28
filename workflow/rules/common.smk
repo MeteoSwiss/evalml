@@ -160,6 +160,13 @@ def _inference_routing_fn(wc):
     return OUT_ROOT / input_path
 
 
+def _enable_nudging(wc):
+    run_config = RUN_CONFIGS[wc.run_id]
+    if run_config["model_type"] == "interpolator":
+        if RUN_CONFIGS[run_config["forecaster"]["run_id"]]["nudging"]:
+            return rules.nudge_analysis.output.okfile
+    return []
+
 def _regions():
     cfg = config["stratification"]
     regions = [f"{cfg['root']}/{region}.shp" for region in cfg["regions"]]
@@ -173,4 +180,5 @@ REGION_TXT = _regions()
 
 RUN_CONFIGS = collect_all_runs()
 BASELINE_CONFIGS = collect_all_baselines()
+EXPERIMENT_HASH = short_hash_config()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()

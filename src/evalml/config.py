@@ -89,6 +89,10 @@ class RunConfig(BaseModel):
         None,
         description="Resource requirements for inference jobs (optional; defaults handled externally).",
     )
+    nudging: bool = Field(
+        False,
+        description="Whether to apply obs nudging during inference.",
+    )
 
     disable_local_eccodes_definitions: bool = Field(
         False,

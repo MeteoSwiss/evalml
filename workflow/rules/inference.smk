@@ -223,6 +223,7 @@ rule execute_inference:
     input:
         okfile=_inference_routing_fn,
         image=rules.make_squashfs_image.output.image,
+        oknudge=_enable_nudging,
     output:
         okfile=touch(OUT_ROOT / "logs/execute_inference/{run_id}-{init_time}.ok"),
     log:

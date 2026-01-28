@@ -33,7 +33,7 @@ rule plot_meteogram:
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
-        runtime="5m",
+        runtime="20m",
     params:
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
