@@ -144,7 +144,7 @@ rule verif_metrics_plot:
         verif=list(EXPERIMENT_PARTICIPANTS.values()),
     output:
         report(
-            directory(OUT_ROOT / "results/{experiment}/metrics/plots"),
+            directory(OUT_ROOT / "results/{experiment}/plots"),
             patterns=["{name}.png"],
         ),
     params:
