@@ -67,6 +67,10 @@ def load_analysis_data_from_zarr(
         .rename({v: k for k, v in PARAMS_MAP.items() if v in ds["variable"].values})
     )
 
+    # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
+    if "cell" in ds.dims:
+        ds = ds.rename({"cell": "values"})
+
     # select valid times
     # (handle special case where some valid times are not in the dataset, e.g. at the end)
     times_included = times.isin(ds.time.values).values
@@ -115,6 +119,10 @@ def load_fct_data_from_grib(
     if "time" not in ds.coords:
         ds = ds.assign_coords(time=ds.ref_time + ds.lead_time)
     ds = ds.sel(ref_time=reftime)
+
+    # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
+    if "cell" in ds.dims:
+        ds = ds.rename({"cell": "values"})
     return ds
 
 

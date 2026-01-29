@@ -24,6 +24,7 @@ dependencies = [
     "earthkit-plots",
     "marimo>=0.16.5",
     "geopandas>=0.14.0",
+    "peakweather",
 ]
 
 [project.optional-dependencies]
@@ -58,3 +59,6 @@ packages = [
   "src/verification",
   "src/data_input"
 ]
+
+[tool.uv.sources]
+peakweather = { git = "https://github.com/MeteoSwiss/PeakWeather.git" }

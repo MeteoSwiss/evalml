@@ -36,13 +36,18 @@ onerror:
 # target rules
 # -----------------------------------------------------
 EXPERIMENT_HASH = short_hash_config()
+EXPERIMENT_DATE = datetime.now().strftime("%Y%m%d")
+EXPERIMENT_LABEL = (
+    config["experiment_label"] or workflow.config_settings.configfiles[0].stem
+)
+EXPERIMENT_DIRNAME = f"{EXPERIMENT_DATE}_{EXPERIMENT_LABEL}_{EXPERIMENT_HASH}"
 
 
 rule experiment_all:
     """Target rule for experiment workflow."""
     input:
-        OUT_ROOT / f"results/{EXPERIMENT_HASH}/metrics/dashboard",
-        OUT_ROOT / f"results/{EXPERIMENT_HASH}/metrics/plots",
+        OUT_ROOT / f"results/experiment/{EXPERIMENT_DIRNAME}/metrics/dashboard",
+        OUT_ROOT / f"results/experiment/{EXPERIMENT_DIRNAME}/metrics/plots",
         expand(
             OUT_ROOT / "data/runs/{run_id}/summary.md",
             run_id=collect_all_candidates(),
@@ -57,8 +62,15 @@ rule showcase_all:
             / "showcases/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=collect_all_candidates(),
-            param=["TOT_PREC", "T_2M", "SP_10M"],
+            param=["T_2M", "SP_10M"],
             region=["globe", "europe", "switzerland"],
+        ),
+        expand(
+            OUT_ROOT / "showcases/{run_id}/{init_time}/{init_time}_{param}_{sta}.png",
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            run_id=collect_all_candidates(),
+            param=["T_2M", "SP_10M"],
+            sta=["GVE", "KLO", "LUG"],
         ),
         expand(
             OUT_ROOT / "data/runs/{run_id}/summary.md",
