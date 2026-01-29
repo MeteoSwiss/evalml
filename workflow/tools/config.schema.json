@@ -539,7 +539,7 @@
       ],
       "default": null,
       "description": "Optional label for the experiment that will be used in the experiment directory name. Defaults to the config file name if not provided.",
-      "title": "Experiment Label"
+      "title": "Config Label"
     },
     "dates": {
       "anyOf": [
