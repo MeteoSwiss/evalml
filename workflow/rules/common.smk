@@ -92,8 +92,7 @@ def _run_config(run_entry: dict) -> tuple[str, dict]:
 
 
 def _make_run_key(prefix: str, run_config: dict) -> tuple[str, str]:
-    """
-    """
+    """ """
     hsh = short_hash_runconfig(run_config)
     return f"{prefix}-{hsh}"
 
@@ -131,7 +130,7 @@ def collect_all_runs() -> dict:
 
             if not forecaster:
                 # "analysis" dependency marker
-                suffix = "ana"
+                suffix = "analysis"
 
             else:
                 fcst_key = _register_forecaster_dependency(runs, forecaster)

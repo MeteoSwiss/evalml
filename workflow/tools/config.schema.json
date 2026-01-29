@@ -528,7 +528,7 @@
       "title": "Description",
       "type": "string"
     },
-    "experiment_label": {
+    "config_label": {
       "anyOf": [
         {
           "type": "string"

@@ -2,6 +2,8 @@
 # Please follow the best practices:
 # https://snakemake.readthedocs.io/en/stable/snakefiles/best_practices.html,
 
+import time
+
 from evalml.config import ConfigModel
 
 # validate configuration and add defaults
@@ -11,46 +13,118 @@ update_config(config, ConfigModel.model_validate(dict(config)).model_dump(mode="
 # load rules
 # -----------------------------------------------------
 include: "rules/common.smk"
+include: "rules/summary.smk"
 include: "rules/data.smk"
 include: "rules/inference.smk"
 include: "rules/verif.smk"
 include: "rules/report.smk"
 include: "rules/plot.smk"
-include: "rules/summary.smk"
+
+
+# about workflow
+# -----------------------------------------------------
+
+RUN_CMD = Path(".evalml_snakemake_cmd.txt").read_text().strip()
+CONFIG_HASH = short_hash_config()
+WHEN = datetime.now().strftime("%Y%m%d")
+CONFIG_FILE = workflow.config_settings.configfiles[0]
+CONFIG_LABEL = config["config_label"] or CONFIG_FILE.stem
+EXPERIMENT_NAME = f"{WHEN}_{CONFIG_LABEL}_{CONFIG_HASH}"
+CANDIDATES = collect_all_candidates()
+
+DATA_DIR = OUT_ROOT / "data"
+LOGS_DIR = OUT_ROOT / "logs"
+RESULTS_DIR = OUT_ROOT / "results" / EXPERIMENT_NAME
 
 
 # optional messages, log and error handling
 # -----------------------------------------------------
+
+
+def _c(text: str, code: str) -> str:
+    return f"\033[{code}m{text}\033[0m"
+
+
+def _hr(char="─", n=72):
+    print(_c(char * n, "90"))
+
+
+def _fmt_seconds(s: float) -> str:
+    s = int(round(s))
+    h = s // 3600
+    m = (s % 3600) // 60
+    sec = s % 60
+    if h:
+        return f"{h}h {m:02d}m {sec:02d}s"
+    if m:
+        return f"{m}m {sec:02d}s"
+    return f"{sec}s"
+
+
 onstart:
-    print("\n--- Analysis started ---\n")
+    global _T0
+    _T0 = time.time()
+
+    when_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    print()
+    _hr()
+    print(_c("🚀 EvalML workflow started", "1"))
+    print(_c(f"   Time:        {when_iso}", "90"))
+    print(_c(f"   Snakemake:   {RUN_CMD}", "90"))
+    print(_c(f"   Workdir:     {Path.cwd()}", "90"))
+    print(_c(f"   Config:      {CONFIG_FILE.name}", "90"))
+    print(_c(f"   Experiment:  {EXPERIMENT_NAME}", "90"))
+    print(_c(f"   Candidates:  {", ".join(CANDIDATES)}", "90"))
+    print(_c(f"   Data dir:    {DATA_DIR}", "90"))
+    print(_c(f"   Logs dir:    {LOGS_DIR}", "90"))
+    print(_c(f"   Results dir: {RESULTS_DIR}", "90"))
+    _hr()
+    print()
 
 
 onsuccess:
-    print("\n--- Workflow finished! ---\n")
+    dt = _fmt_seconds(time.time() - (_T0 or time.time()))
+
+    print()
+    _hr()
+    print(_c("✅ Workflow finished successfully", "1"))
+    print(_c(f"   Duration:  {dt}", "90"))
+    print(_c(f"   Results:   {RESULTS_DIR}", "90"))
+    _hr()
+    print()
 
 
 onerror:
-    print("\n--- An error occurred! ---\n")
+    dt = _fmt_seconds(time.time() - (_T0 or time.time()))
+
+    print()
+    _hr()
+    print(_c("❌ Workflow failed", "1"))
+    print(_c(f"   Snakemake:   {RUN_CMD}", "90"))
+    print(_c(f"   Duration:       {dt}", "90"))
+    print(_c(f"   Results:        {RESULTS_DIR}", "90"))
+    print(_c(f"   Rule logs:      {LOGS_DIR}", "90"))
+    print(_c(f"   Snakemake logs: .snakemake/logs/", "90"))
+    print(_c(f"   Slurm logs:     .snakemake/slurm_logs/", "90"))
+    _hr()
+    print()
 
 
 # target rules
 # -----------------------------------------------------
-EXPERIMENT_HASH = short_hash_config()
-EXPERIMENT_DATE = datetime.now().strftime("%Y%m%d")
-EXPERIMENT_LABEL = (
-    config["experiment_label"] or workflow.config_settings.configfiles[0].stem
-)
-EXPERIMENT_DIRNAME = f"{EXPERIMENT_DATE}_{EXPERIMENT_LABEL}_{EXPERIMENT_HASH}"
 
 
 rule experiment_all:
     """Target rule for experiment workflow."""
     input:
-        OUT_ROOT / f"results/experiment/{EXPERIMENT_DIRNAME}/metrics/dashboard",
-        OUT_ROOT / f"results/experiment/{EXPERIMENT_DIRNAME}/metrics/plots",
         expand(
-            OUT_ROOT / "data/runs/{run_id}/summary.md",
-            run_id=collect_all_candidates(),
+            rules.report_experiment_dashboard.output,
+            experiment=EXPERIMENT_NAME,
+        ),
+        expand(
+            rules.verif_metrics_plot.output,
+            experiment=EXPERIMENT_NAME,
         ),
 
 
@@ -58,23 +132,20 @@ rule showcase_all:
     """Target rule for showcase workflow."""
     input:
         expand(
-            OUT_ROOT
-            / "results/showcase/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
+            rules.make_forecast_animation.output,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=collect_all_candidates(),
+            run_id=CANDIDATES,
             param=["T_2M", "SP_10M"],
             region=["globe", "europe", "switzerland"],
+            showcase=EXPERIMENT_NAME,
         ),
         expand(
-            OUT_ROOT / "showcases/{run_id}/{init_time}/{init_time}_{param}_{sta}.png",
+            rules.plot_meteogram.output,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=collect_all_candidates(),
+            run_id=CANDIDATES,
             param=["T_2M", "SP_10M"],
             sta=["GVE", "KLO", "LUG"],
-        ),
-        expand(
-            OUT_ROOT / "data/runs/{run_id}/summary.md",
-            run_id=collect_all_candidates(),
+            showcase=EXPERIMENT_NAME,
         ),
 
 
@@ -83,7 +154,7 @@ rule sandbox_all:
     input:
         expand(
             rules.create_inference_sandbox.output.sandbox,
-            run_id=collect_all_candidates(),
+            run_id=CANDIDATES,
         ),
 
 
@@ -93,7 +164,7 @@ rule run_inference_all:
         expand(
             OUT_ROOT / "data/runs/{run_id}/{init_time}/raw",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=collect_all_candidates(),
+            run_id=CANDIDATES,
         ),
 
 
@@ -102,7 +173,7 @@ rule verif_metrics_all:
         expand(
             rules.verif_metrics.output,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=collect_all_candidates(),
+            run_id=CANDIDATES,
         ),
 
 
@@ -111,5 +182,5 @@ rule verif_metrics_plot_all:
     input:
         expand(
             rules.verif_metrics_plot.output,
-            experiment=EXPERIMENT_HASH,
+            experiment=EXPERIMENT_NAME,
         ),

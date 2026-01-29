@@ -24,7 +24,7 @@ rule report_experiment_dashboard:
         configfile={workflow.configfiles[0]},
     output:
         report(
-            directory(OUT_ROOT / "results/{experiment}/metrics/dashboard"),
+            directory(OUT_ROOT / "results/{experiment}/dashboard"),
             htmlindex="dashboard.html",
         ),
     params:
