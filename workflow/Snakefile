@@ -51,6 +51,10 @@ rule experiment_all:
             run_id=collect_all_candidates(),
         ),
         expand(
+            rules.run_ffv2.output,
+            run_id=collect_all_candidates(),
+        ),
+        expand(
             OUT_ROOT / "data/runs/{run_id}/summary.md",
             run_id=collect_all_candidates(),
         ),
