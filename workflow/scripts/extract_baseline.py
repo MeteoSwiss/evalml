@@ -229,6 +229,10 @@ if __name__ == "__main__":
 
 """
 Example usage:
+
+To submit as a batch job on compute nodes
+sbatch --wrap "uv run python ..."
+
 python workflow/scripts/extract_baseline.py \
     --archive_dir /archive/mch/msopr/osm/COSMO-E/FCST20 \
     --output_store /store_new/mch/msopr/ml/COSMO-E/FCST20.zarr \
