@@ -79,6 +79,7 @@ rule generate_mec_namelist:
     input:
         script="workflow/scripts/generate_mec_namelist.py",
         template="resources/mec/namelist.jinja2",
+        wait_inference=rules.prepare_inference_forecaster.output.okfile
     output:
         namelist=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/namelist",
     params:
@@ -203,7 +204,7 @@ rule run_ffv2:
         # Run FFV2 inside sarus container
         # Note: pull command currently needed only once to download the container
         # TODO(mmcglohon): Update from dev to main once things work
-        sarus pull container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-dev
+        sarus pull container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-main
         namelist=$(realpath {input.namelist})
         domain_table={params.domain_table}
         blacklists={params.blacklists}
@@ -217,7 +218,7 @@ rule run_ffv2:
         --mount=type=bind,source=$blacklists,destination=$blacklists \
         --mount=type=bind,source=$feedback_dir_abs,destination=/src/ffv2/input \
         --mount=type=bind,source=$output_dir_abs,destination=/src/ffv2/output \
-        container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-dev
+        container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-main
 
         echo "...time at end of run_ffv2: $(date)"
         ) > {log} 2>&1
