@@ -23,7 +23,7 @@ document.getElementById("region-select").addEventListener("change", updateChart)
 
 choicesInstances["season-select"] = new Choices("#season-select", {
   searchEnabled: false,
-  removeItemButton: false,
+  removeItemButton: true,
   shouldSort: false,
   itemSelectText: "",
   placeholder: false
@@ -32,7 +32,7 @@ document.getElementById("season-select").addEventListener("change", updateChart)
 
 choicesInstances["init-select"] = new Choices("#init-select", {
   searchEnabled: false,
-  removeItemButton: false,
+  removeItemButton: true,
   shouldSort: false,
   itemSelectText: "",
   placeholder: false
@@ -117,12 +117,12 @@ var spec = {
         "legend": { "orient": "top", "title": "Data Source", "offset": 0, "padding": 10 }
       },
       "shape": {
-        "field": "region",
+        "field": "region_season_init",
         "type": "nominal",
         "legend": { "orient": "top", "title": "Region", "offset": 0, "padding": 10 }
       },
       "strokeDash": {
-        "field": "region",
+        "field": "region_season_init",
         "type": "nominal",
         "legend": null
       },
@@ -147,7 +147,7 @@ function getSelectedValues(id) {
 
 function updateChart() {
   const selectedRegions = getSelectedValues("region-select");
-  const selecttedSeasons = getSelectedValues("season-select");
+  const selectedSeasons = getSelectedValues("season-select");
   const selectedInits = getSelectedValues("init-select");
   const selectedSources = getSelectedValues("source-select");
   const selectedparams = getSelectedValues("param-select");
@@ -160,8 +160,8 @@ function updateChart() {
   if (selectedRegions.length > 0) {
     filters.push({ field: "region", oneOf: selectedRegions });
   }
-  if (selecttedSeasons.length > 0) {
-    filters.push({ field: "season", oneOf: selecttedSeasons });
+  if (selectedSeasons.length > 0) {
+    filters.push({ field: "season", oneOf: selectedSeasons });
   }
   if (selectedInits.length > 0) {
     filters.push({ field: "init_hour", oneOf: selectedInits });

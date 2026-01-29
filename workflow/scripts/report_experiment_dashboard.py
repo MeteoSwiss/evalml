@@ -47,6 +47,15 @@ def main(args):
     # convert numeric column init_hour to string in format HH:00 UTC and replace -999 with "all"
     df["init_hour"] = df["init_hour"].astype(str).str.zfill(2) + ":00 UTC"
     df["init_hour"] = df["init_hour"].where(df["init_hour"] != "-999:00 UTC", "all")
+    # create a new column for line styles and shapes in dashboard
+    df["region_season_init"] = (
+        "Region: "
+        + df["region"].astype(str)
+        + ", Season: "
+        + df["season"].astype(str)
+        + ", Init: "
+        + df["init_hour"].astype(str)
+    )
 
     df.dropna(inplace=True)
     LOG.info("Loaded verification data frame: \n%s", df)
