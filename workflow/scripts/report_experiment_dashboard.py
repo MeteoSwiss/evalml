@@ -44,8 +44,19 @@ def main(args):
     df[["param", "metric"]] = df["stack"].str.split(".", n=1, expand=True)
     df.drop(columns=["stack"], inplace=True)
     df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
-    # select only results for all seasons and init_hours (for now)
-    df = df[(df["season"] == "all") & (df["init_hour"] == -999)]
+    # convert numeric column init_hour to string in format HH:00 UTC and replace -999 with "all"
+    df["init_hour"] = df["init_hour"].astype(str).str.zfill(2) + ":00 UTC"
+    df["init_hour"] = df["init_hour"].where(df["init_hour"] != "-999:00 UTC", "all")
+    # create a new column for line styles and shapes in dashboard
+    df["region_season_init"] = (
+        "Region: "
+        + df["region"].astype(str)
+        + ", Season: "
+        + df["season"].astype(str)
+        + ", Init: "
+        + df["init_hour"].astype(str)
+    )
+
     df.dropna(inplace=True)
     LOG.info("Loaded verification data frame: \n%s", df)
 
@@ -54,6 +65,8 @@ def main(args):
     params = df["param"].unique()
     metrics = df["metric"].unique()
     regions = df["region"].unique()
+    seasons = df["season"].unique()
+    init_hours = df["init_hour"].unique()
 
     # get json string to embed in the HTML
     df_json = df.to_json(orient="records", lines=False)
@@ -78,6 +91,8 @@ def main(args):
         params=params,
         metrics=metrics,
         regions=regions,
+        seasons=seasons,
+        init_hours=init_hours,
         header_text=args.header_text,
         configfile_content=open(args.configfile, "r").read()
         if args.configfile.is_file()

@@ -9,9 +9,10 @@ include: "common.smk"
 
 def make_header_text():
     dates = config["dates"]
+    analysis = config["analysis"]["label"]
     if isinstance(dates, list):
         return f"Explicit initializations from {len(dates)} runs have been used."
-    return f"Initializations from {dates.get('start')} to {dates.get('end')} by {dates.get('frequency')} have been used."
+    return f"Verification against {analysis} with initializations from {dates.get('start')} to {dates.get('end')} by {dates.get('frequency')}"
 
 
 rule report_experiment_dashboard:
