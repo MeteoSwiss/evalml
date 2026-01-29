@@ -119,12 +119,12 @@ var spec = {
       "shape": {
         "field": "region_season_init",
         "type": "nominal",
-        "legend": { "orient": "top", "title": "Region", "offset": 0, "padding": 10 }
+        "legend": { "orient": "top", "title": "Region, Season, Initialization", "offset": 0, "padding": 10 }
       },
       "strokeDash": {
         "field": "region_season_init",
         "type": "nominal",
-        "legend": null
+        "legend": { "orient": "top", "title": "Region, Season, Initialization", "offset": 0, "padding": 10 }
       },
       "tooltip": [
         { "field": "region", "type": "nominal", "title": "Region" },
@@ -156,7 +156,7 @@ function updateChart() {
   const newSpec = JSON.parse(JSON.stringify(spec));
   const filters = [];
 
-  newSpec.title = "Verification using " + header;
+  newSpec.title = header;
   if (selectedRegions.length > 0) {
     filters.push({ field: "region", oneOf: selectedRegions });
   }
