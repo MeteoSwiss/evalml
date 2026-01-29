@@ -72,7 +72,7 @@ def execute_workflow(
     command += config.profile.parsable()
     command += ["--configfile", str(configfile)]
     command += ["--cores", str(cores)]
-    command += ["--quiet rules"]  # reduce verobosity of snakemake output
+    command += ["--quiet", "rules"]  # reduce verobosity of snakemake output
 
     if dry_run:
         command.append("--dry-run")
