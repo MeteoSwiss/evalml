@@ -52,22 +52,22 @@ _CMAP_DEFAULTS = {
     # always start at 0 so that the saturation of the colour corresponds to the error magnitude.
 
     # RMSE:
-    "U_10M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "m/s"},
-    "V_10M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "m/s"},
-    "TD_2M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "°C"},
-    "T_2M.RMSE.spatial":     {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "°C"},
-    "PMSL.RMSE.spatial":     {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "Pa"},
-    "PS.RMSE.spatial":       {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "Pa"},
-    "TOT_PREC.RMSE.spatial": {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "mm"},
+    "U_10M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
+    "V_10M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
+    "TD_2M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "°C"},
+    "T_2M.RMSE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "vmin": 0, "vmax": 6} | {"units": "°C"},
+    "PMSL.RMSE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "Pa"},
+    "PS.RMSE.spatial":       {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "Pa"},
+    "TOT_PREC.RMSE.spatial": {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "mm"},
     
     # MAE:
-    "U_10M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "m/s"},
-    "V_10M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "m/s"},
-    "TD_2M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "°C"},
-    "T_2M.MAE.spatial":     {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "°C"},
-    "PMSL.MAE.spatial":     {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "Pa"},
-    "PS.MAE.spatial":       {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "Pa"},
-    "TOT_PREC.MAE.spatial": {"cmap": plt.get_cmap("Reds", 11), "vmin": 0} | {"units": "mm"}, 
+    "U_10M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
+    "V_10M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
+    "TD_2M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "°C"},
+    "T_2M.MAE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "vmin": 0, "vmax": 6} | {"units": "°C"},
+    "PMSL.MAE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "Pa"},
+    "PS.MAE.spatial":       {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "Pa"},
+    "TOT_PREC.MAE.spatial": {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "mm"}, 
 
     # Bias:
     # diverging colour scheme for the Bias to reflect the nature of the data (can be positive or negative, symmetric).

@@ -118,6 +118,10 @@ def _(CMAP_DEFAULTS, ekp, np):
         # For the case of Bias, construct symmetric levels:
         if metric == "BIAS":
             levels = np.linspace(start = vmin, stop = vmax, num=12)
+        elif metric == "RMSE": 
+            levels = np.linspace(start = vmin, stop = vmax, num=7)
+        elif metric == "MAE": 
+            levels = np.linspace(start = vmin, stop = vmax, num=7)
 
         return {
             "style": ekp.styles.Style(
