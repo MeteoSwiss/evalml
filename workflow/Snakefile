@@ -17,7 +17,10 @@ include: "rules/verif.smk"
 include: "rules/report.smk"
 include: "rules/plot.smk"
 include: "rules/summary.smk"
+include: "rules/verif_obs.smk"
 
+# prefer one rule because snakemake complains about ambiguous rules (same output)
+ruleorder: prepare_inference_forecaster > prepare_inference_interpolator
 
 # optional messages, log and error handling
 # -----------------------------------------------------
@@ -43,6 +46,7 @@ EXPERIMENT_LABEL = (
 EXPERIMENT_DIRNAME = f"{EXPERIMENT_DATE}_{EXPERIMENT_LABEL}_{EXPERIMENT_HASH}"
 
 
+# TODO: target final scorefile instead of FF
 rule experiment_all:
     """Target rule for experiment workflow."""
     input:
@@ -52,6 +56,12 @@ rule experiment_all:
             OUT_ROOT / "data/runs/{run_id}/summary.md",
             run_id=collect_all_candidates(),
         ),
+        expand(
+            OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}.nc",
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            run_id=collect_all_candidates(),
+        ),
+
 
 
 rule showcase_all:
@@ -112,4 +122,16 @@ rule verif_metrics_plot_all:
         expand(
             rules.verif_metrics_plot.output,
             experiment=EXPERIMENT_HASH,
+        ),
+
+
+# To run:  snakemake --cores 1 --configfile=config/forecasters.yaml verif_obs_all
+# run_id=collect_all_runs(),      init_time=202001081200,
+
+rule verif_obs_all:
+    input:
+        expand(
+            rules.run_mec.output,
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            run_id=collect_all_candidates(),
         ),
