@@ -21,6 +21,7 @@ rule report_experiment_dashboard:
         verif=EXPERIMENT_PARTICIPANTS.values(),
         template="resources/report/dashboard/template.html.jinja2",
         js_script="resources/report/dashboard/script.js",
+        configfile={workflow.configfiles[0]},
     output:
         report(
             directory(OUT_ROOT / "results/{experiment}/metrics/dashboard"),
@@ -38,5 +39,6 @@ rule report_experiment_dashboard:
             --template {input.template} \
             --script {input.js_script} \
             --header_text "{params.header_text}" \
+            --configfile "{input.configfile}" \
             --output {output} > {log} 2>&1
         """
