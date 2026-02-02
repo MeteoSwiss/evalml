@@ -11,12 +11,12 @@ def _():
 
     import matplotlib.pyplot as plt
     import numpy as np
-    import pandas as pd
     import xarray as xr
     from meteodatalab import data_source, grib_decoder
     from peakweather import PeakWeatherDataset
 
     from data_input import load_analysis_data_from_zarr, load_baseline_from_zarr
+
     return (
         ArgumentParser,
         Path,
@@ -101,6 +101,7 @@ def _(np):
             }
             ds = ds.drop_vars(["U", "V"])
         return ds
+
     return (preprocess_ds,)
 
 
@@ -214,10 +215,10 @@ def _(da_ana, da_base, da_fct, np, stations):
 
     # store dicts (indexers) in columns
     sta_idxs = stations.copy()
-    sta_idxs["fct_isel"]  = sta_idxs.apply(lambda r: get_idx_row(r, da_fct),  axis=1)
-    sta_idxs["ana_isel"]  = sta_idxs.apply(lambda r: get_idx_row(r, da_ana),  axis=1)
+    sta_idxs["fct_isel"] = sta_idxs.apply(lambda r: get_idx_row(r, da_fct), axis=1)
+    sta_idxs["ana_isel"] = sta_idxs.apply(lambda r: get_idx_row(r, da_ana), axis=1)
     sta_idxs["base_isel"] = sta_idxs.apply(lambda r: get_idx_row(r, da_base), axis=1)
-    sta_idxs 
+    sta_idxs
     return (sta_idxs,)
 
 
@@ -236,8 +237,8 @@ def _(
 ):
     # station indices
     row = sta_idxs.loc[station]
-    fct_isel  = row.fct_isel
-    ana_isel  = row.ana_isel
+    fct_isel = row.fct_isel
+    ana_isel = row.ana_isel
     base_isel = row.base_isel
 
     fig, ax = plt.subplots()
