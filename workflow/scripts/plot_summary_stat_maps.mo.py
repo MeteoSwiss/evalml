@@ -100,41 +100,27 @@ def _(init_hour, lead_time, metric, param, season, verif_file, xr):
     return ds, var
 
 @app.cell
-def _(CMAP_DEFAULTS, ekp, np):
+def _(CMAP_DEFAULTS, ekp):
     def get_style(param, metric, units_override=None):
         """Get style and colormap settings for the plot.
         Needed because cmap/norm does not work in Style(colors=cmap),
         still needs to be passed as arguments to tripcolor()/tricontourf().
         """
-
         metric_key = f"{param}.{metric}.spatial"
         cfg = CMAP_DEFAULTS[metric_key] if metric_key in CMAP_DEFAULTS else CMAP_DEFAULTS[param]
         units = units_override if units_override is not None else cfg.get("units", "")
-
-        vmin = cfg.get("vmin", None)
-        vmax = cfg.get("vmax", None)
-        levels = cfg.get("levels", None)
-
-        # For the case of Bias, construct symmetric levels:
-        if metric == "BIAS":
-            levels = np.linspace(start = vmin, stop = vmax, num=12)
-        elif metric == "RMSE": 
-            levels = np.linspace(start = vmin, stop = vmax, num=7)
-        elif metric == "MAE": 
-            levels = np.linspace(start = vmin, stop = vmax, num=7)
-
         return {
             "style": ekp.styles.Style(
-                levels=cfg.get("bounds", levels),
+                levels=cfg.get("bounds", cfg.get("levels", None)),
                 extend="both",
                 units=units,
                 colors=cfg.get("colors", None),
             ),
             "norm": cfg.get("norm", None),
             "cmap": cfg.get("cmap", None),
-            "levels": levels,
-            "vmin": vmin,
-            "vmax": vmax,
+            "levels": cfg.get("levels", None),
+            "vmin": cfg.get("vmin", None),
+            "vmax": cfg.get("vmax", None),
             "colors": cfg.get("colors", None),
         }
     return (get_style,)
