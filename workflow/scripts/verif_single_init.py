@@ -10,22 +10,13 @@ from data_input import (
     load_baseline_from_zarr,
     load_analysis_data_from_zarr,
     load_fct_data_from_grib,
+    parse_steps,
 )  # noqa: E402
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-
-
-def _parse_steps(steps: str) -> int:
-    # check that steps is in the format "start/stop/step"
-    if "/" not in steps:
-        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
-    if len(steps.split("/")) != 3:
-        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
-    start, end, step = map(int, steps.split("/"))
-    return list(range(start, end + 1, step))
 
 
 class ScriptConfig(Namespace):
@@ -36,7 +27,7 @@ class ScriptConfig(Namespace):
     baseline_zarr: Path = None
     reftime: datetime = None
     params: list[str] = ["T_2M", "TD_2M", "U_10M", "V_10M"]
-    steps: list[int] = _parse_steps("0/120/6")
+    steps: list[int] = parse_steps("0/120/6")
 
 
 def program_summary_log(args):
@@ -153,7 +144,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--steps",
-        type=_parse_steps,
+        type=parse_steps,
         default="0/120/6",
         help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
     )
