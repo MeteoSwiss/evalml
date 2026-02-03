@@ -1,0 +1,94 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Evaluate skill of ICON emulators trained with different graph structures: SG, Hierarhical SG, concentric SG, hierarchical concentric SG.
+
+dates:
+  start: 2024-01-01T06:00
+  end: 2024-12-31T18:00
+  frequency: 36h
+
+runs:
+  - forecaster:
+      mlflow_id: 5515982d90b94d229be0ff8864110c88
+      label: icon_1km_from_scratch
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+  
+  - forecaster:
+      mlflow_id: 92b8f9157b744562a5b21c11be1ab42d
+      label: icon_1km_hierarchical_2_from_scratch
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+  
+  - forecaster:
+      mlflow_id: fbfd4bd163f84274a007482c267b88e5
+      label: icon_1km_from_scratch_concentric
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+
+  - forecaster:
+      mlflow_id: 6a498d9076e84e8b82f0d180d5e44d47
+      label: icon_1km_hierarchical_2_from_scratch_concentric
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+
+  - forecaster:
+      mlflow_id: 03f85cfdb78744b4a36166fadcc140bd
+      label: icon_1km_hierarchical_2_level_proc_from_scratch
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+
+baselines:   
+  - baseline:
+      baseline_id: ICON-CH1-EPS
+      label: ICON-CH1-EPS
+      root: /store_new/mch/msopr/ml/ICON-CH1-EPS
+      steps: 0/33/6
+
+analysis:
+  label: REA-L-CH1
+  analysis_zarr: /store_new/mch/msopr/ml/datasets/mch-realch1-fdb-1km-2005-2025-1h-pl13-v1.0.zarr
+
+stratification:
+  regions:
+    - jura
+    - mittelland
+    - voralpen
+    - alpennordhang
+    - innerealpentaeler
+    - alpensuedseite
+  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+
+locations:
+  output_root: output/
+  mlflow_uri:
+    - https://servicedepl.meteoswiss.ch/mlstore
+    - https://service.meteoswiss.ch/mlstore
+    - https://mlflow.ecmwf.int
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50

@@ -65,13 +65,13 @@ rule showcase_all:
             param=["T_2M", "SP_10M"],
             region=["globe", "europe", "switzerland"],
         ),
-        expand(
-            OUT_ROOT / "showcases/{run_id}/{init_time}/{init_time}_{param}_{sta}.png",
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=collect_all_candidates(),
-            param=["T_2M", "SP_10M"],
-            sta=["GVE", "KLO", "LUG"],
-        ),
+        # expand(
+        #     OUT_ROOT / "showcases/{run_id}/{init_time}/{init_time}_{param}_{sta}.png",
+        #     init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+        #     run_id=collect_all_candidates(),
+        #     param=["T_2M", "SP_10M"],
+        #     sta=["GVE", "KLO", "LUG"],
+        # ),
         expand(
             OUT_ROOT / "data/runs/{run_id}/summary.md",
             run_id=collect_all_candidates(),

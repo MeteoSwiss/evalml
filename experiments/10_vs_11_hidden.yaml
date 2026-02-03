@@ -1,11 +1,11 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Evaluate skill of ICON-CH1 single.
+  Evaluate skill of ICON emulator trained with a SG hidden with 10 or 11 icosahedral splits.
 
 dates:
-  start: 2024-01-01T00:00
-  end: 2024-01-02T00:00
-  frequency: 6h
+  start: 2024-01-01T06:00
+  end: 2024-12-31T18:00
+  frequency: 36h
 
 runs:
   - forecaster:
@@ -16,9 +16,18 @@ runs:
       disable_local_eccodes_definitions: true
       extra_dependencies:
         - git+https://github.com/ecmwf/anemoi-inference.git@main
+  
+  - forecaster:
+      mlflow_id: 339fd4f435f04c17a7cb5932578cbe8a
+      label: stage_C_realch1_hidden_11
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
 
-baselines:
-- baseline:
+baselines:   
+  - baseline:
       baseline_id: ICON-CH1-EPS
       label: ICON-CH1-EPS
       root: /store_new/mch/msopr/ml/ICON-CH1-EPS
@@ -42,6 +51,7 @@ locations:
   output_root: output/
   mlflow_uri:
     - https://servicedepl.meteoswiss.ch/mlstore
+    - https://service.meteoswiss.ch/mlstore
     - https://mlflow.ecmwf.int
 
 profile:

@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Experiment to compare entangled and disentangled forecasting. With and without autoencoder finetuning.
+
+dates:
+  start: 2020-01-06T12:00
+  end: 2020-10-28T12:00
+  frequency: 36h
+
+runs:
+  - forecaster:
+      mlflow_id: 2241012852624833b73b2c933db608c9
+      label: Stage C entangled
+      config: resources/inference/configs/sgm-forecaster-global-disentangled.yaml
+      steps: 0/120/6
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+        - git+https://github.com/MeteoSwiss/anemoi-core.git@2a90165e3f25defc55fbeb77f7b4ebfef685820d#subdirectory=models
+
+  - forecaster:
+      mlflow_id: f9f0b0a0c91949b6a72df2dc23c55255
+      label: dis_HAE_1lvl_ft_n320_cosmo_stage_C_direct
+      config: resources/inference/configs/sgm-forecaster-global-disentangled.yaml
+      steps: 0/120/6
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+        - git+https://github.com/MeteoSwiss/anemoi-core.git@2a90165e3f25defc55fbeb77f7b4ebfef685820d#subdirectory=models
+
+  - forecaster:
+      mlflow_id: 60db882d54174b4582d10dc5826d9eee
+      label: dis_HAE_1lvl_ft_n320_cosmo_stage_C
+      config: resources/inference/configs/sgm-forecaster-global-disentangled.yaml
+      steps: 0/120/6
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+        - git+https://github.com/MeteoSwiss/anemoi-core.git@2a90165e3f25defc55fbeb77f7b4ebfef685820d#subdirectory=models
+
+baselines:
+  - baseline:
+      baseline_id: COSMO-E
+      label: COSMO-E
+      root: /store_new/mch/msopr/ml/COSMO-E
+      steps: 0/120/6
+
+analysis:
+  label: COSMO KENDA
+  analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr
+
+stratification:
+  regions:
+    - jura
+    - mittelland
+    - voralpen
+    - alpennordhang
+    - innerealpentaeler
+    - alpensuedseite
+  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+
+locations:
+  output_root: output/
+  mlflow_uri:
+    - https://servicedepl.meteoswiss.ch/mlstore
+    - https://mlflow.ecmwf.int
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50

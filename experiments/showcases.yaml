@@ -1,0 +1,121 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Showcases of icon models.
+
+dates:
+  - 2024-06-28T00:00 # Valle Maggia Floods -> Prec
+  - 2024-03-07T00:00 # South Foehn Storm -> Wind
+
+runs:
+
+  - forecaster:
+      mlflow_id: 0f9c84a65d844850afcc1a1afaff22b4
+      label: stage_C_realch1
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+  
+  - forecaster:
+      mlflow_id: 339fd4f435f04c17a7cb5932578cbe8a
+      label: stage_C_realch1_hidden_11
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+
+  - forecaster:
+      mlflow_id: 280ea4fed6a24341938b7d2d923b6c8f
+      label: stage_C_icon_1km_limited_to_cosmo
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+
+  - forecaster:
+      mlflow_id: 5515982d90b94d229be0ff8864110c88
+      label: icon_1km_from_scratch
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+  
+  - forecaster:
+      mlflow_id: 92b8f9157b744562a5b21c11be1ab42d
+      label: icon_1km_hierarchical_2_from_scratch
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+  
+  - forecaster:
+      mlflow_id: fbfd4bd163f84274a007482c267b88e5
+      label: icon_1km_from_scratch_concentric
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+
+  - forecaster:
+      mlflow_id: 6a498d9076e84e8b82f0d180d5e44d47
+      label: icon_1km_hierarchical_2_from_scratch_concentric
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+
+  - forecaster:
+      mlflow_id: 03f85cfdb78744b4a36166fadcc140bd
+      label: icon_1km_hierarchical_2_level_proc_from_scratch
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      disable_local_eccodes_definitions: true
+      extra_dependencies:
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+
+baselines:   
+  - baseline:
+      baseline_id: ICON-CH1-EPS
+      label: ICON-CH1-EPS
+      root: /store_new/mch/msopr/ml/ICON-CH1-EPS
+      steps: 0/33/6
+
+analysis:
+  label: REA-L-CH1
+  analysis_zarr: /store_new/mch/msopr/ml/datasets/mch-realch1-fdb-1km-2005-2025-1h-pl13-v1.0.zarr
+
+stratification:
+  regions:
+    - jura
+    - mittelland
+    - voralpen
+    - alpennordhang
+    - innerealpentaeler
+    - alpensuedseite
+  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+
+locations:
+  output_root: output/
+  mlflow_uri:
+    - https://servicedepl.meteoswiss.ch/mlstore
+    - https://service.meteoswiss.ch/mlstore
+    - https://mlflow.ecmwf.int
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50
