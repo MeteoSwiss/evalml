@@ -31,6 +31,8 @@ runs:
         mlflow_id: d0846032fc7248a58b089cbe8fa4c511
         config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
         steps: 0/120/6
+        extra_dependencies:
+          - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
       extra_dependencies:
         - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
         - torch-geometric==2.6.1
@@ -82,3 +84,5 @@ profile:
     runtime: "1h"
     gpus: 0
   jobs: 50
+  batch_rules:
+    plot_forecast_frame: 32
