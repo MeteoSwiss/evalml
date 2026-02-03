@@ -48,6 +48,10 @@ verification.ipynb
 # Config
 experiment_report.html
 uv.lock
+
 # files with secrets
 .env
 *credentials*
+
+# evalml
+.evalml_snakemake_cmd.txt
