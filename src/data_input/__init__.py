@@ -157,3 +157,13 @@ def load_baseline_from_zarr(
     )
     baseline = baseline.assign_coords(time=baseline.ref_time + baseline.lead_time)
     return baseline
+
+
+def parse_steps(steps: str) -> list[int]:
+    # check that steps is in the format "start/stop/step"
+    if "/" not in steps:
+        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
+    if len(steps.split("/")) != 3:
+        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
+    start, end, step = map(int, steps.split("/"))
+    return list(range(start, end + 1, step))

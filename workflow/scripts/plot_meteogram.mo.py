@@ -15,7 +15,11 @@ def _():
     from meteodatalab import data_source, grib_decoder
     from peakweather import PeakWeatherDataset
 
-    from data_input import load_analysis_data_from_zarr, load_baseline_from_zarr
+    from data_input import (
+        load_analysis_data_from_zarr,
+        load_baseline_from_zarr,
+        parse_steps,
+    )
 
     return (
         ArgumentParser,
@@ -25,6 +29,7 @@ def _():
         grib_decoder,
         load_analysis_data_from_zarr,
         load_baseline_from_zarr,
+        parse_steps,
         np,
         plt,
         xr,
@@ -32,7 +37,7 @@ def _():
 
 
 @app.cell
-def _(ArgumentParser, Path):
+def _(ArgumentParser, Path, parse_steps):
     parser = ArgumentParser()
 
     parser.add_argument(
@@ -43,6 +48,12 @@ def _(ArgumentParser, Path):
     )
     parser.add_argument(
         "--baseline", type=str, default=None, help="Path to baseline zarr data"
+    )
+    parser.add_argument(
+        "--baseline_steps",
+        type=parse_steps,
+        default="0/120/6",
+        help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
     )
     parser.add_argument(
         "--peakweather", type=str, default=None, help="Path to PeakWeather dataset"
@@ -56,6 +67,7 @@ def _(ArgumentParser, Path):
     grib_dir = Path(args.forecast)
     zarr_dir_ana = Path(args.analysis)
     zarr_dir_base = Path(args.baseline)
+    baseline_steps = args.baseline_steps
     peakweather_dir = Path(args.peakweather)
     init_time = args.date
     outfn = Path(args.outfn)
@@ -70,6 +82,7 @@ def _(ArgumentParser, Path):
         station,
         zarr_dir_ana,
         zarr_dir_base,
+        baseline_steps,
     )
 
 
@@ -108,6 +121,7 @@ def _(np):
 @app.cell
 def load_grib_data(
     data_source,
+    baseline_steps,
     grib_decoder,
     grib_dir,
     init_time,
@@ -136,10 +150,9 @@ def load_grib_data(
     ds_ana = preprocess_ds(ds_ana, param)
     da_ana = ds_ana[param].squeeze()
 
-    steps = list(
-        range(da_fct.sizes["lead_time"])
-    )  # FIX: this will fail if lead_time is not 0,1,2,...
-    ds_base = load_baseline_from_zarr(zarr_dir_base, da_fct.ref_time, steps, paramlist)
+    ds_base = load_baseline_from_zarr(
+        zarr_dir_base, da_fct.ref_time, baseline_steps, paramlist
+    )
     ds_base = preprocess_ds(ds_base, param)
     da_base = ds_base[param].squeeze()
     return da_ana, da_base, da_fct
