@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sys
 import tarfile
+from uuid import UUID
 
 definition_path = Path(sys.prefix) / "share/eccodes-cosmo-resources/definitions"
 os.environ["ECCODES_DEFINITION_PATH"] = str(definition_path)
@@ -13,6 +14,7 @@ import earthkit.data as ekd  # noqa: E402
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
 from earthkit.data.sources.stream import StreamFieldList  # noqa: E402
+from meteodatalab.icon_grid import load_grid_from_balfrin
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -107,12 +109,14 @@ def extract(
                 shortname = field.metadata("shortName")
                 if shortname in params:
                     out.append(field)
+            # get unique identifier for horizontal grid definition
+            uuid_of_hgrid = UUID(field.metadata("uuidOfHGrid"))
 
     out = out.to_xarray(profile="grib")
     out = out.expand_dims(
         forecast_reference_time=[np.array(reftime, dtype="datetime64[ns]")], axis=0
     )
-
+    out.attrs["uuidOfHGrid"] = uuid_of_hgrid
     return out
 
 
@@ -168,10 +172,20 @@ def main(cfg: ScriptConfig):
             )
 
     _, indices, _ = np.intersect1d(reftimes, missing, return_indices=True)
-
     for i in indices:
         file = input[i]
         ds = extract(file, cfg.steps, cfg.run_id, cfg.params)
+
+        # get horizonal grid information from file and add to dataset
+        hcoords = load_grid_from_balfrin()(ds.attrs["uuidOfHGrid"])
+        lat_vals = hcoords["lat"].rename({"cell": "values"})
+        lon_vals = hcoords["lon"].rename({"cell": "values"})
+        ds = ds.assign_coords(
+            latitude=lat_vals,
+            longitude=lon_vals,
+        )
+        # remove uuid from ds attributes (no longer needed)
+        ds.attrs.pop("uuidOfHGrid")
 
         LOG.info(f"Extracted: {ds}")
 
@@ -251,5 +265,10 @@ python workflow/scripts/extract_baseline.py \
 python workflow/scripts/extract_baseline.py \
     --archive_dir /store_new/mch/msopr/osm/ICON-CH1-EPS/FCST25 \
     --output_store /store_new/mch/msopr/ml/ICON-CH1-EPS/FCST25.zarr \
+    --steps 0/33/1
+
+python workflow/scripts/extract_baseline.py \
+    --archive_dir /store_new/mch/msopr/osm/ICON-CH2-EPS/FCST24 \
+    --output_store /store_new/mch/msopr/ml/ICON-CH2-EPS/FCST24.zarr \
     --steps 0/33/1
 """
