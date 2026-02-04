@@ -53,7 +53,7 @@ rule experiment_all:
             run_id=collect_all_candidates(),
         ),
         expand(
-            OUT_ROOT / "results/{experiment}/metrics/spatial/{run_id}/{param}_{metric}_{leadtime}_{region}.png",
+            OUT_ROOT / "results/{experiment}/metrics/spatial/{run_id}/{param}_{metric}_{region}_{leadtime}.png",
             run_id=collect_all_candidates(),
             leadtime=[6, 12],
             metric=["BIAS", "RMSE", "MAE"],
