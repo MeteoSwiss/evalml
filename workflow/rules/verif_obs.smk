@@ -2,21 +2,27 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 
-def get_init_times(wc):
+def init_times_for_mec(wc):
     """
     Return list of init times (YYYYMMDDHHMM) from init_time - lead ... init_time
-    stepping by configured frequency (default 12h).
+    stepping by configured frequency.
     """
     init = wc.init_time
     lt = get_leadtime(wc)  # expects something like "48h"
     lead_h = int(str(lt).rstrip("h"))
-    freq_cfg = RUN_CONFIGS[wc.run_id].get("frequency", "6h")
-    freq_h = int(str(freq_cfg).rstrip("h"))
+    dates_cfg = config["dates"]
+
+    # use the same parsing as in common.smk; support "Xh" and "Xd"
+    freq_td = _parse_timedelta(dates_cfg["frequency"])
+
     base = datetime.strptime(init, "%Y%m%d%H%M")
     times = []
-    for h in range(lead_h, -1, -freq_h):
-        t = base - timedelta(hours=h)
+
+    # iterate from base - lead to base stepping by the parsed timedelta
+    t = base - timedelta(hours=lead_h)
+    while t <= base:
         times.append(t.strftime("%Y%m%d%H%M"))
+        t += freq_td
     return times
 
 
@@ -73,7 +79,7 @@ rule link_mec_input:
         # list of source fc files produced by prepare_mec_input for each init in the window
         fc_files=lambda wc: [
             OUT_ROOT / f"data/runs/{wc.run_id}/{t}/mec/fc_{t}"
-            for t in get_init_times(wc)
+            for t in init_times_for_mec(wc)
         ],
     output:
         # own the final input_mod directory for this init (and its contents)
@@ -84,6 +90,7 @@ rule link_mec_input:
         """
         (
         set -euo pipefail
+
         mkdir -p {output.mod}
         cd {output.mod}/../../..
 
