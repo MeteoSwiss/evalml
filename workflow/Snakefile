@@ -126,6 +126,15 @@ rule experiment_all:
             rules.verif_metrics_plot.output,
             experiment=EXPERIMENT_NAME,
         ),
+        expand(
+            OUT_ROOT / "results/{experiment}/metrics/spatial/{run_id}/{param}_{metric}_{region}_{leadtime}.png",
+            run_id=collect_all_candidates(),
+            leadtime=[6, 12],
+            metric=["BIAS", "RMSE"],
+            param=["T_2M", "TOT_PREC"],
+            region=["switzerland", "switzerlandsmall"], 
+            experiment=EXPERIMENT_HASH
+        )
 
 
 rule showcase_all:
