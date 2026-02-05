@@ -75,7 +75,7 @@ _CMAP_DEFAULTS = {
     "U_10M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "m/s"}, 
     "V_10M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "m/s"},
     "TD_2M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "°C"},
-    "T_2M.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu_r", 11), "levels" : [-5.5, -4.5, -3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5, 4.5, 5.5]} | {"units": "°C"},
+    "T_2M.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu_r", 11), "levels" : np.arange(start = -5.5, stop = 6, step = 1)} | {"units": "°C"},
     "PMSL.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "Pa"},
     "PS.BIAS.spatial":       {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "Pa"},
     "TOT_PREC.BIAS.spatial": {"cmap": plt.get_cmap("BrBG", 11)} | {"units": "mm"}
