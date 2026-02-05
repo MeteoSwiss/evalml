@@ -56,9 +56,9 @@ rule experiment_all:
             OUT_ROOT / "results/{experiment}/metrics/spatial/{run_id}/{param}_{metric}_{region}_{leadtime}.png",
             run_id=collect_all_candidates(),
             leadtime=[6, 12],
-            metric=["BIAS", "RMSE", "MAE"],
-            param=["TD_2M", "T_2M", "PMSL", "PS", "TOT_PREC"],
-            region=["switzerland", "switzerland_small"], 
+            metric=["BIAS", "RMSE"],
+            param=["T_2M", "TOT_PREC"],
+            region=["switzerland", "switzerlandsmall"], 
             experiment=EXPERIMENT_HASH
         )
 
