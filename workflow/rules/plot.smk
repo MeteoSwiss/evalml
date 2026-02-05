@@ -100,14 +100,14 @@ rule plot_summary_stat_maps:
         #     --param {wildcards.param} --leadtime {wildcards.leadtime} --metric {wildcards.metric} \
         """
 
-use rule plot_summary_stat_maps as plot_summary_stat_maps_baseline with:
-    input:
-        script="workflow/scripts/plot_summary_stat_maps.mo.py",
-        verif_file=OUT_ROOT / "data/baselines/{baseline_id}/verif_aggregated.nc",
-    output:
-        OUT_ROOT / "results/{experiment}/metrics/spatial/{baseline_id}/{param}_{metric}_{region}_{leadtime}.png",
-    params:
-        nc_out_dir=lambda wc: (
-            Path(OUT_ROOT) / f"data/baselines/{wc.baseline_id}/verif_aggregated.nc"
-            # not sure if this is actually needed. Verification file is already specified above as input. Leave it for the time being. 
-        ).resolve()
+# use rule plot_summary_stat_maps as plot_summary_stat_maps_baseline with:
+#     input:
+#         script="workflow/scripts/plot_summary_stat_maps.mo.py",
+#         verif_file=OUT_ROOT / "data/baselines/{baseline_id}/verif_aggregated.nc",
+#     output:
+#         OUT_ROOT / "results/{experiment}/metrics/spatial/{baseline_id}/{param}_{metric}_{region}_{leadtime}.png",
+#     params:
+#         nc_out_dir=lambda wc: (
+#             Path(OUT_ROOT) / f"data/baselines/{wc.baseline_id}/verif_aggregated.nc"
+#             # not sure if this is actually needed. Verification file is already specified above as input. Leave it for the time being. 
+#         ).resolve()
