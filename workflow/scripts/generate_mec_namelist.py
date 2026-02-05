@@ -35,7 +35,7 @@ def main(args):
     # Ensure file ends with a newline (prevent editors/tools from removing final RETURN)
     if not namelist.endswith("\n"):
         namelist += "\n"
-    LOG.info(f"MEC namelist created: {namelist}")
+    LOG.info("MEC namelist created:\n%s", namelist)
 
     out_path = Path(str(args.namelist))
     out_path.parent.mkdir(parents=True, exist_ok=True)

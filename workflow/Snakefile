@@ -19,6 +19,8 @@ include: "rules/plot.smk"
 include: "rules/summary.smk"
 include: "rules/verif_obs.smk"
 
+# prefer one rule because snakemake complains about ambiguous rules (same output)
+ruleorder: prepare_inference_forecaster > prepare_inference_interpolator
 
 # optional messages, log and error handling
 # -----------------------------------------------------
@@ -37,14 +39,23 @@ onerror:
 # target rules
 # -----------------------------------------------------
 EXPERIMENT_HASH = short_hash_config()
+EXPERIMENT_DATE = datetime.now().strftime("%Y%m%d")
+EXPERIMENT_LABEL = (
+    config["experiment_label"] or workflow.config_settings.configfiles[0].stem
+)
+EXPERIMENT_DIRNAME = f"{EXPERIMENT_DATE}_{EXPERIMENT_LABEL}_{EXPERIMENT_HASH}"
 
 
 # TODO: target final scorefile instead of FF
 rule experiment_all:
     """Target rule for experiment workflow."""
     input:
-        OUT_ROOT / f"results/{EXPERIMENT_HASH}/metrics/dashboard",
-        OUT_ROOT / f"results/{EXPERIMENT_HASH}/metrics/plots",
+        OUT_ROOT / f"results/experiment/{EXPERIMENT_DIRNAME}/metrics/dashboard",
+        OUT_ROOT / f"results/experiment/{EXPERIMENT_DIRNAME}/metrics/plots",
+        expand(
+            OUT_ROOT / "data/runs/{run_id}/summary.md",
+            run_id=collect_all_candidates(),
+        ),
         expand(
             OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}.nc",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
@@ -68,8 +79,15 @@ rule showcase_all:
             / "showcases/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=collect_all_candidates(),
-            param=["TOT_PREC", "T_2M", "SP_10M"],
+            param=["T_2M", "SP_10M"],
             region=["globe", "europe", "switzerland"],
+        ),
+        expand(
+            OUT_ROOT / "showcases/{run_id}/{init_time}/{init_time}_{param}_{sta}.png",
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            run_id=collect_all_candidates(),
+            param=["T_2M", "SP_10M"],
+            sta=["GVE", "KLO", "LUG"],
         ),
         expand(
             OUT_ROOT / "data/runs/{run_id}/summary.md",
@@ -94,6 +112,10 @@ rule run_inference_all:
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=collect_all_candidates(),
         ),
+    output:
+        touch=OUT_ROOT / f"run_inference_all.{EXPERIMENT_HASH}.ok",
+    shell:
+        "touch {output.touch}"
 
 
 rule verif_metrics_all:
@@ -115,8 +137,8 @@ rule verif_metrics_plot_all:
 
 
 # To run:  snakemake --cores 1 --configfile=config/forecasters.yaml verif_obs_all
-# clean: rm -rf ./output/data/runs/d0846032f/202001040000/mec ./output/data/runs/d0846032f/202001040000/folder_to_delete
-#             init_time=202001040000,             run_id=collect_all_runs(),
+# run_id=collect_all_runs(),
+
 rule verif_obs_all:
     input:
         expand(
@@ -124,3 +146,5 @@ rule verif_obs_all:
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=collect_all_candidates(),
         ),
+        # wait for the global run_inference_all sentinel
+        OUT_ROOT / f"run_inference_all.{EXPERIMENT_HASH}.ok",

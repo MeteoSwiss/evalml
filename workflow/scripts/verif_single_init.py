@@ -97,7 +97,11 @@ def main(args: ScriptConfig):
                 params=args.params,
             )
             .compute()
-            .chunk({"y": -1, "x": -1})
+            .chunk(
+                {"y": -1, "x": -1}
+                if "y" in fcst.dims and "x" in fcst.dims
+                else {"values": -1}
+            )
         )
     else:
         raise ValueError("--analysis_zarr must be provided.")
