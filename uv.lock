@@ -36,47 +36,54 @@ wheels = [
 
 [[package]]
 name = "anemoi-datasets"
-version = "0.5.26"
+version = "0.5.31"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anemoi-transform" },
-    { name = "anemoi-utils", extra = ["provenance"] },
+    { name = "anemoi-utils" },
     { name = "cfunits" },
+    { name = "glom" },
+    { name = "jsonschema" },
     { name = "numcodecs" },
     { name = "numpy" },
+    { name = "pytest" },
+    { name = "pytest-xdist" },
     { name = "pyyaml" },
+    { name = "ruamel-yaml" },
     { name = "semantic-version" },
     { name = "tqdm" },
     { name = "zarr" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/24/9b/ddce8751a14879349b46f65153ea95a654dc874043f869e7c6a9c4a28a25/anemoi_datasets-0.5.26.tar.gz", hash = "sha256:75c3c0c55c26a985fb3b58cb8af483383820fb0ad6768b2eb62058c2b1f36bd2", size = 1771624, upload-time = "2025-07-15T06:53:02.194Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8d/6c/abb645f9862da60ed62ecea4f71635528ecde83aeb0cdc820bd31299b258/anemoi_datasets-0.5.31.tar.gz", hash = "sha256:3ffbc382e6f6b512ded580a0a0ed481da686944c840f8778c0354a3e98fe4675", size = 1793730, upload-time = "2026-02-05T11:46:03.881Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ca/00/8fd84aa44be8efb99c2b74d630a7db1ec48bd7a0620a4634a560437175ea/anemoi_datasets-0.5.26-py3-none-any.whl", hash = "sha256:2508fc15bd825d04477530ed285186a748da25abe006499e1d39ce7310d3296b", size = 282350, upload-time = "2025-07-15T06:53:00.71Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/81/09ac820664b56cc54522560dc56d9b8a776d2b866af127d5f98d9a11f650/anemoi_datasets-0.5.31-py3-none-any.whl", hash = "sha256:9e46242f0d8910b25631923fdf4034ae10f2b33618d2c12a9d3bef8c250c01b9", size = 285973, upload-time = "2026-02-05T11:46:02.017Z" },
 ]
 
 [[package]]
 name = "anemoi-transform"
-version = "0.1.16"
+version = "0.1.23"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anemoi-utils" },
     { name = "cfunits" },
     { name = "earthkit-data" },
+    { name = "earthkit-geo" },
     { name = "earthkit-meteo" },
     { name = "earthkit-regrid" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c8/f0/544c4a0943d649ab089ac2bf6737ea7e5959b68fb6e6a7b6e3695757d9dc/anemoi_transform-0.1.16.tar.gz", hash = "sha256:771a4134bd35cf8ef713047e704558defdfab6a363ab4ea61356d4da26c6bee6", size = 132995, upload-time = "2025-08-08T07:49:42.267Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e7/ee/0e16c0735ce83b03eefb7e2a69b5d1b3be0ad56736826ab06fc60db16b19/anemoi_transform-0.1.23.tar.gz", hash = "sha256:fcf06a4aaa6dcb8a8f56350489e4b48418b3500766b2b882d8c29fc0a8b25ba5", size = 163027, upload-time = "2026-02-05T10:30:47.186Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/14/2d/c41440ff4924a4a8696efb8d795e710491882fc7ba76d1b0b479dd99ce83/anemoi_transform-0.1.16-py3-none-any.whl", hash = "sha256:2987a40467fb26d6a01b2b0a9a2be55e2a6bf8a8a4f0f3b28e61795da3bec2b4", size = 76819, upload-time = "2025-08-08T07:49:41.307Z" },
+    { url = "https://files.pythonhosted.org/packages/7c/87/505614c01e023306b707d13b673628b577fd4c1332f5b44f0c9e1ff2a09b/anemoi_transform-0.1.23-py3-none-any.whl", hash = "sha256:233f20eefb1ce8fe68ff96e39f4e1daf9a29cced9dda6a30bdf867dc49571869", size = 106826, upload-time = "2026-02-05T10:30:45.835Z" },
 ]
 
 [[package]]
 name = "anemoi-utils"
-version = "0.4.35"
+version = "0.4.43"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aniso8601" },
     { name = "deprecation" },
+    { name = "entrypoints" },
     { name = "multiurl" },
     { name = "numpy" },
     { name = "pydantic" },
@@ -85,15 +92,9 @@ dependencies = [
     { name = "rich" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/70/70/50e7bd93327bd610b0d808d017c5dc9b87a21a3f6172a449307ca1480cfe/anemoi_utils-0.4.35.tar.gz", hash = "sha256:c259c918e7ae9582c6f8cac3bb137fb1326759703d82334c7ec568c00a07afe5", size = 136476, upload-time = "2025-08-12T16:11:52.902Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9e/40/79ee8859b327806c193a22c840ba02715aacf4993270f3f713d8f61f7fa3/anemoi_utils-0.4.43.tar.gz", hash = "sha256:e8ab8577e1b68b252e75772aa1e3eb9733bf30cbd280b94375ca93bafd23c012", size = 145251, upload-time = "2026-01-21T13:34:00.239Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d4/d0/219f4f280745d7462bb534a1de9197afe1ab81e81ae2768e23569cb1cdce/anemoi_utils-0.4.35-py3-none-any.whl", hash = "sha256:b0c98359852231c3e18c5b90dd8a5ba278a106d527fa97d9b578fbf162b185a2", size = 91019, upload-time = "2025-08-12T16:11:51.43Z" },
-]
-
-[package.optional-dependencies]
-provenance = [
-    { name = "gitpython" },
-    { name = "nvsmi" },
+    { url = "https://files.pythonhosted.org/packages/9e/48/bfbd65958625bb75e41b77fc198420461a5a1dcdd32ef1763daf2ae28cab/anemoi_utils-0.4.43-py3-none-any.whl", hash = "sha256:5c04312d48168197d94bf3fa97228a2537a6e8ff756845be95193a4233297b68", size = 93307, upload-time = "2026-01-21T13:33:57.637Z" },
 ]
 
 [[package]]
@@ -214,6 +215,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/21/28/9b3f50ce0e048515135495f198351908d99540d69bfdc8c1d15b73dc55ce/blinker-1.9.0.tar.gz", hash = "sha256:b4ce2265a7abece45e7cc896e98dbebe6cead56bcf805a3d23136d145f5445bf", size = 22460, upload-time = "2024-11-08T17:25:47.436Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/10/cb/f2ad4230dc2eb1a74edf38f1a38b9b52277f75bef262d8908e60d957e13c/blinker-1.9.0-py3-none-any.whl", hash = "sha256:ba0efaa9080b619ff2f3459d1d500c57bddea4a6b424b60a91141db6fd2f08bc", size = 8458, upload-time = "2024-11-08T17:25:46.184Z" },
+]
+
+[[package]]
+name = "boltons"
+version = "25.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/63/54/71a94d8e02da9a865587fb3fff100cb0fc7aa9f4d5ed9ed3a591216ddcc7/boltons-25.0.0.tar.gz", hash = "sha256:e110fbdc30b7b9868cb604e3f71d4722dd8f4dcb4a5ddd06028ba8f1ab0b5ace", size = 246294, upload-time = "2025-02-03T05:57:59.129Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/45/7f/0e961cf3908bc4c1c3e027de2794f867c6c89fb4916fc7dba295a0e80a2d/boltons-25.0.0-py3-none-any.whl", hash = "sha256:dc9fb38bf28985715497d1b54d00b62ea866eca3938938ea9043e254a3a6ca62", size = 194210, upload-time = "2025-02-03T05:57:56.705Z" },
 ]
 
 [[package]]
@@ -879,6 +889,20 @@ covjsonkit = [
 ]
 
 [[package]]
+name = "earthkit-geo"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyproj" },
+    { name = "requests" },
+    { name = "scipy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ca/2f/6dcb9cb89ef0520b5752c3cfb93dc15775bfe9ed59265b4a9b4adedf66b7/earthkit_geo-0.4.0.tar.gz", hash = "sha256:7aeb989abd97f06de9fd870676ddec97e215b91cf80cc225c4b2198878940b38", size = 644334, upload-time = "2025-10-24T10:44:36.69Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8b/82/61bd75d544c959213abfeafc425835d203334c5fed63d62e51d661d81244/earthkit_geo-0.4.0-py3-none-any.whl", hash = "sha256:4d89ae8a8dfbf7f7e83a95656c608cefb018ab0bb732be4f2678cf6cc4d9a469", size = 20037, upload-time = "2025-10-24T10:44:34.709Z" },
+]
+
+[[package]]
 name = "earthkit-meteo"
 version = "0.4.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1031,7 +1055,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anemoi-datasets", specifier = ">=0.5.25" },
+    { name = "anemoi-datasets", specifier = ">=0.5.31" },
     { name = "cartopy", specifier = ">=0.25.0" },
     { name = "click" },
     { name = "earthkit-plots" },
@@ -1058,6 +1082,27 @@ provides-extras = ["kerchunk"]
 dev = [
     { name = "pre-commit", specifier = ">=4.2.0" },
     { name = "snakefmt", specifier = ">=0.11.0" },
+]
+
+[[package]]
+name = "execnet"
+version = "2.1.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bf/89/780e11f9588d9e7128a3f87788354c7946a9cbb1401ad38a48c4db9a4f07/execnet-2.1.2.tar.gz", hash = "sha256:63d83bfdd9a23e35b9c6a3261412324f964c2ec8dcd8d3c6916ee9373e0befcd", size = 166622, upload-time = "2025-11-12T09:56:37.75Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/84/02fc1827e8cdded4aa65baef11296a9bbe595c474f0d6d758af082d849fd/execnet-2.1.2-py3-none-any.whl", hash = "sha256:67fba928dd5a544b783f6056f449e5e3931a5c378b128bc18501f7ea79e296ec", size = 40708, upload-time = "2025-11-12T09:56:36.333Z" },
+]
+
+[[package]]
+name = "face"
+version = "24.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "boltons" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ac/79/2484075a8549cd64beae697a8f664dee69a5ccf3a7439ee40c8f93c1978a/face-24.0.0.tar.gz", hash = "sha256:611e29a01ac5970f0077f9c577e746d48c082588b411b33a0dd55c4d872949f6", size = 62732, upload-time = "2024-11-02T05:24:26.095Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/47/21867c2e5fd006c8d36a560df9e32cb4f1f566b20c5dd41f5f8a2124f7de/face-24.0.0-py3-none-any.whl", hash = "sha256:0e2c17b426fa4639a4e77d1de9580f74a98f4869ba4c7c8c175b810611622cd3", size = 54742, upload-time = "2024-11-02T05:24:24.939Z" },
 ]
 
 [[package]]
@@ -1287,6 +1332,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/9a/c8/dd58967d119baab745caec2f9d853297cec1989ec1d63f677d3880632b88/gitpython-3.1.45.tar.gz", hash = "sha256:85b0ee964ceddf211c41b9f27a49086010a190fd8132a24e21f362a4b36a791c", size = 215076, upload-time = "2025-07-24T03:45:54.871Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/01/61/d4b89fec821f72385526e1b9d9a3a0385dda4a72b206d28049e2c7cd39b8/gitpython-3.1.45-py3-none-any.whl", hash = "sha256:8908cb2e02fb3b93b7eb0f2827125cb699869470432cc885f019b8fd0fccff77", size = 208168, upload-time = "2025-07-24T03:45:52.517Z" },
+]
+
+[[package]]
+name = "glom"
+version = "25.12.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "boltons" },
+    { name = "face" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/78/74/8387f95565ba7c30cd152a585b275ebb9a834d1d32782425c5d2fe0a102c/glom-25.12.0.tar.gz", hash = "sha256:1ae7da88be3693df40ad27bdf57a765a55c075c86c971bcddd67927403eb0069", size = 196128, upload-time = "2025-12-29T06:29:07.274Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a7/e6/4129d9a3baa72d747533bb33376543ccadd9a7f9944e5a6e3ae2e245f5d6/glom-25.12.0-py3-none-any.whl", hash = "sha256:b9f21e77f71a6576a43864e85066b8cc3f0f778d0d50961563f8981377a6dcb1", size = 103295, upload-time = "2025-12-29T06:29:06.074Z" },
 ]
 
 [[package]]
@@ -2319,15 +2378,6 @@ wheels = [
 ]
 
 [[package]]
-name = "nvsmi"
-version = "0.4.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/9d/13/c5da04d29f4e5f830a8558601b3e179163d0d94e0da06529d5a8e62eed9e/nvsmi-0.4.2.tar.gz", hash = "sha256:c1a391c7c4dadc6ec572909ff0372451d464ebadc144e5aa5fbbcc893dcb7bfa", size = 5248, upload-time = "2020-02-28T09:32:05.357Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d2/d5/6ec6d6410b434463ba76900d2363a1f75c474f3442a4365557b2588fa14b/nvsmi-0.4.2-py3-none-any.whl", hash = "sha256:718894c24bdf7b58b8ecdfd282dceb06ef120a4b4e0b8517193cba876174945e", size = 5466, upload-time = "2020-02-28T09:32:03.88Z" },
-]
-
-[[package]]
 name = "opentelemetry-api"
 version = "1.36.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3030,6 +3080,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-xdist"
+version = "3.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "execnet" },
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/78/b4/439b179d1ff526791eb921115fca8e44e596a13efeda518b9d845a619450/pytest_xdist-3.8.0.tar.gz", hash = "sha256:7e578125ec9bc6050861aa93f2d59f1d8d085595d6551c2c90b6f4fad8d3a9f1", size = 88069, upload-time = "2025-07-01T13:30:59.346Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/31/d4e37e9e550c2b92a9cbc2e4d0b7420a27224968580b5a447f420847c975/pytest_xdist-3.8.0-py3-none-any.whl", hash = "sha256:202ca578cfeb7370784a8c33d6d05bc6e13b4f25b5053c30a152269fd10f0b88", size = 46396, upload-time = "2025-07-01T13:30:56.632Z" },
+]
+
+[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 source = { registry = "https://pypi.org/simple" }
@@ -3285,6 +3348,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/da/8a/22b7beea3ee0d44b1916c0c1cb0ee3af23b700b6da9f04991899d0c555d4/rsa-4.9.1.tar.gz", hash = "sha256:e7bdbfdb5497da4c07dfd35530e1a902659db6ff241e39d9953cad06ebd0ae75", size = 29034, upload-time = "2025-04-16T09:51:18.218Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/64/8d/0133e4eb4beed9e425d9a98ed6e081a55d195481b7632472be1af08d2f6b/rsa-4.9.1-py3-none-any.whl", hash = "sha256:68635866661c6836b8d39430f97a996acbd61bfa49406748ea243539fe239762", size = 34696, upload-time = "2025-04-16T09:51:17.142Z" },
+]
+
+[[package]]
+name = "ruamel-yaml"
+version = "0.19.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c7/3b/ebda527b56beb90cb7652cb1c7e4f91f48649fbcd8d2eb2fb6e77cd3329b/ruamel_yaml-0.19.1.tar.gz", hash = "sha256:53eb66cd27849eff968ebf8f0bf61f46cdac2da1d1f3576dd4ccee9b25c31993", size = 142709, upload-time = "2026-01-02T16:50:31.84Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/0c/51f6841f1d84f404f92463fc2b1ba0da357ca1e3db6b7fbda26956c3b82a/ruamel_yaml-0.19.1-py3-none-any.whl", hash = "sha256:27592957fedf6e0b62f281e96effd28043345e0e66001f97683aa9a40c667c93", size = 118102, upload-time = "2026-01-02T16:50:29.201Z" },
 ]
 
 [[package]]
