@@ -53,8 +53,17 @@ rule experiment_all:
             run_id=collect_all_candidates(),
         ),
         expand(
-            OUT_ROOT / "results/{experiment}/metrics/spatial/{run_id}/{param}_{metric}_{region}_{leadtime}.png",
+            OUT_ROOT / "results/{experiment}/metrics/spatial/runs/{run_id}/{param}_{metric}_{region}_{leadtime}.png",
             run_id=collect_all_candidates(),
+            leadtime=[6, 12],
+            metric=["BIAS", "RMSE"],
+            param=["T_2M", "TOT_PREC"],
+            region=["switzerland", "switzerlandsmall"], 
+            experiment=EXPERIMENT_HASH
+        ), 
+        expand(
+            OUT_ROOT / "results/{experiment}/metrics/spatial/baselines/{baseline_id}/{param}_{metric}_{region}_{leadtime}.png",
+            baseline_id=collect_all_baselines(),
             leadtime=[6, 12],
             metric=["BIAS", "RMSE"],
             param=["T_2M", "TOT_PREC"],
