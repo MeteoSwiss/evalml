@@ -146,11 +146,9 @@
     "ForecasterConfig": {
       "description": "Single training run stored in MLflow.",
       "properties": {
-        "mlflow_id": {
+        "checkpoint": {
           "description": "The mlflow run ID, as a 32-character hexadecimal string.",
-          "maxLength": 32,
-          "minLength": 32,
-          "title": "Mlflow Id",
+          "title": "Checkpoint",
           "type": "string"
         },
         "label": {
@@ -212,7 +210,7 @@
         }
       },
       "required": [
-        "mlflow_id",
+        "checkpoint",
         "steps"
       ],
       "title": "ForecasterConfig",
@@ -333,11 +331,9 @@
     "InterpolatorConfig": {
       "description": "Single training run stored in MLflow.",
       "properties": {
-        "mlflow_id": {
+        "checkpoint": {
           "description": "The mlflow run ID, as a 32-character hexadecimal string.",
-          "maxLength": 32,
-          "minLength": 32,
-          "title": "Mlflow Id",
+          "title": "Checkpoint",
           "type": "string"
         },
         "label": {
@@ -411,7 +407,7 @@
         }
       },
       "required": [
-        "mlflow_id",
+        "checkpoint",
         "steps"
       ],
       "title": "InterpolatorConfig",

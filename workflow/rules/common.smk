@@ -91,7 +91,7 @@ def parse_regions():
 def register_run(model_type, run_config, as_candidate=True):
     """Parse a run configuration and assign a unique run ID."""
     run_cfg = copy.deepcopy(run_config)
-    mlflow_id_short = run_cfg["mlflow_id"][:HASH_LENGTH]
+    mlflow_id_short = run_cfg["checkpoint"][:HASH_LENGTH]
     run_id_prefix = f"{model_type}-{mlflow_id_short}"
     run_id_hash = run_entry_hash(run_cfg)
     run_cfg["_is_candidate"] = as_candidate

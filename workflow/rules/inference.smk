@@ -5,6 +5,63 @@
 import os
 from pathlib import Path
 from datetime import datetime
+from urllib.parse import urlparse
+
+
+def _checkpoint_uri_type(checkpoint_uri: str):
+    parsed_url = urlparse(checkpoint_uri)
+    if parsed_url.netloc in [
+        "mlflow.ecmwf.int",
+        "service.meteoswiss.ch",
+        "servicedepl.meteoswiss.ch",
+    ]:
+        return "mlflow"
+    elif parsed_url.netloc == "huggingface.co":
+        if not parsed_url.path.endswith(".ckpt"):
+            raise ValueError(
+                f"Expected a .ckpt file for HuggingFace checkpoint URI. Got: {checkpoint_uri}"
+            )
+        return "huggingface"
+    elif parsed_url.netloc == "":
+        return "local"
+    else:
+        raise ValueError(f"Unknown checkpoint URI type: {checkpoint_uri}")
+
+
+rule prepare_checkpoint:
+    localrule: True
+    output:
+        checkpoint=OUT_ROOT / "data/runs/{run_id}/inference-last.ckpt",
+        metadata=OUT_ROOT / "data/runs/{run_id}/anemoi.json",
+    params:
+        checkpoint=lambda wc: RUN_CONFIGS[wc.run_id]["checkpoint"],
+        checkpoint_type=lambda wc: _checkpoint_uri_type(
+            RUN_CONFIGS[wc.run_id]["checkpoint"]
+        ),
+    log:
+        OUT_ROOT / "logs/prepare_checkpoint/{run_id}.log",
+    shell:
+        """(
+        mkdir -p $(dirname {output.checkpoint})
+        if [ "{params.checkpoint_type}" = "mlflow" ]; then
+            ln -s $(python workflow/scripts/inference_get_checkpoint_mlflow.py {params.checkpoint}) {output.checkpoint}
+            echo "Located checkpoint from MLFlow log."
+            echo "Created symlink: {output.checkpoint} -> $(readlink {output.checkpoint})"
+        elif [ "{params.checkpoint_type}" = "huggingface" ]; then
+            repo_id=$(python -c "import re; print(re.search(r'huggingface\.co/([^/]+/[^/]+)', '{params.checkpoint}').group(1))")
+            file_path=$(python -c "import re; print(re.search(r'huggingface\.co/[^/]+/[^/]+/blob/[^/]+/(.*)', '{params.checkpoint}').group(1))")
+            cp $(uvx hf download $repo_id $file_path) {output.checkpoint}
+            echo "Copied checkpoint from HuggingFace: {output.checkpoint}"
+        elif [ "{params.checkpoint_type}" = "local" ]; then
+            ln -s {params.checkpoint} {output.checkpoint}
+            echo "Created symlink: {output.checkpoint} -> $(readlink {output.checkpoint})"
+        else
+            echo "Unknown checkpoint type: {params.checkpoint_type}"
+        fi
+        anemoi-utils metadata --dump --json {output.checkpoint} > {output.metadata}
+        echo "Extracted metadata from checkpoint: {output.metadata}"
+        ) > {log} 2>&1
+        """
 
 
 rule create_inference_pyproject:
@@ -17,8 +74,10 @@ rule create_inference_pyproject:
     """
     input:
         toml="workflow/envs/anemoi_inference.toml",
+        metadata=OUT_ROOT / "data/runs/{run_id}/anemoi.json",
         summary=rules.write_summary.output,
     output:
+        requirements=OUT_ROOT / "data/runs/{run_id}/requirements.txt",
         pyproject=OUT_ROOT / "data/runs/{run_id}/pyproject.toml",
     params:
         extra_dependencies=lambda wc: RUN_CONFIGS[wc.run_id].get(
@@ -28,8 +87,16 @@ rule create_inference_pyproject:
     log:
         OUT_ROOT / "logs/create_inference_pyproject/{run_id}.log",
     localrule: True
-    script:
-        "../scripts/set_inference_pyproject.py"
+    shell:
+        """(
+        python workflow/scripts/inference_get_requirements.py {input.metadata} > {output.requirements}
+        echo "Extracted requirements from metadata: {output.requirements}"
+        cp {input.toml} {output.pyproject}
+        echo "Copied base pyproject.toml to: {output.pyproject}"
+        uv --project {output.pyproject} add --no-sync --requirements {output.requirements}
+        echo "Added requirements to pyproject.toml: {output.pyproject}"
+        ) > {log} 2>&1
+        """
 
 
 rule create_inference_venv:
@@ -39,7 +106,8 @@ rule create_inference_venv:
     so it can be squashed later. Pre-compilation to bytecode is done to speed up imports.
     """
     input:
-        pyproject=rules.create_inference_pyproject.output.pyproject,
+        pyproject=OUT_ROOT / "data/runs/{run_id}/pyproject.toml",
+        metadata=OUT_ROOT / "data/runs/{run_id}/anemoi.json",
     output:
         venv=temp(directory(OUT_ROOT / "data/runs/{run_id}/.venv")),
         lockfile=OUT_ROOT / "data/runs/{run_id}/uv.lock",
@@ -52,8 +120,9 @@ rule create_inference_venv:
         OUT_ROOT / "logs/create_inference_venv/{run_id}.log",
     shell:
         """(
+        PYTHON_VERSION=$(cat {input.metadata} | jq -r ".provenance_training.python")
         PROJECT_ROOT=$(dirname {input.pyproject})
-        uv venv --project $PROJECT_ROOT --managed-python \
+        uv venv --project $PROJECT_ROOT --managed-python --python $PYTHON_VERSION \
             --relocatable --link-mode=copy {output.venv}
         source {output.venv}/bin/activate
         cd $(dirname {input.pyproject})
@@ -156,9 +225,7 @@ rule prepare_inference_forecaster:
             OUT_ROOT / "logs/prepare_inference_forecaster/{run_id}-{init_time}.ok"
         ),
     params:
-        checkpoints_path=parse_input(
-            input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
-        ),
+        checkpoints_path="cio",
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),

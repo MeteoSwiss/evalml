@@ -60,10 +60,10 @@ class InferenceResources(BaseModel):
 
 
 class RunConfig(BaseModel):
-    mlflow_id: str = Field(
+    checkpoint: str = Field(
         ...,
-        min_length=32,
-        max_length=32,
+        # min_length=32,
+        # max_length=32,
         description="The mlflow run ID, as a 32-character hexadecimal string.",
     )
     label: str | None = Field(
