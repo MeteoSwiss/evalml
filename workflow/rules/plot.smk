@@ -75,7 +75,7 @@ rule plot_summary_stat_maps:
         script="workflow/scripts/plot_summary_stat_maps.mo.py",
         verif_file=OUT_ROOT / "data/runs/{run_id}/verif_aggregated.nc",
     output:
-        OUT_ROOT / "results/{experiment}/metrics/spatial/runs/{run_id}/{param}_{metric}_{region}_{leadtime}.png",
+        OUT_ROOT / "results/{experiment}/metrics/spatial/runs/{run_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
     resources:
@@ -94,10 +94,12 @@ rule plot_summary_stat_maps:
         python {input.script} \
             --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} --metric {wildcards.metric} \
+            --season {wildcards.season} \
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
         #     --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
         #     --param {wildcards.param} --leadtime {wildcards.leadtime} --metric {wildcards.metric} \
+        #     --season {wildcards.season} \
         """
 
 use rule plot_summary_stat_maps as plot_summary_stat_maps_baseline with:
@@ -105,7 +107,7 @@ use rule plot_summary_stat_maps as plot_summary_stat_maps_baseline with:
         script="workflow/scripts/plot_summary_stat_maps.mo.py",
         verif_file=OUT_ROOT / "data/baselines/{baseline_id}/verif_aggregated.nc",
     output:
-        OUT_ROOT / "results/{experiment}/metrics/spatial/baselines/{baseline_id}/{param}_{metric}_{region}_{leadtime}.png",
+        OUT_ROOT / "results/{experiment}/metrics/spatial/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
     params:
         nc_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/baselines/{wc.baseline_id}/verif_aggregated.nc"

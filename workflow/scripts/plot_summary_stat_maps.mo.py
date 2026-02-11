@@ -138,6 +138,7 @@ def _(
     outfn,
     param,
     region, 
+    season, 
     var,
 ):
     # plot individual fields
@@ -172,7 +173,7 @@ def _(
     # validtime = state["valid_time"].strftime("%Y%m%d%H%M")
     # # leadtime = int(state["lead_time"].total_seconds() // 3600)
 
-    fig.title(f"{metric} of {param}, Lead Time: {lead_time}")
+    fig.title(f"{metric} of {param}, Season: {season}, Lead Time: {lead_time}")
 
     fig.save(outfn, bbox_inches="tight", dpi=200)
     LOG.info(f"saved: {outfn}")
