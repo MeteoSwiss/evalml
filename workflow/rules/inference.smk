@@ -17,7 +17,6 @@ rule create_inference_pyproject:
     """
     input:
         toml="workflow/envs/anemoi_inference.toml",
-        summary=rules.write_summary.output,
     output:
         pyproject=OUT_ROOT / "data/runs/{run_id}/pyproject.toml",
     params:

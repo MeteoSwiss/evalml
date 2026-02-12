@@ -23,9 +23,9 @@ baselines:
       root: /store_new/mch/msopr/ml/COSMO-E
       steps: 0/120/6
 
-analysis:
+truth:
   label: COSMO KENDA
-  analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr
+  root: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr
 
 stratification:
   regions:

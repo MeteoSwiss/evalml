@@ -173,18 +173,18 @@ class BaselineConfig(BaseModel):
     )
 
 
-class AnalysisConfig(BaseModel):
-    """Configuration for the analysis data used in the verification."""
+class TruthConfig(BaseModel):
+    """Configuration for the truth data used in the verification."""
 
     label: str = Field(
         ...,
         min_length=1,
-        description="Label for the analysis that will be used in experiment results such as reports and figures.",
+        description="Label that will be used in experiment results such as reports and figures.",
     )
-    analysis_zarr: str = Field(
+    root: str = Field(
         ...,
         min_length=1,
-        description="Path to the zarr dataset containing the analysis data.",
+        description="Path to the root of the dataset.",
     )
 
 
@@ -310,7 +310,7 @@ class ConfigModel(BaseModel):
         ...,
         description="Dictionary of baselines to include in the verification.",
     )
-    analysis: AnalysisConfig
+    truth: TruthConfig | None
     stratification: Stratification
     locations: Locations
     profile: Profile

@@ -4,12 +4,16 @@ from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
+import xarray as xr
+from scipy.spatial import cKDTree
 
 from verification import verify  # noqa: E402
 from data_input import (
     load_baseline_from_zarr,
     load_analysis_data_from_zarr,
     load_fct_data_from_grib,
+    load_obs_data_from_peakweather,
 )  # noqa: E402
 
 LOG = logging.getLogger(__name__)
@@ -32,7 +36,7 @@ class ScriptConfig(Namespace):
     """Configuration for the script to verify baseline forecast data."""
 
     archive_root: Path = None
-    analysis_zarr: Path = None
+    truth: Path = None
     baseline_zarr: Path = None
     reftime: datetime = None
     params: list[str] = ["T_2M", "TD_2M", "U_10M", "V_10M"]
@@ -44,8 +48,8 @@ def program_summary_log(args):
     LOG.info("=" * 80)
     LOG.info("Running verification of baseline forecast data")
     LOG.info("=" * 80)
-    LOG.info("baseline zarr dataset: %s", args.baseline_zarr)
-    LOG.info("Zarr dataset for analysis: %s", args.analysis_zarr)
+    LOG.info("Baseline dataset: %s", args.baseline_zarr)
+    LOG.info("Truth dataset: %s", args.truth)
     LOG.info("Reference time: %s", args.reftime)
     LOG.info("Parameters to verify: %s", args.params)
     LOG.info("Lead time: %s", args.lead_time)
@@ -53,21 +57,59 @@ def program_summary_log(args):
     LOG.info("=" * 80)
 
 
-def main(args: ScriptConfig):
-    """Main function to verify baseline forecast data."""
+def _map_fcst_to_truth(
+    fcst: xr.Dataset, truth: xr.Dataset
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """Map forecasts to the truth grid or station locations via nearest-neighbor lookup."""
 
-    # get baseline forecast data
+    truth = truth.sel(time=fcst.time)  # swap time dimension to lead_time
 
-    now = datetime.now()
+    if "y" in fcst.dims and "x" in fcst.dims:
+        fcst = fcst.stack(values=("y", "x"))
+    fcst_lat = fcst["lat"].values.ravel()
+    fcst_lon = fcst["lon"].values.ravel()
 
-    # try to open the baselin as a zarr, and if it fails load from grib
-    if not args.forecast:
-        raise ValueError("--forecast must be provided.")
+    if "y" in truth.dims and "x" in truth.dims:
+        truth = truth.stack(values=("y", "x"))
+    truth_lat = truth["lat"].values.ravel()
+    truth_lon = truth["lon"].values.ravel()
+
+    # TODO: Project to a metric CRS for a proper distance metric
+    fcst_lat_rad = np.deg2rad(fcst_lat)
+    fcst_lon_rad = np.deg2rad(fcst_lon)
+    truth_lat_rad = np.deg2rad(truth_lat)
+    truth_lon_rad = np.deg2rad(truth_lon)
+
+    fcst_xyz = np.c_[
+        np.cos(fcst_lat_rad) * np.cos(fcst_lon_rad),
+        np.cos(fcst_lat_rad) * np.sin(fcst_lon_rad),
+        np.sin(fcst_lat_rad),
+    ]
+    truth_xyz = np.c_[
+        np.cos(truth_lat_rad) * np.cos(truth_lon_rad),
+        np.cos(truth_lat_rad) * np.sin(truth_lon_rad),
+        np.sin(truth_lat_rad),
+    ]
+
+    fcst_tree = cKDTree(fcst_xyz)
+    _, fi = fcst_tree.query(truth_xyz, k=1)
+    fi = np.asarray(fi)
+    fcst = fcst.isel(values=fi)
+    fcst = fcst.drop_vars(["x", "y", "values"], errors="ignore")
+    fcst = fcst.assign_coords(lon=("values", truth.lon.data))
+    fcst = fcst.assign_coords(lat=("values", truth.lat.data))
+    fcst = fcst.assign_coords(values=truth["values"])
+
+    return fcst, truth
+
+
+def _load_forecast(args: ScriptConfig) -> xr.Dataset:
+    """Load forecast data from GRIB files or a baseline Zarr dataset."""
 
     if any(args.forecast.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
         fcst = load_fct_data_from_grib(
-            grib_output_dir=args.forecast,
+            root=args.forecast,
             reftime=args.reftime,
             steps=args.steps,
             params=args.params,
@@ -75,11 +117,51 @@ def main(args: ScriptConfig):
     else:
         LOG.info("Loading baseline forecasts from zarr dataset...")
         fcst = load_baseline_from_zarr(
-            zarr_path=args.forecast,
+            root=args.forecast,
             reftime=args.reftime,
             steps=args.steps,
             params=args.params,
         )
+
+    return fcst
+
+
+def _load_truth(args: ScriptConfig) -> xr.Dataset:
+    """Load truth data from analysis Zarr or PeakWeather observations."""
+    LOG.info("Loading ground truth from an analysis zarr dataset...")
+    if args.truth.suffix == ".zarr":
+        truth = load_analysis_data_from_zarr(
+            root=args.truth,
+            reftime=args.reftime,
+            steps=args.steps,
+            params=args.params,
+        )
+        truth = truth.compute().chunk(
+            {"y": -1, "x": -1}
+            if "y" in truth.dims and "x" in truth.dims
+            else {"values": -1}
+        )
+    elif "peakweather" in str(args.truth):
+        LOG.info("Loading ground truth from PeakWeather observations...")
+        # TODO: replace with OGD data
+        truth = load_obs_data_from_peakweather(
+            root=args.truth,
+            reftime=args.reftime,
+            steps=args.steps,
+            params=args.params,
+        )
+    else:
+        raise ValueError(f"Unsupported truth root: {args.truth}")
+    return truth
+
+
+def main(args: ScriptConfig):
+    """Main function to verify baseline forecast data."""
+
+    # get baseline forecast data
+    now = datetime.now()
+
+    fcst = _load_forecast(args)
 
     LOG.info(
         "Loaded forecast data in %s seconds: \n%s",
@@ -87,33 +169,19 @@ def main(args: ScriptConfig):
         fcst,
     )
 
-    # get truth data (aka analysis data)
+    # get truth data
     now = datetime.now()
-    if args.analysis_zarr:
-        analysis = (
-            load_analysis_data_from_zarr(
-                analysis_zarr=args.analysis_zarr,
-                times=fcst.time,
-                params=args.params,
-            )
-            .compute()
-            .chunk(
-                {"y": -1, "x": -1}
-                if "y" in fcst.dims and "x" in fcst.dims
-                else {"values": -1}
-            )
-        )
-    else:
-        raise ValueError("--analysis_zarr must be provided.")
+    truth = _load_truth(args)
     LOG.info(
-        "Loaded analysis data in %s seconds: \n%s",
+        "Loaded truth data in %s seconds: \n%s",
         (datetime.now() - now).total_seconds(),
-        analysis,
+        truth,
     )
 
-    # compute metrics and statistics
+    fcst, truth = _map_fcst_to_truth(fcst, truth)
 
-    results = verify(fcst, analysis, args.label, args.analysis_label, args.regions)
+    # compute metrics and statistics
+    results = verify(fcst, truth, args.label, args.truth_label, args.regions)
 
     # save results to NetCDF
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -134,11 +202,10 @@ if __name__ == "__main__":
         help="Path to the directory containing the grib forecast or to the zarr dataset containing baseline data.",
     )
     parser.add_argument(
-        "--analysis_zarr",
+        "--truth",
         type=Path,
         required=True,
-        default="/scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr",
-        help="Path to the zarr dataset containing analysis data.",
+        help="Path to the truth data.",
     )
     parser.add_argument(
         "--reftime",
@@ -164,10 +231,10 @@ if __name__ == "__main__":
         help="Label for the forecast or baseline data (default: COSMO-E).",
     )
     parser.add_argument(
-        "--analysis_label",
+        "--truth_label",
         type=str,
         default="COSMO KENDA",
-        help="Label for the analysis data (default: COSMO KENDA).",
+        help="Label for the truth data (default: COSMO KENDA).",
     )
     parser.add_argument(
         "--regions",

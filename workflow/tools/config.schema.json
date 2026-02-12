@@ -1,28 +1,5 @@
 {
   "$defs": {
-    "AnalysisConfig": {
-      "description": "Configuration for the analysis data used in the verification.",
-      "properties": {
-        "label": {
-          "description": "Label for the analysis that will be used in experiment results such as reports and figures.",
-          "minLength": 1,
-          "title": "Label",
-          "type": "string"
-        },
-        "analysis_zarr": {
-          "description": "Path to the zarr dataset containing the analysis data.",
-          "minLength": 1,
-          "title": "Analysis Zarr",
-          "type": "string"
-        }
-      },
-      "required": [
-        "label",
-        "analysis_zarr"
-      ],
-      "title": "AnalysisConfig",
-      "type": "object"
-    },
     "BaselineConfig": {
       "description": "Configuration for a single baseline to include in the verification.",
       "properties": {
@@ -518,6 +495,29 @@
       ],
       "title": "Stratification",
       "type": "object"
+    },
+    "TruthConfig": {
+      "description": "Configuration for the truth data used in the verification.",
+      "properties": {
+        "label": {
+          "description": "Label that will be used in experiment results such as reports and figures.",
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "root": {
+          "description": "Path to the root of the dataset.",
+          "minLength": 1,
+          "title": "Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "root"
+      ],
+      "title": "TruthConfig",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -575,8 +575,15 @@
       "title": "Baselines",
       "type": "array"
     },
-    "analysis": {
-      "$ref": "#/$defs/AnalysisConfig"
+    "truth": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TruthConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "stratification": {
       "$ref": "#/$defs/Stratification"
@@ -593,7 +600,7 @@
     "dates",
     "runs",
     "baselines",
-    "analysis",
+    "truth",
     "stratification",
     "locations",
     "profile"

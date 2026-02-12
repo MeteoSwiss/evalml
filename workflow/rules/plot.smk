@@ -24,9 +24,9 @@ rule plot_meteogram:
     input:
         script="workflow/scripts/plot_meteogram.mo.py",
         inference_okfile=rules.execute_inference.output.okfile,
-        analysis_zarr=config["analysis"].get("analysis_zarr"),
+        truth=config["truth"]["root"],
         baseline_zarr=lambda wc: _use_first_baseline_zarr(wc),
-        peakweather_dir=rules.download_obs_from_peakweather.output.peakweather,
+        peakweather_dir=rules.download_obs_from_peakweather.output.root,
     output:
         OUT_ROOT
         / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{sta}.png",
@@ -43,13 +43,13 @@ rule plot_meteogram:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         python {input.script} \
-            --forecast {params.grib_out_dir}  --analysis {input.analysis_zarr} \
+            --forecast {params.grib_out_dir}  --analysis {input.truth} \
             --baseline {input.baseline_zarr} --peakweather {input.peakweather_dir} \
             --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param}  --station {wildcards.sta}
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
-        #     --forecast {params.grib_out_dir}  --analysis {input.analysis_zarr} \
+        #     --forecast {params.grib_out_dir}  --analysis {input.truth} \
         #     --baseline {input.baseline_zarr} --peakweather {input.peakweather_dir} \
         #     --date {wildcards.init_time} --outfn {output[0]} \
         #     --param {wildcards.param}  --station {wildcards.sta}
