@@ -1,6 +1,44 @@
 from pathlib import Path
 from datetime import datetime, timedelta
 
+EXPERIMENT_HASH = short_hash_config()
+
+
+# TODO: merge _parse_steps from generate_mec_namelist.py and verif_single_init.py?
+def _parse_steps(steps: str) -> list[int]:
+    # check that steps is in the format "start/stop/step"
+    if "/" not in steps:
+        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
+    if len(steps.split("/")) != 3:
+        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
+    start, end, step = map(int, steps.split("/"))
+    return list(range(start, end + 1, step))
+
+
+# TODO: merge with _ref_times from common.smk?
+def _reftimes_mec():
+    """
+    Construct ref times for MEC. Needs to be max of all
+    leadtimes shorter than ref times from the config.
+    """
+    cfg = config["dates"]
+    if isinstance(cfg, list):
+        return [datetime.strptime(t, "%Y-%m-%dT%H:%M") for t in cfg]
+    start = datetime.strptime(cfg["start"], "%Y-%m-%dT%H:%M")
+    leads = _parse_steps(config["runs"][0]["forecaster"]["steps"])
+    start_mec = start + timedelta(hours=max(leads))
+    end = datetime.strptime(cfg["end"], "%Y-%m-%dT%H:%M")
+    freq = _parse_timedelta(cfg["frequency"])
+    times = []
+    t = start_mec
+    while t <= end:
+        times.append(t)
+        t += freq
+    return times
+
+
+REFTIMES_MEC = _reftimes_mec()
+
 
 def init_times_for_mec(wc):
     """
@@ -8,18 +46,16 @@ def init_times_for_mec(wc):
     stepping by configured frequency.
     """
     init = wc.init_time
+    base = datetime.strptime(init, "%Y%m%d%H%M")
+
     lt = get_leadtime(wc)  # expects something like "48h"
     lead_h = int(str(lt).rstrip("h"))
-    dates_cfg = config["dates"]
-
-    # use the same parsing as in common.smk; support "Xh" and "Xd"
-    freq_td = _parse_timedelta(dates_cfg["frequency"])
-
-    base = datetime.strptime(init, "%Y%m%d%H%M")
-    times = []
+    freq_td = _parse_timedelta(config["dates"]["frequency"])
 
     # iterate from base - lead to base stepping by the parsed timedelta
     t = base - timedelta(hours=lead_h)
+    times = []
+
     while t <= base:
         times.append(t.strftime("%Y%m%d%H%M"))
         t += freq_td
@@ -30,20 +66,19 @@ def init_times_for_mec(wc):
 rule prepare_mec_input:
     input:
         src_dir=OUT_ROOT / "data/runs/{run_id}/{init_time}/grib",
+        inference_ok=OUT_ROOT / f"run_inference_all.{EXPERIMENT_HASH}.ok",
     output:
         run=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec"),
         obs=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs"),
         ekf_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs/ekfSYNOP.nc",
-        # prepare_mec_input no longer claims ownership of input_mod dir;
-        # it should produce the fc file somewhere visible (or create a temp),
-        # but we keep fc as a produced file returned here in the mec dir
         fc_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/fc_{init_time}",
     log:
         OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/prepare_mec_input.log",
     shell:
         """
         (
-        #set -uo pipefail
+        set -euo pipefail
+        shopt -s nullglob
 
         mkdir -p {output.run} {output.obs}
         src_dir="{input.src_dir}"
@@ -57,10 +92,10 @@ rule prepare_mec_input:
 
         # concatenate all grib files in src_dir into a single file fc_file
         echo "grib files processed:"
-        if ls "$src_dir"/20*.grib >/dev/null 2>&1; then
-            # concatenate all matching files into the target file
-            ls  "$src_dir"/20*.grib
-            cat "$src_dir"/20*.grib > "$fc_file"
+        files=( "$src_dir"/20*.grib )
+        if (( ${{#files[@]}} )); then
+            printf '%s\n' "${{files[@]}}"
+            cat "${{files[@]}}" > "$fc_file"
         else
             echo "WARNING: no grib files found in $src_dir" >&2
         fi

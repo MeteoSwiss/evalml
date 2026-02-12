@@ -46,7 +46,7 @@ EXPERIMENT_LABEL = (
 EXPERIMENT_DIRNAME = f"{EXPERIMENT_DATE}_{EXPERIMENT_LABEL}_{EXPERIMENT_HASH}"
 
 
-# TODO: target final scorefile instead of FF
+
 rule experiment_all:
     """Target rule for experiment workflow."""
     input:
@@ -58,7 +58,7 @@ rule experiment_all:
         ),
         expand(
             OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}.nc",
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
             run_id=collect_all_candidates(),
         ),
 
@@ -101,14 +101,13 @@ rule run_inference_all:
     """Run inference for all reference times as defined in the configuration."""
     input:
         expand(
-            OUT_ROOT / "data/runs/{run_id}/{init_time}/raw",
+            OUT_ROOT / "data/runs/{run_id}/{init_time}/grib",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=collect_all_candidates(),
         ),
     output:
-        touch=OUT_ROOT / f"run_inference_all.{EXPERIMENT_HASH}.ok",
-    shell:
-        "touch {output.touch}"
+        inference_ok=touch(OUT_ROOT / f"run_inference_all.{EXPERIMENT_HASH}.ok")
+
 
 
 rule verif_metrics_all:
@@ -129,15 +128,11 @@ rule verif_metrics_plot_all:
         ),
 
 
-# To run:  snakemake --cores 1 --configfile=config/forecasters.yaml verif_obs_all
-# run_id=collect_all_runs(),
-
 rule verif_obs_all:
     input:
         expand(
             rules.run_mec.output,
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
             run_id=collect_all_candidates(),
         ),
-        # wait for the global run_inference_all sentinel
-        OUT_ROOT / f"run_inference_all.{EXPERIMENT_HASH}.ok",
+
