@@ -1,0 +1,54 @@
+lead_time: 120h
+write_initial_state: true
+allow_nans: true
+
+env:
+  ANEMOI_INFERENCE_NUM_CHUNKS: 8 # OOM error if not set
+
+# inputs
+input:
+  test:
+    use_original_paths: true
+
+
+# outputs
+output:
+  tee:
+    - grib:
+        path: grib/{date}{time:04}_{step:03}.grib
+        encoding:
+          typeOfGeneratingProcess: 2
+        templates:
+          - file:
+              path: resources/icon-ch1-typeOfLevel=surface.grib
+              variables: [lsm, msl, sp, z, skt, tp]
+          - file:
+              path: resources/icon-ch1-typeOfLevel=heightAboveGround.grib
+              variables: [2t, 2d, 10u, 10v]
+          - file: resources/icon-ch1-typeOfLevel=isobaricInhPa.grib
+        post_processors:
+          - extract_mask: # removes global points
+              mask: "lam_0/cutout_mask"
+              as_slice: true
+    - grib:
+        path: grib/ifs-{date}{time:04}_{step:03}.grib
+        encoding:
+          typeOfGeneratingProcess: 2
+        templates:
+          samples: resources/templates_index_ifs.yaml
+        post_processors:
+        - extract_mask: # removes lam points
+            mask: "lam_0/cutout_mask"
+            as_slice: true
+            inverse: true
+        - assign_mask: # fill local/global overlapping points with nan
+            mask: "global/cutout_mask"
+
+patch_metadata:
+  config:
+    dataloader:
+      test:
+        dataset:
+          cutout:
+            - dataset: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-ifsnames-v1.0.zarr
+            - dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2025-6h-v1-for-single-v2.zarr

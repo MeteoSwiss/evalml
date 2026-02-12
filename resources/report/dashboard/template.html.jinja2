@@ -111,6 +111,22 @@
                 </select>
             </div>
             <div class="control-group">
+                <label>Season</label>
+                <select id="season-select" multiple>
+                    {% for season in seasons %}
+                    <option value="{{season}}"{% if season == 'all' %} selected{% endif %}>{{season}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Initialization</label>
+                <select id="init-select" multiple>
+                    {% for init_hour in init_hours %}
+                    <option value="{{init_hour}}"{% if init_hour == 'all' %} selected{% endif %}>{{init_hour}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="control-group">
                 <label>Source(s)</label>
                 <select id="source-select" multiple>
                     {% for source in sources %}
