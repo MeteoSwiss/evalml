@@ -134,7 +134,11 @@ def load_grib_data(
     ds_fct = preprocess_ds(ds_fct, param)
     da_fct = ds_fct[param].squeeze()
 
-    ds_ana = load_analysis_data_from_zarr(zarr_dir_ana, da_fct.valid_time, paramlist)
+    reftime = da_fct.ref_time.values
+    steps = list(
+        range(da_fct.sizes["lead_time"])
+    )  # FIX: this will fail if lead_time is not 0,1,2,...
+    ds_ana = load_analysis_data_from_zarr(zarr_dir_ana, reftime, steps, paramlist)
     ds_ana = preprocess_ds(ds_ana, param)
     da_ana = ds_ana[param].squeeze()
 
@@ -191,13 +195,8 @@ def _(da_ana, da_base, da_fct, np, pd, stations):
         Return (y_idx, x_idx) of the grid point nearest to (lat_s, lon_s)
         using Euclidean distance in degrees.
         """
-        try:
-            lat2d = ds["lat"]  # (y, x)
-            lon2d = ds["lon"]  # (y, x)
-        except KeyError:
-            lat2d = ds["latitude"]  # (y, x)
-            lon2d = ds["longitude"]  # (y, x)
-
+        lat2d = ds["lat"]  # (y, x)
+        lon2d = ds["lon"]  # (y, x)
         dist2 = (lat2d - lat_s) ** 2 + (lon2d - lon_s) ** 2
         flat_idx = np.nanargmin(dist2.values)
         y_idx, x_idx = np.unravel_index(flat_idx, dist2.shape)
