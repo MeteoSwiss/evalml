@@ -4,7 +4,7 @@ description: |
 
 dates:
   start: 2025-01-01T00:00
-  end: 2025-10-20T00:00
+  end: 2025-06-20T00:00
   frequency: 54h
 
 
@@ -28,6 +28,7 @@ baselines:
 truth:
   label: KENDA-CH1
   root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
 
 stratification:
   regions:
