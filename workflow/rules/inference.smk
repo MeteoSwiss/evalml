@@ -64,7 +64,7 @@ rule prepare_checkpoint:
         """
 
 
-rule create_inference_pyproject:
+rule extract_checkpoint_requirements:
     """
     Generate a pyproject.toml that contains the information needed
     to set up a virtual environment for inference of a specific checkpoint.
@@ -72,29 +72,25 @@ rule create_inference_pyproject:
     and additional dependencies can be specified under a run entry in the main
     config file.
     """
+    localrule: True
     input:
-        toml="workflow/envs/anemoi_inference.toml",
         metadata=OUT_ROOT / "data/runs/{run_id}/anemoi.json",
-        summary=rules.write_summary.output,
     output:
         requirements=OUT_ROOT / "data/runs/{run_id}/requirements.txt",
-        pyproject=OUT_ROOT / "data/runs/{run_id}/pyproject.toml",
     params:
-        extra_dependencies=lambda wc: RUN_CONFIGS[wc.run_id].get(
-            "extra_dependencies", []
+        custom_requirements=lambda wc: ",".join(
+            RUN_CONFIGS[wc.run_id].get("custom_requirements", [])
+            + ["eccodes==2.38.3", "eccodes-cosmo-resources-python"]
         ),
-        mlflow_id=lambda wc: RUN_CONFIGS[wc.run_id].get("mlflow_id"),
     log:
-        OUT_ROOT / "logs/create_inference_pyproject/{run_id}.log",
-    localrule: True
+        OUT_ROOT / "logs/extract_checkpoint_requirements/{run_id}.log",
     shell:
         """(
-        python workflow/scripts/inference_get_requirements.py {input.metadata} > {output.requirements}
-        echo "Extracted requirements from metadata: {output.requirements}"
-        cp {input.toml} {output.pyproject}
-        echo "Copied base pyproject.toml to: {output.pyproject}"
-        uv --project {output.pyproject} add --no-sync --requirements {output.requirements}
-        echo "Added requirements to pyproject.toml: {output.pyproject}"
+        echo "[$(date)] Starting requirement extraction..."
+        python workflow/scripts/inference_get_requirements.py {input.metadata} \
+            --overrides "{params.custom_requirements}" > {output.requirements}
+        echo "[$(date)] Extracted requirements from metadata: {output.requirements}"
+        echo $(cat {output.requirements})
         ) > {log} 2>&1
         """
 
@@ -105,36 +101,34 @@ rule create_inference_venv:
     The virtual environment is managed with uv. The created virtual environment is relocatable,
     so it can be squashed later. Pre-compilation to bytecode is done to speed up imports.
     """
+    localrule: True
     input:
-        pyproject=OUT_ROOT / "data/runs/{run_id}/pyproject.toml",
         metadata=OUT_ROOT / "data/runs/{run_id}/anemoi.json",
+        requirements=OUT_ROOT / "data/runs/{run_id}/requirements.txt",
     output:
         venv=temp(directory(OUT_ROOT / "data/runs/{run_id}/.venv")),
-        lockfile=OUT_ROOT / "data/runs/{run_id}/uv.lock",
-    params:
-        py_version=parse_input(
-            input.pyproject, parse_toml, key="project.requires-python"
-        ),
-    localrule: True
     log:
         OUT_ROOT / "logs/create_inference_venv/{run_id}.log",
     shell:
         """(
+
         PYTHON_VERSION=$(cat {input.metadata} | jq -r ".provenance_training.python")
-        PROJECT_ROOT=$(dirname {input.pyproject})
-        uv venv --project $PROJECT_ROOT --managed-python --python $PYTHON_VERSION \
-            --relocatable --link-mode=copy {output.venv}
+        echo "[$(date)] Creating virtual environment with Python $PYTHON_VERSION..."
+        uv venv --managed-python --python $PYTHON_VERSION --relocatable --link-mode=copy {output.venv}
         source {output.venv}/bin/activate
-        cd $(dirname {input.pyproject})
-        uv sync
+
+        echo "[$(date)] Installing requirements from {input.requirements}..."
+        uv pip install -r {input.requirements}
+
+        echo "[$(date)] Compiling Python bytecode..."
         python -m compileall -j 8 -o 0 -o 1 -o 2 .venv/lib/python*/site-packages
-        echo 'Testing that eccodes is working...'
+        echo "[$(date)] Testing that eccodes is working..."
         if ! python -c "import eccodes" &>/dev/null; then
-            echo 'ERROR: eccodes is not installed correctly in the virtual environment.'
-            echo 'Please check the installation and try again.'
+            echo "[$(date)] ERROR: eccodes is not installed correctly in the virtual environment."
+            echo "[$(date)] Please check the installation and try again."
             exit 1
         fi
-        echo 'Inference virutal environment successfully created at {output.venv}'
+        echo "[$(date)] Inference virtual environment successfully created at {output.venv}"
         ) > {log} 2>&1
         """
 
@@ -145,13 +139,13 @@ rule make_squashfs_image:
     a specific checkpoint. Find more about this at
     https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
     """
+    localrule: True
     input:
         venv=rules.create_inference_venv.output.venv,
     output:
         image=OUT_ROOT / "data/runs/{run_id}/venv.squashfs",
     log:
         OUT_ROOT / "logs/make_squashfs_image/{run_id}.log",
-    localrule: True
     shell:
         # we can safely ignore the many warnings "Unrecognised xattr prefix..."
         "mksquashfs $(realpath {input.venv}) {output.image}"
@@ -159,40 +153,39 @@ rule make_squashfs_image:
         " > {log} 2>/dev/null"
 
 
-rule create_inference_sandbox:
-    """
-    Create a zipped directory that, when extracted, can be used as a sandbox
-    for running inference jobs for a specific checkpoint. Its main purpose is
-    to serve as a development environment for anemoi-inference and to facilitate
-    sharing with external collaborators.
+# rule create_inference_sandbox:
+#     """
+#     Create a zipped directory that, when extracted, can be used as a sandbox
+#     for running inference jobs for a specific checkpoint. Its main purpose is
+#     to serve as a development environment for anemoi-inference and to facilitate
+#     sharing with external collaborators.
 
-    TO use this sandbox, unzip it to a target directory.
+#     TO use this sandbox, unzip it to a target directory.
 
-    ```bash
-    unzip sandbox.zip -d /path/to/target/directory
-    ```
-    """
-    input:
-        script="workflow/scripts/inference_create_sandbox.py",
-        image=rules.make_squashfs_image.output.image,
-        pyproject=rules.create_inference_pyproject.output.pyproject,
-        lockfile=rules.create_inference_venv.output.lockfile,
-        config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
-        readme_template="resources/inference/sandbox/readme.md.jinja2",
-    output:
-        sandbox=OUT_ROOT / "data/runs/{run_id}/sandbox.zip",
-    log:
-        OUT_ROOT / "logs/create_inference_sandbox/{run_id}.log",
-    localrule: True
-    shell:
-        """
-        uv run {input.script} \
-            --pyproject {input.pyproject} \
-            --lockfile {input.lockfile} \
-            --readme-template {input.readme_template} \
-            --output {output.sandbox} \
-            > {log} 2>&1
-        """
+#     ```bash
+#     unzip sandbox.zip -d /path/to/target/directory
+#     ```
+#     """
+#     input:
+#         script="workflow/scripts/inference_create_sandbox.py",
+#         image=rules.make_squashfs_image.output.image,
+#         lockfile=rules.create_inference_venv.output.lockfile,
+#         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
+#         readme_template="resources/inference/sandbox/readme.md.jinja2",
+#     output:
+#         sandbox=OUT_ROOT / "data/runs/{run_id}/sandbox.zip",
+#     log:
+#         OUT_ROOT / "logs/create_inference_sandbox/{run_id}.log",
+#     localrule: True
+#     shell:
+#         """
+#         uv run {input.script} \
+#             --pyproject {input.pyproject} \
+#             --lockfile {input.lockfile} \
+#             --readme-template {input.readme_template} \
+#             --output {output.sandbox} \
+#             > {log} 2>&1
+#         """
 
 
 def get_resource(wc, field: str, default):
@@ -215,7 +208,7 @@ def get_leadtime(wc):
 rule prepare_inference_forecaster:
     localrule: True
     input:
-        pyproject=rules.create_inference_pyproject.output.pyproject,
+        # pyproject=rules.create_inference_pyproject.output.pyproject,
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
     output:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
@@ -247,7 +240,7 @@ rule prepare_inference_interpolator:
     """Run the interpolator for a specific run ID."""
     localrule: True
     input:
-        pyproject=rules.create_inference_pyproject.output.pyproject,
+        # pyproject=rules.create_inference_pyproject.output.pyproject,
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
         forecasts=lambda wc: (
             [
