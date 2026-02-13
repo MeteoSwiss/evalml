@@ -131,39 +131,39 @@ rule make_squashfs_image:
         " > {log} 2>/dev/null"
 
 
-# rule create_inference_sandbox:
-#     """
-#     Create a zipped directory that, when extracted, can be used as a sandbox
-#     for running inference jobs for a specific checkpoint. Its main purpose is
-#     to serve as a development environment for anemoi-inference and to facilitate
-#     sharing with external collaborators.
+rule create_inference_sandbox:
+    """
+    Create a zipped directory that, when extracted, can be used as a sandbox
+    for running inference jobs for a specific checkpoint. Its main purpose is
+    to serve as a development environment for anemoi-inference and to facilitate
+    sharing with external collaborators.
 
-#     TO use this sandbox, unzip it to a target directory.
+    TO use this sandbox, unzip it to a target directory.
 
-#     ```bash
-#     unzip sandbox.zip -d /path/to/target/directory
-#     ```
-#     """
-#     input:
-#         script="workflow/scripts/inference_create_sandbox.py",
-#         image=rules.make_squashfs_image.output.image,
-#         lockfile=rules.create_inference_venv.output.lockfile,
-#         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
-#         readme_template="resources/inference/sandbox/readme.md.jinja2",
-#     output:
-#         sandbox=OUT_ROOT / "data/runs/{run_id}/sandbox.zip",
-#     log:
-#         OUT_ROOT / "logs/create_inference_sandbox/{run_id}.log",
-#     localrule: True
-#     shell:
-#         """
-#         uv run {input.script} \
-#             --pyproject {input.pyproject} \
-#             --lockfile {input.lockfile} \
-#             --readme-template {input.readme_template} \
-#             --output {output.sandbox} \
-#             > {log} 2>&1
-#         """
+    ```bash
+    unzip sandbox.zip -d /path/to/target/directory
+    ```
+    """
+    input:
+        script="workflow/scripts/inference_create_sandbox.py",
+        checkpoint=OUT_ROOT / "data/runs/{run_id}/inference-last.ckpt",
+        requirements=OUT_ROOT / "data/runs/{run_id}/requirements.txt",
+        config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
+        readme_template="resources/inference/sandbox/readme.md.jinja2",
+    output:
+        sandbox=OUT_ROOT / "data/runs/{run_id}/sandbox.zip",
+    log:
+        OUT_ROOT / "logs/create_inference_sandbox/{run_id}.log",
+    localrule: True
+    shell:
+        """
+        python {input.script} \
+            --checkpoint {input.checkpoint} \
+            --requirements {input.requirements} \
+            --readme-template {input.readme_template} \
+            --output {output.sandbox} \
+            > {log} 2>&1
+        """
 
 
 def get_resource(wc, field: str, default):
