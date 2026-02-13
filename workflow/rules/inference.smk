@@ -5,27 +5,6 @@
 import os
 from pathlib import Path
 from datetime import datetime
-from urllib.parse import urlparse
-
-
-def _checkpoint_uri_type(checkpoint_uri: str):
-    parsed_url = urlparse(checkpoint_uri)
-    if parsed_url.netloc in [
-        "mlflow.ecmwf.int",
-        "service.meteoswiss.ch",
-        "servicedepl.meteoswiss.ch",
-    ]:
-        return "mlflow"
-    elif parsed_url.netloc == "huggingface.co":
-        if not parsed_url.path.endswith(".ckpt"):
-            raise ValueError(
-                f"Expected a .ckpt file for HuggingFace checkpoint URI. Got: {checkpoint_uri}"
-            )
-        return "huggingface"
-    elif parsed_url.netloc == "":
-        return "local"
-    else:
-        raise ValueError(f"Unknown checkpoint URI type: {checkpoint_uri}")
 
 
 rule prepare_checkpoint:
@@ -41,7 +20,7 @@ rule prepare_checkpoint:
     log:
         OUT_ROOT / "logs/prepare_checkpoint/{run_id}.log",
     shell:
-        """(
+        r"""(
         mkdir -p $(dirname {output.checkpoint})
         if [ "{params.checkpoint_type}" = "mlflow" ]; then
             ln -s $(python workflow/scripts/inference_get_checkpoint_mlflow.py {params.checkpoint}) {output.checkpoint}
@@ -78,9 +57,8 @@ rule extract_checkpoint_requirements:
     output:
         requirements=OUT_ROOT / "data/runs/{run_id}/requirements.txt",
     params:
-        custom_requirements=lambda wc: ",".join(
-            RUN_CONFIGS[wc.run_id].get("custom_requirements", [])
-            + ["eccodes==2.38.3", "eccodes-cosmo-resources-python"]
+        extra_requirements=lambda wc: ",".join(
+            RUN_CONFIGS[wc.run_id].get("extra_requirements", [])
         ),
     log:
         OUT_ROOT / "logs/extract_checkpoint_requirements/{run_id}.log",
@@ -88,7 +66,7 @@ rule extract_checkpoint_requirements:
         """(
         echo "[$(date)] Starting requirement extraction..."
         python workflow/scripts/inference_get_requirements.py {input.metadata} \
-            --overrides "{params.custom_requirements}" > {output.requirements}
+            --overrides "{params.extra_requirements}" > {output.requirements}
         echo "[$(date)] Extracted requirements from metadata: {output.requirements}"
         echo $(cat {output.requirements})
         ) > {log} 2>&1
@@ -208,7 +186,7 @@ def get_leadtime(wc):
 rule prepare_inference_forecaster:
     localrule: True
     input:
-        # pyproject=rules.create_inference_pyproject.output.pyproject,
+        checkpoint=OUT_ROOT / "data/runs/{run_id}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
     output:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
@@ -218,7 +196,6 @@ rule prepare_inference_forecaster:
             OUT_ROOT / "logs/prepare_inference_forecaster/{run_id}-{init_time}.ok"
         ),
     params:
-        checkpoints_path="cio",
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
@@ -240,7 +217,7 @@ rule prepare_inference_interpolator:
     """Run the interpolator for a specific run ID."""
     localrule: True
     input:
-        # pyproject=rules.create_inference_pyproject.output.pyproject,
+        checkpoint=OUT_ROOT / "data/runs/{run_id}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
         forecasts=lambda wc: (
             [
@@ -259,9 +236,6 @@ rule prepare_inference_interpolator:
             OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.ok"
         ),
     params:
-        checkpoints_path=parse_input(
-            input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
-        ),
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),

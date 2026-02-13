@@ -6,34 +6,21 @@ from packaging.version import Version, InvalidVersion
 
 CORE_SUBMODULES = {"models", "training", "graphs"}
 
-SKIP_PACKAGES = {
-    "anemoi-training",
-    "databricks-connect",
-}
+SKIP_PACKAGES = {"anemoi-training"}
 SKIP_PACKAGES |= set(sys.stdlib_module_names)
 SKIP_PACKAGES |= set(sys.builtin_module_names)
 
-PACKAGE_ALIASES = {
-    "sklearn": "scikit-learn",
-    "attr": "attrs",
-    "google-protobuf": "protobuf",
-}
-
-
-# -----------------------------------------------------------------------------
-# Metadata loading
-# -----------------------------------------------------------------------------
+BASE_DEPENDENCIES = [
+    "anemoi-inference",
+    "eccodes==2.39.1",
+    "eccodes-cosmo-resources-python",
+]
 
 
 def load_provenance(metadata_path: str) -> dict:
     with open(metadata_path, "r") as f:
         data = json.load(f)
     return data.get("provenance_training", {})
-
-
-# -----------------------------------------------------------------------------
-# Index handling
-# -----------------------------------------------------------------------------
 
 
 def default_torch_index(torch_version: Version) -> str | None:
@@ -59,11 +46,6 @@ def default_torch_index(torch_version: Version) -> str | None:
         raise ValueError(f"No CUDA version found for torch version {torch_version}")
 
     return f"https://download.pytorch.org/whl/{cuda_tag}"
-
-
-# -----------------------------------------------------------------------------
-# Requirement extraction
-# -----------------------------------------------------------------------------
 
 
 def extract_pypi_requirements(
@@ -121,23 +103,22 @@ def extract_git_requirements(
     return requirements
 
 
-def parse_overrides(overrides: str | None) -> dict[str, str]:
+def parse_overrides(overrides: list) -> dict[str, str]:
     if not overrides:
         return {}
 
     result = {}
-    for item in overrides.split(","):
+
+    # overrides > BASE_DEPENDENCIES
+    for item in [*BASE_DEPENDENCIES, *overrides]:
         item = item.strip()
         if not item:
             continue
 
-        # Handle name=version
         if "==" in item:
             name, version = item.split("==", 1)
             result[name.strip()] = version.strip()
-        # Handle git+..., http://..., https://...
         elif any(item.startswith(prefix) for prefix in ("git+", "http://", "https://")):
-            # Extract the last part after / as the name if possible
             name = item.split("/")[-1]
             if "." in name:
                 name = name.split(".")[0]
@@ -146,11 +127,6 @@ def parse_overrides(overrides: str | None) -> dict[str, str]:
             result[item] = None
 
     return result
-
-
-# -----------------------------------------------------------------------------
-# Formatting
-# -----------------------------------------------------------------------------
 
 
 def format_requirements(
@@ -202,13 +178,11 @@ def format_requirements(
         for name, url in sorted(git_requirements.items()):
             if name in SKIP_PACKAGES:
                 continue
-
-            if name in overrides:
-                lines.append("# Overridden by user")
             version = pypi_requirements.pop(name, None)
             if version:
                 lines.append(f"# {name}=={version}")
-            lines.append(url)
+            line = url + "  # Extra (not from checkpoint)" if name in overrides else url
+            lines.append(line)
 
     # PyPI requirements
     if pypi_requirements:
@@ -220,15 +194,10 @@ def format_requirements(
             if name in SKIP_PACKAGES:
                 continue
             line = f"{name}=={version}" if version else f"{name}"
-            line += "  # Overridden by user" if name in overrides else ""
+            line += "  # Extra (not from checkpoint)" if name in overrides else ""
             lines.append(line)
 
     return "\n".join(lines)
-
-
-# -----------------------------------------------------------------------------
-# Main
-# -----------------------------------------------------------------------------
 
 
 def main(args: argparse.Namespace) -> None:
@@ -236,7 +205,6 @@ def main(args: argparse.Namespace) -> None:
 
     distribution_names = {
         **md.get("distribution_names", {}),
-        **PACKAGE_ALIASES,
     }
 
     pypi_requirements = extract_pypi_requirements(
@@ -260,11 +228,20 @@ def main(args: argparse.Namespace) -> None:
     print(output)
 
 
+def _parse_overrides(overrides: str) -> list[str]:
+    if not overrides:
+        return []
+    return [item.strip() for item in overrides.split(",") if item.strip()]
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("metadata", help="Path to the metadata JSON file")
     parser.add_argument(
-        "--overrides", default=None, help="Comma-separated list of overrides."
+        "--overrides",
+        type=_parse_overrides,
+        default=None,
+        help="Comma-separated list of overrides.",
     )
     args = parser.parse_args()
     main(args)

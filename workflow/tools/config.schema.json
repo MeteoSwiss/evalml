@@ -144,6 +144,7 @@
       "type": "array"
     },
     "ForecasterConfig": {
+      "additionalProperties": false,
       "description": "Single training run stored in MLflow.",
       "properties": {
         "checkpoint": {
@@ -169,12 +170,12 @@
           "title": "Steps",
           "type": "string"
         },
-        "extra_dependencies": {
+        "extra_requirements": {
           "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
           "items": {
             "type": "string"
           },
-          "title": "Extra Dependencies",
+          "title": "Extra Requirements",
           "type": "array"
         },
         "inference_resources": {
@@ -329,6 +330,7 @@
       "type": "object"
     },
     "InterpolatorConfig": {
+      "additionalProperties": false,
       "description": "Single training run stored in MLflow.",
       "properties": {
         "checkpoint": {
@@ -354,12 +356,12 @@
           "title": "Steps",
           "type": "string"
         },
-        "extra_dependencies": {
+        "extra_requirements": {
           "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
           "items": {
             "type": "string"
           },
-          "title": "Extra Dependencies",
+          "title": "Extra Requirements",
           "type": "array"
         },
         "inference_resources": {

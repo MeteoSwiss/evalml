@@ -62,8 +62,6 @@ class InferenceResources(BaseModel):
 class RunConfig(BaseModel):
     checkpoint: str = Field(
         ...,
-        # min_length=32,
-        # max_length=32,
         description="The mlflow run ID, as a 32-character hexadecimal string.",
     )
     label: str | None = Field(
@@ -80,7 +78,7 @@ class RunConfig(BaseModel):
             "or '0/33/6' up to 30 h."
         ),
     )
-    extra_dependencies: List[str] = Field(
+    extra_requirements: List[str] = Field(
         default_factory=list,
         description="List of extra dependencies to install for this model. "
         "These will be added to the pyproject.toml file in the run directory.",
@@ -96,6 +94,8 @@ class RunConfig(BaseModel):
     )
 
     config: Dict[str, Any] | str
+
+    model_config = {"extra": "forbid"}
 
     @field_validator("steps")
     def validate_steps(cls, v: str) -> str:
