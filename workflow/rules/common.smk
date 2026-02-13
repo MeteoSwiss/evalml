@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import yaml
 import hashlib
 import json
+from urllib.parse import urlparse
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
@@ -15,19 +16,6 @@ HASH_LENGTH = 4
 # ============================================================================
 # Utility Functions
 # ============================================================================
-
-
-def parse_toml(toml_file, key):
-    """Parse a key (e.g. 'project.requires-python') from a TOML file handle."""
-    import toml
-
-    content = toml.load(toml_file)
-    # support dotted keys
-    for part in key.split("."):
-        content = content.get(part, {})
-    if isinstance(content, str):
-        return content.lstrip(">=< ").strip()
-    raise ValueError(f"Expected a string for key '{key}', got: {content}")
 
 
 def parse_timedelta(td):
@@ -88,15 +76,49 @@ def parse_regions():
 # ============================================================================
 
 
+def _checkpoint_uri_type(checkpoint_uri: str):
+    parsed_url = urlparse(checkpoint_uri)
+    if parsed_url.netloc in [
+        "mlflow.ecmwf.int",
+        "service.meteoswiss.ch",
+        "servicedepl.meteoswiss.ch",
+    ]:
+        return "mlflow"
+    elif parsed_url.netloc == "huggingface.co":
+        if not parsed_url.path.endswith(".ckpt"):
+            raise ValueError(
+                f"Expected a .ckpt file for HuggingFace checkpoint URI. Got: {checkpoint_uri}"
+            )
+        return "huggingface"
+    elif parsed_url.netloc == "":
+        if Path(checkpoint_uri).exists():
+            return "local"
+        else:
+            raise ValueError(f"Local checkpoint path does not exist: {checkpoint_uri}")
+    else:
+        raise ValueError(f"Unknown checkpoint URI type: {checkpoint_uri}")
+
+
+def model_id(checkpoint_uri: str) -> str:
+    """Generate a model ID based on the checkpoint URI."""
+    ckpt_type = _checkpoint_uri_type(checkpoint_uri)
+    if ckpt_type == "mlflow":
+        return checkpoint_uri.split("/")[-1][:HASH_LENGTH]
+    elif ckpt_type == "huggingface":
+        return checkpoint_uri.split("/")[-1].split(".")[0]
+    elif ckpt_type == "local":
+        return checkpoint_uri.split("/")[-2][:HASH_LENGTH]
+
+
 def register_run(model_type, run_config, as_candidate=True):
     """Parse a run configuration and assign a unique run ID."""
     run_cfg = copy.deepcopy(run_config)
-    mlflow_id_short = run_cfg["checkpoint"][:HASH_LENGTH]
+    mlflow_id_short = model_id(run_cfg["checkpoint"])
     run_id_prefix = f"{model_type}-{mlflow_id_short}"
     run_id_hash = run_entry_hash(run_cfg)
     run_cfg["_is_candidate"] = as_candidate
     run_cfg["model_type"] = model_type
-    run_id = f"{run_id_prefix}{run_id_hash}"
+    run_id = f"{run_id_prefix}-{run_id_hash}"
     out = {}
     if model_type == "interpolator":
         forecaster = run_cfg["forecaster"]
