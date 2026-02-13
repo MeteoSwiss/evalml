@@ -58,8 +58,10 @@ _CMAP_DEFAULTS = {
     "T_2M.RMSE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "levels": np.arange(start = 0, stop = 3.1, step = 0.5)} | {"units": "°C"},
     "PMSL.RMSE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "Pa"},
     "PS.RMSE.spatial":       {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "Pa"},
-    "TOT_PREC.RMSE.spatial": {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "mm"},
-    
+    "TOT_PREC.RMSE.spatial": {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.001, 0.0015, 0.002, 0.003, 0.004]} | {"units": "mm"},
+    # would ideally want a 6th colour on the high end of the colour scale, but somehow 
+    # matplotlib does not do that -> ?
+
     # MAE:
     "U_10M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
     "V_10M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
@@ -67,7 +69,8 @@ _CMAP_DEFAULTS = {
     "T_2M.MAE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "levels": np.arange(start = 0, stop = 3.1, step = 0.5)} | {"units": "°C"},
     "PMSL.MAE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "Pa"},
     "PS.MAE.spatial":       {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "Pa"},
-    "TOT_PREC.MAE.spatial": {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "mm"}, 
+    "TOT_PREC.MAE.spatial": {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.001, 0.0015, 0.002, 0.003, 0.004]} | {"units": "mm"}, 
+    # the levels for precip are a bit on the bright side, but still worth keeping consistent with RMSE. 
 
     # Bias:
     # diverging colour scheme for the Bias to reflect the nature of the data (can be positive or negative, symmetric).
@@ -78,7 +81,7 @@ _CMAP_DEFAULTS = {
     "T_2M.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu_r", 11), "levels" : np.arange(start = -2.75, stop = 2.76, step = 0.5)} | {"units": "°C"},
     "PMSL.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "Pa"},
     "PS.BIAS.spatial":       {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "Pa"},
-    "TOT_PREC.BIAS.spatial": {"cmap": plt.get_cmap("BrBG", 11)} | {"units": "mm"}
+    "TOT_PREC.BIAS.spatial": {"cmap": plt.get_cmap("BrBG", 9), "levels": [-0.001, -0.0005, -0.00025, -0.0001, 0.0001, 0.00025, 0.0005, 0.001]} | {"units": "mm"}
 }
 
 CMAP_DEFAULTS = defaultdict(_fallback, _CMAP_DEFAULTS)
