@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List, Any
 
-from pydantic import BaseModel, Field, RootModel, HttpUrl, field_validator
+from pydantic import BaseModel, Field, RootModel, field_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -81,7 +81,7 @@ class RunConfig(BaseModel):
     extra_requirements: List[str] = Field(
         default_factory=list,
         description="List of extra dependencies to install for this model. "
-        "These will be added to the pyproject.toml file in the run directory.",
+        "These will be added to the requirements.txt file in the run directory.",
     )
     inference_resources: InferenceResources | None = Field(
         None,
@@ -204,10 +204,6 @@ class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
 
     output_root: Path = Field(..., description="Root directory for all output files.")
-    mlflow_uri: List[HttpUrl] = Field(
-        ...,
-        description="MLflow tracking URI(s) for the experiment. Can be a list of URIs if using multiple tracking servers.",
-    )
 
 
 class Stratification(BaseModel):

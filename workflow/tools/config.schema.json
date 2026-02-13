@@ -171,7 +171,7 @@
           "type": "string"
         },
         "extra_requirements": {
-          "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
+          "description": "List of extra dependencies to install for this model. These will be added to the requirements.txt file in the run directory.",
           "items": {
             "type": "string"
           },
@@ -357,7 +357,7 @@
           "type": "string"
         },
         "extra_requirements": {
-          "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
+          "description": "List of extra dependencies to install for this model. These will be added to the requirements.txt file in the run directory.",
           "items": {
             "type": "string"
           },
@@ -435,22 +435,10 @@
           "format": "path",
           "title": "Output Root",
           "type": "string"
-        },
-        "mlflow_uri": {
-          "description": "MLflow tracking URI(s) for the experiment. Can be a list of URIs if using multiple tracking servers.",
-          "items": {
-            "format": "uri",
-            "maxLength": 2083,
-            "minLength": 1,
-            "type": "string"
-          },
-          "title": "Mlflow Uri",
-          "type": "array"
         }
       },
       "required": [
-        "output_root",
-        "mlflow_uri"
+        "output_root"
       ],
       "title": "Locations",
       "type": "object"

@@ -9,29 +9,29 @@ dates:
 
 runs:
   - forecaster:
-      mlflow_id: 2241012852624833b73b2c933db608c9
+      checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/409/runs/2241012852624833b73b2c933db608c9
       label: Stage C entangled
       config: resources/inference/configs/sgm-forecaster-global-disentangled.yaml
       steps: 0/120/6
-      extra_dependencies:
+      extra_requirements:
         - git+https://github.com/ecmwf/anemoi-inference.git@main
         - git+https://github.com/MeteoSwiss/anemoi-core.git@2a90165e3f25defc55fbeb77f7b4ebfef685820d#subdirectory=models
 
   - forecaster:
-      mlflow_id: f9f0b0a0c91949b6a72df2dc23c55255
+      checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/307/runs/f9f0b0a0c91949b6a72df2dc23c55255
       label: dis_HAE_1lvl_ft_n320_cosmo_stage_C_direct
       config: resources/inference/configs/sgm-forecaster-global-disentangled.yaml
       steps: 0/120/6
-      extra_dependencies:
+      extra_requirements:
         - git+https://github.com/ecmwf/anemoi-inference.git@main
         - git+https://github.com/MeteoSwiss/anemoi-core.git@2a90165e3f25defc55fbeb77f7b4ebfef685820d#subdirectory=models
 
   - forecaster:
-      mlflow_id: 60db882d54174b4582d10dc5826d9eee
+      checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/307/runs/60db882d54174b4582d10dc5826d9eee
       label: dis_HAE_1lvl_ft_n320_cosmo_stage_C
       config: resources/inference/configs/sgm-forecaster-global-disentangled.yaml
       steps: 0/120/6
-      extra_dependencies:
+      extra_requirements:
         - git+https://github.com/ecmwf/anemoi-inference.git@main
         - git+https://github.com/MeteoSwiss/anemoi-core.git@2a90165e3f25defc55fbeb77f7b4ebfef685820d#subdirectory=models
 
@@ -58,9 +58,6 @@ stratification:
 
 locations:
   output_root: output/
-  mlflow_uri:
-    - https://servicedepl.meteoswiss.ch/mlstore
-    - https://mlflow.ecmwf.int
 
 profile:
   executor: slurm
