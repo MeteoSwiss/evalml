@@ -25,7 +25,7 @@ include: "rules/plot.smk"
 # -----------------------------------------------------
 
 RUN_CMD = Path(".evalml_snakemake_cmd.txt").read_text().strip()
-CONFIG_HASH = short_hash_config()
+CONFIG_HASH = master_hash()
 WHEN = datetime.now().strftime("%Y%m%d")
 CONFIG_FILE = workflow.config_settings.configfiles[0]
 CONFIG_LABEL = config["config_label"] or CONFIG_FILE.stem
