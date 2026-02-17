@@ -15,6 +15,8 @@ runs:
       config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
       disable_local_eccodes_definitions: true
       extra_requirements:
+        - earthkit-utils<0.2.0
+        - earthkit-data<0.19.0
         - git+https://github.com/ecmwf/anemoi-inference.git@main
 
   - forecaster:
@@ -24,6 +26,8 @@ runs:
       config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
       disable_local_eccodes_definitions: true
       extra_requirements:
+        - earthkit-utils<0.2.0
+        - earthkit-data<0.19.0
         - git+https://github.com/ecmwf/anemoi-inference.git@main
 
   # - forecaster:
@@ -33,7 +37,9 @@ runs:
   #     config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
   #     disable_local_eccodes_definitions: true
   #     extra_requirements:
-  #       - git+https://github.com/ecmwf/anemoi-inference.git@main
+        # - earthkit-utils<0.2.0
+        # - earthkit-data<0.19.0
+        # - git+https://github.com/ecmwf/anemoi-inference.git@main
 
 baselines:
   - baseline:
