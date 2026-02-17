@@ -22,6 +22,7 @@ runs:
         - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
+
   - interpolator:
       checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/228/runs/8d1e0410ca7d4f74b368b3079878259a
       label: M-2 interpolator (M-1 forecaster)
@@ -37,6 +38,7 @@ runs:
         - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
+
   - forecaster:
       checkpoint: https://mlflow.ecmwf.int/#/experiments/103/runs/d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
@@ -68,10 +70,6 @@ stratification:
 
 locations:
   output_root: output/
-  mlflow_uri:
-    # - https://service.meteoswiss.ch/mlstore
-    - https://servicedepl.meteoswiss.ch/mlstore
-    - https://mlflow.ecmwf.int
 
 profile:
   executor: slurm

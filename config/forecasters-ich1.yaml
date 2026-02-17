@@ -64,9 +64,6 @@ stratification:
 
 locations:
   output_root: output/
-  mlflow_uri:
-    - https://servicedepl.meteoswiss.ch/mlstore
-    - https://mlflow.ecmwf.int
 
 profile:
   executor: slurm
