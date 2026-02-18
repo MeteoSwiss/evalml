@@ -16,3 +16,6 @@ grib_copy -w shortName=PS $SFC_SAMPLE /dev/stdout | grib_set -d 0 - icon-ch1-typ
 
 # template for typeOfLevel=isobaricInhPa
 grib_copy -w shortName=T,level=500 $PL_SAMPLE /dev/stdout | grib_set -d 0 - icon-ch1-typeOfLevel=isobaricInhPa.grib
+
+# template for typeOfLevel=meanSea
+grib_copy -w shortName=PMSL $SFC_SAMPLE /dev/stdout | grib_set -d 0 - icon-ch1-typeOfLevel=meanSea.grib
