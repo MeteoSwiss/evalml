@@ -144,13 +144,12 @@
       "type": "array"
     },
     "ForecasterConfig": {
+      "additionalProperties": false,
       "description": "Single training run stored in MLflow.",
       "properties": {
-        "mlflow_id": {
+        "checkpoint": {
           "description": "The mlflow run ID, as a 32-character hexadecimal string.",
-          "maxLength": 32,
-          "minLength": 32,
-          "title": "Mlflow Id",
+          "title": "Checkpoint",
           "type": "string"
         },
         "label": {
@@ -171,12 +170,12 @@
           "title": "Steps",
           "type": "string"
         },
-        "extra_dependencies": {
-          "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
+        "extra_requirements": {
+          "description": "List of extra dependencies to install for this model. These will be added to the requirements.txt file in the run directory.",
           "items": {
             "type": "string"
           },
-          "title": "Extra Dependencies",
+          "title": "Extra Requirements",
           "type": "array"
         },
         "inference_resources": {
@@ -212,7 +211,7 @@
         }
       },
       "required": [
-        "mlflow_id",
+        "checkpoint",
         "steps"
       ],
       "title": "ForecasterConfig",
@@ -331,13 +330,12 @@
       "type": "object"
     },
     "InterpolatorConfig": {
+      "additionalProperties": false,
       "description": "Single training run stored in MLflow.",
       "properties": {
-        "mlflow_id": {
+        "checkpoint": {
           "description": "The mlflow run ID, as a 32-character hexadecimal string.",
-          "maxLength": 32,
-          "minLength": 32,
-          "title": "Mlflow Id",
+          "title": "Checkpoint",
           "type": "string"
         },
         "label": {
@@ -358,12 +356,12 @@
           "title": "Steps",
           "type": "string"
         },
-        "extra_dependencies": {
-          "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
+        "extra_requirements": {
+          "description": "List of extra dependencies to install for this model. These will be added to the requirements.txt file in the run directory.",
           "items": {
             "type": "string"
           },
-          "title": "Extra Dependencies",
+          "title": "Extra Requirements",
           "type": "array"
         },
         "inference_resources": {
@@ -411,7 +409,7 @@
         }
       },
       "required": [
-        "mlflow_id",
+        "checkpoint",
         "steps"
       ],
       "title": "InterpolatorConfig",
@@ -437,22 +435,10 @@
           "format": "path",
           "title": "Output Root",
           "type": "string"
-        },
-        "mlflow_uri": {
-          "description": "MLflow tracking URI(s) for the experiment. Can be a list of URIs if using multiple tracking servers.",
-          "items": {
-            "format": "uri",
-            "maxLength": 2083,
-            "minLength": 1,
-            "type": "string"
-          },
-          "title": "Mlflow Uri",
-          "type": "array"
         }
       },
       "required": [
-        "output_root",
-        "mlflow_uri"
+        "output_root"
       ],
       "title": "Locations",
       "type": "object"
