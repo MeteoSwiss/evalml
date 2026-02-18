@@ -47,7 +47,13 @@ def prepare_workdir(workdir: Path, resources_root: Path):
     """
     workdir.mkdir(parents=True, exist_ok=True)
     (workdir / "grib").mkdir(parents=True, exist_ok=True)
-    shutil.copytree(resources_root / "templates", workdir / "resources")
+    (workdir / "resources").mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        resources_root / "templates", workdir / "resources", dirs_exist_ok=True
+    )
+    shutil.copytree(
+        resources_root / "metadata", workdir / "resources", dirs_exist_ok=True
+    )
 
 
 def prepare_interpolator(smk):
