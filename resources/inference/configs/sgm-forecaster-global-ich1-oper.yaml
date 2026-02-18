@@ -20,7 +20,7 @@ output:
           typeOfGeneratingProcess: 2
           centre: lssw
         templates:
-          samples: resources//templates_index_icon.yaml
+          samples: resources/templates_index_icon.yaml
         post_processors:
           - extract_mask: # removes global points
               mask: "lam_0/cutout_mask"

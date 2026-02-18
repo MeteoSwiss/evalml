@@ -19,16 +19,7 @@ output:
         encoding:
           typeOfGeneratingProcess: 2
         templates:
-          - file:
-              path: resources/icon-ch1-typeOfLevel=surface.grib
-              variables: [lsm, msl, sp, z, skt, tp]
-          - file:
-              path: resources/icon-ch1-typeOfLevel=heightAboveGround.grib
-              variables: [2t, 2d, 10u, 10v]
-          - file:
-              path: resources/icon-ch1-typeOfLevel=meanSea.grib
-              variables: [msl]
-          - file: resources/icon-ch1-typeOfLevel=isobaricInhPa.grib
+          samples: resources/templates_index_icon.yaml
         post_processors:
           - extract_mask: # removes global points
               mask: "lam_0/cutout_mask"

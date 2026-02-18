@@ -13,7 +13,6 @@ runs:
       label: stage_C_icon_1km
       steps: 0/120/6
       config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
-      disable_local_eccodes_definitions: true
       extra_requirements:
         - earthkit-utils<0.2.0
         - earthkit-data<0.19.0
@@ -24,7 +23,6 @@ runs:
       label: stage_C_icon_1km_hidden_11
       steps: 0/120/6
       config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
-      disable_local_eccodes_definitions: true
       extra_requirements:
         - earthkit-utils<0.2.0
         - earthkit-data<0.19.0
