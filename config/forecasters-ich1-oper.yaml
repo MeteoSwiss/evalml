@@ -21,7 +21,7 @@ runs:
       extra_requirements:
         - earthkit-utils<0.2.0
         - earthkit-data<0.19.0
-        - git+https://github.com/ecmwf/anemoi-inference.git@feat/patch-metadata-file
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
 
 baselines:
   - baseline:
