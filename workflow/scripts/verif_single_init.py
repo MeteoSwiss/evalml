@@ -157,7 +157,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--params",
         type=lambda x: x.split(","),
-        default=["T_2M", "TD_2M", "U_10M", "V_10M", "WS_10M", "PS", "PMSL", "TOT_PREC"],
+        default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"],
     )
     parser.add_argument(
         "--steps",
