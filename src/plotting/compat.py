@@ -5,6 +5,7 @@ import earthkit.data as ekd
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import xarray as xr
 from meteodatalab import data_source
 from meteodatalab import grib_decoder
 from shapely.geometry import MultiPoint
@@ -90,3 +91,4 @@ def load_state_from_raw(
         if key.startswith("field_"):
             state["fields"][key.removeprefix("field_")] = value
     return state
+
