@@ -57,7 +57,7 @@ rule experiment_all:
             run_id=collect_all_candidates(),
             leadtime=[6],
             metric=["BIAS"],
-            param=["WS_10M"],
+            param=["SP_10M"],
             region=["centraleurope", "switzerland"], 
             season=["all", "DJF", "MAM", "JJA", "SON"], 
             experiment=EXPERIMENT_HASH
@@ -67,7 +67,7 @@ rule experiment_all:
             baseline_id=collect_all_baselines(),
             leadtime=[6],
             metric=["BIAS"],
-            param=["WS_10M"],
+            param=["SP_10M"],
             region=["centraleurope", "switzerland"], 
             season=["all", "DJF", "MAM", "JJA", "SON"], 
             experiment=EXPERIMENT_HASH

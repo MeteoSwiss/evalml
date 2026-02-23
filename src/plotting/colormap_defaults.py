@@ -54,7 +54,7 @@ _CMAP_DEFAULTS = {
     # RMSE:
     "U_10M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
     "V_10M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
-    "WS_10M.RMSE.spatial":   {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
+    "SP_10M.RMSE.spatial":   {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
     "TD_2M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
     "T_2M.RMSE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
     "PMSL.RMSE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "Pa"},
@@ -66,7 +66,7 @@ _CMAP_DEFAULTS = {
     # MAE:
     "U_10M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
     "V_10M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
-    "WS_10M.MAE.spatial":   {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
+    "SP_10M.MAE.spatial":   {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
     "TD_2M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
     "T_2M.MAE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
     "PMSL.MAE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "Pa"},
@@ -79,7 +79,7 @@ _CMAP_DEFAULTS = {
     # Red-Blue colour scheme for all variables except precipitation, where a Brown-Green scheme is more suggestive.
     "U_10M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "m/s"}, 
     "V_10M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "m/s"},
-    "WS_10M.BIAS.spatial":   {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "m/s"},
+    "SP_10M.BIAS.spatial":   {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "m/s"},
     "TD_2M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu_r", 11), "levels" : np.arange(start = -2.75, stop = 2.76, step = 0.5)} | {"units": "°C"},
     "T_2M.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu_r", 11), "levels" : np.arange(start = -2.75, stop = 2.76, step = 0.5)} | {"units": "°C"},
     "PMSL.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "Pa"},
