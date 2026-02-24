@@ -9,6 +9,7 @@ from evalml.config import ConfigModel
 # validate configuration and add defaults
 update_config(config, ConfigModel.model_validate(dict(config)).model_dump(mode="json"))
 
+
 # load rules
 # -----------------------------------------------------
 include: "rules/common.smk"
@@ -19,6 +20,7 @@ include: "rules/verif.smk"
 include: "rules/report.smk"
 include: "rules/plot.smk"
 include: "rules/verif_obs.smk"
+
 
 # about workflow
 # -----------------------------------------------------
@@ -35,8 +37,10 @@ DATA_DIR = OUT_ROOT / "data"
 LOGS_DIR = OUT_ROOT / "logs"
 RESULTS_DIR = OUT_ROOT / "results" / EXPERIMENT_NAME
 
+
 # prefer one rule because snakemake complains about ambiguous rules (same output)
 ruleorder: prepare_inference_forecaster > prepare_inference_interpolator
+
 
 # optional messages, log and error handling
 # -----------------------------------------------------
@@ -116,7 +120,6 @@ onerror:
 # -----------------------------------------------------
 
 
-
 rule experiment_all:
     """Target rule for experiment workflow."""
     input:
@@ -133,7 +136,6 @@ rule experiment_all:
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
             run_id=collect_all_candidates(),
         ),
-
 
 
 rule showcase_all:
@@ -175,8 +177,7 @@ rule run_inference_all:
             run_id=CANDIDATES,
         ),
     output:
-        inference_ok=touch(OUT_ROOT / f"run_inference_all.{EXPERIMENT_HASH}.ok")
-
+        inference_ok=touch(OUT_ROOT / f"run_inference_all.{EXPERIMENT_HASH}.ok"),
 
 
 rule verif_metrics_all:
@@ -204,4 +205,3 @@ rule verif_obs_all:
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
             run_id=CANDIDATES,
         ),
-

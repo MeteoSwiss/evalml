@@ -136,7 +136,7 @@ rule link_mec_input:
             one_init_time="${{src_basename: -12}}"
             realpath_src=$(realpath -m "$PWD/$one_init_time/mec/")
 
-            echo "Linking $realpath_src/$src_basename to {wildcards.init_time}/mec/input_mod/$src_basename" 
+            echo "Linking $realpath_src/$src_basename to {wildcards.init_time}/mec/input_mod/$src_basename"
             ln -s "$realpath_src/$src_basename" {wildcards.init_time}/mec/input_mod/"$src_basename"
         done
         ) > {log} 2>&1
@@ -176,7 +176,7 @@ rule run_mec:
         """
         (
         set -euo pipefail
- 
+
         # Run MEC inside sarus container
         # Note: pull command currently needed only once to download the container
         sarus pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
@@ -192,13 +192,13 @@ rule run_mec:
 
         # run container (split over multiple lines for readability)
         sarus run $MOUNTS container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
- 
+
         # Run MEC using local executable (Alternative to sarus container)
         #cd {input.run_dir}
         #export LM_HOST=balfrin-ln003
         #source /oprusers/osm/opr.emme/abs/mec.env
         #./mec > ./mec_out.log 2>&1
- 
+
         # copy the output file to the final location for the Feedback files
         mkdir -p {input.run_dir}/../../fdbk_files
         cp {input.run_dir}/verSYNOP.nc {input.run_dir}/../../fdbk_files/verSYNOP_{wildcards.init_time}.nc
