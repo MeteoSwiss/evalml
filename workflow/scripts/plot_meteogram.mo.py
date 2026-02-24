@@ -11,12 +11,15 @@ def _():
 
     import matplotlib.pyplot as plt
     import numpy as np
-    import pandas as pd
     import xarray as xr
     from meteodatalab import data_source, grib_decoder
     from peakweather import PeakWeatherDataset
 
-    from data_input import load_analysis_data_from_zarr, load_baseline_from_zarr
+    from data_input import (
+        load_analysis_data_from_zarr,
+        load_baseline_from_zarr,
+        parse_steps,
+    )
 
     return (
         ArgumentParser,
@@ -26,15 +29,15 @@ def _():
         grib_decoder,
         load_analysis_data_from_zarr,
         load_baseline_from_zarr,
+        parse_steps,
         np,
-        pd,
         plt,
         xr,
     )
 
 
 @app.cell
-def _(ArgumentParser, Path):
+def _(ArgumentParser, Path, parse_steps):
     parser = ArgumentParser()
 
     parser.add_argument(
@@ -45,6 +48,12 @@ def _(ArgumentParser, Path):
     )
     parser.add_argument(
         "--baseline", type=str, default=None, help="Path to baseline zarr data"
+    )
+    parser.add_argument(
+        "--baseline_steps",
+        type=parse_steps,
+        default="0/120/6",
+        help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
     )
     parser.add_argument(
         "--peakweather", type=str, default=None, help="Path to PeakWeather dataset"
@@ -58,6 +67,7 @@ def _(ArgumentParser, Path):
     grib_dir = Path(args.forecast)
     zarr_dir_ana = Path(args.analysis)
     zarr_dir_base = Path(args.baseline)
+    baseline_steps = args.baseline_steps
     peakweather_dir = Path(args.peakweather)
     init_time = args.date
     outfn = Path(args.outfn)
@@ -72,6 +82,7 @@ def _(ArgumentParser, Path):
         station,
         zarr_dir_ana,
         zarr_dir_base,
+        baseline_steps,
     )
 
 
@@ -110,6 +121,7 @@ def _(np):
 @app.cell
 def load_grib_data(
     data_source,
+    baseline_steps,
     grib_decoder,
     grib_dir,
     init_time,
@@ -142,10 +154,9 @@ def load_grib_data(
     ds_ana = preprocess_ds(ds_ana, param)
     da_ana = ds_ana[param].squeeze()
 
-    steps = list(
-        range(da_fct.sizes["lead_time"])
-    )  # FIX: this will fail if lead_time is not 0,1,2,...
-    ds_base = load_baseline_from_zarr(zarr_dir_base, da_fct.ref_time, steps, paramlist)
+    ds_base = load_baseline_from_zarr(
+        zarr_dir_base, da_fct.ref_time, baseline_steps, paramlist
+    )
     ds_base = preprocess_ds(ds_base, param)
     da_base = ds_base[param].squeeze()
     return da_ana, da_base, da_fct
@@ -189,49 +200,58 @@ def _(peakweather):
 
 
 @app.cell
-def _(da_ana, da_base, da_fct, np, pd, stations):
-    def nearest_yx_euclid(ds, lat_s, lon_s):
+def _(da_ana, da_base, da_fct, np, stations):
+    def nearest_indexers_euclid(ds, lat_s, lon_s):
         """
-        Return (y_idx, x_idx) of the grid point nearest to (lat_s, lon_s)
-        using Euclidean distance in degrees.
+        Return a dict of indexers usable as: ds.isel(**indexers)
+
+        Examples:
+          - 2D structured grid -> {"y": y_idx, "x": x_idx}
+          - 1D unstructured grid -> {"point": i_idx} (or {"cell": i_idx}, etc.)
         """
-        lat2d = ds["lat"]  # (y, x)
-        lon2d = ds["lon"]  # (y, x)
-        dist2 = (lat2d - lat_s) ** 2 + (lon2d - lon_s) ** 2
-        flat_idx = np.nanargmin(dist2.values)
-        y_idx, x_idx = np.unravel_index(flat_idx, dist2.shape)
-        return int(y_idx), int(x_idx)
+        lat = ds["lat"]
+        lon = ds["lon"]
+        dist = (lat - lat_s) ** 2 + (lon - lon_s) ** 2
+        arr = dist.values
 
-    def get_fct_idx_row(row):
-        return nearest_yx_euclid(da_fct, row["latitude"], row["longitude"])
+        flat_idx = int(np.nanargmin(arr))
 
-    idxs_fct = stations.apply(get_fct_idx_row, axis=1, result_type="expand")
-    idxs_fct.columns = ["fct_y_idx", "fct_x_idx"]
+        if dist.ndim == 1:
+            return {dist.dims[0]: flat_idx}
 
-    def get_ana_idx_row(row):
-        return nearest_yx_euclid(da_ana, row["latitude"], row["longitude"])
+        unr = np.unravel_index(flat_idx, dist.shape)
+        return {dim: int(i) for dim, i in zip(dist.dims, unr)}
 
-    idxs_ana = stations.apply(get_ana_idx_row, axis=1, result_type="expand")
-    idxs_ana.columns = ["ana_y_idx", "ana_x_idx"]
+    def get_idx_row(row, da):
+        return nearest_indexers_euclid(da, row["latitude"], row["longitude"])
 
-    def get_base_idx_row(row):
-        return nearest_yx_euclid(da_base, row["latitude"], row["longitude"])
-
-    idxs_base = stations.apply(get_base_idx_row, axis=1, result_type="expand")
-    idxs_base.columns = ["base_y_idx", "base_x_idx"]
-
-    sta_idxs = pd.concat([stations, idxs_fct, idxs_ana, idxs_base], axis=1)
+    # store dicts (indexers) in columns
+    sta_idxs = stations.copy()
+    sta_idxs["fct_isel"] = sta_idxs.apply(lambda r: get_idx_row(r, da_fct), axis=1)
+    sta_idxs["ana_isel"] = sta_idxs.apply(lambda r: get_idx_row(r, da_ana), axis=1)
+    sta_idxs["base_isel"] = sta_idxs.apply(lambda r: get_idx_row(r, da_base), axis=1)
     sta_idxs
     return (sta_idxs,)
 
 
 @app.cell
-def _(da_ana, da_base, da_fct, init_time, obs, offset, outfn, plt, sta_idxs, station):
+def _(
+    da_ana,
+    da_base,
+    da_fct,
+    init_time,
+    obs,
+    offset,
+    outfn,
+    plt,
+    sta_idxs,
+    station,
+):
     # station indices
     row = sta_idxs.loc[station]
-    fct_x_idx, fct_y_idx = row.fct_x_idx, row.fct_y_idx
-    ana_x_idx, ana_y_idx = row.ana_x_idx, row.ana_y_idx
-    base_x_idx, base_y_idx = row.base_x_idx, row.base_y_idx
+    fct_isel = row.fct_isel
+    ana_isel = row.ana_isel
+    base_isel = row.base_isel
 
     fig, ax = plt.subplots()
 
@@ -245,7 +265,7 @@ def _(da_ana, da_base, da_fct, init_time, obs, offset, outfn, plt, sta_idxs, sta
     )
 
     # analysis
-    ana2plot = da_ana.isel(x=ana_x_idx, y=ana_y_idx)
+    ana2plot = da_ana.isel(**ana_isel)
     ax.plot(
         ana2plot["time"].values,
         ana2plot.values,
@@ -255,7 +275,7 @@ def _(da_ana, da_base, da_fct, init_time, obs, offset, outfn, plt, sta_idxs, sta
     )
 
     # baseline
-    base2plot = da_base.isel(x=base_x_idx, y=base_y_idx)
+    base2plot = da_base.isel(**base_isel)
     ax.plot(
         base2plot["time"].values,
         base2plot.values,
@@ -264,7 +284,7 @@ def _(da_ana, da_base, da_fct, init_time, obs, offset, outfn, plt, sta_idxs, sta
     )
 
     # forecast
-    fct2plot = da_fct.isel(x=fct_x_idx, y=fct_y_idx)
+    fct2plot = da_fct.isel(**fct_isel)
     ax.plot(
         fct2plot["valid_time"].values,
         fct2plot.values,
