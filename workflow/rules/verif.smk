@@ -27,13 +27,14 @@ rule verif_metrics_baseline:
         analysis_label=config["analysis"].get("label"),
         regions=REGION_TXT,
     output:
-        temp(OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc"),
+        OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
     log:
         OUT_ROOT / "logs/verif_metrics_baseline/{baseline_id}-{init_time}.log",
     resources:
         cpus_per_task=24,
         mem_mb=50_000,
         runtime="60m",
+        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230"
     shell:
         """
         uv run {input.script} \
@@ -63,7 +64,7 @@ rule verif_metrics:
         inference_okfile=rules.execute_inference.output.okfile,
         analysis_zarr=config["analysis"].get("analysis_zarr"),
     output:
-        temp(OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.nc"),
+        OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.nc",
     # wildcard_constraints:
     # run_id="^" # to avoid ambiguitiy with run_baseline_verif
     # TODO: implement logic to use experiment name instead of run_id as wildcard
@@ -81,6 +82,7 @@ rule verif_metrics:
         cpus_per_task=24,
         mem_mb=50_000,
         runtime="60m",
+        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230"
     shell:
         """
         uv run {input.script} \
@@ -117,7 +119,8 @@ rule verif_metrics_aggregation:
     resources:
         cpus_per_task=24,
         mem_mb=250_000,
-        runtime="2h",
+        runtime="24h",
+        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230"
     shell:
         """
         uv run {input.script} {input.verif_nc} --output {output} > {log} 2>&1
