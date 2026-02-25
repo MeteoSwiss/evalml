@@ -4,17 +4,13 @@ from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
 
-import numpy as np
-import xarray as xr
-from scipy.spatial import cKDTree
 
 from verification import verify  # noqa: E402
+from verification.spatial import map_forecast_to_truth  # noqa: E402
 from data_input import (
-    load_baseline_from_zarr,
-    load_analysis_data_from_zarr,
-    load_fct_data_from_grib,
-    load_obs_data_from_peakweather,
     parse_steps,
+    load_forecast_data,
+    load_truth_data,
 )  # noqa: E402
 
 LOG = logging.getLogger(__name__)
@@ -48,111 +44,13 @@ def program_summary_log(args):
     LOG.info("=" * 80)
 
 
-def _map_fcst_to_truth(
-    fcst: xr.Dataset, truth: xr.Dataset
-) -> tuple[xr.Dataset, xr.Dataset]:
-    """Map forecasts to the truth grid or station locations via nearest-neighbor lookup."""
-
-    truth = truth.sel(time=fcst.time)  # swap time dimension to lead_time
-
-    if "y" in fcst.dims and "x" in fcst.dims:
-        fcst = fcst.stack(values=("y", "x"))
-    fcst_lat = fcst["lat"].values.ravel()
-    fcst_lon = fcst["lon"].values.ravel()
-
-    if "y" in truth.dims and "x" in truth.dims:
-        truth = truth.stack(values=("y", "x"))
-    truth_lat = truth["lat"].values.ravel()
-    truth_lon = truth["lon"].values.ravel()
-
-    # TODO: Project to a metric CRS for a proper distance metric
-    fcst_lat_rad = np.deg2rad(fcst_lat)
-    fcst_lon_rad = np.deg2rad(fcst_lon)
-    truth_lat_rad = np.deg2rad(truth_lat)
-    truth_lon_rad = np.deg2rad(truth_lon)
-
-    fcst_xyz = np.c_[
-        np.cos(fcst_lat_rad) * np.cos(fcst_lon_rad),
-        np.cos(fcst_lat_rad) * np.sin(fcst_lon_rad),
-        np.sin(fcst_lat_rad),
-    ]
-    truth_xyz = np.c_[
-        np.cos(truth_lat_rad) * np.cos(truth_lon_rad),
-        np.cos(truth_lat_rad) * np.sin(truth_lon_rad),
-        np.sin(truth_lat_rad),
-    ]
-
-    fcst_tree = cKDTree(fcst_xyz)
-    _, fi = fcst_tree.query(truth_xyz, k=1)
-    fi = np.asarray(fi)
-    fcst = fcst.isel(values=fi)
-    fcst = fcst.drop_vars(["x", "y", "values"], errors="ignore")
-    fcst = fcst.assign_coords(lon=("values", truth.lon.data))
-    fcst = fcst.assign_coords(lat=("values", truth.lat.data))
-    fcst = fcst.assign_coords(values=truth["values"])
-
-    return fcst, truth
-
-
-def _load_forecast(args: ScriptConfig) -> xr.Dataset:
-    """Load forecast data from GRIB files or a baseline Zarr dataset."""
-
-    if any(args.forecast.glob("*.grib")):
-        LOG.info("Loading forecasts from GRIB files...")
-        fcst = load_fct_data_from_grib(
-            root=args.forecast,
-            reftime=args.reftime,
-            steps=args.steps,
-            params=args.params,
-        )
-    else:
-        LOG.info("Loading baseline forecasts from zarr dataset...")
-        fcst = load_baseline_from_zarr(
-            root=args.forecast,
-            reftime=args.reftime,
-            steps=args.steps,
-            params=args.params,
-        )
-
-    return fcst
-
-
-def _load_truth(args: ScriptConfig) -> xr.Dataset:
-    """Load truth data from analysis Zarr or PeakWeather observations."""
-    LOG.info("Loading ground truth from an analysis zarr dataset...")
-    if args.truth.suffix == ".zarr":
-        truth = load_analysis_data_from_zarr(
-            root=args.truth,
-            reftime=args.reftime,
-            steps=args.steps,
-            params=args.params,
-        )
-        truth = truth.compute().chunk(
-            {"y": -1, "x": -1}
-            if "y" in truth.dims and "x" in truth.dims
-            else {"values": -1}
-        )
-    elif "peakweather" in str(args.truth):
-        LOG.info("Loading ground truth from PeakWeather observations...")
-        # TODO: replace with OGD data
-        truth = load_obs_data_from_peakweather(
-            root=args.truth,
-            reftime=args.reftime,
-            steps=args.steps,
-            params=args.params,
-        )
-    else:
-        raise ValueError(f"Unsupported truth root: {args.truth}")
-    return truth
-
-
 def main(args: ScriptConfig):
     """Main function to verify baseline forecast data."""
 
     # get baseline forecast data
     now = datetime.now()
 
-    fcst = _load_forecast(args)
+    fcst = load_forecast_data(args.root, args.reftime, args.steps, args.params)
 
     LOG.info(
         "Loaded forecast data in %s seconds: \n%s",
@@ -162,14 +60,16 @@ def main(args: ScriptConfig):
 
     # get truth data
     now = datetime.now()
-    truth = _load_truth(args)
+    truth = load_truth_data(args.root, args.reftime, args.steps, args.params)
     LOG.info(
         "Loaded truth data in %s seconds: \n%s",
         (datetime.now() - now).total_seconds(),
         truth,
     )
 
-    fcst, truth = _map_fcst_to_truth(fcst, truth)
+    # align forecast and truth data spatially and temporally
+    fcst = map_forecast_to_truth(fcst, truth)
+    truth = truth.sel(time=fcst.time)
 
     # compute metrics and statistics
     results = verify(fcst, truth, args.label, args.truth_label, args.regions)

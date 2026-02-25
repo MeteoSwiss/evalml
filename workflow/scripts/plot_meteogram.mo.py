@@ -7,44 +7,44 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     from argparse import ArgumentParser
+    from datetime import datetime
     from pathlib import Path
 
     import matplotlib.pyplot as plt
     import numpy as np
-    import xarray as xr
-    from meteodatalab import data_source, grib_decoder
     from peakweather import PeakWeatherDataset
 
     from data_input import (
-        load_analysis_data_from_zarr,
-        load_baseline_from_zarr,
         parse_steps,
+        load_forecast_data,
+        load_truth_data,
     )
 
     return (
         ArgumentParser,
         Path,
         PeakWeatherDataset,
-        data_source,
-        grib_decoder,
-        load_analysis_data_from_zarr,
-        load_baseline_from_zarr,
+        datetime,
+        load_forecast_data,
+        load_truth_data,
         np,
         parse_steps,
         plt,
-        xr,
     )
 
 
 @app.cell
-def _(ArgumentParser, Path, parse_steps):
+def _(ArgumentParser, Path, datetime, parse_steps):
     parser = ArgumentParser()
 
     parser.add_argument(
         "--forecast", type=str, default=None, help="Directory to forecast grib data"
     )
     parser.add_argument(
-        "--analysis", type=str, default=None, help="Path to analysis zarr data"
+        "--steps",
+        type=parse_steps,
+        default="0/120/6",
+        help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
     )
     parser.add_argument(
         "--baseline", type=str, default=None, help="Path to baseline zarr data"
@@ -56,6 +56,9 @@ def _(ArgumentParser, Path, parse_steps):
         help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
     )
     parser.add_argument(
+        "--analysis", type=str, default=None, help="Path to analysis zarr data"
+    )
+    parser.add_argument(
         "--peakweather", type=str, default=None, help="Path to PeakWeather dataset"
     )
     parser.add_argument("--date", type=str, default=None, help="reference datetime")
@@ -65,16 +68,18 @@ def _(ArgumentParser, Path, parse_steps):
 
     args = parser.parse_args()
     grib_dir = Path(args.forecast)
+    forecast_steps = args.steps
     zarr_dir_ana = Path(args.analysis)
     zarr_dir_base = Path(args.baseline)
     baseline_steps = args.baseline_steps
     peakweather_dir = Path(args.peakweather)
-    init_time = args.date
+    init_time = datetime.strptime(args.date, "%Y%m%d%H%M")
     outfn = Path(args.outfn)
     station = args.station
     param = args.param
     return (
         baseline_steps,
+        forecast_steps,
         grib_dir,
         init_time,
         outfn,
@@ -121,15 +126,14 @@ def _(np):
 @app.cell
 def load_grib_data(
     baseline_steps,
-    data_source,
-    grib_decoder,
+    forecast_steps,
     grib_dir,
     init_time,
-    load_analysis_data_from_zarr,
-    load_baseline_from_zarr,
+    load_forecast_data,
+    load_truth_data,
     param,
+    peakweather_dir,
     preprocess_ds,
-    xr,
     zarr_dir_ana,
     zarr_dir_base,
 ):
@@ -140,57 +144,28 @@ def load_grib_data(
     else:
         paramlist = [param]
 
-    grib_files = sorted(grib_dir.glob(f"{init_time}*.grib"))
-    fds = data_source.FileDataSource(datafiles=grib_files)
-    ds_fct = xr.Dataset(grib_decoder.load(fds, {"param": paramlist}))
+    ds_fct = load_forecast_data(grib_dir, init_time, forecast_steps, paramlist)
     ds_fct = preprocess_ds(ds_fct, param)
     da_fct = ds_fct[param].squeeze()
 
-    reftime = da_fct.ref_time.values
-    steps = da_fct.lead_time.dt.total_seconds() / 3600
-    ds_ana = load_analysis_data_from_zarr(zarr_dir_ana, reftime, steps, paramlist)
+    steps = da_fct.lead_time.dt.total_seconds().values / 3600
+    ds_ana = load_truth_data(zarr_dir_ana, init_time, steps, paramlist)
     ds_ana = preprocess_ds(ds_ana, param)
     da_ana = ds_ana[param].squeeze()
 
-    ds_base = load_baseline_from_zarr(
-        zarr_dir_base, da_fct.ref_time, baseline_steps, paramlist
-    )
+    ds_base = load_forecast_data(zarr_dir_base, init_time, baseline_steps, paramlist)
     ds_base = preprocess_ds(ds_base, param)
     da_base = ds_base[param].squeeze()
-    return da_ana, da_base, da_fct
+
+    ds_obs = load_truth_data(peakweather_dir, init_time, steps, paramlist)
+    ds_obs = preprocess_ds(ds_obs, param)
+    da_obs = ds_obs[param].squeeze()
+    return da_ana, da_base, da_fct, da_obs
 
 
 @app.cell
-def _(PeakWeatherDataset, da_fct, np, param, peakweather_dir, station):
-    if param == "T_2M":
-        parameter = "temperature"
-        offset = 273.15  # K to C
-    elif param == "SP_10M":
-        parameter = "wind_speed"
-        offset = 0
-    elif param == "TOT_PREC":
-        parameter = "precipitation"
-        offset = 0
-    else:
-        raise NotImplementedError(
-            f"The mapping for {param=} to PeakWeather is not implemented"
-        )
-
+def _(PeakWeatherDataset, peakweather_dir):
     peakweather = PeakWeatherDataset(root=peakweather_dir, freq="1h")
-    obs, mask = peakweather.get_observations(
-        parameters=[parameter],
-        stations=station,
-        first_date=np.datetime_as_string(da_fct.valid_time.values[0]),
-        last_date=np.datetime_as_string(da_fct.valid_time.values[-1]),
-        return_mask=True,
-    )
-    obs = obs.loc[:, mask.iloc[0]].droplevel("name", axis=1)
-    obs
-    return obs, offset, peakweather
-
-
-@app.cell
-def _(peakweather):
     stations = peakweather.stations_table
     stations.index.names = ["station"]
     stations
@@ -237,9 +212,8 @@ def _(
     da_ana,
     da_base,
     da_fct,
+    da_obs,
     init_time,
-    obs,
-    offset,
     outfn,
     plt,
     sta_idxs,
@@ -254,9 +228,10 @@ def _(
     fig, ax = plt.subplots()
 
     # station
+    obs2plot = da_obs.sel(values=station)
     ax.plot(
-        obs.index.to_pydatetime(),
-        obs.to_numpy() + offset,
+        obs2plot["time"].values,
+        obs2plot.values,
         color="k",
         ls="--",
         label=station,
@@ -284,7 +259,7 @@ def _(
     # forecast
     fct2plot = da_fct.isel(**fct_isel)
     ax.plot(
-        fct2plot["valid_time"].values,
+        fct2plot["time"].values,
         fct2plot.values,
         color="C0",
         label="forecast",

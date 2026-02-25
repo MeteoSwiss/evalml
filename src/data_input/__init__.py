@@ -107,7 +107,7 @@ def load_fct_data_from_grib(
     root: Path, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
     """Load forecast data from GRIB files for a specific valid time."""
-    files = sorted(root.glob("20*.grib"))
+    files = sorted(root.glob(f"{reftime:%Y%m%d%H%M}*.grib"))
     fds = data_source.FileDataSource(datafiles=files)
     ds = grib_decoder.load(fds, {"param": params, "step": steps})
     for var, da in ds.items():
@@ -227,3 +227,58 @@ def load_obs_data_from_peakweather(
 
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
     return _select_valid_times(ds, times)
+
+
+def load_truth_data(
+    root, reftime: datetime, steps: list[int], params: list[str]
+) -> xr.Dataset:
+    """Load truth data from analysis Zarr or PeakWeather observations."""
+    if root.suffix == ".zarr":
+        LOG.info("Loading ground truth from an analysis zarr dataset...")
+        truth = load_analysis_data_from_zarr(
+            root=root,
+            reftime=reftime,
+            steps=steps,
+            params=params,
+        )
+        truth = truth.compute().chunk(
+            {"y": -1, "x": -1}
+            if "y" in truth.dims and "x" in truth.dims
+            else {"values": -1}
+        )
+    elif "peakweather" in str(root):
+        LOG.info("Loading ground truth from PeakWeather observations...")
+        truth = load_obs_data_from_peakweather(
+            root=root,
+            reftime=reftime,
+            steps=steps,
+            params=params,
+        )
+    else:
+        raise ValueError(f"Unsupported truth root: {root}")
+    return truth
+
+
+def load_forecast_data(
+    root, reftime: datetime, steps: list[int], params: list[str]
+) -> xr.Dataset:
+    """Load forecast data from GRIB files or a baseline Zarr dataset."""
+
+    if any(root.glob("*.grib")):
+        LOG.info("Loading forecasts from GRIB files...")
+        fcst = load_fct_data_from_grib(
+            root=root,
+            reftime=reftime,
+            steps=steps,
+            params=params,
+        )
+    else:
+        LOG.info("Loading baseline forecasts from zarr dataset...")
+        fcst = load_baseline_from_zarr(
+            root=root,
+            reftime=reftime,
+            steps=steps,
+            params=params,
+        )
+
+    return fcst

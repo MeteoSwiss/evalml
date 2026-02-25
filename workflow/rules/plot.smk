@@ -40,20 +40,23 @@ rule plot_meteogram:
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
+        fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         baseline_steps=lambda wc: _use_first_baseline_zarr(wc)[1],
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         python {input.script} \
-            --forecast {params.grib_out_dir}  --analysis {input.truth} \
+            --forecast {params.grib_out_dir} --steps {params.fcst_steps} \
             --baseline {input.baseline_zarr} --baseline_steps {params.baseline_steps} \
+            --analysis {input.truth} \
             --peakweather {input.peakweather_dir} \
             --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param}  --station {wildcards.sta}
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
-        #     --forecast {params.grib_out_dir} --analysis {input.truth} \
+        #     --forecast {params.grib_out_dir} --steps {params.fcst_steps} \
         #     --baseline {input.baseline_zarr} --baseline_steps {params.baseline_steps} \
+        #     --analysis {input.truth} \
         #     --peakweather {input.peakweather_dir} \
         #     --date {wildcards.init_time} --outfn {output[0]} \
         #     --param {wildcards.param}  --station {wildcards.sta}
