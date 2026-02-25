@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.16.5"
+__generated_with = "0.19.6"
 app = marimo.App(width="medium")
 
 
@@ -29,8 +29,8 @@ def _():
         grib_decoder,
         load_analysis_data_from_zarr,
         load_baseline_from_zarr,
-        parse_steps,
         np,
+        parse_steps,
         plt,
         xr,
     )
@@ -74,6 +74,7 @@ def _(ArgumentParser, Path, parse_steps):
     station = args.station
     param = args.param
     return (
+        baseline_steps,
         grib_dir,
         init_time,
         outfn,
@@ -82,7 +83,6 @@ def _(ArgumentParser, Path, parse_steps):
         station,
         zarr_dir_ana,
         zarr_dir_base,
-        baseline_steps,
     )
 
 
@@ -120,8 +120,8 @@ def _(np):
 
 @app.cell
 def load_grib_data(
-    data_source,
     baseline_steps,
+    data_source,
     grib_decoder,
     grib_dir,
     init_time,
@@ -147,9 +147,7 @@ def load_grib_data(
     da_fct = ds_fct[param].squeeze()
 
     reftime = da_fct.ref_time.values
-    steps = list(
-        range(da_fct.sizes["lead_time"])
-    )  # FIX: this will fail if lead_time is not 0,1,2,...
+    steps = da_fct.lead_time.dt.total_seconds() / 3600
     ds_ana = load_analysis_data_from_zarr(zarr_dir_ana, reftime, steps, paramlist)
     ds_ana = preprocess_ds(ds_ana, param)
     da_ana = ds_ana[param].squeeze()
@@ -303,11 +301,6 @@ def _(
     ax.set_title(f"{init_time} {name} at {station}")
 
     plt.savefig(outfn)
-    return
-
-
-@app.cell
-def _():
     return
 
 

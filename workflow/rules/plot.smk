@@ -28,7 +28,6 @@ rule plot_meteogram:
         truth=config["truth"]["root"],
         baseline_zarr=lambda wc: _use_first_baseline_zarr(wc)[0],
         peakweather_dir=rules.download_obs_from_peakweather.output.root,
-
     output:
         OUT_ROOT
         / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{sta}.png",
