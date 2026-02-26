@@ -82,6 +82,7 @@ rule plot_summary_stat_maps:
         slurm_partition="postproc",
         cpus_per_task=1,
         runtime="10m",
+        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230"
     params:
         nc_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/verif_aggregated.nc"
