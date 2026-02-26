@@ -134,7 +134,7 @@ rule experiment_all:
             param=["SP_10M"],
             region=["centraleurope", "switzerland"], 
             season=["all", "DJF", "MAM", "JJA", "SON"], 
-            experiment=EXPERIMENT_HASH
+            experiment=EXPERIMENT_NAME
         ), 
         expand(
             OUT_ROOT / "results/{experiment}/metrics/spatial/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
@@ -144,7 +144,7 @@ rule experiment_all:
             param=["SP_10M"],
             region=["centraleurope", "switzerland"], 
             season=["all", "DJF", "MAM", "JJA", "SON"], 
-            experiment=EXPERIMENT_HASH
+            experiment=EXPERIMENT_NAME
         )
 
 
