@@ -7,7 +7,43 @@ from pathlib import Path
 from datetime import datetime
 
 
-rule create_inference_pyproject:
+rule prepare_checkpoint:
+    localrule: True
+    output:
+        checkpoint=OUT_ROOT / "data/runs/{run_id}/inference-last.ckpt",
+        metadata=OUT_ROOT / "data/runs/{run_id}/anemoi.json",
+    params:
+        checkpoint=lambda wc: RUN_CONFIGS[wc.run_id]["checkpoint"],
+        checkpoint_type=lambda wc: _checkpoint_uri_type(
+            RUN_CONFIGS[wc.run_id]["checkpoint"]
+        ),
+    log:
+        OUT_ROOT / "logs/prepare_checkpoint/{run_id}.log",
+    shell:
+        r"""(
+        mkdir -p $(dirname {output.checkpoint})
+        if [ "{params.checkpoint_type}" = "mlflow" ]; then
+            ln -s $(python workflow/scripts/inference_get_checkpoint_mlflow.py {params.checkpoint}) {output.checkpoint}
+            echo "Located checkpoint from MLFlow log."
+            echo "Created symlink: {output.checkpoint} -> $(readlink {output.checkpoint})"
+        elif [ "{params.checkpoint_type}" = "huggingface" ]; then
+            repo_id=$(python -c "import re; print(re.search(r'huggingface\.co/([^/]+/[^/]+)', '{params.checkpoint}').group(1))")
+            file_path=$(python -c "import re; print(re.search(r'huggingface\.co/[^/]+/[^/]+/blob/[^/]+/(.*)', '{params.checkpoint}').group(1))")
+            cp $(uvx hf download $repo_id $file_path) {output.checkpoint}
+            echo "Copied checkpoint from HuggingFace: {output.checkpoint}"
+        elif [ "{params.checkpoint_type}" = "local" ]; then
+            ln -s {params.checkpoint} {output.checkpoint}
+            echo "Created symlink: {output.checkpoint} -> $(readlink {output.checkpoint})"
+        else
+            echo "Unknown checkpoint type: {params.checkpoint_type}"
+        fi
+        anemoi-utils metadata --dump --json {output.checkpoint} > {output.metadata}
+        echo "Extracted metadata from checkpoint: {output.metadata}"
+        ) > {log} 2>&1
+        """
+
+
+rule extract_checkpoint_requirements:
     """
     Generate a pyproject.toml that contains the information needed
     to set up a virtual environment for inference of a specific checkpoint.
@@ -15,20 +51,26 @@ rule create_inference_pyproject:
     and additional dependencies can be specified under a run entry in the main
     config file.
     """
-    input:
-        toml="workflow/envs/anemoi_inference.toml",
-    output:
-        pyproject=OUT_ROOT / "data/runs/{run_id}/pyproject.toml",
-    params:
-        extra_dependencies=lambda wc: RUN_CONFIGS[wc.run_id].get(
-            "extra_dependencies", []
-        ),
-        mlflow_id=lambda wc: RUN_CONFIGS[wc.run_id].get("mlflow_id"),
-    log:
-        OUT_ROOT / "logs/create_inference_pyproject/{run_id}.log",
     localrule: True
-    script:
-        "../scripts/set_inference_pyproject.py"
+    input:
+        metadata=OUT_ROOT / "data/runs/{run_id}/anemoi.json",
+    output:
+        requirements=OUT_ROOT / "data/runs/{run_id}/requirements.txt",
+    params:
+        extra_requirements=lambda wc: ",".join(
+            RUN_CONFIGS[wc.run_id].get("extra_requirements", [])
+        ),
+    log:
+        OUT_ROOT / "logs/extract_checkpoint_requirements/{run_id}.log",
+    shell:
+        """(
+        echo "[$(date)] Starting requirement extraction..."
+        python workflow/scripts/inference_get_requirements.py {input.metadata} \
+            --overrides "{params.extra_requirements}" > {output.requirements}
+        echo "[$(date)] Extracted requirements from metadata: {output.requirements}"
+        echo $(cat {output.requirements})
+        ) > {log} 2>&1
+        """
 
 
 rule create_inference_venv:
@@ -37,34 +79,34 @@ rule create_inference_venv:
     The virtual environment is managed with uv. The created virtual environment is relocatable,
     so it can be squashed later. Pre-compilation to bytecode is done to speed up imports.
     """
+    localrule: True
     input:
-        pyproject=rules.create_inference_pyproject.output.pyproject,
+        metadata=OUT_ROOT / "data/runs/{run_id}/anemoi.json",
+        requirements=OUT_ROOT / "data/runs/{run_id}/requirements.txt",
     output:
         venv=temp(directory(OUT_ROOT / "data/runs/{run_id}/.venv")),
-        lockfile=OUT_ROOT / "data/runs/{run_id}/uv.lock",
-    params:
-        py_version=parse_input(
-            input.pyproject, parse_toml, key="project.requires-python"
-        ),
-    localrule: True
     log:
         OUT_ROOT / "logs/create_inference_venv/{run_id}.log",
     shell:
         """(
-        PROJECT_ROOT=$(dirname {input.pyproject})
-        uv venv --project $PROJECT_ROOT --managed-python \
-            --relocatable --link-mode=copy {output.venv}
+
+        PYTHON_VERSION=$(cat {input.metadata} | jq -r ".provenance_training.python")
+        echo "[$(date)] Creating virtual environment with Python $PYTHON_VERSION..."
+        uv venv --managed-python --python $PYTHON_VERSION --relocatable --link-mode=copy {output.venv}
         source {output.venv}/bin/activate
-        cd $(dirname {input.pyproject})
-        uv sync
+
+        echo "[$(date)] Installing requirements from {input.requirements}..."
+        uv pip install -r {input.requirements}
+
+        echo "[$(date)] Compiling Python bytecode..."
         python -m compileall -j 8 -o 0 -o 1 -o 2 .venv/lib/python*/site-packages
-        echo 'Testing that eccodes is working...'
+        echo "[$(date)] Testing that eccodes is working..."
         if ! python -c "import eccodes" &>/dev/null; then
-            echo 'ERROR: eccodes is not installed correctly in the virtual environment.'
-            echo 'Please check the installation and try again.'
+            echo "[$(date)] ERROR: eccodes is not installed correctly in the virtual environment."
+            echo "[$(date)] Please check the installation and try again."
             exit 1
         fi
-        echo 'Inference virutal environment successfully created at {output.venv}'
+        echo "[$(date)] Inference virtual environment successfully created at {output.venv}"
         ) > {log} 2>&1
         """
 
@@ -75,13 +117,13 @@ rule make_squashfs_image:
     a specific checkpoint. Find more about this at
     https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
     """
+    localrule: True
     input:
         venv=rules.create_inference_venv.output.venv,
     output:
         image=OUT_ROOT / "data/runs/{run_id}/venv.squashfs",
     log:
         OUT_ROOT / "logs/make_squashfs_image/{run_id}.log",
-    localrule: True
     shell:
         # we can safely ignore the many warnings "Unrecognised xattr prefix..."
         "mksquashfs $(realpath {input.venv}) {output.image}"
@@ -104,9 +146,8 @@ rule create_inference_sandbox:
     """
     input:
         script="workflow/scripts/inference_create_sandbox.py",
-        image=rules.make_squashfs_image.output.image,
-        pyproject=rules.create_inference_pyproject.output.pyproject,
-        lockfile=rules.create_inference_venv.output.lockfile,
+        checkpoint=OUT_ROOT / "data/runs/{run_id}/inference-last.ckpt",
+        requirements=OUT_ROOT / "data/runs/{run_id}/requirements.txt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
         readme_template="resources/inference/sandbox/readme.md.jinja2",
     output:
@@ -116,9 +157,9 @@ rule create_inference_sandbox:
     localrule: True
     shell:
         """
-        uv run {input.script} \
-            --pyproject {input.pyproject} \
-            --lockfile {input.lockfile} \
+        python {input.script} \
+            --checkpoint {input.checkpoint} \
+            --requirements {input.requirements} \
             --readme-template {input.readme_template} \
             --output {output.sandbox} \
             > {log} 2>&1
@@ -145,7 +186,7 @@ def get_leadtime(wc):
 rule prepare_inference_forecaster:
     localrule: True
     input:
-        pyproject=rules.create_inference_pyproject.output.pyproject,
+        checkpoint=OUT_ROOT / "data/runs/{run_id}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
     output:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
@@ -155,9 +196,6 @@ rule prepare_inference_forecaster:
             OUT_ROOT / "logs/prepare_inference_forecaster/{run_id}-{init_time}.ok"
         ),
     params:
-        checkpoints_path=parse_input(
-            input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
-        ),
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
@@ -179,7 +217,7 @@ rule prepare_inference_interpolator:
     """Run the interpolator for a specific run ID."""
     localrule: True
     input:
-        pyproject=rules.create_inference_pyproject.output.pyproject,
+        checkpoint=OUT_ROOT / "data/runs/{run_id}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
         forecasts=lambda wc: (
             [
@@ -198,9 +236,6 @@ rule prepare_inference_interpolator:
             OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.ok"
         ),
     params:
-        checkpoints_path=parse_input(
-            input.pyproject, parse_toml, key="tool.anemoi.checkpoints_path"
-        ),
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
@@ -216,6 +251,22 @@ rule prepare_inference_interpolator:
         OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.log",
     script:
         "../scripts/inference_prepare.py"
+
+
+def _inference_routing_fn(wc):
+
+    run_config = RUN_CONFIGS[wc.run_id]
+
+    if run_config["model_type"] == "forecaster":
+        input_path = f"logs/prepare_inference_forecaster/{wc.run_id}-{wc.init_time}.ok"
+    elif run_config["model_type"] == "interpolator":
+        input_path = (
+            f"logs/prepare_inference_interpolator/{wc.run_id}-{wc.init_time}.ok"
+        )
+    else:
+        raise ValueError(f"Unsupported model type: {run_config['model_type']}")
+
+    return OUT_ROOT / input_path
 
 
 rule execute_inference:

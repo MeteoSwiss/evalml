@@ -9,16 +9,38 @@ dates:
 
 runs:
   - forecaster:
-      mlflow_id: b30acf68520a4bbd8324c44666561696
+      checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/409/runs/b30acf68520a4bbd8324c44666561696
       label: stage_C_icon_1km
       steps: 0/120/6
       config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
-      disable_local_eccodes_definitions: true
-      extra_dependencies:
+      extra_requirements:
+        - earthkit-utils<0.2.0
+        - earthkit-data<0.19.0
         - git+https://github.com/ecmwf/anemoi-inference.git@main
 
+  - forecaster:
+      checkpoint: /scratch/mch/apennino/output/checkpoint/973b78b8b39543949abc2b154c5f98d9/inference-last.ckpt
+      label: stage_C_icon_1km_hidden_11
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      extra_requirements:
+        - earthkit-utils<0.2.0
+        - earthkit-data<0.19.0
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+
+  # - forecaster:
+  #     checkpoint: https://huggingface.co/met-no/bris_cloudy-skies/blob/main/2025-10/cloudy-skies-2025-10.ckpt
+  #     label: bris-cloudy-skies
+  #     steps: 0/120/6
+  #     config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+  #     disable_local_eccodes_definitions: true
+  #     extra_requirements:
+        # - earthkit-utils<0.2.0
+        # - earthkit-data<0.19.0
+        # - git+https://github.com/ecmwf/anemoi-inference.git@main
+
 baselines:
-- baseline:
+  - baseline:
       baseline_id: ICON-CH1-EPS
       label: ICON-CH1-EPS
       root: /store_new/mch/msopr/ml/ICON-CH1-EPS
@@ -40,9 +62,6 @@ stratification:
 
 locations:
   output_root: output/
-  mlflow_uri:
-    - https://servicedepl.meteoswiss.ch/mlstore
-    - https://mlflow.ecmwf.int
 
 profile:
   executor: slurm
@@ -55,3 +74,5 @@ profile:
     runtime: "1h"
     gpus: 0
   jobs: 50
+  batch_rules:
+    plot_forecast_frame: 32

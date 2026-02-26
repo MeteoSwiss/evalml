@@ -18,6 +18,7 @@ output:
         path: grib/{date}{time:04}_{step:03}.grib
         encoding:
           typeOfGeneratingProcess: 2
+          centre: lssw
         templates:
           samples: resources/templates_index_icon.yaml
         post_processors:
@@ -28,6 +29,7 @@ output:
         path: grib/ifs-{date}{time:04}_{step:03}.grib
         encoding:
           typeOfGeneratingProcess: 2
+          centre: ecmf
         templates:
           samples: resources/templates_index_ifs.yaml
         post_processors:
@@ -38,4 +40,4 @@ output:
         - assign_mask: # fill local/global overlapping points with nan
             mask: "global/cutout_mask"
 
-patch_metadata: resources/sgm-ich1-patch_metadata.yaml
+patch_metadata: resources/sgm-ich1-oper-patch_metadata.yaml

@@ -13,7 +13,7 @@ dependencies = [
     "snakemake-executor-plugin-slurm",
     "click",
     "meteodata-lab>=0.4.0",
-    "anemoi-datasets>=0.5.25",
+    "anemoi-datasets>=0.5.31",
     "mlflow>=3.1.1",
     "pydantic>=2.11.7",
     "toml>=0.10.2",
@@ -22,8 +22,9 @@ dependencies = [
     "cartopy>=0.25.0",
     "pyproj>=3.7.2",
     "earthkit-plots",
-    "marimo>=0.16.5",
+    "marimo>=0.19.0",
     "geopandas>=0.14.0",
+    "peakweather",
 ]
 
 [project.optional-dependencies]
@@ -58,3 +59,6 @@ packages = [
   "src/verification",
   "src/data_input"
 ]
+
+[tool.uv.sources]
+peakweather = { git = "https://github.com/MeteoSwiss/PeakWeather.git" }

@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List, Any
 
-from pydantic import BaseModel, Field, RootModel, HttpUrl, field_validator
+from pydantic import BaseModel, Field, RootModel, field_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -60,10 +60,8 @@ class InferenceResources(BaseModel):
 
 
 class RunConfig(BaseModel):
-    mlflow_id: str = Field(
+    checkpoint: str = Field(
         ...,
-        min_length=32,
-        max_length=32,
         description="The mlflow run ID, as a 32-character hexadecimal string.",
     )
     label: str | None = Field(
@@ -80,10 +78,10 @@ class RunConfig(BaseModel):
             "or '0/33/6' up to 30 h."
         ),
     )
-    extra_dependencies: List[str] = Field(
+    extra_requirements: List[str] = Field(
         default_factory=list,
         description="List of extra dependencies to install for this model. "
-        "These will be added to the pyproject.toml file in the run directory.",
+        "These will be added to the requirements.txt file in the run directory.",
     )
     inference_resources: InferenceResources | None = Field(
         None,
@@ -96,6 +94,8 @@ class RunConfig(BaseModel):
     )
 
     config: Dict[str, Any] | str
+
+    model_config = {"extra": "forbid"}
 
     @field_validator("steps")
     def validate_steps(cls, v: str) -> str:
@@ -204,10 +204,6 @@ class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
 
     output_root: Path = Field(..., description="Root directory for all output files.")
-    mlflow_uri: List[HttpUrl] = Field(
-        ...,
-        description="MLflow tracking URI(s) for the experiment. Can be a list of URIs if using multiple tracking servers.",
-    )
 
 
 class Stratification(BaseModel):
@@ -297,7 +293,7 @@ class ConfigModel(BaseModel):
         ...,
         description="Description of the experiment, e.g. 'Hindcast of the 2023 season.'",
     )
-    experiment_label: str | None = Field(
+    config_label: str | None = Field(
         None,
         description="Optional label for the experiment that will be used in the experiment directory name. Defaults to the config file name if not provided.",
     )

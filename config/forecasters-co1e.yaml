@@ -4,21 +4,21 @@ description: |
   (KENDA-1) at 1km resolution.
 
 dates:
-  start: 2024-01-01T12:00
-  end: 2024-01-10T00:00
+  start: 2020-01-01T12:00
+  end: 2020-01-10T00:00
   frequency: 54h
 
 runs:
   - forecaster:
-      mlflow_id: 2174c939c8844555a52843b71219d425
+      checkpoint: https://mlflow.ecmwf.int/#/experiments/367/runs/2174c939c8844555a52843b71219d425
       label: Cosmo 1km + era5 N320, finetuned on cerra checkpoint, lam resolution 11
       config: resources/inference/configs/sgm-forecaster-regional_fromtraining.yaml
       steps: 0/120/6
       inference_resources:
         gpu: 4
         tasks: 4
-      extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference.git@main
+      extra_requirements:
+        - git+https://github.com/ecmwf/anemoi-inference.git@0.6.3
 
 baselines:
   - baseline:
@@ -43,9 +43,6 @@ stratification:
 
 locations:
   output_root: output/
-  mlflow_uri:
-    - https://servicedepl.meteoswiss.ch/mlstore
-    - https://mlflow.ecmwf.int
 
 profile:
   executor: slurm
@@ -58,3 +55,5 @@ profile:
     runtime: "1h"
     gpus: 0
   jobs: 50
+  batch_rules:
+    plot_forecast_frame: 32

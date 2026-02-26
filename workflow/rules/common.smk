@@ -4,48 +4,22 @@ from datetime import datetime, timedelta
 import yaml
 import hashlib
 import json
+from urllib.parse import urlparse
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
 
-
-def short_hash_config():
-    """Generate a short hash of the configuration file."""
-    configs_to_hash = []
-    for run_id, run_config in RUN_CONFIGS.items():
-        with open(run_config["config"], "r") as f:
-            configs_to_hash.append(yaml.safe_load(f))
-        if "forecaster" in run_config and run_config["forecaster"] is not None:
-            with open(run_config["forecaster"]["config"], "r") as f:
-                configs_to_hash.append(yaml.safe_load(f))
-    cfg_str = json.dumps([config, *configs_to_hash], sort_keys=True)
-    return hashlib.sha256(cfg_str.encode()).hexdigest()[:8]
+DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
+HASH_LENGTH = 4
 
 
-def short_hash_runconfig(run_config):
-    """Generate a short hash of the run block in the config file."""
-    # 'label' has no functional impact on the results of a model run, so we exclude it
-    if "label" in run_config:
-        run_config = copy.deepcopy(run_config)
-        run_config.pop("label")
-    cfg_str = json.dumps(run_config, sort_keys=True)
-    return hashlib.sha256(cfg_str.encode()).hexdigest()[:8]
+# ============================================================================
+# Utility Functions
+# ============================================================================
 
 
-def parse_toml(toml_file, key):
-    """Parse a key (e.g. 'project.requires-python') from a TOML file handle."""
-    import toml
-
-    content = toml.load(toml_file)
-    # support dotted keys
-    for part in key.split("."):
-        content = content.get(part, {})
-    if isinstance(content, str):
-        return content.lstrip(">=< ").strip()
-    raise ValueError(f"Expected a string for key '{key}', got: {content}")
-
-
-def _parse_timedelta(td):
+def parse_timedelta(td):
+    """Parse a string representing a time delta (e.g., '1d', '2h') into a timedelta object."""
     if not isinstance(td, str):
         raise ValueError("Expected a string in the format 'Xd' or 'Xh'")
     magnitude, unit = int(td[:-1]), td[-1]
@@ -60,13 +34,27 @@ def _parse_timedelta(td):
             )
 
 
-def _reftimes():
+def generate_json_hash(obj: object) -> str:
+    """Generate a short hash of a JSON-serializable object."""
+    json_str = json.dumps(
+        obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    return hashlib.sha256(json_str.encode()).hexdigest()[:HASH_LENGTH]
+
+
+# ============================================================================
+# Configuration Parsing
+# ============================================================================
+
+
+def parse_reference_times():
+    """Parse reference times from the configuration."""
     cfg = config["dates"]
     if isinstance(cfg, list):
-        return [datetime.strptime(t, "%Y-%m-%dT%H:%M") for t in cfg]
-    start = datetime.strptime(cfg["start"], "%Y-%m-%dT%H:%M")
-    end = datetime.strptime(cfg["end"], "%Y-%m-%dT%H:%M")
-    freq = _parse_timedelta(cfg["frequency"])
+        return [datetime.strptime(t, DATETIME_FORMAT) for t in cfg]
+    start = datetime.strptime(cfg["start"], DATETIME_FORMAT)
+    end = datetime.strptime(cfg["end"], DATETIME_FORMAT)
+    freq = parse_timedelta(cfg["frequency"])
     times = []
     t = start
     while t <= end:
@@ -75,41 +63,86 @@ def _reftimes():
     return times
 
 
-REFTIMES = _reftimes()
+def parse_regions():
+    """Parse regions from the configuration."""
+    cfg = config["stratification"]
+    regions = [f"{cfg['root']}/{region}.shp" for region in cfg["regions"]]
+    regions_txt = ",".join(regions)
+    return regions_txt
 
 
-def collect_all_runs():
+# ============================================================================
+# Run entries configuration management
+# ============================================================================
+
+
+def _checkpoint_uri_type(checkpoint_uri: str):
+    parsed_url = urlparse(checkpoint_uri)
+    if parsed_url.netloc in [
+        "mlflow.ecmwf.int",
+        "service.meteoswiss.ch",
+        "servicedepl.meteoswiss.ch",
+    ]:
+        return "mlflow"
+    elif parsed_url.netloc == "huggingface.co":
+        if not parsed_url.path.endswith(".ckpt"):
+            raise ValueError(
+                f"Expected a .ckpt file for HuggingFace checkpoint URI. Got: {checkpoint_uri}"
+            )
+        return "huggingface"
+    elif parsed_url.netloc == "":
+        if Path(checkpoint_uri).exists():
+            return "local"
+        else:
+            raise ValueError(f"Local checkpoint path does not exist: {checkpoint_uri}")
+    else:
+        raise ValueError(f"Unknown checkpoint URI type: {checkpoint_uri}")
+
+
+def model_id(checkpoint_uri: str) -> str:
+    """Generate a model ID based on the checkpoint URI."""
+    ckpt_type = _checkpoint_uri_type(checkpoint_uri)
+    if ckpt_type == "mlflow":
+        return checkpoint_uri.split("/")[-1][:HASH_LENGTH]
+    elif ckpt_type == "huggingface":
+        return checkpoint_uri.split("/")[-1].split(".")[0]
+    elif ckpt_type == "local":
+        return checkpoint_uri.split("/")[-2][:HASH_LENGTH]
+
+
+def register_run(model_type, run_config, as_candidate=True):
+    """Parse a run configuration and assign a unique run ID."""
+    run_cfg = copy.deepcopy(run_config)
+    mlflow_id_short = model_id(run_cfg["checkpoint"])
+    run_id_prefix = f"{model_type}-{mlflow_id_short}"
+    run_id_hash = run_entry_hash(run_cfg)
+    run_cfg["_is_candidate"] = as_candidate
+    run_cfg["model_type"] = model_type
+    run_id = f"{run_id_prefix}-{run_id_hash}"
+    out = {}
+    if model_type == "interpolator":
+        forecaster = run_cfg["forecaster"]
+        if forecaster is None:
+            dependency = "analysis"
+        else:
+            dependency_entry = register_run(
+                "forecaster", forecaster, as_candidate=False
+            )
+            dependency = next(iter(dependency_entry))
+            out |= dependency_entry
+            run_cfg["forecaster"]["run_id"] = dependency
+        run_id += f"-on-{dependency}"
+    out[run_id] = run_cfg
+    return out
+
+
+def collect_all_runs() -> dict:
     """Collect all runs defined in the configuration, including secondary runs."""
-    runs = {}
-    for run_entry in copy.deepcopy(config["runs"]):
+    runs: dict[str, dict] = {}
+    for run_entry in config["runs"]:
         model_type = next(iter(run_entry))
         run_config = run_entry[model_type]
-        run_config["model_type"] = model_type
-        run_id = run_config["mlflow_id"][0:4]
-
-        if model_type == "interpolator":
-            if "forecaster" not in run_config or run_config["forecaster"] is None:
-                fcst_id = "ana"
-            else:
-                fcst_id = run_config["forecaster"]["mlflow_id"][0:4]
-                # Ensure a proper 'forecaster' entry exists with model_type
-                fore_cfg = copy.deepcopy(run_config["forecaster"])
-                fore_cfg["model_type"] = "forecaster"
-                # make sure we don't hash the is_candidate status
-                fore_id = short_hash_runconfig(fore_cfg)
-                fore_cfg["is_candidate"] = False  # exclude from outputs
-                runs[f"{fcst_id}-{fore_id}"] = fore_cfg
-                # add run_id of forecaster to interpolator config
-                run_config["forecaster"]["run_id"] = f"{fcst_id}-{fore_id}"
-            run_id = f"{run_id}-{fcst_id}"
-
-        # add the hash of the config to the run id
-        run_id = f"{run_id}-{short_hash_runconfig(run_config)}"
-
-        # make sure we don't hash the is_candidate status
-        run_config["is_candidate"] = True
-        # Register this (possibly composite) run inside the loop
-        runs[run_id] = run_config
+        runs |= register_run(model_type, run_config)
     return runs
 
 
@@ -118,7 +151,7 @@ def collect_all_candidates():
     runs = collect_all_runs()
     candidates = {}
     for run_id, run_config in runs.items():
-        if run_config.get("is_candidate", False):
+        if run_config.get("_is_candidate", False):
             candidates[run_id] = run_config
     return candidates
 
@@ -139,38 +172,42 @@ def collect_experiment_participants():
     for base in BASELINE_CONFIGS.keys():
         participants[base] = OUT_ROOT / f"data/baselines/{base}/verif_aggregated.nc"
     for exp in RUN_CONFIGS.keys():
-        if RUN_CONFIGS[exp].get("is_candidate", False):
+        if RUN_CONFIGS[exp].get("_is_candidate", False):
             participants[exp] = OUT_ROOT / f"data/runs/{exp}/verif_aggregated.nc"
     return participants
 
 
-def _inference_routing_fn(wc):
-
-    run_config = RUN_CONFIGS[wc.run_id]
-
-    if run_config["model_type"] == "forecaster":
-        input_path = f"logs/prepare_inference_forecaster/{wc.run_id}-{wc.init_time}.ok"
-    elif run_config["model_type"] == "interpolator":
-        input_path = (
-            f"logs/prepare_inference_interpolator/{wc.run_id}-{wc.init_time}.ok"
-        )
-    else:
-        raise ValueError(f"Unsupported model type: {run_config['model_type']}")
-
-    return OUT_ROOT / input_path
+# -----------------------------------------------
+# Hashing functions
+# -----------------------------------------------
 
 
-def _regions():
-    cfg = config["stratification"]
-    regions = [f"{cfg['root']}/{region}.shp" for region in cfg["regions"]]
-    # convert list of strings in regions to comma-separated string
-    regions_txt = ",".join(regions)
-    return regions_txt
+def master_hash() -> str:
+    """Generate a short hash of all the configurable components of the workflow."""
+    configs_to_hash = [config]
+    for run_id, run_config in RUN_CONFIGS.items():
+        configs_to_hash.append(run_entry_hash(run_config))
+    return generate_json_hash(configs_to_hash)
 
 
-REGION_TXT = _regions()
+RUN_ENTRY_HASH_EXCLUDE = ["label", "_is_candidate"]
 
 
+def run_entry_hash(run_config: dict) -> str:
+    """Generate a short hash of a run entry."""
+    cfg = copy.deepcopy(run_config)
+    for key in RUN_ENTRY_HASH_EXCLUDE:
+        cfg.pop(key, None)
+    configs_to_hash = [cfg]
+    with open(cfg["config"], "r") as f:
+        configs_to_hash.append(yaml.safe_load(f))
+    if "forecaster" in cfg and cfg["forecaster"] is not None:
+        configs_to_hash.append(run_entry_hash(cfg["forecaster"]))
+    return generate_json_hash(configs_to_hash)
+
+
+REGIONS = parse_regions()
+REFTIMES = parse_reference_times()
 RUN_CONFIGS = collect_all_runs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()

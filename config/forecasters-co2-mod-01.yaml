@@ -3,17 +3,17 @@ description: |
   Evaluate skill of COSMO-E emulator (M-1 forecaster).
 
 dates:
-  - 2020-02-03T00:00 # Storm Petra
-  - 2020-02-07T00:00 # Storm Sabine
-  - 2020-10-01T00:00 # Storm Brigitte
+  start: 2020-01-02T00:00
+  end: 2020-01-31T00:00
+  frequency: 24h
 
 runs:
   - forecaster:
-      checkpoint: https://mlflow.ecmwf.int/#/experiments/103/runs/d0846032fc7248a58b089cbe8fa4c511
+      mlflow_id: d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
       steps: 0/120/6
       config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
-      extra_requirements:
+      extra_dependencies:
         - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
 
 baselines:
@@ -39,6 +39,9 @@ stratification:
 
 locations:
   output_root: output/
+  mlflow_uri:
+    - https://servicedepl.meteoswiss.ch/mlstore
+    - https://mlflow.ecmwf.int
 
 profile:
   executor: slurm
@@ -48,8 +51,6 @@ profile:
     slurm_partition: "postproc"
     cpus_per_task: 1
     mem_mb_per_cpu: 1800
-    runtime: "1h"
+    runtime: "23h"
     gpus: 0
   jobs: 50
-  batch_rules:
-    plot_forecast_frame: 32

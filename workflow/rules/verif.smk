@@ -25,7 +25,7 @@ rule verif_metrics_baseline:
         baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         analysis_label=config["analysis"].get("label"),
-        regions=REGION_TXT,
+        regions=REGIONS,
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
     log:
@@ -72,7 +72,7 @@ rule verif_metrics:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         analysis_label=config["analysis"].get("label"),
-        regions=REGION_TXT,
+        regions=REGIONS,
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
@@ -147,7 +147,7 @@ rule verif_metrics_plot:
         verif=list(EXPERIMENT_PARTICIPANTS.values()),
     output:
         report(
-            directory(OUT_ROOT / "results/{experiment}/metrics/plots"),
+            directory(OUT_ROOT / "results/{experiment}/plots"),
             patterns=["{name}.png"],
         ),
     params:
