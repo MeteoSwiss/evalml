@@ -233,6 +233,8 @@ def _(
     # field, units_override = preprocess_field(param, state)
 
     # Quick fix for precipitation (might have to use preprocess_field in the end (see above))
+    # for wind speed, preprocess_field only has conversion from m/s to knots 
+    # (not the other way around), so I assume the values are in m/s
     if param == "TOT_PREC":
         plot_vals = ds.values.ravel()*1000
     else:
