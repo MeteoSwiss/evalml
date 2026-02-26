@@ -29,12 +29,16 @@ DOMAINS = {
         "extent": [-16.0, 25.0, 30.0, 65.0],
         "projection": _PROJECTIONS["orthographic"],
     },
+    # The domains which are originally called "centraleurope" and "switzerland"
+    # are mostly the same. I suggest making domain "switzerland" much smaller, 
+    # so that more spatial detail can be seen, especially in the complex 
+    # topography of the alps. 
     "centraleurope": {
         "extent": [-2.6, 19.5, 40.2, 52.3],
         "projection": _PROJECTIONS["orthographic"],
     },
     "switzerland": {
-        "extent": [0, 17.5, 40.5, 53.0],
+        "extent": [5.5, 11.0, 45.5, 48.0],
         "projection": _PROJECTIONS["orthographic"],
     },
 }
