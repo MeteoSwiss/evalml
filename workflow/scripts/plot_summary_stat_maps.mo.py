@@ -125,6 +125,76 @@ def _(CMAP_DEFAULTS, ekp):
         }
     return (get_style,)
 
+# @app.cell
+# def _(LOG, np):
+#     """Preprocess fields with pint-based unit conversion and derived quantities."""
+#     try:
+#         import pint  # type: ignore
+
+#         _ureg = pint.UnitRegistry()
+
+#         def _k_to_c(arr):
+#             # robust conversion with pint, fallback if dtype unsupported
+#             try:
+#                 return (_ureg.Quantity(arr, _ureg.kelvin).to(_ureg.degC)).magnitude
+#             except Exception:
+#                 return arr - 273.15
+
+#         def _ms_to_knots(arr):
+#             # robust conversion with pint, fallback if dtype unsupported
+#             try:
+#                 return (
+#                     _ureg.Quantity(arr, _ureg.meter / _ureg.second).to(_ureg.knot)
+#                 ).magnitude
+#             except Exception:
+#                 return arr * 1.943844
+
+#         def _m_to_mm(arr):
+#             # robust conversion with pint, fallback if dtype unsupported
+#             try:
+#                 return (_ureg.Quantity(arr, _ureg.meter).to(_ureg.millimeter)).magnitude
+#             except Exception:
+#                 return arr * 1000
+
+#     except Exception:
+#         LOG.warning("pint not available; falling back hardcoded conversions")
+
+#         def _k_to_c(arr):
+#             return arr - 273.15
+
+#         def _ms_to_knots(arr):
+#             return arr * 1.943844
+
+#         def _m_to_mm(arr):
+#             return arr * 1000
+
+#     def preprocess_field(param: str, state: dict):
+#         """
+#         - Temperatures: K -> °C
+#         - Wind speed: sqrt(u^2 + v^2)
+#         - Precipitation: m -> mm
+#         Returns: (field_array, units_override or None)
+#         """
+#         fields = state["fields"]
+#         # temperature variables
+#         if param in ("T_2M", "TD_2M", "T", "TD"):
+#             return _k_to_c(fields[param]), "°C"
+#         # 10m wind speed (allow legacy 'uv' alias)
+#         if param == "SP_10M":
+#             u = fields["U_10M"]
+#             v = fields["V_10M"]
+#             return np.sqrt(u**2 + v**2), "m/s"
+#         # wind speed from standard-level components
+#         if param == "SP":
+#             u = fields["U"]
+#             v = fields["V"]
+#             return np.sqrt(u**2 + v**2), "m/s"
+#         if param == "TOT_PREC":
+#             return _m_to_mm(fields[param]), "mm"
+#         # default: passthrough
+#         return fields[param], None
+
+#     return (preprocess_field,)
 
 @app.cell
 def _(
@@ -162,7 +232,13 @@ def _(
     # # preprocess field (unit conversion, derived quantities)
     # field, units_override = preprocess_field(param, state)
 
-    plotter.plot_field(subplot, ds.values.ravel(), **get_style(var, metric))
+    # Quick fix for precipitation (might have to use preprocess_field in the end (see above))
+    if param == "TOT_PREC":
+        plot_vals = ds.values.ravel()*1000
+    else:
+        plot_vals = ds.values.ravel()
+
+    plotter.plot_field(subplot, plot_vals, **get_style(var, metric))
     # subplot.ax.add_geometries(
     #     state["lam_envelope"],
     #     edgecolor="black",
