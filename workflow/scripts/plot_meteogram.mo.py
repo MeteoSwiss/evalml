@@ -1,50 +1,52 @@
 import marimo
 
-__generated_with = "0.16.5"
+__generated_with = "0.19.6"
 app = marimo.App(width="medium")
 
 
 @app.cell
 def _():
     from argparse import ArgumentParser
+    from datetime import datetime
     from pathlib import Path
 
     import matplotlib.pyplot as plt
     import numpy as np
-    import xarray as xr
-    from meteodatalab import data_source, grib_decoder
     from peakweather import PeakWeatherDataset
 
     from data_input import (
-        load_analysis_data_from_zarr,
-        load_baseline_from_zarr,
         parse_steps,
+        load_forecast_data,
+        load_truth_data,
     )
+    from verification.spatial import map_forecast_to_truth
 
     return (
         ArgumentParser,
         Path,
         PeakWeatherDataset,
-        data_source,
-        grib_decoder,
-        load_analysis_data_from_zarr,
-        load_baseline_from_zarr,
-        parse_steps,
+        datetime,
+        load_forecast_data,
+        load_truth_data,
+        map_forecast_to_truth,
         np,
+        parse_steps,
         plt,
-        xr,
     )
 
 
 @app.cell
-def _(ArgumentParser, Path, parse_steps):
+def _(ArgumentParser, Path, datetime, parse_steps):
     parser = ArgumentParser()
 
     parser.add_argument(
         "--forecast", type=str, default=None, help="Directory to forecast grib data"
     )
     parser.add_argument(
-        "--analysis", type=str, default=None, help="Path to analysis zarr data"
+        "--steps",
+        type=parse_steps,
+        default="0/120/6",
+        help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
     )
     parser.add_argument(
         "--baseline", type=str, default=None, help="Path to baseline zarr data"
@@ -56,6 +58,9 @@ def _(ArgumentParser, Path, parse_steps):
         help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
     )
     parser.add_argument(
+        "--analysis", type=str, default=None, help="Path to analysis zarr data"
+    )
+    parser.add_argument(
         "--peakweather", type=str, default=None, help="Path to PeakWeather dataset"
     )
     parser.add_argument("--date", type=str, default=None, help="reference datetime")
@@ -65,15 +70,18 @@ def _(ArgumentParser, Path, parse_steps):
 
     args = parser.parse_args()
     grib_dir = Path(args.forecast)
+    forecast_steps = args.steps
     zarr_dir_ana = Path(args.analysis)
     zarr_dir_base = Path(args.baseline)
     baseline_steps = args.baseline_steps
     peakweather_dir = Path(args.peakweather)
-    init_time = args.date
+    init_time = datetime.strptime(args.date, "%Y%m%d%H%M")
     outfn = Path(args.outfn)
     station = args.station
     param = args.param
     return (
+        baseline_steps,
+        forecast_steps,
         grib_dir,
         init_time,
         outfn,
@@ -82,7 +90,6 @@ def _(ArgumentParser, Path, parse_steps):
         station,
         zarr_dir_ana,
         zarr_dir_base,
-        baseline_steps,
     )
 
 
@@ -113,23 +120,22 @@ def _(np):
                 "name": '"Wind speed',
             }
             ds = ds.drop_vars(["U", "V"])
-        return ds
+        return ds.squeeze()
 
     return (preprocess_ds,)
 
 
 @app.cell
-def load_grib_data(
-    data_source,
+def load_data(
     baseline_steps,
-    grib_decoder,
+    forecast_steps,
     grib_dir,
     init_time,
-    load_analysis_data_from_zarr,
-    load_baseline_from_zarr,
+    load_forecast_data,
+    load_truth_data,
     param,
+    peakweather_dir,
     preprocess_ds,
-    xr,
     zarr_dir_ana,
     zarr_dir_base,
 ):
@@ -140,162 +146,82 @@ def load_grib_data(
     else:
         paramlist = [param]
 
-    grib_files = sorted(grib_dir.glob(f"{init_time}*.grib"))
-    fds = data_source.FileDataSource(datafiles=grib_files)
-    ds_fct = xr.Dataset(grib_decoder.load(fds, {"param": paramlist}))
+    ds_fct = load_forecast_data(grib_dir, init_time, forecast_steps, paramlist)
     ds_fct = preprocess_ds(ds_fct, param)
-    da_fct = ds_fct[param].squeeze()
 
-    ds_ana = load_analysis_data_from_zarr(zarr_dir_ana, da_fct.valid_time, paramlist)
+    steps = ds_fct.lead_time.dt.total_seconds().values / 3600
+    ds_ana = load_truth_data(zarr_dir_ana, init_time, steps, paramlist)
     ds_ana = preprocess_ds(ds_ana, param)
-    da_ana = ds_ana[param].squeeze()
 
-    ds_base = load_baseline_from_zarr(
-        zarr_dir_base, da_fct.ref_time, baseline_steps, paramlist
-    )
+    ds_base = load_forecast_data(zarr_dir_base, init_time, baseline_steps, paramlist)
     ds_base = preprocess_ds(ds_base, param)
-    da_base = ds_base[param].squeeze()
-    return da_ana, da_base, da_fct
+
+    ds_obs = load_truth_data(peakweather_dir, init_time, steps, paramlist)
+    ds_obs = preprocess_ds(ds_obs, param)
+    return ds_ana, ds_base, ds_fct
 
 
 @app.cell
-def _(PeakWeatherDataset, da_fct, np, param, peakweather_dir, station):
-    if param == "T_2M":
-        parameter = "temperature"
-        offset = 273.15  # K to C
-    elif param == "SP_10M":
-        parameter = "wind_speed"
-        offset = 0
-    elif param == "TOT_PREC":
-        parameter = "precipitation"
-        offset = 0
-    else:
-        raise NotImplementedError(
-            f"The mapping for {param=} to PeakWeather is not implemented"
-        )
-
-    peakweather = PeakWeatherDataset(root=peakweather_dir, freq="1h")
-    obs, mask = peakweather.get_observations(
-        parameters=[parameter],
-        stations=station,
-        first_date=np.datetime_as_string(da_fct.valid_time.values[0]),
-        last_date=np.datetime_as_string(da_fct.valid_time.values[-1]),
-        return_mask=True,
-    )
-    obs = obs.loc[:, mask.iloc[0]].droplevel("name", axis=1)
-    obs
-    return obs, offset, peakweather
-
-
-@app.cell
-def _(peakweather):
+def _(PeakWeatherDataset, peakweather_dir, station):
+    peakweather = PeakWeatherDataset(root=peakweather_dir)
     stations = peakweather.stations_table
-    stations.index.names = ["station"]
-    stations
-    return (stations,)
+    stations.index.names = ["values"]
+    ds_sta = stations.to_xarray().sel(values=[station])  # keep singleton dim
+    ds_sta = ds_sta.rename({"latitude": "lat", "longitude": "lon"})
+    ds_sta = ds_sta.set_coords(("lat", "lon", "station_name"))
+    ds_sta = ds_sta.drop_vars(list(ds_sta.data_vars))
+    ds_sta
+    return (ds_sta,)
 
 
 @app.cell
-def _(da_ana, da_base, da_fct, np, stations):
-    def nearest_indexers_euclid(ds, lat_s, lon_s):
-        """
-        Return a dict of indexers usable as: ds.isel(**indexers)
-
-        Examples:
-          - 2D structured grid -> {"y": y_idx, "x": x_idx}
-          - 1D unstructured grid -> {"point": i_idx} (or {"cell": i_idx}, etc.)
-        """
-        try:
-            lat = ds["lat"]
-            lon = ds["lon"]
-        except KeyError:
-            lat = ds["latitude"]
-            lon = ds["longitude"]
-
-        dist = (lat - lat_s) ** 2 + (lon - lon_s) ** 2
-        arr = dist.values
-
-        flat_idx = int(np.nanargmin(arr))
-
-        if dist.ndim == 1:
-            return {dist.dims[0]: flat_idx}
-
-        unr = np.unravel_index(flat_idx, dist.shape)
-        return {dim: int(i) for dim, i in zip(dist.dims, unr)}
-
-    def get_idx_row(row, da):
-        return nearest_indexers_euclid(da, row["latitude"], row["longitude"])
-
-    # store dicts (indexers) in columns
-    sta_idxs = stations.copy()
-    sta_idxs["fct_isel"] = sta_idxs.apply(lambda r: get_idx_row(r, da_fct), axis=1)
-    sta_idxs["ana_isel"] = sta_idxs.apply(lambda r: get_idx_row(r, da_ana), axis=1)
-    sta_idxs["base_isel"] = sta_idxs.apply(lambda r: get_idx_row(r, da_base), axis=1)
-    sta_idxs
-    return (sta_idxs,)
+def _(ds_ana, ds_base, ds_fct, ds_sta, map_forecast_to_truth):
+    ds_fct_sta = map_forecast_to_truth(ds_fct, ds_sta)
+    ds_ana_sta = map_forecast_to_truth(ds_ana, ds_sta)
+    ds_base_sta = map_forecast_to_truth(ds_base, ds_sta)
+    return ds_ana_sta, ds_base_sta, ds_fct_sta
 
 
 @app.cell
 def _(
-    da_ana,
-    da_base,
-    da_fct,
+    ds_ana_sta,
+    ds_base_sta,
+    ds_fct,
+    ds_fct_sta,
     init_time,
-    obs,
-    offset,
     outfn,
+    param,
     plt,
-    sta_idxs,
     station,
 ):
-    # station indices
-    row = sta_idxs.loc[station]
-    fct_isel = row.fct_isel
-    ana_isel = row.ana_isel
-    base_isel = row.base_isel
-
     fig, ax = plt.subplots()
 
-    # station
+    # truth
     ax.plot(
-        obs.index.to_pydatetime(),
-        obs.to_numpy() + offset,
+        ds_ana_sta["time"].values,
+        ds_ana_sta[param].values,
         color="k",
         ls="--",
-        label=station,
+        label="truth",
     )
-
-    # analysis
-    ana2plot = da_ana.isel(**ana_isel)
-    ax.plot(
-        ana2plot["time"].values,
-        ana2plot.values,
-        color="k",
-        ls="-",
-        label="analysis",
-    )
-
     # baseline
-    base2plot = da_base.isel(**base_isel)
     ax.plot(
-        base2plot["time"].values,
-        base2plot.values,
+        ds_base_sta["time"].values,
+        ds_base_sta[param].values,
         color="C1",
         label="baseline",
     )
-
     # forecast
-    fct2plot = da_fct.isel(**fct_isel)
     ax.plot(
-        fct2plot["valid_time"].values,
-        fct2plot.values,
+        ds_fct_sta["time"].values,
+        ds_fct_sta[param].values,
         color="C0",
         label="forecast",
     )
 
     ax.legend()
 
-    param2plot = da_fct.attrs.get("parameter", {})
+    param2plot = ds_fct[param].attrs.get("parameter", {})
     short = param2plot.get("shortName", "")
     units = param2plot.get("units", "")
     name = param2plot.get("name", "")
@@ -304,11 +230,7 @@ def _(
     ax.set_title(f"{init_time} {name} at {station}")
 
     plt.savefig(outfn)
-    return
-
-
-@app.cell
-def _():
+    print(f"saved: {outfn}")
     return
 
 

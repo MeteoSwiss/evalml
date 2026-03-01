@@ -9,7 +9,7 @@ include: "common.smk"
 import pandas as pd
 
 
-def _use_first_baseline_zarr(wc):
+def _use_first_baseline_zarr(wc) -> tuple[str, str]:
     """Get the first available baseline zarr for the given init time."""
     for baseline_id in BASELINE_CONFIGS:
         root = BASELINE_CONFIGS[baseline_id].get("root")
@@ -25,9 +25,9 @@ rule plot_meteogram:
     input:
         script="workflow/scripts/plot_meteogram.mo.py",
         inference_okfile=rules.execute_inference.output.okfile,
-        analysis_zarr=config["analysis"].get("analysis_zarr"),
+        truth=config["truth"]["root"],
         baseline_zarr=lambda wc: _use_first_baseline_zarr(wc)[0],
-        peakweather_dir=rules.download_obs_from_peakweather.output.peakweather,
+        peakweather_dir=rules.download_obs_from_peakweather.output.root,
     output:
         OUT_ROOT
         / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{sta}.png",
@@ -40,20 +40,24 @@ rule plot_meteogram:
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
+        fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         baseline_steps=lambda wc: _use_first_baseline_zarr(wc)[1],
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         python {input.script} \
-            --forecast {params.grib_out_dir}  --analysis {input.analysis_zarr} \
+            --forecast {params.grib_out_dir} --steps {params.fcst_steps} \
             --baseline {input.baseline_zarr} --baseline_steps {params.baseline_steps} \
+            --analysis {input.truth} \
             --peakweather {input.peakweather_dir} \
             --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param}  --station {wildcards.sta}
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
-        #     --forecast {params.grib_out_dir}  --analysis {input.analysis_zarr} \
-        #     --baseline {input.baseline_zarr} --peakweather {input.peakweather_dir} \
+        #     --forecast {params.grib_out_dir} --steps {params.fcst_steps} \
+        #     --baseline {input.baseline_zarr} --baseline_steps {params.baseline_steps} \
+        #     --analysis {input.truth} \
+        #     --peakweather {input.peakweather_dir} \
         #     --date {wildcards.init_time} --outfn {output[0]} \
         #     --param {wildcards.param}  --station {wildcards.sta}
         """

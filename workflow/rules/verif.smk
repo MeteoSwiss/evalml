@@ -20,11 +20,11 @@ rule verif_metrics_baseline:
             root=BASELINE_CONFIGS[wc.baseline_id].get("root"),
             year=wc.init_time[2:4],
         ),
-        analysis_zarr=config["analysis"].get("analysis_zarr"),
+        truth=config["truth"]["root"],
     params:
         baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
-        analysis_label=config["analysis"].get("label"),
+        truth_label=config["truth"]["label"],
         regions=REGIONS,
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
@@ -38,11 +38,11 @@ rule verif_metrics_baseline:
         """
         uv run {input.script} \
             --forecast {input.baseline_zarr} \
-            --analysis_zarr {input.analysis_zarr} \
+            --truth {input.truth} \
             --reftime {wildcards.init_time} \
             --steps "{params.baseline_steps}" \
             --label "{params.baseline_label}" \
-            --analysis_label "{params.analysis_label}" \
+            --truth_label "{params.truth_label}" \
             --regions "{params.regions}" \
             --output {output} > {log} 2>&1
         """
@@ -61,7 +61,7 @@ rule verif_metrics:
         "src/data_input/__init__.py",
         script="workflow/scripts/verif_single_init.py",
         inference_okfile=rules.execute_inference.output.okfile,
-        analysis_zarr=config["analysis"].get("analysis_zarr"),
+        truth=config["truth"]["root"],
     output:
         OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.nc",
     # wildcard_constraints:
@@ -70,7 +70,7 @@ rule verif_metrics:
     params:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
-        analysis_label=config["analysis"].get("label"),
+        truth_label=config["truth"]["label"],
         regions=REGIONS,
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
@@ -85,11 +85,11 @@ rule verif_metrics:
         """
         uv run {input.script} \
             --forecast {params.grib_out_dir} \
-            --analysis_zarr {input.analysis_zarr} \
+            --truth {input.truth} \
             --reftime {wildcards.init_time} \
             --steps "{params.fcst_steps}" \
             --label "{params.fcst_label}" \
-            --analysis_label "{params.analysis_label}" \
+            --truth_label "{params.truth_label}" \
             --regions "{params.regions}" \
             --output {output} > {log} 2>&1
         """

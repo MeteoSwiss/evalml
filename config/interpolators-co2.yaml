@@ -54,9 +54,9 @@ baselines:
       root: /store_new/mch/msopr/ml/COSMO-E_hourly
       steps: 0/120/1
 
-analysis:
+truth:
   label: COSMO KENDA
-  analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-1h-v3-pl13.zarr
+  root: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-1h-v3-pl13.zarr
 
 stratification:
   regions:
