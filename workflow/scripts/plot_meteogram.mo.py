@@ -19,6 +19,7 @@ def _():
         load_forecast_data,
         load_truth_data,
     )
+    from verification.spatial import map_forecast_to_truth
 
     return (
         ArgumentParser,
@@ -27,6 +28,7 @@ def _():
         datetime,
         load_forecast_data,
         load_truth_data,
+        map_forecast_to_truth,
         np,
         parse_steps,
         plt,
@@ -118,13 +120,13 @@ def _(np):
                 "name": '"Wind speed',
             }
             ds = ds.drop_vars(["U", "V"])
-        return ds
+        return ds.squeeze()
 
     return (preprocess_ds,)
 
 
 @app.cell
-def load_grib_data(
+def load_data(
     baseline_steps,
     forecast_steps,
     grib_dir,
@@ -146,128 +148,80 @@ def load_grib_data(
 
     ds_fct = load_forecast_data(grib_dir, init_time, forecast_steps, paramlist)
     ds_fct = preprocess_ds(ds_fct, param)
-    da_fct = ds_fct[param].squeeze()
 
-    steps = da_fct.lead_time.dt.total_seconds().values / 3600
+    steps = ds_fct.lead_time.dt.total_seconds().values / 3600
     ds_ana = load_truth_data(zarr_dir_ana, init_time, steps, paramlist)
     ds_ana = preprocess_ds(ds_ana, param)
-    da_ana = ds_ana[param].squeeze()
 
     ds_base = load_forecast_data(zarr_dir_base, init_time, baseline_steps, paramlist)
     ds_base = preprocess_ds(ds_base, param)
-    da_base = ds_base[param].squeeze()
 
     ds_obs = load_truth_data(peakweather_dir, init_time, steps, paramlist)
     ds_obs = preprocess_ds(ds_obs, param)
-    da_obs = ds_obs[param].squeeze()
-    return da_ana, da_base, da_fct, da_obs
+    return ds_ana, ds_base, ds_fct
 
 
 @app.cell
-def _(PeakWeatherDataset, peakweather_dir):
-    peakweather = PeakWeatherDataset(root=peakweather_dir, freq="1h")
+def _(PeakWeatherDataset, peakweather_dir, station):
+    peakweather = PeakWeatherDataset(root=peakweather_dir)
     stations = peakweather.stations_table
-    stations.index.names = ["station"]
-    stations
-    return (stations,)
+    stations.index.names = ["values"]
+    ds_sta = stations.to_xarray().sel(values=[station])  # keep singleton dim
+    ds_sta = ds_sta.rename({"latitude": "lat", "longitude": "lon"})
+    ds_sta = ds_sta.set_coords(("lat", "lon", "station_name"))
+    ds_sta = ds_sta.drop_vars(list(ds_sta.data_vars))
+    ds_sta
+    return (ds_sta,)
 
 
 @app.cell
-def _(da_ana, da_base, da_fct, np, stations):
-    def nearest_indexers_euclid(ds, lat_s, lon_s):
-        """
-        Return a dict of indexers usable as: ds.isel(**indexers)
-
-        Examples:
-          - 2D structured grid -> {"y": y_idx, "x": x_idx}
-          - 1D unstructured grid -> {"point": i_idx} (or {"cell": i_idx}, etc.)
-        """
-        lat = ds["lat"]
-        lon = ds["lon"]
-        dist = (lat - lat_s) ** 2 + (lon - lon_s) ** 2
-        arr = dist.values
-
-        flat_idx = int(np.nanargmin(arr))
-
-        if dist.ndim == 1:
-            return {dist.dims[0]: flat_idx}
-
-        unr = np.unravel_index(flat_idx, dist.shape)
-        return {dim: int(i) for dim, i in zip(dist.dims, unr)}
-
-    def get_idx_row(row, da):
-        return nearest_indexers_euclid(da, row["latitude"], row["longitude"])
-
-    # store dicts (indexers) in columns
-    sta_idxs = stations.copy()
-    sta_idxs["fct_isel"] = sta_idxs.apply(lambda r: get_idx_row(r, da_fct), axis=1)
-    sta_idxs["ana_isel"] = sta_idxs.apply(lambda r: get_idx_row(r, da_ana), axis=1)
-    sta_idxs["base_isel"] = sta_idxs.apply(lambda r: get_idx_row(r, da_base), axis=1)
-    sta_idxs
-    return (sta_idxs,)
+def _(ds_ana, ds_base, ds_fct, ds_sta, map_forecast_to_truth):
+    ds_fct_sta = map_forecast_to_truth(ds_fct, ds_sta)
+    ds_ana_sta = map_forecast_to_truth(ds_ana, ds_sta)
+    ds_base_sta = map_forecast_to_truth(ds_base, ds_sta)
+    return ds_ana_sta, ds_base_sta, ds_fct_sta
 
 
 @app.cell
 def _(
-    da_ana,
-    da_base,
-    da_fct,
-    da_obs,
+    ds_ana_sta,
+    ds_base_sta,
+    ds_fct,
+    ds_fct_sta,
     init_time,
     outfn,
+    param,
     plt,
-    sta_idxs,
     station,
 ):
-    # station indices
-    row = sta_idxs.loc[station]
-    fct_isel = row.fct_isel
-    ana_isel = row.ana_isel
-    base_isel = row.base_isel
-
     fig, ax = plt.subplots()
 
-    # station
-    obs2plot = da_obs.sel(values=station)
+    # truth
     ax.plot(
-        obs2plot["time"].values,
-        obs2plot.values,
+        ds_ana_sta["time"].values,
+        ds_ana_sta[param].values,
         color="k",
         ls="--",
-        label=station,
+        label="truth",
     )
-
-    # analysis
-    ana2plot = da_ana.isel(**ana_isel)
-    ax.plot(
-        ana2plot["time"].values,
-        ana2plot.values,
-        color="k",
-        ls="-",
-        label="analysis",
-    )
-
     # baseline
-    base2plot = da_base.isel(**base_isel)
     ax.plot(
-        base2plot["time"].values,
-        base2plot.values,
+        ds_base_sta["time"].values,
+        ds_base_sta[param].values,
         color="C1",
         label="baseline",
     )
-
     # forecast
-    fct2plot = da_fct.isel(**fct_isel)
     ax.plot(
-        fct2plot["time"].values,
-        fct2plot.values,
+        ds_fct_sta["time"].values,
+        ds_fct_sta[param].values,
         color="C0",
         label="forecast",
     )
 
     ax.legend()
 
-    param2plot = da_fct.attrs.get("parameter", {})
+    param2plot = ds_fct[param].attrs.get("parameter", {})
     short = param2plot.get("shortName", "")
     units = param2plot.get("units", "")
     name = param2plot.get("name", "")
@@ -276,6 +230,7 @@ def _(
     ax.set_title(f"{init_time} {name} at {station}")
 
     plt.savefig(outfn)
+    print(f"saved: {outfn}")
     return
 
 
