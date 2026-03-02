@@ -39,7 +39,7 @@ def test_nearest_grid_yx_indices_returns_grid_indices():
     assert np.array_equal(x_idx, np.array([0, 1]))
 
 
-def test_map_forecast_to_truth_maps_and_aligns_time():
+def test_map_forecast_to_truth_maps_forecast_to_truth_locations():
     fcst_time = np.array(
         ["2024-01-01T00:00", "2024-01-01T01:00"], dtype="datetime64[ns]"
     )
@@ -78,11 +78,14 @@ def test_map_forecast_to_truth_maps_and_aligns_time():
         },
     )
 
-    mapped_fcst, mapped_truth = map_forecast_to_truth(fcst, truth)
+    mapped_fcst = map_forecast_to_truth(fcst, truth)
 
     assert mapped_fcst["T_2M"].dims == ("time", "values")
-    assert np.array_equal(mapped_truth["time"].values, fcst_time)
+    assert np.array_equal(mapped_fcst["time"].values, fcst_time)
     assert np.array_equal(mapped_fcst["values"].values, np.array(["STA1", "STA2"]))
     assert np.allclose(mapped_fcst["lat"].values, np.array([46.1, 46.9]))
     assert np.allclose(mapped_fcst["lon"].values, np.array([7.1, 7.9]))
-    assert np.allclose(mapped_fcst["T_2M"].values, np.array([[1.0, 4.0], [10.0, 40.0]]))
+    assert np.allclose(
+        mapped_fcst["T_2M"].values,
+        np.array([[1.0, 4.0], [10.0, 40.0]]),
+    )
