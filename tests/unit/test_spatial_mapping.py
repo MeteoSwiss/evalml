@@ -40,7 +40,9 @@ def test_nearest_grid_yx_indices_returns_grid_indices():
 
 
 def test_map_forecast_to_truth_maps_and_aligns_time():
-    fcst_time = np.array(["2024-01-01T00:00", "2024-01-01T01:00"], dtype="datetime64[ns]")
+    fcst_time = np.array(
+        ["2024-01-01T00:00", "2024-01-01T01:00"], dtype="datetime64[ns]"
+    )
     truth_time = np.array(
         ["2024-01-01T00:00", "2024-01-01T01:00", "2024-01-01T02:00"],
         dtype="datetime64[ns]",

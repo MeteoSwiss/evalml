@@ -120,7 +120,7 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
     -------
     xr.Dataset
         Mapped forecast dataset.
-    """      
+    """
 
     if "y" in fcst.dims and "x" in fcst.dims:
         fcst = fcst.stack(values=("y", "x"))
