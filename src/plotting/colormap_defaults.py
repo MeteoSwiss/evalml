@@ -82,8 +82,8 @@ _CMAP_DEFAULTS = {
     "SP_10M.BIAS.spatial":   {"cmap": plt.get_cmap("RdBu_r", 11), "levels": np.arange(start = -2.25, stop = 2.26, step = 0.5)} | {"units": "m/s"},
     "TD_2M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu_r", 11), "levels": np.arange(start = -2.75, stop = 2.76, step = 0.5)} | {"units": "°C"},
     "T_2M.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu_r", 11), "levels": np.arange(start = -2.75, stop = 2.76, step = 0.5)} | {"units": "°C"},
-    "PMSL.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "Pa"},
-    "PS.BIAS.spatial":       {"cmap": plt.get_cmap("RdBu_r", 11)} | {"units": "Pa"},
+    "PMSL.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu_r", 11), "levels": np.arange(start = -110, stop = 111, step = 20)} | {"units": "Pa"},
+    "PS.BIAS.spatial":       {"cmap": plt.get_cmap("RdBu_r", 11), "levels": np.arange(start = -110, stop = 111, step = 20)} | {"units": "Pa"},
     "TOT_PREC.BIAS.spatial": {"cmap": plt.get_cmap("BrBG", 9), "levels": [-1, -0.5, -0.25, -0.1, 0.1, 0.25, 0.5, 1]} | {"units": "mm"}
 }
 
