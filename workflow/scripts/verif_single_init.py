@@ -50,7 +50,7 @@ def main(args: ScriptConfig):
     # get baseline forecast data
     now = datetime.now()
 
-    fcst = load_forecast_data(args.root, args.reftime, args.steps, args.params)
+    fcst = load_forecast_data(args.forecast, args.reftime, args.steps, args.params)
 
     LOG.info(
         "Loaded forecast data in %s seconds: \n%s",
@@ -60,7 +60,7 @@ def main(args: ScriptConfig):
 
     # get truth data
     now = datetime.now()
-    truth = load_truth_data(args.root, args.reftime, args.steps, args.params)
+    truth = load_truth_data(args.truth, args.reftime, args.steps, args.params)
     LOG.info(
         "Loaded truth data in %s seconds: \n%s",
         (datetime.now() - now).total_seconds(),
