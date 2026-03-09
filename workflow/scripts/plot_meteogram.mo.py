@@ -43,22 +43,49 @@ def _(ArgumentParser, Path, datetime, parse_steps):
         "--forecast", type=str, default=None, help="Directory to forecast grib data"
     )
     parser.add_argument(
-        "--steps",
+        "--forecast_steps",
         type=parse_steps,
         default="0/120/6",
         help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
     )
     parser.add_argument(
-        "--baseline", type=str, default=None, help="Path to baseline zarr data"
+        "--forecast_label",
+        type=str,
+        default="forecast",
+        help="Label for forecast line in plot legend.",
+    )
+    parser.add_argument(
+        "--baseline",
+        action="append",
+        type=str,
+        default=[],
+        help="Path to baseline zarr data (repeatable).",
     )
     parser.add_argument(
         "--baseline_steps",
+        action="append",
         type=parse_steps,
-        default="0/120/6",
-        help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
+        default=[],
+        help=(
+            "Forecast steps in the format 'start/stop/step' for each baseline "
+            "(repeatable, must match --baseline count)."
+        ),
+    )
+    parser.add_argument(
+        "--baseline_label",
+        action="append",
+        type=str,
+        default=[],
+        help="Label for each baseline line in plot legend (repeatable).",
     )
     parser.add_argument(
         "--analysis", type=str, default=None, help="Path to analysis zarr data"
+    )
+    parser.add_argument(
+        "--analysis_label",
+        type=str,
+        default="truth",
+        help="Label for analysis line in plot legend.",
     )
     parser.add_argument(
         "--peakweather", type=str, default=None, help="Path to PeakWeather dataset"
@@ -69,27 +96,43 @@ def _(ArgumentParser, Path, datetime, parse_steps):
     parser.add_argument("--station", type=str, help="station")
 
     args = parser.parse_args()
-    grib_dir = Path(args.forecast)
-    forecast_steps = args.steps
-    zarr_dir_ana = Path(args.analysis)
-    zarr_dir_base = Path(args.baseline)
+    forecast_grib_dir = Path(args.forecast)
+    forecast_steps = args.forecast_steps
+    forecast_label = args.forecast_label
+    analysis_zarr = Path(args.analysis)
+    analysis_label = args.analysis_label
+    baseline_zarrs = [Path(path) for path in args.baseline]
     baseline_steps = args.baseline_steps
+    baseline_labels = args.baseline_label
+    if len(baseline_zarrs) != len(baseline_steps):
+        raise ValueError(
+            "Mismatched baseline arguments: --baseline and --baseline_steps "
+            "must be provided the same number of times."
+        )
+    if len(baseline_labels) != len(baseline_zarrs):
+        raise ValueError(
+            "Mismatched baseline arguments: --baseline and --baseline_label "
+            "must be provided the same number of times."
+        )
     peakweather_dir = Path(args.peakweather)
     init_time = datetime.strptime(args.date, "%Y%m%d%H%M")
     outfn = Path(args.outfn)
     station = args.station
     param = args.param
     return (
+        analysis_label,
+        analysis_zarr,
+        baseline_labels,
         baseline_steps,
+        baseline_zarrs,
+        forecast_label,
         forecast_steps,
-        grib_dir,
+        forecast_grib_dir,
         init_time,
         outfn,
         param,
         peakweather_dir,
         station,
-        zarr_dir_ana,
-        zarr_dir_base,
     )
 
 
@@ -127,17 +170,16 @@ def _(np):
 
 @app.cell
 def load_data(
+    analysis_zarr,
     baseline_steps,
+    baseline_zarrs,
     forecast_steps,
-    grib_dir,
+    forecast_grib_dir,
     init_time,
     load_forecast_data,
     load_truth_data,
     param,
-    peakweather_dir,
     preprocess_ds,
-    zarr_dir_ana,
-    zarr_dir_base,
 ):
     if param == "SP_10M":
         paramlist = ["U_10M", "V_10M"]
@@ -146,19 +188,24 @@ def load_data(
     else:
         paramlist = [param]
 
-    ds_fct = load_forecast_data(grib_dir, init_time, forecast_steps, paramlist)
-    ds_fct = preprocess_ds(ds_fct, param)
+    forecast_ds = load_forecast_data(
+        forecast_grib_dir, init_time, forecast_steps, paramlist
+    )
+    forecast_ds = preprocess_ds(forecast_ds, param)
 
-    steps = ds_fct.lead_time.dt.total_seconds().values / 3600
-    ds_ana = load_truth_data(zarr_dir_ana, init_time, steps, paramlist)
-    ds_ana = preprocess_ds(ds_ana, param)
+    steps = forecast_ds.lead_time.dt.total_seconds().values / 3600
+    analysis_ds = load_truth_data(analysis_zarr, init_time, steps, paramlist)
+    analysis_ds = preprocess_ds(analysis_ds, param)
 
-    ds_base = load_forecast_data(zarr_dir_base, init_time, baseline_steps, paramlist)
-    ds_base = preprocess_ds(ds_base, param)
+    baseline_ds_list = [
+        preprocess_ds(
+            load_forecast_data(zarr, init_time, step, paramlist),
+            param,
+        )
+        for zarr, step in zip(baseline_zarrs, baseline_steps)
+    ]
 
-    ds_obs = load_truth_data(peakweather_dir, init_time, steps, paramlist)
-    ds_obs = preprocess_ds(ds_obs, param)
-    return ds_ana, ds_base, ds_fct
+    return analysis_ds, baseline_ds_list, forecast_ds
 
 
 @app.cell
@@ -166,28 +213,33 @@ def _(PeakWeatherDataset, peakweather_dir, station):
     peakweather = PeakWeatherDataset(root=peakweather_dir)
     stations = peakweather.stations_table
     stations.index.names = ["values"]
-    ds_sta = stations.to_xarray().sel(values=[station])  # keep singleton dim
-    ds_sta = ds_sta.rename({"latitude": "lat", "longitude": "lon"})
-    ds_sta = ds_sta.set_coords(("lat", "lon", "station_name"))
-    ds_sta = ds_sta.drop_vars(list(ds_sta.data_vars))
-    ds_sta
-    return (ds_sta,)
+    station_ds = stations.to_xarray().sel(values=[station])  # keep singleton dim
+    station_ds = station_ds.rename({"latitude": "lat", "longitude": "lon"})
+    station_ds = station_ds.set_coords(("lat", "lon", "station_name"))
+    station_ds = station_ds.drop_vars(list(station_ds.data_vars))
+    station_ds
+    return (station_ds,)
 
 
 @app.cell
-def _(ds_ana, ds_base, ds_fct, ds_sta, map_forecast_to_truth):
-    ds_fct_sta = map_forecast_to_truth(ds_fct, ds_sta)
-    ds_ana_sta = map_forecast_to_truth(ds_ana, ds_sta)
-    ds_base_sta = map_forecast_to_truth(ds_base, ds_sta)
-    return ds_ana_sta, ds_base_sta, ds_fct_sta
+def _(analysis_ds, baseline_ds_list, forecast_ds, station_ds, map_forecast_to_truth):
+    forecast_station_ds = map_forecast_to_truth(forecast_ds, station_ds)
+    analysis_station_ds = map_forecast_to_truth(analysis_ds, station_ds)
+    baseline_station_ds_list = [
+        map_forecast_to_truth(ds, station_ds) for ds in baseline_ds_list
+    ]
+    return analysis_station_ds, baseline_station_ds_list, forecast_station_ds
 
 
 @app.cell
 def _(
-    ds_ana_sta,
-    ds_base_sta,
-    ds_fct,
-    ds_fct_sta,
+    analysis_label,
+    baseline_labels,
+    analysis_station_ds,
+    baseline_station_ds_list,
+    forecast_label,
+    forecast_ds,
+    forecast_station_ds,
     init_time,
     outfn,
     param,
@@ -198,30 +250,33 @@ def _(
 
     # truth
     ax.plot(
-        ds_ana_sta["time"].values,
-        ds_ana_sta[param].values,
+        analysis_station_ds["time"].values,
+        analysis_station_ds[param].values,
         color="k",
         ls="--",
-        label="truth",
+        label=analysis_label,
     )
-    # baseline
-    ax.plot(
-        ds_base_sta["time"].values,
-        ds_base_sta[param].values,
-        color="C1",
-        label="baseline",
-    )
+    # baselines
+    for i, (baseline_label, baseline_station_ds) in enumerate(
+        zip(baseline_labels, baseline_station_ds_list), start=1
+    ):
+        ax.plot(
+            baseline_station_ds["time"].values,
+            baseline_station_ds[param].values,
+            color=f"C{i}",
+            label=f"{baseline_label}",
+        )
     # forecast
     ax.plot(
-        ds_fct_sta["time"].values,
-        ds_fct_sta[param].values,
+        forecast_station_ds["time"].values,
+        forecast_station_ds[param].values,
         color="C0",
-        label="forecast",
+        label=forecast_label,
     )
 
     ax.legend()
 
-    param2plot = ds_fct[param].attrs.get("parameter", {})
+    param2plot = forecast_ds[param].attrs.get("parameter", {})
     short = param2plot.get("shortName", "")
     units = param2plot.get("units", "")
     name = param2plot.get("name", "")

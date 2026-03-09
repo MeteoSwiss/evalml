@@ -9,16 +9,20 @@ include: "common.smk"
 import pandas as pd
 
 
-def _use_first_baseline_zarr(wc) -> tuple[str, str]:
-    """Get the first available baseline zarr for the given init time."""
+def _get_available_baselines(wc) -> list[dict[str, str]]:
+    """Get all available baseline zarr datasets for the given init time."""
+    baselines = []
     for baseline_id in BASELINE_CONFIGS:
         root = BASELINE_CONFIGS[baseline_id].get("root")
         steps = BASELINE_CONFIGS[baseline_id].get("steps")
+        label = BASELINE_CONFIGS[baseline_id].get("label", baseline_id)
         year = wc.init_time[2:4]
         baseline_zarr = f"{root}/FCST{year}.zarr"
         if Path(baseline_zarr).exists():
-            return baseline_zarr, steps
-    raise ValueError(f"No baseline zarr found for init time {wc.init_time}")
+            baselines.append({"zarr": baseline_zarr, "steps": steps, "label": label})
+    if not baselines:
+        raise ValueError(f"No baseline zarr found for init time {wc.init_time}")
+    return baselines
 
 
 rule plot_meteogram:
@@ -26,7 +30,6 @@ rule plot_meteogram:
         script="workflow/scripts/plot_meteogram.mo.py",
         inference_okfile=rules.execute_inference.output.okfile,
         truth=config["truth"]["root"],
-        baseline_zarr=lambda wc: _use_first_baseline_zarr(wc)[0],
         peakweather_dir=rules.download_obs_from_peakweather.output.root,
     output:
         OUT_ROOT
@@ -37,29 +40,46 @@ rule plot_meteogram:
         cpus_per_task=1,
         runtime="10m",
     params:
-        grib_out_dir=lambda wc: (
+        ana_label=lambda wc: config["truth"]["label"],
+        fcst_grib=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
-        baseline_steps=lambda wc: _use_first_baseline_zarr(wc)[1],
+        fcst_label=lambda wc: RUN_CONFIGS[wc.run_id]["label"],
+        baseline_zarrs=lambda wc: [x["zarr"] for x in _get_available_baselines(wc)],
+        baseline_steps=lambda wc: [x["steps"] for x in _get_available_baselines(wc)],
+        baseline_labels=lambda wc: [x["label"] for x in _get_available_baselines(wc)],
     shell:
         """
+        set -euo pipefail
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
-        python {input.script} \
-            --forecast {params.grib_out_dir} --steps {params.fcst_steps} \
-            --baseline {input.baseline_zarr} --baseline_steps {params.baseline_steps} \
-            --analysis {input.truth} \
-            --peakweather {input.peakweather_dir} \
-            --date {wildcards.init_time} --outfn {output[0]} \
-            --param {wildcards.param}  --station {wildcards.sta}
+
+        BASELINE_ZARRS=({params.baseline_zarrs:q})
+        BASELINE_STEPS=({params.baseline_steps:q})
+        BASELINE_LABELS=({params.baseline_labels:q})
+
+        CMD_ARGS=(
+            --forecast {params.fcst_grib:q}
+            --forecast_steps {params.fcst_steps:q}
+            --forecast_label {params.fcst_label:q}
+            --analysis {input.truth:q}
+            --analysis_label {params.ana_label:q}
+            --peakweather {input.peakweather_dir:q}
+            --date {wildcards.init_time:q}
+            --outfn {output[0]:q}
+            --param {wildcards.param:q}
+            --station {wildcards.sta:q}
+        )
+
+        for i in "${{!BASELINE_ZARRS[@]}}"; do
+            CMD_ARGS+=(--baseline "${{BASELINE_ZARRS[$i]}}")
+            CMD_ARGS+=(--baseline_steps "${{BASELINE_STEPS[$i]}}")
+            CMD_ARGS+=(--baseline_label "${{BASELINE_LABELS[$i]}}")
+        done
+
+        python {input.script} "${{CMD_ARGS[@]}}"
         # interactive editing (needs to set localrule: True and use only one core)
-        # marimo edit {input.script} -- \
-        #     --forecast {params.grib_out_dir} --steps {params.fcst_steps} \
-        #     --baseline {input.baseline_zarr} --baseline_steps {params.baseline_steps} \
-        #     --analysis {input.truth} \
-        #     --peakweather {input.peakweather_dir} \
-        #     --date {wildcards.init_time} --outfn {output[0]} \
-        #     --param {wildcards.param}  --station {wildcards.sta}
+        # marimo edit {input.script} -- "${{CMD_ARGS[@]}}"
         """
 
 

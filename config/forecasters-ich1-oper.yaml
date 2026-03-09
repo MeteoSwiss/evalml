@@ -11,7 +11,6 @@ dates:
   - 2025-02-01T06:00
   - 2025-03-01T12:00
 
-
 runs:
   - forecaster:
       checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/409/runs/b30acf68520a4bbd8324c44666561696
@@ -25,15 +24,19 @@ runs:
 
 baselines:
   - baseline:
+      baseline_id: ICON-CH1-EPS
+      label: ICON-CH1-ctrl
+      root: /scratch/mch/cmerker/ICON-CH1-EPS
+      steps: 0/33/6
+  - baseline:
       baseline_id: ICON-CH2-EPS
-      label: ICON-CH2-EPS
+      label: ICON-CH2-ctrl
       root: /scratch/mch/cmerker/ICON-CH2-EPS
       steps: 0/120/6
 
 truth:
   label: KENDA-CH1
   root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
-
 
 stratification:
   regions:
