@@ -34,6 +34,7 @@ rule verif_metrics_baseline:
         cpus_per_task=24,
         mem_mb=50_000,
         runtime="60m",
+        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230"
     shell:
         """
         uv run {input.script} \
@@ -81,6 +82,7 @@ rule verif_metrics:
         cpus_per_task=24,
         mem_mb=50_000,
         runtime="60m",
+        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230"
     shell:
         """
         uv run {input.script} \
@@ -117,7 +119,8 @@ rule verif_metrics_aggregation:
     resources:
         cpus_per_task=24,
         mem_mb=250_000,
-        runtime="2h",
+        runtime="24h",
+        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230"
     shell:
         """
         uv run {input.script} {input.verif_nc} --output {output} > {log} 2>&1
