@@ -52,9 +52,9 @@ _CMAP_DEFAULTS = {
     # always start at 0 so that the saturation of the colour corresponds to the error magnitude.
 
     # RMSE:
-    "U_10M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
-    "V_10M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
-    "SP_10M.RMSE.spatial":   {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
+    "U_10M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
+    "V_10M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
+    "SP_10M.RMSE.spatial":   {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
     "TD_2M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
     "T_2M.RMSE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
     "PMSL.RMSE.spatial":     {"cmap": plt.get_cmap("Reds", 7), "levels": [0, 50, 100, 150, 200, 250, 300, 350]} | {"units": "Pa"},
@@ -64,9 +64,9 @@ _CMAP_DEFAULTS = {
     # matplotlib does not do that -> ?
 
     # MAE:
-    "U_10M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
-    "V_10M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
-    "SP_10M.MAE.spatial":   {"cmap": plt.get_cmap("Reds", 6), "vmin": 0} | {"units": "m/s"},
+    "U_10M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
+    "V_10M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
+    "SP_10M.MAE.spatial":   {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
     "TD_2M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
     "T_2M.MAE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
     "PMSL.MAE.spatial":     {"cmap": plt.get_cmap("Reds", 7), "levels": [0, 50, 100, 150, 200, 250, 300, 350]} | {"units": "Pa"},
