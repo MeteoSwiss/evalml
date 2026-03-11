@@ -122,7 +122,7 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
         Mapped forecast dataset.
     """
     # TODO: return fcst unchanged when forecast and truth are already aligned
-    
+
     truth_is_grid = "y" in truth.dims and "x" in truth.dims
 
     if "y" in fcst.dims and "x" in fcst.dims:
