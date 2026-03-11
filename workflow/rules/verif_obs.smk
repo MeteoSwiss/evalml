@@ -66,7 +66,11 @@ def init_times_for_mec(wc):
 rule prepare_mec_input:
     input:
         src_dir=OUT_ROOT / "data/runs/{run_id}/{init_time}/grib",
-        inference_ok=OUT_ROOT / f"run_inference_all.{EXPERIMENT_HASH}.ok",
+        inference_ok=lambda wc: expand(
+            rules.execute_inference.output.okfile,
+            run_id=wc.run_id,
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+        ),
     output:
         run=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec"),
         obs=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs"),
@@ -201,6 +205,6 @@ rule run_mec:
 
         # copy the output file to the final location for the Feedback files
         mkdir -p {input.run_dir}/../../fdbk_files
-        cp {input.run_dir}/verSYNOP.nc {input.run_dir}/../../fdbk_files/verSYNOP_{wildcards.init_time}.nc
+        cp {input.run_dir}/verSYNOP.nc {input.run_dir}/../../fdbk_files/verSYNOP_{wildcards.init_time}00.nc
         ) > {log} 2>&1
         """

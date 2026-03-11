@@ -172,12 +172,17 @@ rule run_inference_all:
     """Run inference for all reference times as defined in the configuration."""
     input:
         expand(
-            OUT_ROOT / "data/runs/{run_id}/{init_time}/grib",
+            rules.execute_inference.output.okfile,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=CANDIDATES,
         ),
     output:
-        inference_ok=touch(OUT_ROOT / f"run_inference_all.{EXPERIMENT_HASH}.ok"),
+        run_all_ok=touch(OUT_ROOT / "logs/run_inference_all.ok"),
+    shell:
+        """
+        mkdir -p $(dirname {output.run_all_ok})
+        touch {output.run_all_ok}
+        """
 
 
 rule verif_metrics_all:
