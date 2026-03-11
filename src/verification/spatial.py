@@ -121,10 +121,13 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
     xr.Dataset
         Mapped forecast dataset.
     """
+    # TODO: return fcst unchanged when forecast and truth are already aligned
+    
+    truth_is_grid = "y" in truth.dims and "x" in truth.dims
 
     if "y" in fcst.dims and "x" in fcst.dims:
         fcst = fcst.stack(values=("y", "x"))
-    if "y" in truth.dims and "x" in truth.dims:
+    if truth_is_grid:
         truth = truth.stack(values=("y", "x"))
 
     nearest_idx = spherical_nearest_neighbor_indices(
@@ -139,5 +142,8 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
     fcst = fcst.assign_coords(lon=("values", truth.lon.data))
     fcst = fcst.assign_coords(lat=("values", truth.lat.data))
     fcst = fcst.assign_coords(values=truth["values"])
+
+    if truth_is_grid:
+        fcst = fcst.unstack("values")
 
     return fcst

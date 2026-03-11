@@ -89,3 +89,45 @@ def test_map_forecast_to_truth_maps_forecast_to_truth_locations():
         mapped_fcst["T_2M"].values,
         np.array([[1.0, 4.0], [10.0, 40.0]]),
     )
+
+
+def test_map_forecast_to_truth_restores_grid_when_truth_is_gridded():
+    fcst_time = np.array(["2024-01-01T00:00"], dtype="datetime64[ns]")
+
+    fcst = xr.Dataset(
+        data_vars={
+            "T_2M": (
+                ("time", "y", "x"),
+                np.array([[[1.0, 2.0], [3.0, 4.0]]]),
+            )
+        },
+        coords={
+            "time": fcst_time,
+            "y": [0, 1],
+            "x": [0, 1],
+            "lat": (("y", "x"), np.array([[46.0, 46.0], [47.0, 47.0]])),
+            "lon": (("y", "x"), np.array([[7.0, 8.0], [7.0, 8.0]])),
+        },
+    )
+    truth = xr.Dataset(
+        data_vars={"T_2M": (("time", "y", "x"), np.zeros((1, 2, 2)))},
+        coords={
+            "time": fcst_time,
+            "y": [0, 1],
+            "x": [0, 1],
+            "lat": (("y", "x"), np.array([[46.1, 46.1], [46.9, 46.9]])),
+            "lon": (("y", "x"), np.array([[7.1, 7.9], [7.1, 7.9]])),
+        },
+    )
+
+    mapped_fcst = map_forecast_to_truth(fcst, truth)
+
+    assert mapped_fcst["T_2M"].dims == ("time", "y", "x")
+    assert np.array_equal(mapped_fcst["y"].values, np.array([0, 1]))
+    assert np.array_equal(mapped_fcst["x"].values, np.array([0, 1]))
+    assert np.allclose(mapped_fcst["lat"].values, truth["lat"].values)
+    assert np.allclose(mapped_fcst["lon"].values, truth["lon"].values)
+    assert np.allclose(
+        mapped_fcst["T_2M"].values,
+        np.array([[[1.0, 2.0], [3.0, 4.0]]]),
+    )
