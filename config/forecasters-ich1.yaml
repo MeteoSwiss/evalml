@@ -41,14 +41,14 @@ runs:
 
 baselines:
   - baseline:
-      baseline_id: ICON-CH1-EPS
-      label: ICON-CH1-EPS
-      root: /store_new/mch/msopr/ml/ICON-CH1-EPS
-      steps: 0/33/6
+      baseline_id: ICON-CH2-EPS
+      label: ICON-CH2-EPS
+      root: /scratch/mch/cmerker/ICON-CH2-EPS
+      steps: 0/120/6
 
-analysis:
-  label: REA-L-CH1
-  analysis_zarr: /store_new/mch/msopr/ml/datasets/mch-realch1-fdb-1km-2005-2025-1h-pl13-v1.0.zarr
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
 
 stratification:
   regions:
