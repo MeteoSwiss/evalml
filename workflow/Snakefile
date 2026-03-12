@@ -132,9 +132,9 @@ rule experiment_all:
             experiment=EXPERIMENT_NAME,
         ),
         expand(
-            OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}.nc",
+            OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}00.nc",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
-            run_id=collect_all_candidates(),
+            run_id=CANDIDATES,
         ),
 
 

@@ -173,7 +173,9 @@ rule run_mec:
         run_dir=directory(rules.prepare_mec_input.output.run),
         mod_dir=directory(rules.link_mec_input.output.mod),
     output:
-        fdbk_file=OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}.nc",
+        fdbk_file=OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}00.nc",
+    wildcard_constraints:
+        init_time=r"\d{12}",
     log:
         OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/run_mec.log",
     shell:
@@ -203,7 +205,8 @@ rule run_mec:
         #source /oprusers/osm/opr.emme/abs/mec.env
         #./mec > ./mec_out.log 2>&1
 
-        # copy the output file to the final location for the Feedback files
+        # copy the output file to the final location for the Feedback files plus renaming to
+        # match NWP naming conventions (verSYNOP_YYYYMMDDHHMMSS.nc)
         mkdir -p {input.run_dir}/../../fdbk_files
         cp {input.run_dir}/verSYNOP.nc {input.run_dir}/../../fdbk_files/verSYNOP_{wildcards.init_time}00.nc
         ) > {log} 2>&1
