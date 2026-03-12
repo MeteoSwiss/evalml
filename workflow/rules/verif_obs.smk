@@ -264,6 +264,31 @@ rule run_ffv2:
         --mount=type=bind,source=$output_dir_abs,destination=/src/ffv2/output \
         container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-main
 
+		# move score files into app-specific subdirectories, for the Shiny app
+		# display.
+		mkdir -p $output_dir_abs/fdbk_cont/data
+		mkdir -p $output_dir_abs/fdbk_cont_bystat/data
+		mkdir -p $output_dir_abs/fdbk_cont_ts/data
+		mkdir -p $output_dir_abs/fdbk_synop_categ/data
+		mkdir -p $output_dir_abs/fdbk_synop_categ_bystat/data
+		mkdir -p $output_dir_abs/fdbk_synop_categ_ts/data
+
+		# DET surface continuous scores
+		mv $output_dir_abs/CONT_exp* $output_dir_abs/fdbk_cont/data/
+		# DET surface continuous scores as time series
+		mv $output_dir_abs/CONT_TS_exp* $output_dir_abs/fdbk_cont_ts/data/
+		# DET surface continuous by stations
+		# mv $output_dir_abs/CONT_bs_exp* $output_dir_abs/fdbk_cont_bystat/data/
+
+		# Categorical verification against SYNOP
+		mv $output_dir_abs/CATEG_exp* $output_dir_abs/fdbk_synop_categ/data
+
+		# Categorical verification against SYNOP by station
+		mv $output_dir_abs/CATEG_TS_exp* $output_dir_abs/fdbk_synop_categ_btstat/data
+
+		# Categorical verification against SYNOP as time series
+		mv $output_dir_abs/CATEG_bs_exp* $output_dir_abs/fdbk_synop_categ_ts/data		
+
         echo "...time at end of run_ffv2: $(date)"
         ) > {log} 2>&1
         """
