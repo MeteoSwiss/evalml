@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Evaluate skill of ICON-CH1 single.
+
+dates:
+  # start: 2025-01-01T00:00
+  # end: 2025-06-20T00:00
+  # frequency: 54h
+  # or
+  - 2025-01-01T00:00
+  - 2025-02-01T06:00
+  - 2025-03-01T12:00
+
+
+runs:
+  - forecaster:
+      checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/409/runs/b30acf68520a4bbd8324c44666561696
+      label: stage_C_icon_1km
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1-oper.yaml
+      extra_requirements:
+        - earthkit-utils<0.2.0
+        - earthkit-data<0.19.0
+        - git+https://github.com/ecmwf/anemoi-inference.git@main
+
+baselines:
+  - baseline:
+      baseline_id: ICON-CH1-EPS
+      label: ICON-CH1-EPS
+      root: /store_new/mch/msopr/ml/ICON-CH1-EPS
+      steps: 0/33/6
+
+analysis:
+  label: KENDA-CH1
+  analysis_zarr: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
+stratification:
+  regions:
+    - jura
+    - mittelland
+    - voralpen
+    - alpennordhang
+    - innerealpentaeler
+    - alpensuedseite
+  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50
+  batch_rules:
+    plot_forecast_frame: 32

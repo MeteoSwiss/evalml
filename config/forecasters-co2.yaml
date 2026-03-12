@@ -9,12 +9,12 @@ dates:
 
 runs:
   - forecaster:
-      mlflow_id: d0846032fc7248a58b089cbe8fa4c511
+      checkpoint: https://mlflow.ecmwf.int/#/experiments/103/runs/d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
       steps: 0/120/6
       config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
-      extra_dependencies:
-        - git+https://github.com/ecmwf/anemoi-inference.git@main
+      extra_requirements:
+        - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
 
 baselines:
   - baseline:
@@ -39,9 +39,6 @@ stratification:
 
 locations:
   output_root: output/
-  mlflow_uri:
-    - https://servicedepl.meteoswiss.ch/mlstore
-    - https://mlflow.ecmwf.int
 
 profile:
   executor: slurm
@@ -54,3 +51,5 @@ profile:
     runtime: "1h"
     gpus: 0
   jobs: 50
+  batch_rules:
+    plot_forecast_frame: 32

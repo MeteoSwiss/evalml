@@ -45,13 +45,14 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
         regions["all"] = [
             Polygon(list(zip([1.5, 16, 16, 1.5, 1.5], [43, 43, 49.5, 49.5, 43])))
         ]
-        shp = [shp] if isinstance(shp, str) else shp
-        for shapefile in shp:
-            region_name = Path(shapefile).stem
-            reader = Reader(shapefile)
-            regions[region_name] = [
-                transform(proj, record.geometry) for record in reader.records()
-            ]
+        if shp != []:
+            shp = [shp] if isinstance(shp, str) else shp
+            for shapefile in shp:
+                region_name = Path(shapefile).stem
+                reader = Reader(shapefile)
+                regions[region_name] = [
+                    transform(proj, record.geometry) for record in reader.records()
+                ]
         self.regions = regions
 
     def get_masks(self, lat: xr.DataArray, lon: xr.DataArray) -> xr.DataArray:
@@ -74,7 +75,6 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
 def _compute_scores(
     fcst: xr.DataArray,
     obs: xr.DataArray,
-    dim=["x", "y"],
     prefix="",
     suffix="",
     source="",
@@ -83,6 +83,7 @@ def _compute_scores(
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
     Returns a xarray Dataset with the computed metrics.
     """
+    dim = ["x", "y"] if "x" in fcst.dims and "y" in fcst.dims else ["values"]
     error = fcst - obs
     scores = xr.Dataset(
         {
@@ -100,7 +101,6 @@ def _compute_scores(
 
 def _compute_statistics(
     data: xr.DataArray,
-    dim=["x", "y"],
     prefix="",
     suffix="",
     source="",
@@ -109,6 +109,7 @@ def _compute_statistics(
     Compute basic statistics of a xarray DataArray (data).
     Returns a xarray Dataset with the computed statistics.
     """
+    dim = ["x", "y"] if "x" in data.dims and "y" in data.dims else ["values"]
     stats = xr.Dataset(
         {
             f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),

@@ -1,3 +1,4 @@
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,7 @@ from evalml.config import ConfigModel
 
 def run_command(command: list[str]) -> int:
     """Execute a shell command, optionally as dry-run."""
-    click.echo("Launching: " + " ".join(command))
+    Path(".evalml_snakemake_cmd.txt").write_text(shlex.join(command) + "\n")
     return subprocess.run(command).returncode
 
 
@@ -76,13 +77,13 @@ def execute_workflow(
         command.append("--dry-run")
     if unlock:
         command.append("--unlock")
-    if verbose:
-        command.append("--printshellcmds")
     if report and not dry_run:
         command += ["--report-after-run", "--report", str(report)]
 
     command.append(target)
     command += list(extra_smk_args)
+    if not verbose:
+        command += ["--quiet", "rules"]  # reduce verobosity of snakemake output
 
     raise SystemExit(run_command(command))
 
