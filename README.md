@@ -26,7 +26,7 @@ To run an experiment, prepare a demo config file like the one below and adapt it
 ```yaml
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Demo experiment: compare two forecaster checkpoints against the same baseline and analysis.
+  Demo experiment: compare two forecaster checkpoints against the same baseline and truth data.
 
 # Optional: used in the output directory name. If omitted, the config file name is used.
 config_label: co2-forecasters-demo
@@ -48,7 +48,7 @@ runs:
       label: Stage D - N320 global grid with CERRA finetuning
       # Lead times follow start/end/step in hours.
       steps: 0/120/6
-      # `config` should point to an inference config file used as the template for the run.
+      # `config` points to the inference config template for the run. If omitted, evalml uses the bundled default for the run type.
       config: resources/inference/configs/sgm-forecaster-global.yaml
       # Optional extra dependencies needed by this checkpoint at inference time.
       extra_requirements:
@@ -66,9 +66,9 @@ baselines:
       root: /store_new/mch/msopr/ml/COSMO-E
       steps: 0/120/6
 
-analysis:
+truth:
   label: COSMO KENDA
-  analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr
+  root: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr
 
 stratification:
   regions:

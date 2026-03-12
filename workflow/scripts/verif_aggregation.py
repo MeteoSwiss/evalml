@@ -34,7 +34,7 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
     ds = ds.assign_coords(
         season=lambda ds: ds.ref_time.dt.season,
         init_hour=lambda ds: ds.ref_time.dt.hour,
-    ).drop_vars(["time"])
+    ).drop_vars(["time"], errors="ignore")
 
     # compute mean with grouping by all permutations of season and init_hour
     ds_mean = []
