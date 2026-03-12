@@ -21,28 +21,43 @@ Run evaluation pipelines for data-driven weather models built with [Anemoi](http
 
 ## Quick example
 
-To launch an experiment, prepare a config file defining your experiment, e.g.
+To run an experiment, prepare a demo config file like the one below and adapt it to your setup:
 
 ```yaml
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  This is an experiment to do blabla.
+  Demo experiment: compare two forecaster checkpoints against the same baseline and analysis.
 
+# Optional: used in the output directory name. If omitted, the config file name is used.
+config_label: co2-forecasters-demo
+
+# Choose one date style:
+# 1. A regular range with a run frequency (shown here)
+# 2. An explicit list of ISO timestamps for case studies or showcases
 dates:
-  start: 2020-01-01T12:00
+  start: 2020-01-01T00:00
   end: 2020-01-10T00:00
   frequency: 60h
 
 runs:
+  # Each item is either `forecaster` or `interpolator`.
   - forecaster:
-      mlflow_id: 2f962c89ff644ca7940072fa9cd088ec
+      # `checkpoint` may point to a supported MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.
+      checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/228/runs/2f962c89ff644ca7940072fa9cd088ec
+      # Labels are what appear in plots, tables, and reports.
       label: Stage D - N320 global grid with CERRA finetuning
+      # Lead times follow start/end/step in hours.
       steps: 0/120/6
+      # `config` should point to an inference config file used as the template for the run.
+      config: resources/inference/configs/sgm-forecaster-global.yaml
+      # Optional extra dependencies needed by this checkpoint at inference time.
+      extra_requirements:
+        - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
   - forecaster:
-      mlflow_id: d0846032fc7248a58b089cbe8fa4c511
+      checkpoint: https://mlflow.ecmwf.int/#/experiments/103/runs/d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
       steps: 0/120/6
-
+      config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
 
 baselines:
   - baseline:
@@ -55,24 +70,38 @@ analysis:
   label: COSMO KENDA
   analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr
 
+stratification:
+  regions:
+    - jura
+    - mittelland
+    - voralpen
+    - alpennordhang
+    - innerealpentaeler
+    - alpensuedseite
+  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+
 locations:
+  # All workflow outputs are written under this root.
   output_root: output/
-  mlflow_uri:
-    - https://servicedepl.meteoswiss.ch/mlstore
-    - https://mlflow.ecmwf.int
 
 profile:
+  # Passed through to Snakemake. Tune this block to match your cluster or local executor.
   executor: slurm
   global_resources:
-    gpus: 15
+    # Limits total concurrent GPU use across submitted jobs.
+    gpus: 16
   default_resources:
     slurm_partition: "postproc"
     cpus_per_task: 1
     mem_mb_per_cpu: 1800
     runtime: "1h"
-    gpus: 0
   jobs: 50
+  batch_rules:
+    # Group many small plotting jobs into fewer submissions.
+    plot_forecast_frame: 32
 ```
+
+The `runs` list accepts both `forecaster` and `interpolator` entries. For `dates`, you can either provide a `start` / `end` / `frequency` block as above or an explicit list of ISO timestamps for case-study style runs.
 
 You can then run it with:
 
