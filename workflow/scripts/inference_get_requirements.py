@@ -112,14 +112,26 @@ def extract_pypi_requirements(
     """
     requirements: dict[str, str] = {}
 
-    for module, version_str in module_versions.items():
-        if module.startswith("_"):
+    for module, version_info in module_versions.items():
+        if module.startswith("_") or not version_info:
             continue
-        if not version_str or not version_str[0].isdigit():
+
+        if isinstance(version_info, str):  # backwards compatibility
+            version = version_info
+        elif isinstance(
+            version_info, dict
+        ):  # https://github.com/ecmwf/anemoi-utils/commit/b28a62b3a0da6382449362132cdc000efc39ce5d
+            version = version_info.get("version")
+        else:
+            raise ValueError(
+                f"Unexpected module version info. Expected a string or dict containing a 'version' key, got {type(version_info)}"
+            )
+
+        if not version[0].isdigit():
             continue
 
         try:
-            version = Version(version_str)
+            version = Version(version)
         except InvalidVersion:
             continue
 
