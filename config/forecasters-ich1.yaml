@@ -18,7 +18,7 @@ runs:
         - git+https://github.com/ecmwf/anemoi-inference.git@main
 
 baselines:
-- baseline:
+  - baseline:
       baseline_id: ICON-CH1-EPS
       label: ICON-CH1-EPS
       root: /store_new/mch/msopr/ml/ICON-CH1-EPS
@@ -55,3 +55,5 @@ profile:
     runtime: "1h"
     gpus: 0
   jobs: 50
+  batch_rules:
+    plot_forecast_frame: 32

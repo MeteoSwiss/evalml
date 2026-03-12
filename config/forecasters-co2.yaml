@@ -3,21 +3,15 @@ description:
   Evaluate skill of COSMO-E emulator (M-1 forecaster).
 
 dates:
-<<<<<<< HEAD:config/forecasters.yaml
-  start: 2020-01-04T00:00
-  end: 2020-01-05T00:00
+  start: 2020-07-25T00:00
+  end: 2020-07-27T00:00
   frequency: 12h
-=======
-  start: 2020-01-08T18:00
-  end: 2020-01-09T00:00
-  frequency: 6h
->>>>>>> origin/MRB-534-Implement-rule-to-generate-namelist:config/forecasters-co2.yaml
 
 runs:
   - forecaster:
       mlflow_id: d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
-      steps: 0/12/6
+      steps: 0/24/12
       config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
       extra_dependencies:
         - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
@@ -27,7 +21,7 @@ baselines:
       baseline_id: COSMO-E
       label: COSMO-E
       root: /store_new/mch/msopr/ml/COSMO-E
-      steps: 0/12/6
+      steps: 0/24/12
 
 analysis:
   label: COSMO KENDA
@@ -60,3 +54,5 @@ profile:
     runtime: "1h"
     gpus: 0
   jobs: 50
+  batch_rules:
+    plot_forecast_frame: 32

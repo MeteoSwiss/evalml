@@ -28,7 +28,8 @@ rule plot_meteogram:
         baseline_zarr=lambda wc: _use_first_baseline_zarr(wc),
         peakweather_dir=rules.download_obs_from_peakweather.output.peakweather,
     output:
-        OUT_ROOT / "showcases/{run_id}/{init_time}/{init_time}_{param}_{sta}.png",
+        OUT_ROOT
+        / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{sta}.png",
     # localrule: True
     resources:
         slurm_partition="postproc",
@@ -60,10 +61,8 @@ rule plot_forecast_frame:
         script="workflow/scripts/plot_forecast_frame.mo.py",
         inference_okfile=rules.execute_inference.output.okfile,
     output:
-        temp(
-            OUT_ROOT
-            / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{region}.png"
-        ),
+        OUT_ROOT
+        / "data/runs/{run_id}/{init_time}/frames/frame_{leadtime}_{param}_{region}.png",
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
     resources:
@@ -100,13 +99,13 @@ rule make_forecast_animation:
     localrule: True
     input:
         expand(
-            OUT_ROOT
-            / "showcases/{run_id}/{init_time}/frames/{init_time}_{leadtime}_{param}_{region}.png",
+            rules.plot_forecast_frame.output,
             leadtime=lambda wc: get_leadtimes(wc),
             allow_missing=True,
         ),
     output:
-        OUT_ROOT / "showcases/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
+        OUT_ROOT
+        / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
     params:
         delay=lambda wc: 10 * int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
     shell:
