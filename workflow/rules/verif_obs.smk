@@ -210,7 +210,8 @@ rule run_mec:
         #source /oprusers/osm/opr.emme/abs/mec.env
         #./mec > ./mec_out.log 2>&1
 
-        # move the output file to the final location for the Feedback files
+        # copy the output file to the final location for the Feedback files
+		# and rename to match NWP conventions
         mkdir -p {params.final_fdbk_file_dir}
         cp {input.run_dir}/verSYNOP.nc {params.final_fdbk_file_dir}/verSYNOP_{wildcards.init_time}00.nc
         echo "...time at end of run_mec: $(date)"
@@ -244,6 +245,8 @@ rule generate_ffv2_namelist:
     shell:
         """
         mkdir -p {params.output_directory}
+		output_dir={params.output_directory}
+		echo "created $output_dir"
         uv run {input.script} \
             --template {input.template} \
             --namelist {output.namelist} \
