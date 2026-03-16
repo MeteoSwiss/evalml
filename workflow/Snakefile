@@ -137,7 +137,7 @@ rule experiment_all:
             run_id=CANDIDATES,
         ),
         expand(
-            rules.run_ffv2.output,
+            rules.reorganize_ffv2_files.output,
             run_id=collect_all_candidates(),
         ),
         expand(

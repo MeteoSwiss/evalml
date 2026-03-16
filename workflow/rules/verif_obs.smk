@@ -259,7 +259,6 @@ rule generate_ffv2_namelist:
             --blacklists {params.blacklists}
         """
 
-# Question: one run per run_id? (If not will need to change wildcards around)
 rule run_ffv2:
     input:
         namelist=rules.generate_ffv2_namelist.output.namelist,
@@ -267,9 +266,7 @@ rule run_ffv2:
         # Need to specify this in order to mount it.
         feedback_directory=rules.generate_ffv2_namelist.input.feedback_directory,
     output:
-        # DO NOT SUBMIT: Fix to use directly.
         scores=directory(OUT_ROOT / "data/runs/{run_id}/scores")
-        #scores=directory(rules.generate_ffv2_namelist.params.output_directory),
     params:
         # domain_table and blacklists are locations on Balfrin, that will be
         # mounted into container (with the same filepaths)
@@ -307,32 +304,55 @@ rule run_ffv2:
         --mount=type=bind,source=$feedback_dir_abs,destination=/src/ffv2/input \
         --mount=type=bind,source=$output_dir_abs,destination=/src/ffv2/output \
         container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-main
-
-		# move score files into app-specific subdirectories, for the Shiny app
-		# display.
-		mkdir -p $output_dir_abs/fdbk_cont/data
-		mkdir -p $output_dir_abs/fdbk_cont_bystat/data
-		mkdir -p $output_dir_abs/fdbk_cont_ts/data
-		mkdir -p $output_dir_abs/fdbk_synop_categ/data
-		mkdir -p $output_dir_abs/fdbk_synop_categ_bystat/data
-		mkdir -p $output_dir_abs/fdbk_synop_categ_ts/data
-
-		# DET surface continuous scores
-		mv $output_dir_abs/CONT_exp* $output_dir_abs/fdbk_cont/data/
-		# DET surface continuous scores as time series
-		mv $output_dir_abs/CONT_TS_exp* $output_dir_abs/fdbk_cont_ts/data/
-		# DET surface continuous by stations
-		# mv $output_dir_abs/CONT_bs_exp* $output_dir_abs/fdbk_cont_bystat/data/
-
-		# Categorical verification against SYNOP
-		mv $output_dir_abs/CATEG_exp* $output_dir_abs/fdbk_synop_categ/data
-
-		# Categorical verification against SYNOP by station
-		mv $output_dir_abs/CATEG_TS_exp* $output_dir_abs/fdbk_synop_categ_btstat/data
-
-		# Categorical verification against SYNOP as time series
-		mv $output_dir_abs/CATEG_bs_exp* $output_dir_abs/fdbk_synop_categ_ts/data		
-
+		
         echo "...time at end of run_ffv2: $(date)"
+        ) > {log} 2>&1
+		"""
+
+rule reorganize_ffv2_files:
+    localrule: True
+    input:
+        scores=rules.run_ffv2.output.scores
+    output:
+        shiny_dir=directory(OUT_ROOT / "data/runs/{run_id}/shiny/")
+    log:
+        OUT_ROOT / "data/runs/{run_id}/reorganize_ffv2_files.log",
+    shell:
+        """
+        (
+        set -euo pipefail
+        echo "...time at start of reorganize_ffv2_files: $(date)"
+
+        input_dir_abs=$(realpath {input.scores})
+        output_dir_abs=$(realpath {output.shiny_dir})
+
+        # move score files into app-specific subdirectories, for the Shiny app
+        # display.
+        mkdir -p $output_dir_abs/fdbk_cont/data
+        mkdir -p $output_dir_abs/fdbk_cont_bystat/data
+        mkdir -p $output_dir_abs/fdbk_cont_ts/data
+        mkdir -p $output_dir_abs/fdbk_synop_categ/data
+        mkdir -p $output_dir_abs/fdbk_synop_categ_bystat/data
+        mkdir -p $output_dir_abs/fdbk_synop_categ_ts/data
+
+        # DET surface continuous scores
+        cp $input_dir_abs/CONT_exp* $output_dir_abs/fdbk_cont/data/
+        # DET surface continuous scores as time series
+        cp $input_dir_abs/CONT_TS_exp* $output_dir_abs/fdbk_cont_ts/data/
+        # DET surface continuous by stations
+        cp $input_dir_abs/CONT_bs_exp* $output_dir_abs/fdbk_cont_bystat/data/
+
+        # Categorical verification against SYNOP
+        cp $input_dir_abs/CATEG_exp* $output_dir_abs/fdbk_synop_categ/data
+        cp $input_dir_abs/PEC_exp* $output_dir_abs/fdbk_synop_categ/data
+
+        # Categorical verification against SYNOP by station
+        # This is not presently generated, so skip.
+        #cp $input_dir_abs/CATEG_TS_exp* $output_dir_abs/fdbk_synop_categ_btstat/data
+
+        # Categorical verification against SYNOP as time series
+        cp $input_dir_abs/CATEG_bs_exp* $output_dir_abs/fdbk_synop_categ_ts/data		
+
+        echo "...time at end of reorganize_ffv2_files: $(date)"
         ) > {log} 2>&1
         """
