@@ -176,6 +176,8 @@ rule run_mec:
         fdbk_file=OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}00.nc",
     wildcard_constraints:
         init_time=r"\d{12}",
+    params:
+        final_fdbk_file_dir=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}/fdbk_files"),
     log:
         OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/run_mec.log",
     shell:
@@ -207,7 +209,7 @@ rule run_mec:
 
         # copy the output file to the final location for the Feedback files plus renaming to
         # match NWP naming conventions (verSYNOP_YYYYMMDDHHMMSS.nc)
-        mkdir -p {input.run_dir}/../../fdbk_files
-        cp {input.run_dir}/verSYNOP.nc {input.run_dir}/../../fdbk_files/verSYNOP_{wildcards.init_time}00.nc
+        mkdir -p {params.final_fdbk_file_dir}
+        cp {input.run_dir}/verSYNOP.nc {params.final_fdbk_file_dir}/verSYNOP_{wildcards.init_time}00.nc
         ) > {log} 2>&1
         """
