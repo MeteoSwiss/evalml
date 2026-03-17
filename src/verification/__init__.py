@@ -17,6 +17,13 @@ from shapely.geometry import Polygon
 
 LOG = logging.getLogger(__name__)
 
+# Thresholds for categorical verification metrics.
+# Keys are dataset parameter names; values are lists of threshold values
+# (in the same units as the parameter in the dataset).
+CATEGORICAL_THRESHOLDS: dict[str, list[float]] = {
+    "TOT_PREC": [1.0, 5.0],  # mm — total precipitation
+}
+
 
 class AggregationMasks(abc.ABC):
     @abc.abstractmethod
@@ -93,6 +100,42 @@ def _compute_scores(
             f"{prefix}VAR{suffix}": error.var(dim=dim, skipna=True),
             f"{prefix}CORR{suffix}": xr.corr(fcst, obs, dim=dim),
             f"{prefix}R2{suffix}": xr.corr(fcst, obs, dim=dim) ** 2,
+        }
+    )
+    scores = scores.expand_dims({"source": [source]})
+    return scores
+
+
+def _compute_categorical_scores(
+    fcst: xr.DataArray,
+    obs: xr.DataArray,
+    threshold: float,
+    dim: list[str],
+    prefix="",
+    suffix="",
+    source="",
+) -> xr.Dataset:
+    """
+    Compute categorical verification metrics for a given threshold.
+    Binary events: 1 where value >= threshold, 0 otherwise.
+    Returns an xr.Dataset with the computed scores.
+    """
+    fcst_bin = (fcst >= threshold).astype(float)
+    obs_bin = (obs >= threshold).astype(float)
+
+    hits        = (fcst_bin * obs_bin).sum(dim=dim, skipna=True)               # H
+    false_alarms = (fcst_bin * (1 - obs_bin)).sum(dim=dim, skipna=True)        # FA
+    misses      = ((1 - fcst_bin) * obs_bin).sum(dim=dim, skipna=True)         # M
+    correct_neg = ((1 - fcst_bin) * (1 - obs_bin)).sum(dim=dim, skipna=True)   # CN
+    total = hits + false_alarms + misses + correct_neg                          # N
+
+    h_r = xr.where(total != 0, (hits + false_alarms) * (hits + misses) / total, np.nan)
+    denom = hits + false_alarms + misses - h_r
+
+    thr_str = f"ge{threshold:g}"
+    scores = xr.Dataset(
+        {
+            f"{prefix}ETS_{thr_str}{suffix}": xr.where(denom != 0, (hits - h_r) / denom, np.nan),
         }
     )
     scores = scores.expand_dims({"source": [source]})
@@ -185,15 +228,32 @@ def verify(
             obs_param = obs_aligned[param].where(masks.sel(region=region))
 
             # scores vs time (reduce spatially)
-            score.append(
-                _compute_scores(
-                    fcst_param,
-                    obs_param,
-                    prefix=param + ".",
-                    source=fcst_label,
-                    dim=dim,
-                ).expand_dims(region=[region])
+            region_score = _compute_scores(
+                fcst_param,
+                obs_param,
+                prefix=param + ".",
+                source=fcst_label,
+                dim=dim,
             )
+
+            # categorical scores (one entry per threshold), merged into region_score
+            if param in CATEGORICAL_THRESHOLDS:
+                cat_scores = xr.merge(
+                    [
+                        _compute_categorical_scores(
+                            fcst_param,
+                            obs_param,
+                            threshold=threshold,
+                            prefix=param + ".",
+                            source=fcst_label,
+                            dim=dim,
+                        )
+                        for threshold in CATEGORICAL_THRESHOLDS[param]
+                    ]
+                )
+                region_score = xr.merge([region_score, cat_scores])
+
+            score.append(region_score.expand_dims(region=[region]))
 
             # statistics vs time (reduce spatially)
             fcst_statistics.append(
