@@ -9,7 +9,7 @@ dates:
   # or
   - 2024-01-01T12:00
   - 2024-02-01T18:00
-  - 2024-03-01T00:00
+  - 2025-03-01T00:00
 
 
 runs:
@@ -35,12 +35,12 @@ baselines:
   - baseline:
       baseline_id: ICON-CH1-EPS
       label: ICON-CH1-EPS
-      root: /store_new/mch/msopr/ml/ICON-CH1-EPS
+      root: /scratch/mch/cmerker/ICON-CH1-EPS
       steps: 0/33/6
 
-analysis:
+truth:
   label: KENDA-CH1
-  analysis_zarr: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
 
 stratification:
   regions:
