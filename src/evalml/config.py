@@ -151,10 +151,10 @@ class InterpolatorConfig(RunConfig):
 class BaselineConfig(BaseModel):
     """Configuration for a single baseline to include in the verification."""
 
-    baseline_id: str = Field(
-        ...,
+    baseline_id: str | None = Field(
+        None,
         min_length=1,
-        description="Identifier for the baseline, e.g. 'COSMO-E'.",
+        description="Optional identifier for the baseline, e.g. 'COSMO-E'. Defaults to label when omitted.",
     )
     label: str = Field(
         ...,
@@ -298,13 +298,13 @@ class ConfigModel(BaseModel):
         description="Optional label for the experiment that will be used in the experiment directory name. Defaults to the config file name if not provided.",
     )
     dates: Dates | ExplicitDates
-    runs: List[ForecasterItem | InterpolatorItem] = Field(
+    runs: List[ForecasterItem | InterpolatorItem | BaselineItem] = Field(
         ...,
-        description="Dictionary of runs to execute, with run IDs as keys and configurations as values.",
+        description="List of experiment participants, including forecaster/interpolator ML runs and baselines.",
     )
     baselines: List[BaselineItem] = Field(
-        ...,
-        description="Dictionary of baselines to include in the verification.",
+        default_factory=list,
+        description="Deprecated top-level baselines list. Prefer defining baseline entries directly in `runs`.",
     )
     truth: TruthConfig | None
     stratification: Stratification
