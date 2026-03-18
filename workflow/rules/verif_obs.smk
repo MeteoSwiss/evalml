@@ -348,10 +348,10 @@ rule reorganize_ffv2_files:
 
         # Categorical verification against SYNOP by station
         # This is not presently generated, so skip.
-        #cp $input_dir_abs/CATEG_TS_exp* $output_dir_abs/fdbk_synop_categ_btstat/data
+        #cp $input_dir_abs/CATEG_TS_exp* $output_dir_abs/fdbk_synop_categ_ts/data
 
         # Categorical verification against SYNOP as time series
-        cp $input_dir_abs/CATEG_bs_exp* $output_dir_abs/fdbk_synop_categ_ts/data		
+        cp $input_dir_abs/CATEG_bs_exp* $output_dir_abs/fdbk_synop_categ_bystat/data		
 
         echo "...time at end of reorganize_ffv2_files: $(date)"
         ) > {log} 2>&1
