@@ -166,7 +166,7 @@ def collect_all_baselines():
         if "baseline" not in run_entry:
             continue
         baseline_config = run_entry["baseline"]
-        baseline_id = baseline_config.pop("baseline_id", baseline_config["label"])
+        baseline_id = baseline_config["baseline_id"] or baseline_config["label"]
         baselines[baseline_id] = baseline_config
 
     # Backward compatibility with legacy top-level `baselines` block.
@@ -223,3 +223,4 @@ REFTIMES = parse_reference_times()
 RUN_CONFIGS = collect_all_runs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
+print(EXPERIMENT_PARTICIPANTS)
