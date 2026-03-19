@@ -33,7 +33,6 @@ runs:
 
 baselines:
   - baseline:
-      baseline_id: ICON-CH1-EPS
       label: ICON-CH1-EPS
       root: /store_new/mch/msopr/ml/ICON-CH1-EPS
       steps: 0/33/6

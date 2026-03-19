@@ -69,3 +69,25 @@ def test_workflow_parsing_excludes_baselines_from_run_configs(
             "steps": "0/120/6",
         }
     }
+
+
+def test_workflow_derives_baseline_id_from_root_stem(example_interpolators_config):
+    """Workflow baseline IDs should come from the baseline root path stem."""
+
+    namespace = {
+        "Path": Path,
+        "config": example_interpolators_config,
+    }
+    common_rules = Path("workflow/rules/common.smk").read_text()
+
+    exec(common_rules, namespace)
+
+    baseline_configs = namespace["BASELINE_CONFIGS"]
+
+    assert "COSMO-E_hourly" in baseline_configs
+    assert "COSMO-E-1h" not in baseline_configs
+    assert baseline_configs["COSMO-E_hourly"] == {
+        "label": "COSMO-E",
+        "root": "/store_new/mch/msopr/ml/COSMO-E_hourly",
+        "steps": "0/120/1",
+    }

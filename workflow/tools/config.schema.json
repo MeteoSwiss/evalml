@@ -14,7 +14,7 @@
             }
           ],
           "default": null,
-          "description": "Optional identifier for the baseline, e.g. 'COSMO-E'. Defaults to label when omitted.",
+          "description": "Deprecated compatibility field. Workflow baseline IDs are derived from the stem of `root`.",
           "title": "Baseline Id"
         },
         "label": {
@@ -24,7 +24,7 @@
           "type": "string"
         },
         "root": {
-          "description": "Root directory where the baseline data is stored.",
+          "description": "Root directory where the baseline data is stored. The workflow derives the baseline ID from the stem of this path.",
           "minLength": 1,
           "title": "Root",
           "type": "string"

@@ -166,14 +166,15 @@ def collect_all_baselines():
         if "baseline" not in run_entry:
             continue
         baseline_config = run_entry["baseline"]
-        baseline_id = baseline_config["baseline_id"] or baseline_config["label"]
+        baseline_id = Path(baseline_config["root"]).stem
         baselines[baseline_id] = baseline_config
 
     # Backward compatibility with legacy top-level `baselines` block.
     for baseline_entry in copy.deepcopy(config.get("baselines", [])):
         baseline_type = next(iter(baseline_entry))
         baseline_config = baseline_entry[baseline_type]
-        baseline_id = baseline_config.pop("baseline_id", baseline_config["label"])
+        baseline_id = Path(baseline_config["root"]).stem
+        baseline_config.pop("baseline_id", None)
         baselines[baseline_id] = baseline_config
 
     return baselines

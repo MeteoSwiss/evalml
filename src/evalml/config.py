@@ -154,7 +154,7 @@ class BaselineConfig(BaseModel):
     baseline_id: str | None = Field(
         None,
         min_length=1,
-        description="Optional identifier for the baseline, e.g. 'COSMO-E'. Defaults to label when omitted.",
+        description="Deprecated compatibility field. Workflow baseline IDs are derived from the stem of `root`.",
     )
     label: str = Field(
         ...,
@@ -164,7 +164,7 @@ class BaselineConfig(BaseModel):
     root: str = Field(
         ...,
         min_length=1,
-        description="Root directory where the baseline data is stored.",
+        description="Root directory where the baseline data is stored. The workflow derives the baseline ID from the stem of this path.",
     )
     steps: str = Field(
         ...,

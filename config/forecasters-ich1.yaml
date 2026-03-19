@@ -40,7 +40,6 @@ runs:
   # - git+https://github.com/ecmwf/anemoi-inference.git@main
 
   - baseline:
-      baseline_id: ICON-CH2-EPS
       label: ICON-CH2-EPS
       root: /scratch/mch/cmerker/ICON-CH2-EPS
       steps: 0/120/6
