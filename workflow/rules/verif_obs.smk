@@ -69,7 +69,7 @@ rule prepare_mec_input:
         inference_ok=lambda wc: expand(
             rules.execute_inference.output.okfile,
             run_id=wc.run_id,
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
         ),
     output:
         run=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec"),
@@ -77,7 +77,7 @@ rule prepare_mec_input:
         ekf_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs/ekfSYNOP.nc",
         fc_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/fc_{init_time}",
     log:
-        OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/prepare_mec_input.log",
+        OUT_ROOT / "logs/prepare_mec_input/{run_id}-{init_time}.log",
     shell:
         """
         (
@@ -124,7 +124,7 @@ rule link_mec_input:
         # own the final input_mod directory for this init (and its contents)
         mod=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_mod"),
     log:
-        OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/link_mec_input.log",
+        OUT_ROOT / "logs/link_mec_input/{run_id}-{init_time}.log",
     shell:
         """
         (
@@ -182,7 +182,7 @@ rule run_mec:
         cpus_per_task=1,
         runtime="1h",
     log:
-        OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/run_mec.log",
+        OUT_ROOT / "logs/run_mec/{run_id}-{init_time}.log",
     shell:
         """
         (
@@ -280,7 +280,7 @@ rule run_ffv2:
         cpus_per_task=1,
         runtime="1h",
     log:
-        OUT_ROOT / "data/runs/{run_id}/run_ffv2.log",
+        OUT_ROOT / "logs/run_ffv2/{run_id}.log",
     shell:
         """
         (
@@ -320,7 +320,7 @@ rule reorganize_ffv2_files:
     output:
         shiny_dir=directory(OUT_ROOT / "data/runs/{run_id}/shiny/")
     log:
-        OUT_ROOT / "data/runs/{run_id}/reorganize_ffv2_files.log",
+        OUT_ROOT / "logs/reorganize_ffv2_files/{run_id}.log",
     shell:
         """
         (
