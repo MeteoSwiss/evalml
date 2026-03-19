@@ -223,16 +223,18 @@ rule generate_ffv2_namelist:
     input:
         script="workflow/scripts/generate_ffv2_namelist.py",
         template="resources/ffv2/template_SYNOP_DET.nl.jinja2",
-        # This will cause the namelist generation to block on MEC running.
-        # Not strictly needed for namelist to be generated, but namelist 
-        # generation script checks that the feedback dirs exist.
-        # So blocking is desireable.
-        # QUESTION: We may want more than one directory here, if we are comparing models.
-        feedback_directory=rules.run_mec.params.final_fdbk_file_dir,
+        # Block on MEC running for all input times, since FFV2 is across feedback files.
+        mec_ok=lambda wc: expand(
+            rules.run_mec.output.fdbk_file,
+            run_id=wc.run_id,
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+        ),
     output:
         # Question: Definitely want to aggregate over init time, but will we have 1 run_ffv2 per run_id, or 1 run of ffv2 for all run_ids?
         namelist=OUT_ROOT / "data/runs/{run_id}/SYNOP_DET.nl",
     params:
+        # TODO: We may want more than one directory here, if we are comparing models.
+        feedback_directory=rules.run_mec.params.final_fdbk_file_dir,
         # TODO: consider including run_ids here?
         experiment_ids="SrucMLModel,",
         # Keeping this as a param. We will create it in run_ffv2 rule.
@@ -251,7 +253,7 @@ rule generate_ffv2_namelist:
             --template {input.template} \
             --namelist {output.namelist} \
             --experiment_ids {params.experiment_ids} \
-            --feedback_directories {input.feedback_directory} \
+            --feedback_directories {params.feedback_directory} \
             --output_directory {params.output_directory} \
             --experiment_description {params.experiment_description} \
             --file_description {params.file_description} \
@@ -262,9 +264,6 @@ rule generate_ffv2_namelist:
 rule run_ffv2:
     input:
         namelist=rules.generate_ffv2_namelist.output.namelist,
-        # QUESTION: Will we want to compare with other models?
-        # Need to specify this in order to mount it.
-        feedback_directory=rules.generate_ffv2_namelist.input.feedback_directory,
     output:
         scores=directory(OUT_ROOT / "data/runs/{run_id}/scores")
     params:
@@ -272,6 +271,11 @@ rule run_ffv2:
         # mounted into container (with the same filepaths)
         domain_table=rules.generate_ffv2_namelist.params.domain_table,
         blacklists=rules.generate_ffv2_namelist.params.blacklists,
+        # QUESTION: Will we want to compare with other models?
+        # Need to specify this in order to mount it.
+        # Because namelist is a blocking input, and namelist generation
+        # blocks on the MEC run, this should be OK to just use as param.
+        feedback_directory=rules.generate_ffv2_namelist.params.feedback_directory,
     resources:
         cpus_per_task=1,
         runtime="1h",
@@ -294,7 +298,7 @@ rule run_ffv2:
         domain_table={params.domain_table}
         blacklists={params.blacklists}
         # Mount needs to have source as absolute path
-        feedback_dir_abs=$(realpath {input.feedback_directory})
+        feedback_dir_abs=$(realpath {params.feedback_directory})
         output_dir_abs=$(realpath {output.scores})
         # DO NOT SUBMIT: Need to mount feedback files, with absolute path
         sarus run \
