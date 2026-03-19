@@ -20,9 +20,7 @@ runs:
       extra_requirements:
         - git+https://github.com/ecmwf/anemoi-inference.git@0.6.3
 
-baselines:
   - baseline:
-      baseline_id: COSMO-1E
       label: COSMO-1E
       root: /store_new/mch/msopr/ml/COSMO-1E
       steps: 0/33/6

@@ -60,8 +60,7 @@ def test_workflow_parsing_excludes_baselines_from_run_configs(
     baseline_configs = namespace["BASELINE_CONFIGS"]
 
     assert all(
-        run_config["model_type"] != "baseline"
-        for run_config in run_configs.values()
+        run_config["model_type"] != "baseline" for run_config in run_configs.values()
     )
     assert baseline_configs == {
         "COSMO-E": {
