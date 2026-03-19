@@ -4,10 +4,18 @@
       "description": "Configuration for a single baseline to include in the verification.",
       "properties": {
         "baseline_id": {
-          "description": "Identifier for the baseline, e.g. 'COSMO-E'.",
-          "minLength": 1,
-          "title": "Baseline Id",
-          "type": "string"
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Deprecated compatibility field. Workflow baseline IDs are derived from the stem of `root`.",
+          "title": "Baseline Id"
         },
         "label": {
           "description": "Label for the baseline that will be used in experiment results such as reports and figures.",
@@ -16,7 +24,7 @@
           "type": "string"
         },
         "root": {
-          "description": "Root directory where the baseline data is stored.",
+          "description": "Root directory where the baseline data is stored. The workflow derives the baseline ID from the stem of this path.",
           "minLength": 1,
           "title": "Root",
           "type": "string"
@@ -29,7 +37,6 @@
         }
       },
       "required": [
-        "baseline_id",
         "label",
         "root",
         "steps"
@@ -539,7 +546,7 @@
       "title": "Dates"
     },
     "runs": {
-      "description": "Dictionary of runs to execute, with run IDs as keys and configurations as values.",
+      "description": "List of experiment participants, including forecaster/interpolator ML runs and baselines.",
       "items": {
         "anyOf": [
           {
@@ -547,6 +554,9 @@
           },
           {
             "$ref": "#/$defs/InterpolatorItem"
+          },
+          {
+            "$ref": "#/$defs/BaselineItem"
           }
         ]
       },
@@ -554,7 +564,7 @@
       "type": "array"
     },
     "baselines": {
-      "description": "Dictionary of baselines to include in the verification.",
+      "description": "Deprecated top-level baselines list. Prefer defining baseline entries directly in `runs`.",
       "items": {
         "$ref": "#/$defs/BaselineItem"
       },
@@ -585,7 +595,6 @@
     "description",
     "dates",
     "runs",
-    "baselines",
     "truth",
     "stratification",
     "locations",

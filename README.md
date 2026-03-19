@@ -61,7 +61,6 @@ runs:
 
 baselines:
   - baseline:
-      baseline_id: COSMO-E
       label: COSMO-E
       root: /store_new/mch/msopr/ml/COSMO-E
       steps: 0/120/6

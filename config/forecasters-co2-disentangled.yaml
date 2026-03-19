@@ -41,9 +41,7 @@ runs:
         - earthkit-data<0.19.0
         - git+https://github.com/MeteoSwiss/anemoi-core.git@2a90165e3f25defc55fbeb77f7b4ebfef685820d#subdirectory=models
 
-baselines:
   - baseline:
-      baseline_id: COSMO-E
       label: COSMO-E
       root: /store_new/mch/msopr/ml/COSMO-E
       steps: 0/120/6
