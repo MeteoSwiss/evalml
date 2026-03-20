@@ -78,8 +78,7 @@ def _compute_scores(
     dim: list[str],
     prefix="",
     suffix="",
-    source="",
-    dim=["x", "y"],
+    source=""
 ) -> xr.Dataset:
     """
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
