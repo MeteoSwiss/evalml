@@ -215,8 +215,8 @@ def _(
     import matplotlib.pyplot as plt
 
     plotter = StatePlotter(
-        ds["longitude"].values.ravel(),
-        ds["latitude"].values.ravel(),
+        ds["lon"].values.ravel(),
+        ds["lat"].values.ravel(),
         outfn.parent,
     )
     fig = plotter.init_geoaxes(

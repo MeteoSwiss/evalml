@@ -72,7 +72,7 @@ def main(args: ScriptConfig):
     truth = truth.sel(time=fcst.time)
 
     # before verifying, calculate wind speed:
-    for ds in [fcst, analysis]:
+    for ds in [fcst, truth]:
         if "U_10M" in ds and "V_10M" in ds:
             LOG.info("Calculating Wind Speed (SP_10M)...")
             ds["SP_10M"] = (ds["U_10M"]**2 + ds["V_10M"]**2)**0.5
