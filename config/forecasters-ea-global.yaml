@@ -1,26 +1,29 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Evaluate skill of COSMO-E emulator (M-1 forecaster).
+  Evaluate skill of a Stage B (global) checkpoint.
 
 dates:
-  - 2022-02-03T00:00 # Some example
+  # start: 2025-01-01T00:00
+  # end: 2025-06-20T00:00
+  # frequency: 54h
+  # or
+  - 2024-01-01T12:00
 
 runs:
   - forecaster:
-      checkpoint: https://mlflow.ecmwf.int/#/experiments/418/runs/2bee8f6b7d0048089a5e25cb60def0e5
-      label: Hourly rollout O96 forecaster
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/721576a388114c8788405cc6936ca13c
+      label: stage_B_global
       steps: 0/120/6
       config: resources/inference/configs/global-forecaster.yaml
       disable_local_eccodes_definitions: true
       extra_requirements:
-        - git+https://github.com/ecmwf/anemoi-inference.git@main
-        - git+https://github.com/MeteoSwiss/anemoi-core.git@06e5533f3e8da37c44d887c42b67440b40286cb3#subdirectory=models
+        - git+https://github.com/ecmwf/anemoi-inference.git@b9aaee5df86614cad9d8d08b76876a4be4e980db
 
 baselines: []
 
-analysis:
+truth:
   label: ERA5
-  analysis_zarr: /scratch/mch/rradev/datasets/aifs-ea-an-oper-0001-mars-o96-1979-2022-1h-v4.zarr
+  root: /store_new/mch/msopr/ml/datasets/aifs-ea-an-oper-0001-mars-n320-1979-2024-6h-v1-for-single-v2.zarr
 
 stratification:
   regions: []
