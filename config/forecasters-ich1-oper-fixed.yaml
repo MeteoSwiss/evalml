@@ -7,32 +7,36 @@ dates:
   # end: 2025-06-20T00:00
   # frequency: 54h
   # or
-  - 2025-01-01T00:00
-  - 2025-02-01T06:00
-  - 2025-03-01T12:00
+  - 2024-01-01T12:00
+  - 2024-02-01T18:00
+  - 2025-03-01T00:00
+
 
 runs:
   - forecaster:
-      checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/409/runs/b30acf68520a4bbd8324c44666561696
-      label: stage_C_icon_1km
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/9f4626a7562a4eb49700aaaaa8607230
+      label: icon_1km_hierarchical_2_level_proc_from_scratch
       steps: 0/120/6
-      config: resources/inference/configs/sgm-forecaster-global-ich1-oper.yaml
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
       extra_requirements:
-        - earthkit-utils<0.2.0
-        - earthkit-data<0.19.0
-        - git+https://github.com/ecmwf/anemoi-inference.git@main
+        - git+https://github.com/ecmwf/anemoi-inference.git@b9aaee5df86614cad9d8d08b76876a4be4e980db
+
+  # - forecaster:
+  #     checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/233b1274e79b4bfea98378d196a8aba0
+  #     label: stage_C_realch1
+  #     steps: 0/120/6
+  #     config: resources/inference/configs/sgm-forecaster-global-ich1-oper.yaml
+  #     extra_requirements:
+  #       - earthkit-utils<0.2.0
+  #       - earthkit-data<0.19.0
+  #       - git+https://github.com/ecmwf/anemoi-inference.git@fix/dataloader-dataset-config
 
 baselines:
   - baseline:
       baseline_id: ICON-CH1-EPS
-      label: ICON-CH1-ctrl
+      label: ICON-CH1-EPS
       root: /scratch/mch/cmerker/ICON-CH1-EPS
       steps: 0/33/6
-  - baseline:
-      baseline_id: ICON-CH2-EPS
-      label: ICON-CH2-ctrl
-      root: /scratch/mch/cmerker/ICON-CH2-EPS
-      steps: 0/120/6
 
 truth:
   label: KENDA-CH1
