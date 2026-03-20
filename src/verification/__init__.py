@@ -78,24 +78,34 @@ def _compute_scores(
     dim: list[str],
     prefix="",
     suffix="",
-    source="",
+    source=""
 ) -> xr.Dataset:
     """
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
     Returns a xarray Dataset with the computed metrics.
     """
+    
     error = fcst - obs
-    scores = xr.Dataset(
-        {
-            f"{prefix}BIAS{suffix}": error.mean(dim=dim, skipna=True),
-            f"{prefix}MSE{suffix}": (error**2).mean(dim=dim, skipna=True),
-            f"{prefix}MAE{suffix}": abs(error).mean(dim=dim, skipna=True),
-            f"{prefix}VAR{suffix}": error.var(dim=dim, skipna=True),
-            f"{prefix}CORR{suffix}": xr.corr(fcst, obs, dim=dim),
-            f"{prefix}R2{suffix}": xr.corr(fcst, obs, dim=dim) ** 2,
-        }
-    )
-    scores = scores.expand_dims({"source": [source]})
+    if dim == []:
+        scores = xr.Dataset(
+            {
+                f"{prefix}BIAS{suffix}": error,
+                f"{prefix}MSE{suffix}": (error**2),
+                f"{prefix}MAE{suffix}": abs(error),
+            }
+        )
+    else:
+        scores = xr.Dataset(
+            {
+                f"{prefix}BIAS{suffix}": error.mean(dim=dim, skipna=True),
+                f"{prefix}MSE{suffix}": (error**2).mean(dim=dim, skipna=True),
+                f"{prefix}MAE{suffix}": abs(error).mean(dim=dim, skipna=True),
+                f"{prefix}VAR{suffix}": error.var(dim=dim, skipna=True),
+                f"{prefix}CORR{suffix}": xr.corr(fcst, obs, dim=dim),
+                f"{prefix}R2{suffix}": xr.corr(fcst, obs, dim=dim) ** 2,
+            }
+        )
+    # scores = scores.expand_dims({"source": [source]})
     return scores
 
 
@@ -216,8 +226,17 @@ def verify(
         score = xr.concat(score, dim="region")
         fcst_statistics = xr.concat(fcst_statistics, dim="region")
         obs_statistics = xr.concat(obs_statistics, dim="region")
+        score_spatial = _compute_scores(
+            fcst_aligned[param],
+            obs_aligned[param],
+            prefix=param + ".",
+            suffix=".spatial",
+            dim=[],
+        )
         statistics.append(xr.concat([fcst_statistics, obs_statistics], dim="source"))
-        scores.append(score)
+        scores.append(
+            xr.merge([score, score_spatial], join="outer", compat="no_conflicts")
+        )
 
     scores = _merge_metrics(scores)
     statistics = _merge_metrics(statistics)

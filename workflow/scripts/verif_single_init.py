@@ -71,8 +71,17 @@ def main(args: ScriptConfig):
     fcst = map_forecast_to_truth(fcst, truth)
     truth = truth.sel(time=fcst.time)
 
+    # before verifying, calculate wind speed:
+    for ds in [fcst, truth]:
+        if "U_10M" in ds and "V_10M" in ds:
+            LOG.info("Calculating Wind Speed (SP_10M)...")
+            ds["SP_10M"] = (ds["U_10M"]**2 + ds["V_10M"]**2)**0.5
+            # Optional: Add metadata for the netCDF output
+            ds["SP_10M"].attrs = {"units": "m/s", "long_name": "10m Wind Speed"}
+
     # compute metrics and statistics
     results = verify(fcst, truth, args.label, args.truth_label, args.regions)
+    LOG.info("Verification results:\n%s", results)
 
     # save results to NetCDF
     args.output.parent.mkdir(parents=True, exist_ok=True)
