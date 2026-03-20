@@ -1,18 +1,27 @@
+import yaml
 import logging
 import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from functools import lru_cache
 
 eccodes_definition_path = Path(sys.prefix) / "share/eccodes-cosmo-resources/definitions"
 os.environ["ECCODES_DEFINITION_PATH"] = str(eccodes_definition_path)
 
-from meteodatalab import data_source, grib_decoder  # noqa: E402
-
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
+import earthkit.data as ekd  # noqa: E402
 
 LOG = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def earthkit_xarray_engine_profile() -> dict:
+    fn = Path(__file__).parent / "profile.yaml"
+    with open(fn) as f:
+        profile = yaml.safe_load(f)
+    return profile
 
 
 def _select_valid_times(ds, times: np.datetime64):
@@ -108,9 +117,15 @@ def load_fct_data_from_grib(
 ) -> xr.Dataset:
     """Load forecast data from GRIB files for a specific valid time."""
     files = sorted(root.glob(f"{reftime:%Y%m%d%H%M}*.grib"))
-    fds = data_source.FileDataSource(datafiles=files)
-    ds = grib_decoder.load(fds, {"param": params, "step": steps})
-    for var, da in ds.items():
+
+    profile = earthkit_xarray_engine_profile()
+    ds: xr.Dataset = (
+        ekd.from_source("file", files)
+        .sel(param=params, step=steps)
+        .to_xarray(profile=profile)
+    )
+
+    for var, da in ds.data_vars.items():
         if "z" in da.dims and da.sizes["z"] == 1:
             ds[var] = da.squeeze("z", drop=True)
         elif "z" in da.dims and da.sizes["z"] > 1:
