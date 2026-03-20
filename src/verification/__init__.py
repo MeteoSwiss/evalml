@@ -115,7 +115,6 @@ def _compute_statistics(
     prefix="",
     suffix="",
     source="",
-    dim=["x", "y"],
 ) -> xr.Dataset:
     """
     Compute basic statistics of a xarray DataArray (data).
