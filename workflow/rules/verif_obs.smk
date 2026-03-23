@@ -69,7 +69,7 @@ rule prepare_mec_input:
         inference_ok=lambda wc: expand(
             rules.execute_inference.output.okfile,
             run_id=wc.run_id,
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
         ),
     output:
         run=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec"),
@@ -227,7 +227,7 @@ rule generate_ffv2_namelist:
         mec_ok=lambda wc: expand(
             rules.run_mec.output.fdbk_file,
             run_id=wc.run_id,
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
         ),
     output:
         # Question: Definitely want to aggregate over init time, but will we have 1 run_ffv2 per run_id, or 1 run of ffv2 for all run_ids?
@@ -300,7 +300,6 @@ rule run_ffv2:
         # Mount needs to have source as absolute path
         feedback_dir_abs=$(realpath {params.feedback_directory})
         output_dir_abs=$(realpath {output.scores})
-        # DO NOT SUBMIT: Need to mount feedback files, with absolute path
         sarus run \
         --mount=type=bind,source=$namelist,destination=/src/ffv2/SYNOP_DET.nl \
         --mount=type=bind,source=$domain_table,destination=$domain_table \
