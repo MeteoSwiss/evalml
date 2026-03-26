@@ -12,6 +12,15 @@ OUT_ROOT = Path(config["locations"]["output_root"])
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
 HASH_LENGTH = 4
 
+# Fields that determine the inference ENVIRONMENT. Changing these requires a new venv/squashfs.
+ENV_HASH_FIELDS = {
+    "checkpoint",
+    "extra_requirements",
+    "disable_local_eccodes_definitions",
+}
+# Fields excluded from ALL hashing (display/resource metadata only).
+RUN_HASH_EXCLUDE = {"label", "inference_resources", "_is_candidate", "model_type"}
+
 
 # ============================================================================
 # Utility Functions
@@ -111,27 +120,50 @@ def model_id(checkpoint_uri: str) -> str:
 
 
 def register_run(model_type, run_config, as_candidate=True):
-    """Parse a run configuration and assign a unique run ID."""
+    """Parse a run configuration and assign a unique env_id and run_id.
+
+    Assigns two identifiers:
+    - env_id: Identifies the inference environment (venv, squashfs). Shared across
+             runs with the same checkpoint and extra_requirements.
+    - run_id: Extends env_id with a hash of inference parameters (config YAML, steps).
+             Ensures each unique run configuration has its own output directory.
+    """
     run_cfg = copy.deepcopy(run_config)
-    mlflow_id_short = model_id(run_cfg["checkpoint"])
-    run_id_prefix = f"{model_type}-{mlflow_id_short}"
-    run_id_hash = run_entry_hash(run_cfg)
-    run_cfg["_is_candidate"] = as_candidate
-    run_cfg["model_type"] = model_type
-    run_id = f"{run_id_prefix}-{run_id_hash}"
+    mid = model_id(run_cfg["checkpoint"])
+
     out = {}
     if model_type == "interpolator":
-        forecaster = run_cfg["forecaster"]
+        forecaster = run_cfg.get("forecaster")
         if forecaster is None:
-            dependency = "analysis"
+            run_cfg["forecaster"] = None
+            env_dep_suffix = "analysis"
+            run_dep_suffix = "analysis"
         else:
-            dependency_entry = register_run(
-                "forecaster", forecaster, as_candidate=False
-            )
-            dependency = next(iter(dependency_entry))
-            out |= dependency_entry
-            run_cfg["forecaster"]["run_id"] = dependency
-        run_id += f"-on-{dependency}"
+            # Register the upstream forecaster recursively
+            dep_entry = register_run("forecaster", forecaster, as_candidate=False)
+            out |= dep_entry
+            dep_run_id = next(iter(dep_entry))
+            dep_env_id = dep_entry[dep_run_id]["env_id"]
+            run_cfg["forecaster"]["run_id"] = dep_run_id
+            run_cfg["forecaster"]["env_id"] = dep_env_id
+            env_dep_suffix = dep_env_id  # env_id determines environment dependency
+            run_dep_suffix = dep_run_id  # run_id determines output dependency
+
+    # Compute env_id (determines which venv/squashfs to use)
+    e_hash = env_entry_hash(run_cfg, model_type)
+    env_id_base = f"{model_type}-{mid}-{e_hash}"
+    if model_type == "interpolator":
+        env_id = f"{env_id_base}-on-{env_dep_suffix}"
+    else:
+        env_id = env_id_base
+
+    # Compute run_id (extends env_id with run-specific config hash)
+    r_hash = run_specific_hash(run_cfg, model_type)
+    run_id = f"{env_id}/{r_hash}"
+
+    run_cfg["env_id"] = env_id
+    run_cfg["_is_candidate"] = as_candidate
+    run_cfg["model_type"] = model_type
     out[run_id] = run_cfg
     return out
 
@@ -154,6 +186,19 @@ def collect_all_candidates():
         if run_config.get("_is_candidate", False):
             candidates[run_id] = run_config
     return candidates
+
+
+def collect_all_envs() -> dict:
+    """Collect unique inference environments from all registered runs.
+
+    Returns a dict mapping env_id -> minimal environment config dict.
+    """
+    envs = {}
+    for run_cfg in RUN_CONFIGS.values():
+        env_id = run_cfg["env_id"]
+        if env_id not in envs:
+            envs[env_id] = {k: v for k, v in run_cfg.items() if k in ENV_HASH_FIELDS}
+    return envs
 
 
 def collect_all_baselines():
@@ -182,32 +227,56 @@ def collect_experiment_participants():
 # -----------------------------------------------
 
 
+def env_entry_hash(run_config: dict, model_type: str) -> str:
+    """Hash of fields that determine the inference environment only.
+
+    The environment (venv, squashfs) must be rebuilt if any of these change:
+    - checkpoint (different model)
+    - extra_requirements (different dependencies)
+    - disable_local_eccodes_definitions (different ECCODES setup)
+    - For interpolators: the forecaster's env_id (different upstream model)
+    """
+    cfg = {k: v for k, v in run_config.items() if k in ENV_HASH_FIELDS}
+    configs_to_hash = [cfg]
+    if model_type == "interpolator" and run_config.get("forecaster"):
+        # environment depends on which forecaster model (not which run config)
+        configs_to_hash.append(run_config["forecaster"].get("env_id"))
+    return generate_json_hash(configs_to_hash)
+
+
+def run_specific_hash(run_config: dict, model_type: str) -> str:
+    """Hash of fields that affect inference outputs but not the environment.
+
+    Changes to these fields create a new run_id (new outputs) but reuse the environment:
+    - steps (lead times)
+    - config YAML file contents (inference parameters)
+    - For interpolators: the forecaster's run_id (which run's outputs to read)
+    """
+    configs_to_hash = [{"steps": run_config["steps"]}]
+    with open(run_config["config"], "r") as f:
+        configs_to_hash.append(yaml.safe_load(f))
+    if model_type == "interpolator" and run_config.get("forecaster"):
+        # run output depends on which forecaster RUN was used (not just the env)
+        configs_to_hash.append(run_config["forecaster"].get("run_id"))
+    return generate_json_hash(configs_to_hash)
+
+
 def master_hash() -> str:
     """Generate a short hash of all the configurable components of the workflow."""
     configs_to_hash = [config]
     for run_id, run_config in RUN_CONFIGS.items():
-        configs_to_hash.append(run_entry_hash(run_config))
-    return generate_json_hash(configs_to_hash)
-
-
-RUN_ENTRY_HASH_EXCLUDE = ["label", "_is_candidate"]
-
-
-def run_entry_hash(run_config: dict) -> str:
-    """Generate a short hash of a run entry."""
-    cfg = copy.deepcopy(run_config)
-    for key in RUN_ENTRY_HASH_EXCLUDE:
-        cfg.pop(key, None)
-    configs_to_hash = [cfg]
-    with open(cfg["config"], "r") as f:
-        configs_to_hash.append(yaml.safe_load(f))
-    if "forecaster" in cfg and cfg["forecaster"] is not None:
-        configs_to_hash.append(run_entry_hash(cfg["forecaster"]))
+        configs_to_hash.append(
+            {
+                "env": env_entry_hash(run_config, run_config["model_type"]),
+                "run": run_specific_hash(run_config, run_config["model_type"]),
+            }
+        )
     return generate_json_hash(configs_to_hash)
 
 
 REGIONS = parse_regions()
 REFTIMES = parse_reference_times()
 RUN_CONFIGS = collect_all_runs()
+ENV_CONFIGS = collect_all_envs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
