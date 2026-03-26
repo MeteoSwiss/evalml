@@ -77,7 +77,7 @@ rule prepare_mec_input:
         ekf_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs/ekfSYNOP.nc",
         fc_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/fc_{init_time}",
     log:
-        OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/prepare_mec_input.log",
+        OUT_ROOT / "logs/prepare_mec_input/{run_id}-{init_time}.log",
     shell:
         """
         (
@@ -124,7 +124,7 @@ rule link_mec_input:
         # own the final input_mod directory for this init (and its contents)
         mod=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_mod"),
     log:
-        OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/link_mec_input.log",
+        OUT_ROOT / "logs/link_mec_input/{run_id}-{init_time}.log",
     shell:
         """
         (
@@ -178,8 +178,11 @@ rule run_mec:
         init_time=r"\d{12}",
     params:
         final_fdbk_file_dir=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}/fdbk_files"),
+    resources:
+        cpus_per_task=1,
+        runtime="1h",
     log:
-        OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/run_mec.log",
+        OUT_ROOT / "logs/run_mec/{run_id}-{init_time}.log",
     shell:
         """
         (
@@ -207,9 +210,149 @@ rule run_mec:
         #source /oprusers/osm/opr.emme/abs/mec.env
         #./mec > ./mec_out.log 2>&1
 
-        # copy the output file to the final location for the Feedback files plus renaming to
-        # match NWP naming conventions (verSYNOP_YYYYMMDDHHMMSS.nc)
+        # copy the output file to the final location for the Feedback files
+		# and rename to match NWP conventions
         mkdir -p {params.final_fdbk_file_dir}
         cp {input.run_dir}/verSYNOP.nc {params.final_fdbk_file_dir}/verSYNOP_{wildcards.init_time}00.nc
+        echo "...time at end of run_mec: $(date)"
+        ) > {log} 2>&1
+        """
+
+rule generate_ffv2_namelist:
+    localrule: True
+    input:
+        script="workflow/scripts/generate_ffv2_namelist.py",
+        template="resources/ffv2/template_SYNOP_DET.nl.jinja2",
+        # Block on MEC running for all input times, since FFV2 is across feedback files.
+        mec_ok=lambda wc: expand(
+            rules.run_mec.output.fdbk_file,
+            run_id=wc.run_id,
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
+        ),
+    output:
+        # Question: Definitely want to aggregate over init time, but will we have 1 run_ffv2 per run_id, or 1 run of ffv2 for all run_ids?
+        namelist=OUT_ROOT / "data/runs/{run_id}/SYNOP_DET.nl",
+    params:
+        # TODO: We may want more than one directory here, if we are comparing models.
+        feedback_directory=rules.run_mec.params.final_fdbk_file_dir,
+        # TODO: consider including run_ids here?
+        experiment_ids="SrucMLModel,",
+        # Keeping this as a param. We will create it in run_ffv2 rule.
+        output_directory=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}/scores"),
+        # TODO: update descriptions to something more fitting
+        experiment_description="emulator_onPL_ALL_obs_2020",
+        file_description="exp_ACOSMO-2-models_C-2E-CTRL_2020",
+        domain_table="/users/paa/01_store/02_FFV2/data/7_ML_inner_polygon",
+        blacklists="/users/paa/01_store/02_FFV2/data/blacklist",
+    shell:
+        """
+        mkdir -p {params.output_directory}
+		output_dir={params.output_directory}
+		echo "created $output_dir"
+        uv run {input.script} \
+            --template {input.template} \
+            --namelist {output.namelist} \
+            --experiment_ids {params.experiment_ids} \
+            --feedback_directories {params.feedback_directory} \
+            --output_directory {params.output_directory} \
+            --experiment_description {params.experiment_description} \
+            --file_description {params.file_description} \
+            --domain_table {params.domain_table} \
+            --blacklists {params.blacklists}
+        """
+
+rule run_ffv2:
+    input:
+        namelist=rules.generate_ffv2_namelist.output.namelist,
+    output:
+        scores=directory(OUT_ROOT / "data/runs/{run_id}/scores")
+    params:
+        # domain_table and blacklists are locations on Balfrin, that will be
+        # mounted into container (with the same filepaths)
+        domain_table=rules.generate_ffv2_namelist.params.domain_table,
+        blacklists=rules.generate_ffv2_namelist.params.blacklists,
+        # QUESTION: Will we want to compare with other models?
+        # Need to specify this in order to mount it.
+        # Because namelist is a blocking input, and namelist generation
+        # blocks on the MEC run, this should be OK to just use as param.
+        feedback_directory=rules.generate_ffv2_namelist.params.feedback_directory,
+    log:
+        OUT_ROOT / "logs/run_ffv2/{run_id}.log",
+    shell:
+        """
+        (
+        set -euo pipefail
+        echo "...time at start of run_ffv2: $(date)"
+
+        # Create the output directory to hold scores, if it does not exist
+        mkdir -p {output.scores}
+
+        # Run FFV2 inside sarus container
+        # Note: pull command currently needed only once to download the container
+        # TODO(mmcglohon): Update from dev to main once things work
+        sarus pull container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-main
+        namelist=$(realpath {input.namelist})
+        domain_table={params.domain_table}
+        blacklists={params.blacklists}
+        # Mount needs to have source as absolute path
+        feedback_dir_abs=$(realpath {params.feedback_directory})
+        output_dir_abs=$(realpath {output.scores})
+        sarus run \
+        --mount=type=bind,source=$namelist,destination=/src/ffv2/SYNOP_DET.nl \
+        --mount=type=bind,source=$domain_table,destination=$domain_table \
+        --mount=type=bind,source=$blacklists,destination=$blacklists \
+        --mount=type=bind,source=$feedback_dir_abs,destination=/src/ffv2/input \
+        --mount=type=bind,source=$output_dir_abs,destination=/src/ffv2/output \
+        container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-main
+		
+        echo "...time at end of run_ffv2: $(date)"
+        ) > {log} 2>&1
+		"""
+
+rule reorganize_ffv2_files:
+    localrule: True
+    input:
+        scores=rules.run_ffv2.output.scores
+    output:
+        shiny_dir=directory(OUT_ROOT / "data/runs/{run_id}/shiny/")
+    log:
+        OUT_ROOT / "logs/reorganize_ffv2_files/{run_id}.log",
+    shell:
+        """
+        (
+        set -euo pipefail
+        echo "...time at start of reorganize_ffv2_files: $(date)"
+
+        input_dir_abs=$(realpath {input.scores})
+        output_dir_abs=$(realpath {output.shiny_dir})
+
+        # move score files into app-specific subdirectories, for the Shiny app
+        # display.
+        mkdir -p $output_dir_abs/fdbk_cont/data
+        mkdir -p $output_dir_abs/fdbk_cont_bystat/data
+        mkdir -p $output_dir_abs/fdbk_cont_ts/data
+        mkdir -p $output_dir_abs/fdbk_synop_categ/data
+        mkdir -p $output_dir_abs/fdbk_synop_categ_bystat/data
+        mkdir -p $output_dir_abs/fdbk_synop_categ_ts/data
+
+        # DET surface continuous scores
+        cp $input_dir_abs/CONT_exp* $output_dir_abs/fdbk_cont/data/
+        # DET surface continuous scores as time series
+        cp $input_dir_abs/CONT_TS_exp* $output_dir_abs/fdbk_cont_ts/data/
+        # DET surface continuous by stations
+        cp $input_dir_abs/CONT_bs_exp* $output_dir_abs/fdbk_cont_bystat/data/
+
+        # Categorical verification against SYNOP
+        cp $input_dir_abs/CATEG_exp* $output_dir_abs/fdbk_synop_categ/data
+        cp $input_dir_abs/PEC_exp* $output_dir_abs/fdbk_synop_categ/data
+
+        # Categorical verification against SYNOP by station
+        # This is not presently generated, so skip.
+        #cp $input_dir_abs/CATEG_TS_exp* $output_dir_abs/fdbk_synop_categ_ts/data
+
+        # Categorical verification against SYNOP as time series
+        cp $input_dir_abs/CATEG_bs_exp* $output_dir_abs/fdbk_synop_categ_bystat/data		
+
+        echo "...time at end of reorganize_ffv2_files: $(date)"
         ) > {log} 2>&1
         """
