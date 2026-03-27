@@ -136,6 +136,14 @@ rule experiment_all:
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
             run_id=CANDIDATES,
         ),
+        expand(
+            rules.reorganize_ffv2_files.output,
+            run_id=collect_all_candidates(),
+        ),
+        expand(
+            OUT_ROOT / "data/runs/{run_id}/summary.md",
+            run_id=collect_all_candidates(),
+        ),
 
 
 rule showcase_all:
@@ -206,7 +214,7 @@ rule verif_metrics_plot_all:
 rule verif_obs_all:
     input:
         expand(
-            rules.run_mec.output,
+            rules.reorganize_ffv2_files.output,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
             run_id=CANDIDATES,
         ),
