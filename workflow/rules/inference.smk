@@ -10,15 +10,15 @@ from datetime import datetime
 rule prepare_checkpoint:
     localrule: True
     output:
-        checkpoint=OUT_ROOT / "data/runs/{run_id}/inference-last.ckpt",
-        metadata=OUT_ROOT / "data/runs/{run_id}/anemoi.json",
+        checkpoint=OUT_ROOT / "data/envs/{env_id}/inference-last.ckpt",
+        metadata=OUT_ROOT / "data/envs/{env_id}/anemoi.json",
     params:
-        checkpoint=lambda wc: RUN_CONFIGS[wc.run_id]["checkpoint"],
+        checkpoint=lambda wc: ENV_CONFIGS[wc.env_id]["checkpoint"],
         checkpoint_type=lambda wc: _checkpoint_uri_type(
-            RUN_CONFIGS[wc.run_id]["checkpoint"]
+            ENV_CONFIGS[wc.env_id]["checkpoint"]
         ),
     log:
-        OUT_ROOT / "logs/prepare_checkpoint/{run_id}.log",
+        OUT_ROOT / "logs/prepare_checkpoint/{env_id}.log",
     shell:
         r"""(
         mkdir -p $(dirname {output.checkpoint})
@@ -53,15 +53,15 @@ rule extract_checkpoint_requirements:
     """
     localrule: True
     input:
-        metadata=OUT_ROOT / "data/runs/{run_id}/anemoi.json",
+        metadata=OUT_ROOT / "data/envs/{env_id}/anemoi.json",
     output:
-        requirements=OUT_ROOT / "data/runs/{run_id}/requirements.txt",
+        requirements=OUT_ROOT / "data/envs/{env_id}/requirements.txt",
     params:
         extra_requirements=lambda wc: ",".join(
-            RUN_CONFIGS[wc.run_id].get("extra_requirements", [])
+            ENV_CONFIGS[wc.env_id].get("extra_requirements", [])
         ),
     log:
-        OUT_ROOT / "logs/extract_checkpoint_requirements/{run_id}.log",
+        OUT_ROOT / "logs/extract_checkpoint_requirements/{env_id}.log",
     shell:
         """(
         echo "[$(date)] Starting requirement extraction..."
@@ -81,12 +81,12 @@ rule create_inference_venv:
     """
     localrule: True
     input:
-        metadata=OUT_ROOT / "data/runs/{run_id}/anemoi.json",
-        requirements=OUT_ROOT / "data/runs/{run_id}/requirements.txt",
+        metadata=OUT_ROOT / "data/envs/{env_id}/anemoi.json",
+        requirements=OUT_ROOT / "data/envs/{env_id}/requirements.txt",
     output:
-        venv=temp(directory(OUT_ROOT / "data/runs/{run_id}/.venv")),
+        venv=temp(directory(OUT_ROOT / "data/envs/{env_id}/.venv")),
     log:
-        OUT_ROOT / "logs/create_inference_venv/{run_id}.log",
+        OUT_ROOT / "logs/create_inference_venv/{env_id}.log",
     shell:
         """(
 
@@ -121,9 +121,9 @@ rule make_squashfs_image:
     input:
         venv=rules.create_inference_venv.output.venv,
     output:
-        image=OUT_ROOT / "data/runs/{run_id}/venv.squashfs",
+        image=OUT_ROOT / "data/envs/{env_id}/venv.squashfs",
     log:
-        OUT_ROOT / "logs/make_squashfs_image/{run_id}.log",
+        OUT_ROOT / "logs/make_squashfs_image/{env_id}.log",
     shell:
         # we can safely ignore the many warnings "Unrecognised xattr prefix..."
         "mksquashfs $(realpath {input.venv}) {output.image}"
@@ -146,8 +146,10 @@ rule create_inference_sandbox:
     """
     input:
         script="workflow/scripts/inference_create_sandbox.py",
-        checkpoint=OUT_ROOT / "data/runs/{run_id}/inference-last.ckpt",
-        requirements=OUT_ROOT / "data/runs/{run_id}/requirements.txt",
+        checkpoint=lambda wc: OUT_ROOT
+        / f"data/envs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
+        requirements=lambda wc: OUT_ROOT
+        / f"data/envs/{RUN_CONFIGS[wc.run_id]['env_id']}/requirements.txt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
         readme_template="resources/inference/sandbox/readme.md.jinja2",
     output:
@@ -186,7 +188,8 @@ def get_leadtime(wc):
 rule prepare_inference_forecaster:
     localrule: True
     input:
-        checkpoint=OUT_ROOT / "data/runs/{run_id}/inference-last.ckpt",
+        checkpoint=lambda wc: OUT_ROOT
+        / f"data/envs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
     output:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
@@ -217,7 +220,8 @@ rule prepare_inference_interpolator:
     """Run the interpolator for a specific run ID."""
     localrule: True
     input:
-        checkpoint=OUT_ROOT / "data/runs/{run_id}/inference-last.ckpt",
+        checkpoint=lambda wc: OUT_ROOT
+        / f"data/envs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
         forecasts=lambda wc: (
             [
@@ -273,7 +277,8 @@ rule execute_inference:
     localrule: True
     input:
         okfile=_inference_routing_fn,
-        image=rules.make_squashfs_image.output.image,
+        image=lambda wc: OUT_ROOT
+        / f"data/envs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
     output:
         okfile=touch(OUT_ROOT / "logs/execute_inference/{run_id}-{init_time}.ok"),
     log:

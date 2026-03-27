@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, ClassVar, FrozenSet
 
 from pydantic import BaseModel, Field, RootModel, field_validator
 
@@ -60,6 +60,14 @@ class InferenceResources(BaseModel):
 
 
 class RunConfig(BaseModel):
+    # Identity contract: fields that determine the inference ENVIRONMENT (venv, squashfs).
+    # Changing any of these requires a new environment to be built.
+    ENV_FIELDS: ClassVar[FrozenSet[str]] = frozenset(
+        {"checkpoint", "extra_requirements", "disable_local_eccodes_definitions"}
+    )
+    # Fields excluded from ALL hashing (display/resource metadata only).
+    HASH_EXCLUDE: ClassVar[FrozenSet[str]] = frozenset({"label", "inference_resources"})
+
     checkpoint: str = Field(
         ...,
         description="The mlflow run ID, as a 32-character hexadecimal string.",
@@ -320,6 +328,11 @@ class ConfigModel(BaseModel):
 def generate_config_schema() -> str:
     """Generate the JSON schema for the ConfigModel."""
     return ConfigModel.model_json_schema()
+
+
+# Module-level constants for use in Snakemake and elsewhere
+RUN_ENV_FIELDS = RunConfig.ENV_FIELDS
+RUN_HASH_EXCLUDE = RunConfig.HASH_EXCLUDE
 
 
 if __name__ == "__main__":
