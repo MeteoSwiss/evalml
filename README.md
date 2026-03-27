@@ -42,9 +42,6 @@ runs:
       mlflow_id: d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
       steps: 0/120/6
-
-
-baselines:
   - baseline:
       label: COSMO-E
       root: /store_new/mch/msopr/ml/COSMO-E
