@@ -289,7 +289,6 @@ rule run_ffv2:
 
         # Run FFV2 inside sarus container
         # Note: pull command currently needed only once to download the container
-        # TODO(mmcglohon): Update from dev to main once things work
         sarus pull container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-main
         namelist=$(realpath {input.namelist})
         domain_table={params.domain_table}

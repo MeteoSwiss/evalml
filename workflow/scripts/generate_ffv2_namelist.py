@@ -12,9 +12,7 @@ logging.basicConfig(
 
 
 def _check_args(args):
-    print('ids are ' + args.experiment_ids)
     ids = args.experiment_ids.split(',')
-    print('fdbk dirs are ' + args.feedback_directories)
     fdbk_dirs = args.feedback_directories.split(',')
     # Allow list to end with comma
     if ids[-1] == '':
@@ -43,7 +41,6 @@ def _check_args(args):
             raise FileNotFoundError(f'feedback directory {fdbk_dir} '
                         'does not exist. Check that MEC has run.')
 
-# TODO: Make this a parameter as well.
 def _make_veri_ens_member(experiment_ids: str) -> str:
     num_ids = len(experiment_ids.split(','))
     return ','.join(['-1'] * num_ids)
@@ -133,7 +130,6 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    print(args)
     _check_args(args)
 
     main(args)

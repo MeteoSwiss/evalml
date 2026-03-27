@@ -214,7 +214,7 @@ rule verif_metrics_plot_all:
 rule verif_obs_all:
     input:
         expand(
-            rules.run_ffv2.output,
+            rules.reorganize_ffv2_files.output,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
             run_id=CANDIDATES,
         ),
