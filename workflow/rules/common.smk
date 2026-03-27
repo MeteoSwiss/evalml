@@ -141,6 +141,8 @@ def collect_all_runs() -> dict:
     runs: dict[str, dict] = {}
     for run_entry in config["runs"]:
         model_type = next(iter(run_entry))
+        if model_type == "baseline":
+            continue
         run_config = run_entry[model_type]
         runs |= register_run(model_type, run_config)
     return runs
@@ -159,11 +161,22 @@ def collect_all_candidates():
 def collect_all_baselines():
     """Collect all baselines defined in the configuration."""
     baselines = {}
-    for baseline_entry in copy.deepcopy(config["baselines"]):
+
+    for run_entry in copy.deepcopy(config["runs"]):
+        if "baseline" not in run_entry:
+            continue
+        baseline_config = run_entry["baseline"]
+        baseline_id = Path(baseline_config["root"]).stem
+        baselines[baseline_id] = baseline_config
+
+    # Backward compatibility with legacy top-level `baselines` block.
+    for baseline_entry in copy.deepcopy(config.get("baselines", [])):
         baseline_type = next(iter(baseline_entry))
         baseline_config = baseline_entry[baseline_type]
-        baseline_id = baseline_config.pop("baseline_id")
+        baseline_id = Path(baseline_config["root"]).stem
+        baseline_config.pop("baseline_id", None)
         baselines[baseline_id] = baseline_config
+
     return baselines
 
 
