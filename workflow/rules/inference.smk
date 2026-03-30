@@ -10,8 +10,8 @@ from datetime import datetime
 rule prepare_checkpoint:
     localrule: True
     output:
-        checkpoint=OUT_ROOT / "data/envs/{env_id}/inference-last.ckpt",
-        metadata=OUT_ROOT / "data/envs/{env_id}/anemoi.json",
+        checkpoint=OUT_ROOT / "data/runs/{env_id}/inference-last.ckpt",
+        metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
     params:
         checkpoint=lambda wc: ENV_CONFIGS[wc.env_id]["checkpoint"],
         checkpoint_type=lambda wc: _checkpoint_uri_type(
@@ -53,9 +53,9 @@ rule extract_checkpoint_requirements:
     """
     localrule: True
     input:
-        metadata=OUT_ROOT / "data/envs/{env_id}/anemoi.json",
+        metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
     output:
-        requirements=OUT_ROOT / "data/envs/{env_id}/requirements.txt",
+        requirements=OUT_ROOT / "data/runs/{env_id}/requirements.txt",
     params:
         extra_requirements=lambda wc: ",".join(
             ENV_CONFIGS[wc.env_id].get("extra_requirements", [])
@@ -81,10 +81,10 @@ rule create_inference_venv:
     """
     localrule: True
     input:
-        metadata=OUT_ROOT / "data/envs/{env_id}/anemoi.json",
-        requirements=OUT_ROOT / "data/envs/{env_id}/requirements.txt",
+        metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
+        requirements=OUT_ROOT / "data/runs/{env_id}/requirements.txt",
     output:
-        venv=temp(directory(OUT_ROOT / "data/envs/{env_id}/.venv")),
+        venv=temp(directory(OUT_ROOT / "data/runs/{env_id}/.venv")),
     log:
         OUT_ROOT / "logs/create_inference_venv/{env_id}.log",
     shell:
@@ -121,7 +121,7 @@ rule make_squashfs_image:
     input:
         venv=rules.create_inference_venv.output.venv,
     output:
-        image=OUT_ROOT / "data/envs/{env_id}/venv.squashfs",
+        image=OUT_ROOT / "data/runs/{env_id}/venv.squashfs",
     log:
         OUT_ROOT / "logs/make_squashfs_image/{env_id}.log",
     shell:
@@ -147,9 +147,9 @@ rule create_inference_sandbox:
     input:
         script="workflow/scripts/inference_create_sandbox.py",
         checkpoint=lambda wc: OUT_ROOT
-        / f"data/envs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
+        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         requirements=lambda wc: OUT_ROOT
-        / f"data/envs/{RUN_CONFIGS[wc.run_id]['env_id']}/requirements.txt",
+        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/requirements.txt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
         readme_template="resources/inference/sandbox/readme.md.jinja2",
     output:
@@ -189,7 +189,7 @@ rule prepare_inference_forecaster:
     localrule: True
     input:
         checkpoint=lambda wc: OUT_ROOT
-        / f"data/envs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
+        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
     output:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
@@ -221,7 +221,7 @@ rule prepare_inference_interpolator:
     localrule: True
     input:
         checkpoint=lambda wc: OUT_ROOT
-        / f"data/envs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
+        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
         forecasts=lambda wc: (
             [
@@ -278,7 +278,7 @@ rule execute_inference:
     input:
         okfile=_inference_routing_fn,
         image=lambda wc: OUT_ROOT
-        / f"data/envs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
+        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
     output:
         okfile=touch(OUT_ROOT / "logs/execute_inference/{run_id}-{init_time}.ok"),
     log:
