@@ -127,25 +127,25 @@ rule experiment_all:
             experiment=EXPERIMENT_NAME,
         ),
         expand(
-            OUT_ROOT / "results/{experiment}/metrics/spatial/runs/{run_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
+            rules.plot_summary_stat_maps.output,
             run_id=collect_all_candidates(),
             leadtime=[6],
             metric=["BIAS"],
             param=["SP_10M"],
-            region=["centraleurope", "switzerland"], 
-            season=["all", "DJF", "MAM", "JJA", "SON"], 
-            experiment=EXPERIMENT_NAME
-        ), 
-        expand(
-            OUT_ROOT / "results/{experiment}/metrics/spatial/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
-            baseline_id=collect_all_baselines(),
-            leadtime=[6],
-            metric=["BIAS"],
-            param=["SP_10M"],
-            region=["centraleurope", "switzerland"], 
-            season=["all", "DJF", "MAM", "JJA", "SON"], 
-            experiment=EXPERIMENT_NAME
-        )
+            region=["centraleurope", "switzerland"],
+            season=["all", "DJF", "MAM", "JJA", "SON"],
+            experiment=EXPERIMENT_NAME,
+        ),
+        # expand(
+        #     OUT_ROOT / "results/{experiment}/metrics/spatial/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
+        #     baseline_id=collect_all_baselines(),
+        #     leadtime=[6],
+        #     metric=["BIAS"],
+        #     param=["SP_10M"],
+        #     region=["centraleurope", "switzerland"], 
+        #     season=["all", "DJF", "MAM", "JJA", "SON"], 
+        #     experiment=EXPERIMENT_NAME
+        # )
 
 
 rule showcase_all:

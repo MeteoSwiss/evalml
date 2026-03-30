@@ -92,10 +92,10 @@ def _(ArgumentParser, Path, np):
 
 
 @app.cell
-def _(init_hour, lead_time, metric, param, season, verif_file, xr):
+def _(metric, param, verif_file, xr):
     ds = xr.open_dataset(verif_file)
-    var = f"{param}.{metric}.spatial"
-    ds = ds[var].sel(init_hour=init_hour, lead_time=lead_time, season=season)
+    var = f"{param}.{metric}"
+    ds = ds[var]
     ds
     return ds, var
 
@@ -107,7 +107,7 @@ def _(CMAP_DEFAULTS, ekp):
         still needs to be passed as arguments to tripcolor()/tricontourf().
         """
         metric_key = f"{param}.{metric}.spatial"
-        cfg = CMAP_DEFAULTS[metric_key] if metric_key in CMAP_DEFAULTS else CMAP_DEFAULTS[param]
+        cfg = CMAP_DEFAULTS[metric_key] if metric_key in CMAP_DEFAULTS else CMAP_DEFAULTS.get(param, {})
         units = units_override if units_override is not None else cfg.get("units", "")
         return {
             "style": ekp.styles.Style(
@@ -240,7 +240,7 @@ def _(
     else:
         plot_vals = ds.values.ravel()
 
-    plotter.plot_field(subplot, plot_vals, **get_style(var, metric))
+    plotter.plot_field(subplot, plot_vals, **get_style(param, metric))
     # subplot.ax.add_geometries(
     #     state["lam_envelope"],
     #     edgecolor="black",

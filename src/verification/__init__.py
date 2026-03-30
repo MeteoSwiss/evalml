@@ -226,16 +226,9 @@ def verify(
         score = xr.concat(score, dim="region")
         fcst_statistics = xr.concat(fcst_statistics, dim="region")
         obs_statistics = xr.concat(obs_statistics, dim="region")
-        score_spatial = _compute_scores(
-            fcst_aligned[param],
-            obs_aligned[param],
-            prefix=param + ".",
-            suffix=".spatial",
-            dim=[],
-        )
         statistics.append(xr.concat([fcst_statistics, obs_statistics], dim="source"))
         scores.append(
-            xr.merge([score, score_spatial], join="outer", compat="no_conflicts")
+            xr.merge([score], join="outer", compat="no_conflicts")
         )
 
     scores = _merge_metrics(scores)
