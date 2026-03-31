@@ -5,9 +5,8 @@ import subprocess
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, List
 
-import toml
 import yaml
 import jinja2
 
@@ -37,24 +36,14 @@ class SandboxModule(abc.ABC):
 class ConfigModule(SandboxModule):
     """Loads anemoi-specific settings from pyproject.toml and writes a YAML config."""
 
-    def __init__(self, pyproject_toml: Path, work_dir: Path, strict: bool) -> None:
-        self.pyproject = pyproject_toml
-        data = toml.load(self.pyproject)
-        tool_cfg = data.get("tool", {}).get("anemoi")
-        if not tool_cfg:
-            raise ValueError(f"Missing [tool.anemoi] in {self.pyproject}")
-
-        self.run_mlflow_link: Optional[str] = tool_cfg.get("run_mlflow_link")
-        checkpoints = tool_cfg.get("checkpoints_path")
-        if not checkpoints:
-            raise ValueError("'checkpoints_path' not defined in [tool.anemoi] section")
-        self.checkpoint_path = Path(checkpoints) / "inference-last.ckpt"
+    def __init__(self, checkpoint: Path, work_dir: Path, strict: bool) -> None:
+        self.checkpoint = checkpoint
         super().__init__(work_dir / "config", strict)
 
     def prepare(self) -> Dict[str, Path]:
         config_data = {
             "checkpoint": (
-                str(self.checkpoint_path) if self.strict else self.checkpoint_path.name
+                str(self.checkpoint) if self.strict else self.checkpoint.name
             ),
             "input": {"test": {"use_original_paths": True}},
             "allow_nans": False,
@@ -67,7 +56,7 @@ class ConfigModule(SandboxModule):
         # Include the checkpoint file if strict mode
         files = {str(Path("config/config.yaml")): out_file}
         if self.strict:
-            files[self.checkpoint_path.name] = self.checkpoint_path
+            files[self.checkpoint.name] = self.checkpoint
         return files
 
 
@@ -162,11 +151,15 @@ def parse_args() -> argparse.Namespace:
         description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+
     parser.add_argument(
-        "--pyproject", type=Path, required=True, help="Path to pyproject.toml"
+        "--checkpoint",
+        type=Path,
+        required=True,
+        help="Path to checkpoint file",
     )
     parser.add_argument(
-        "--lockfile", type=Path, required=True, help="Path to poetry.lock"
+        "--requirements", type=Path, required=True, help="Path to requirements.txt"
     )
     parser.add_argument(
         "--readme-template", type=Path, required=True, help="Path to README.j2 template"
@@ -199,12 +192,11 @@ def main() -> None:
         work_dir = Path(tmp)
         # Collect files from initial user inputs
         files: Dict[str, Path] = {
-            args.pyproject.name: args.pyproject,
-            args.lockfile.name: args.lockfile,
+            args.requirements.name: args.requirements,
         }
 
         # Prepare modules
-        cfg_module = ConfigModule(args.pyproject, work_dir, args.strict)
+        cfg_module = ConfigModule(args.checkpoint, work_dir, args.strict)
         files.update(cfg_module.prepare())
 
         # Optionally include squashfs
@@ -219,11 +211,10 @@ def main() -> None:
         # README generation
         context = {
             "image": args.squashfs.name if args.squashfs else None,
-            "run_mlflow_link": cfg_module.run_mlflow_link,
             "checkpoint_path": (
-                cfg_module.checkpoint_path.name
+                cfg_module.checkpoint.name
                 if args.strict
-                else str(cfg_module.checkpoint_path)
+                else str(cfg_module.checkpoint)
             ),
             "strict": args.strict,
         }
@@ -236,7 +227,7 @@ def main() -> None:
         arch.close()
 
     # Verify essential files
-    arch.verify([args.pyproject.name, args.lockfile.name, "config/config.yaml"])
+    arch.verify([args.requirements.name, "config/config.yaml"])
     LOG.info("Sandbox archive created at %s", args.output)
 
 

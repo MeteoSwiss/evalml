@@ -1,0 +1,730 @@
+config:
+  dataloader:
+    test:
+      dataset:
+        cutout:
+          - dataset: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-ifsnames-v1.0.zarr
+          - dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2025-6h-v1-for-single-v2.zarr
+dataset:
+  variables_metadata:
+    10u:
+      mars:
+        date: 20050101
+        levtype: sfc
+        param: U_10M
+        step: 12
+        time: 0
+    10v:
+      mars:
+        date: 20050101
+        levtype: sfc
+        param: V_10M
+        step: 12
+        time: 0
+    2d:
+      mars:
+        date: 20050101
+        levtype: sfc
+        param: TD_2M
+        step: 12
+        time: 0
+    2t:
+      mars:
+        date: 20050101
+        levtype: sfc
+        param: T_2M
+        step: 12
+        time: 0
+    cos_julian_day:
+      computed_forcing: true
+      constant_in_time: false
+    cos_latitude:
+      computed_forcing: true
+      constant_in_time: true
+    cos_local_time:
+      computed_forcing: true
+      constant_in_time: false
+    cos_longitude:
+      computed_forcing: true
+      constant_in_time: true
+    insolation:
+      computed_forcing: true
+      constant_in_time: false
+    lsm:
+      constant_in_time: true
+      mars:
+        date: 20050101
+        levtype: sfc
+        param: FR_LAND
+        step: 0
+        time: 12
+    msl:
+      mars:
+        date: 20050101
+        levtype: sfc
+        param: PMSL
+        step: 12
+        time: 0
+    q_100:
+      mars:
+        date: 20050101
+        levelist: 100
+        levtype: pl
+        param: QV
+        step: 12
+        time: 0
+    q_1000:
+      mars:
+        date: 20050101
+        levelist: 1000
+        levtype: pl
+        param: QV
+        step: 12
+        time: 0
+    q_150:
+      mars:
+        date: 20050101
+        levelist: 150
+        levtype: pl
+        param: QV
+        step: 12
+        time: 0
+    q_200:
+      mars:
+        date: 20050101
+        levelist: 200
+        levtype: pl
+        param: QV
+        step: 12
+        time: 0
+    q_250:
+      mars:
+        date: 20050101
+        levelist: 250
+        levtype: pl
+        param: QV
+        step: 12
+        time: 0
+    q_300:
+      mars:
+        date: 20050101
+        levelist: 300
+        levtype: pl
+        param: QV
+        step: 12
+        time: 0
+    q_400:
+      mars:
+        date: 20050101
+        levelist: 400
+        levtype: pl
+        param: QV
+        step: 12
+        time: 0
+    q_50:
+      mars:
+        date: 20050101
+        levelist: 50
+        levtype: pl
+        param: QV
+        step: 12
+        time: 0
+    q_500:
+      mars:
+        date: 20050101
+        levelist: 500
+        levtype: pl
+        param: QV
+        step: 12
+        time: 0
+    q_600:
+      mars:
+        date: 20050101
+        levelist: 600
+        levtype: pl
+        param: QV
+        step: 12
+        time: 0
+    q_700:
+      mars:
+        date: 20050101
+        levelist: 700
+        levtype: pl
+        param: QV
+        step: 12
+        time: 0
+    q_850:
+      mars:
+        date: 20050101
+        levelist: 850
+        levtype: pl
+        param: QV
+        step: 12
+        time: 0
+    q_925:
+      mars:
+        date: 20050101
+        levelist: 925
+        levtype: pl
+        param: QV
+        step: 12
+        time: 0
+    sin_julian_day:
+      computed_forcing: true
+      constant_in_time: false
+    sin_latitude:
+      computed_forcing: true
+      constant_in_time: true
+    sin_local_time:
+      computed_forcing: true
+      constant_in_time: false
+    sin_longitude:
+      computed_forcing: true
+      constant_in_time: true
+    sp:
+      mars:
+        date: 20050101
+        levtype: sfc
+        param: PS
+        step: 12
+        time: 0
+    t_100:
+      mars:
+        date: 20050101
+        levelist: 100
+        levtype: pl
+        param: T
+        step: 12
+        time: 0
+    t_1000:
+      mars:
+        date: 20050101
+        levelist: 1000
+        levtype: pl
+        param: T
+        step: 12
+        time: 0
+    t_150:
+      mars:
+        date: 20050101
+        levelist: 150
+        levtype: pl
+        param: T
+        step: 12
+        time: 0
+    t_200:
+      mars:
+        date: 20050101
+        levelist: 200
+        levtype: pl
+        param: T
+        step: 12
+        time: 0
+    t_250:
+      mars:
+        date: 20050101
+        levelist: 250
+        levtype: pl
+        param: T
+        step: 12
+        time: 0
+    t_300:
+      mars:
+        date: 20050101
+        levelist: 300
+        levtype: pl
+        param: T
+        step: 12
+        time: 0
+    t_400:
+      mars:
+        date: 20050101
+        levelist: 400
+        levtype: pl
+        param: T
+        step: 12
+        time: 0
+    t_50:
+      mars:
+        date: 20050101
+        levelist: 50
+        levtype: pl
+        param: T
+        step: 12
+        time: 0
+    t_500:
+      mars:
+        date: 20050101
+        levelist: 500
+        levtype: pl
+        param: T
+        step: 12
+        time: 0
+    t_600:
+      mars:
+        date: 20050101
+        levelist: 600
+        levtype: pl
+        param: T
+        step: 12
+        time: 0
+    t_700:
+      mars:
+        date: 20050101
+        levelist: 700
+        levtype: pl
+        param: T
+        step: 12
+        time: 0
+    t_850:
+      mars:
+        date: 20050101
+        levelist: 850
+        levtype: pl
+        param: T
+        step: 12
+        time: 0
+    t_925:
+      mars:
+        date: 20050101
+        levelist: 925
+        levtype: pl
+        param: T
+        step: 12
+        time: 0
+    tp:
+      mars:
+        date: 20050101
+        levtype: sfc
+        param: TOT_PREC
+        step: 12
+        time: 0
+      period:
+      - 6h
+      - 12h
+      process: accumulation
+    u_100:
+      mars:
+        date: 20050101
+        levelist: 100
+        levtype: pl
+        param: U
+        step: 12
+        time: 0
+    u_1000:
+      mars:
+        date: 20050101
+        levelist: 1000
+        levtype: pl
+        param: U
+        step: 12
+        time: 0
+    u_150:
+      mars:
+        date: 20050101
+        levelist: 150
+        levtype: pl
+        param: U
+        step: 12
+        time: 0
+    u_200:
+      mars:
+        date: 20050101
+        levelist: 200
+        levtype: pl
+        param: U
+        step: 12
+        time: 0
+    u_250:
+      mars:
+        date: 20050101
+        levelist: 250
+        levtype: pl
+        param: U
+        step: 12
+        time: 0
+    u_300:
+      mars:
+        date: 20050101
+        levelist: 300
+        levtype: pl
+        param: U
+        step: 12
+        time: 0
+    u_400:
+      mars:
+        date: 20050101
+        levelist: 400
+        levtype: pl
+        param: U
+        step: 12
+        time: 0
+    u_50:
+      mars:
+        date: 20050101
+        levelist: 50
+        levtype: pl
+        param: U
+        step: 12
+        time: 0
+    u_500:
+      mars:
+        date: 20050101
+        levelist: 500
+        levtype: pl
+        param: U
+        step: 12
+        time: 0
+    u_600:
+      mars:
+        date: 20050101
+        levelist: 600
+        levtype: pl
+        param: U
+        step: 12
+        time: 0
+    u_700:
+      mars:
+        date: 20050101
+        levelist: 700
+        levtype: pl
+        param: U
+        step: 12
+        time: 0
+    u_850:
+      mars:
+        date: 20050101
+        levelist: 850
+        levtype: pl
+        param: U
+        step: 12
+        time: 0
+    u_925:
+      mars:
+        date: 20050101
+        levelist: 925
+        levtype: pl
+        param: U
+        step: 12
+        time: 0
+    v_100:
+      mars:
+        date: 20050101
+        levelist: 100
+        levtype: pl
+        param: V
+        step: 12
+        time: 0
+    v_1000:
+      mars:
+        date: 20050101
+        levelist: 1000
+        levtype: pl
+        param: V
+        step: 12
+        time: 0
+    v_150:
+      mars:
+        date: 20050101
+        levelist: 150
+        levtype: pl
+        param: V
+        step: 12
+        time: 0
+    v_200:
+      mars:
+        date: 20050101
+        levelist: 200
+        levtype: pl
+        param: V
+        step: 12
+        time: 0
+    v_250:
+      mars:
+        date: 20050101
+        levelist: 250
+        levtype: pl
+        param: V
+        step: 12
+        time: 0
+    v_300:
+      mars:
+        date: 20050101
+        levelist: 300
+        levtype: pl
+        param: V
+        step: 12
+        time: 0
+    v_400:
+      mars:
+        date: 20050101
+        levelist: 400
+        levtype: pl
+        param: V
+        step: 12
+        time: 0
+    v_50:
+      mars:
+        date: 20050101
+        levelist: 50
+        levtype: pl
+        param: V
+        step: 12
+        time: 0
+    v_500:
+      mars:
+        date: 20050101
+        levelist: 500
+        levtype: pl
+        param: V
+        step: 12
+        time: 0
+    v_600:
+      mars:
+        date: 20050101
+        levelist: 600
+        levtype: pl
+        param: V
+        step: 12
+        time: 0
+    v_700:
+      mars:
+        date: 20050101
+        levelist: 700
+        levtype: pl
+        param: V
+        step: 12
+        time: 0
+    v_850:
+      mars:
+        date: 20050101
+        levelist: 850
+        levtype: pl
+        param: V
+        step: 12
+        time: 0
+    v_925:
+      mars:
+        date: 20050101
+        levelist: 925
+        levtype: pl
+        param: V
+        step: 12
+        time: 0
+    w_100:
+      mars:
+        date: 20050101
+        levelist: 100
+        levtype: pl
+        param: OMEGA
+        step: 12
+        time: 0
+    w_1000:
+      mars:
+        date: 20050101
+        levelist: 1000
+        levtype: pl
+        param: OMEGA
+        step: 12
+        time: 0
+    w_150:
+      mars:
+        date: 20050101
+        levelist: 150
+        levtype: pl
+        param: OMEGA
+        step: 12
+        time: 0
+    w_200:
+      mars:
+        date: 20050101
+        levelist: 200
+        levtype: pl
+        param: OMEGA
+        step: 12
+        time: 0
+    w_250:
+      mars:
+        date: 20050101
+        levelist: 250
+        levtype: pl
+        param: OMEGA
+        step: 12
+        time: 0
+    w_300:
+      mars:
+        date: 20050101
+        levelist: 300
+        levtype: pl
+        param: OMEGA
+        step: 12
+        time: 0
+    w_400:
+      mars:
+        date: 20050101
+        levelist: 400
+        levtype: pl
+        param: OMEGA
+        step: 12
+        time: 0
+    w_50:
+      mars:
+        date: 20050101
+        levelist: 50
+        levtype: pl
+        param: OMEGA
+        step: 12
+        time: 0
+    w_500:
+      mars:
+        date: 20050101
+        levelist: 500
+        levtype: pl
+        param: OMEGA
+        step: 12
+        time: 0
+    w_600:
+      mars:
+        date: 20050101
+        levelist: 600
+        levtype: pl
+        param: OMEGA
+        step: 12
+        time: 0
+    w_700:
+      mars:
+        date: 20050101
+        levelist: 700
+        levtype: pl
+        param: OMEGA
+        step: 12
+        time: 0
+    w_850:
+      mars:
+        date: 20050101
+        levelist: 850
+        levtype: pl
+        param: OMEGA
+        step: 12
+        time: 0
+    w_925:
+      mars:
+        date: 20050101
+        levelist: 925
+        levtype: pl
+        param: OMEGA
+        step: 12
+        time: 0
+    z:
+      constant_in_time: true
+      mars:
+        date: 20050101
+        levelist: null
+        levtype: sfc
+        param: FIS
+        step: 0
+        time: 12
+    z_100:
+      mars:
+        date: 20050101
+        levelist: 100
+        levtype: pl
+        param: FI
+        step: 12
+        time: 0
+    z_1000:
+      mars:
+        date: 20050101
+        levelist: 1000
+        levtype: pl
+        param: FI
+        step: 12
+        time: 0
+    z_150:
+      mars:
+        date: 20050101
+        levelist: 150
+        levtype: pl
+        param: FI
+        step: 12
+        time: 0
+    z_200:
+      mars:
+        date: 20050101
+        levelist: 200
+        levtype: pl
+        param: FI
+        step: 12
+        time: 0
+    z_250:
+      mars:
+        date: 20050101
+        levelist: 250
+        levtype: pl
+        param: FI
+        step: 12
+        time: 0
+    z_300:
+      mars:
+        date: 20050101
+        levelist: 300
+        levtype: pl
+        param: FI
+        step: 12
+        time: 0
+    z_400:
+      mars:
+        date: 20050101
+        levelist: 400
+        levtype: pl
+        param: FI
+        step: 12
+        time: 0
+    z_50:
+      mars:
+        date: 20050101
+        levelist: 50
+        levtype: pl
+        param: FI
+        step: 12
+        time: 0
+    z_500:
+      mars:
+        date: 20050101
+        levelist: 500
+        levtype: pl
+        param: FI
+        step: 12
+        time: 0
+    z_600:
+      mars:
+        date: 20050101
+        levelist: 600
+        levtype: pl
+        param: FI
+        step: 12
+        time: 0
+    z_700:
+      mars:
+        date: 20050101
+        levelist: 700
+        levtype: pl
+        param: FI
+        step: 12
+        time: 0
+    z_850:
+      mars:
+        date: 20050101
+        levelist: 850
+        levtype: pl
+        param: FI
+        step: 12
+        time: 0
+    z_925:
+      mars:
+        date: 20050101
+        levelist: 925
+        levtype: pl
+        param: FI
+        step: 12
+        time: 0
