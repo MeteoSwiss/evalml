@@ -1,7 +1,7 @@
 from pathlib import Path
 from datetime import datetime, timedelta
 
-EXPERIMENT_HASH = short_hash_config()
+EXPERIMENT_HASH = master_hash()
 
 
 # TODO: merge _parse_steps from generate_mec_namelist.py and verif_single_init.py?
@@ -28,7 +28,7 @@ def _reftimes_mec():
     leads = _parse_steps(config["runs"][0]["forecaster"]["steps"])
     start_mec = start + timedelta(hours=max(leads))
     end = datetime.strptime(cfg["end"], "%Y-%m-%dT%H:%M")
-    freq = _parse_timedelta(cfg["frequency"])
+    freq = parse_timedelta(cfg["frequency"])
     times = []
     t = start_mec
     while t <= end:
@@ -50,7 +50,7 @@ def init_times_for_mec(wc):
 
     lt = get_leadtime(wc)  # expects something like "48h"
     lead_h = int(str(lt).rstrip("h"))
-    freq_td = _parse_timedelta(config["dates"]["frequency"])
+    freq_td = parse_timedelta(config["dates"]["frequency"])
 
     # iterate from base - lead to base stepping by the parsed timedelta
     t = base - timedelta(hours=lead_h)
@@ -177,7 +177,9 @@ rule run_mec:
     wildcard_constraints:
         init_time=r"\d{12}",
     params:
-        final_fdbk_file_dir=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}/fdbk_files"),
+        final_fdbk_file_dir=lambda wc: str(
+            OUT_ROOT / f"data/runs/{wc.run_id}/fdbk_files"
+        ),
     resources:
         cpus_per_task=1,
         runtime="1h",
@@ -211,12 +213,13 @@ rule run_mec:
         #./mec > ./mec_out.log 2>&1
 
         # copy the output file to the final location for the Feedback files
-		# and rename to match NWP conventions
+        # and rename to match NWP conventions
         mkdir -p {params.final_fdbk_file_dir}
         cp {input.run_dir}/verSYNOP.nc {params.final_fdbk_file_dir}/verSYNOP_{wildcards.init_time}00.nc
         echo "...time at end of run_mec: $(date)"
         ) > {log} 2>&1
         """
+
 
 rule generate_ffv2_namelist:
     localrule: True
@@ -247,8 +250,8 @@ rule generate_ffv2_namelist:
     shell:
         """
         mkdir -p {params.output_directory}
-		output_dir={params.output_directory}
-		echo "created $output_dir"
+        output_dir={params.output_directory}
+        echo "created $output_dir"
         uv run {input.script} \
             --template {input.template} \
             --namelist {output.namelist} \
@@ -261,11 +264,12 @@ rule generate_ffv2_namelist:
             --blacklists {params.blacklists}
         """
 
+
 rule run_ffv2:
     input:
         namelist=rules.generate_ffv2_namelist.output.namelist,
     output:
-        scores=directory(OUT_ROOT / "data/runs/{run_id}/scores")
+        scores=directory(OUT_ROOT / "data/runs/{run_id}/scores"),
     params:
         # domain_table and blacklists are locations on Balfrin, that will be
         # mounted into container (with the same filepaths)
@@ -307,17 +311,18 @@ rule run_ffv2:
         --mount=type=bind,source=$feedback_dir_abs,destination=/src/ffv2/input \
         --mount=type=bind,source=$output_dir_abs,destination=/src/ffv2/output \
         container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-main
-		
+
         echo "...time at end of run_ffv2: $(date)"
         ) > {log} 2>&1
-		"""
+        """
+
 
 rule reorganize_ffv2_files:
     localrule: True
     input:
-        scores=rules.run_ffv2.output.scores
+        scores=rules.run_ffv2.output.scores,
     output:
-        shiny_dir=directory(OUT_ROOT / "data/runs/{run_id}/shiny/")
+        shiny_dir=directory(OUT_ROOT / "data/runs/{run_id}/shiny/"),
     log:
         OUT_ROOT / "logs/reorganize_ffv2_files/{run_id}.log",
     shell:
@@ -354,7 +359,7 @@ rule reorganize_ffv2_files:
         #cp $input_dir_abs/CATEG_TS_exp* $output_dir_abs/fdbk_synop_categ_ts/data
 
         # Categorical verification against SYNOP as time series
-        cp $input_dir_abs/CATEG_bs_exp* $output_dir_abs/fdbk_synop_categ_bystat/data		
+        cp $input_dir_abs/CATEG_bs_exp* $output_dir_abs/fdbk_synop_categ_bystat/data
 
         echo "...time at end of reorganize_ffv2_files: $(date)"
         ) > {log} 2>&1
