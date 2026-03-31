@@ -34,6 +34,20 @@ logging.basicConfig(
 
 DATETIME_FMT = "%Y%m%d%H%M"
 
+SEASONS = ["DJF", "MAM", "JJA", "SON", "all"]
+
+
+def _season_of(dt: datetime) -> str:
+    """Return the meteorological season string for a given datetime."""
+    month = dt.month
+    if month in (12, 1, 2):
+        return "DJF"
+    if month in (3, 4, 5):
+        return "MAM"
+    if month in (6, 7, 8):
+        return "JJA"
+    return "SON"
+
 # Maps from standard parameter names to zarr variable names.
 # COSMO-2e zarrs use short CF names; COSMO-1e zarrs keep the COSMO names.
 _PARAMS_MAP_CO2 = {
@@ -179,12 +193,13 @@ def main(args: Namespace) -> None:
 
     step_td = timedelta(hours=args.step)
 
-    # Running accumulators – initialised on the first successfully processed
-    # sample so that we can infer the spatial shape from the data.
-    accum_n: np.ndarray | None = None
-    accum_sum_e: np.ndarray | None = None
-    accum_sum_se: np.ndarray | None = None
-    accum_sum_ae: np.ndarray | None = None
+    # Running accumulators per season – initialised on the first successfully
+    # processed sample so that we can infer the spatial shape from the data.
+    # Each entry is a numpy array over the spatial dimension(s).
+    accum_n:      dict[str, np.ndarray | None] = {s: None for s in SEASONS}
+    accum_sum_e:  dict[str, np.ndarray | None] = {s: None for s in SEASONS}
+    accum_sum_se: dict[str, np.ndarray | None] = {s: None for s in SEASONS}
+    accum_sum_ae: dict[str, np.ndarray | None] = {s: None for s in SEASONS}
     ref_truth_slice: xr.DataArray | None = None  # kept for output coordinates
 
     n_ok = 0
@@ -249,20 +264,23 @@ def main(args: Namespace) -> None:
         truth_vals = truth_slice.values
         error = fcst_vals - truth_vals  # shape: spatial dims of truth
 
-        # --- initialise accumulators ---
-        if accum_n is None:
-            accum_n = np.zeros(error.shape, dtype=np.int64)
-            accum_sum_e = np.zeros(error.shape, dtype=np.float64)
-            accum_sum_se = np.zeros(error.shape, dtype=np.float64)
-            accum_sum_ae = np.zeros(error.shape, dtype=np.float64)
+        # --- initialise accumulators on first valid sample ---
+        if accum_n["all"] is None:
+            for s in SEASONS:
+                accum_n[s]      = np.zeros(error.shape, dtype=np.int64)
+                accum_sum_e[s]  = np.zeros(error.shape, dtype=np.float64)
+                accum_sum_se[s] = np.zeros(error.shape, dtype=np.float64)
+                accum_sum_ae[s] = np.zeros(error.shape, dtype=np.float64)
             ref_truth_slice = truth_slice
 
-        # --- accumulate (NaN-safe) ---
+        # --- accumulate into the matching season bucket and "all" (NaN-safe) ---
+        season = _season_of(reftime)
         valid = ~np.isnan(error)
-        accum_n[valid] += 1
-        accum_sum_e[valid] += error[valid]
-        accum_sum_se[valid] += error[valid] ** 2
-        accum_sum_ae[valid] += np.abs(error[valid])
+        for s in [season, "all"]:
+            accum_n[s][valid]      += 1
+            accum_sum_e[s][valid]  += error[valid]
+            accum_sum_se[s][valid] += error[valid] ** 2
+            accum_sum_ae[s][valid] += np.abs(error[valid])
         n_ok += 1
 
     LOG.info("Finished: %d init times processed, %d skipped", n_ok, n_skip)
@@ -271,33 +289,40 @@ def main(args: Namespace) -> None:
         LOG.error("No data could be processed – no output written.")
         return
 
-    # --- compute aggregate maps ---
-    with np.errstate(invalid="ignore", divide="ignore"):
-        bias = np.where(accum_n > 0, accum_sum_e / accum_n, np.nan).astype(np.float32)
-        rmse = np.where(accum_n > 0, np.sqrt(accum_sum_se / accum_n), np.nan).astype(
-            np.float32
-        )
-        mae = np.where(accum_n > 0, accum_sum_ae / accum_n, np.nan).astype(np.float32)
-        count = np.where(accum_n > 0, accum_n, np.nan).astype(np.float32)
-
-    # Build a spatial template: keep only spatial dims and lat/lon coords,
-    # dropping scalar coords like time (added by .sel).
+    # --- compute aggregate maps per season, then stack into a season dimension ---
     spatial_coords = {
         c: ref_truth_slice[c]
         for c in ref_truth_slice.coords
         if set(ref_truth_slice[c].dims).issubset(set(ref_truth_slice.dims))
         and c != "time"
     }
+    spatial_dims = list(ref_truth_slice.dims)
+    out_dims = ["season"] + spatial_dims
+    out_coords = {"season": SEASONS, **spatial_coords}
 
-    def _da(data: np.ndarray) -> xr.DataArray:
-        return xr.DataArray(data, dims=ref_truth_slice.dims, coords=spatial_coords)
+    def _seasonal_da(compute_fn) -> xr.DataArray:
+        """Stack per-season arrays into a (season, *spatial) DataArray."""
+        slices = []
+        for s in SEASONS:
+            n = accum_n[s]
+            with np.errstate(invalid="ignore", divide="ignore"):
+                slices.append(compute_fn(n, s).astype(np.float32))
+        return xr.DataArray(np.stack(slices), dims=out_dims, coords=out_coords)
 
     out = xr.Dataset(
         {
-            f"{args.param}.BIAS": _da(bias),
-            f"{args.param}.RMSE": _da(rmse),
-            f"{args.param}.MAE": _da(mae),
-            f"{args.param}.N": _da(count),
+            f"{args.param}.BIAS": _seasonal_da(
+                lambda n, s: np.where(n > 0, accum_sum_e[s] / n, np.nan)
+            ),
+            f"{args.param}.RMSE": _seasonal_da(
+                lambda n, s: np.where(n > 0, np.sqrt(accum_sum_se[s] / n), np.nan)
+            ),
+            f"{args.param}.MAE": _seasonal_da(
+                lambda n, s: np.where(n > 0, accum_sum_ae[s] / n, np.nan)
+            ),
+            f"{args.param}.N": _seasonal_da(
+                lambda n, s: np.where(n > 0, n, np.nan)
+            ),
         },
         attrs={
             "param": args.param,

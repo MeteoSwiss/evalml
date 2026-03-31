@@ -92,10 +92,10 @@ def _(ArgumentParser, Path, np):
 
 
 @app.cell
-def _(metric, param, verif_file, xr):
+def _(metric, param, season, verif_file, xr):
     ds = xr.open_dataset(verif_file)
     var = f"{param}.{metric}"
-    ds = ds[var]
+    ds = ds[var].sel(season=season)
     ds
     return ds, var
 
