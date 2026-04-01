@@ -92,10 +92,14 @@ def _(ArgumentParser, Path, np):
 
 
 @app.cell
-def _(metric, param, season, verif_file, xr):
+def _(LOG, metric, param, season, verif_file, xr):
     ds = xr.open_dataset(verif_file)
+    LOG.info("Opened dataset: %s", ds)
     var = f"{param}.{metric}"
+    LOG.info("Selecting variable '%s' for season '%s'", var, season)
     ds = ds[var].sel(season=season)
+    LOG.info("Selected DataArray: dims=%s, shape=%s, dtype=%s", ds.dims, ds.shape, ds.dtype)
+    LOG.info("Value range: min=%.4g, max=%.4g, n_nan=%d", float(ds.min()), float(ds.max()), int(ds.isnull().sum()))
     ds
     return ds, var
 
@@ -205,10 +209,11 @@ def _(
     get_style,
     lead_time,
     metric,
+    np,
     outfn,
     param,
-    region, 
-    season, 
+    region,
+    season,
     var,
 ):
     # plot individual fields
@@ -233,14 +238,27 @@ def _(
     # field, units_override = preprocess_field(param, state)
 
     # Quick fix for precipitation (might have to use preprocess_field in the end (see above))
-    # for wind speed, preprocess_field only has conversion from m/s to knots 
+    # for wind speed, preprocess_field only has conversion from m/s to knots
     # (not the other way around), so I assume the values are in m/s
     if param == "TOT_PREC":
         plot_vals = ds.values.ravel()*1000
     else:
         plot_vals = ds.values.ravel()
+    LOG.info("plot_vals: shape=%s, min=%.4g, max=%.4g, n_nan=%d",
+             plot_vals.shape, float(np.nanmin(plot_vals)), float(np.nanmax(plot_vals)), int(np.isnan(plot_vals).sum()))
 
-    plotter.plot_field(subplot, plot_vals, **get_style(param, metric))
+    style_kwargs = get_style(param, metric)
+    LOG.info("style_kwargs: %s", style_kwargs)
+
+    if np.all(np.isnan(plot_vals)):
+        LOG.warning("All values are NaN for %s %s season=%s — plotting empty map.", param, metric, season)
+        import matplotlib.patches as mpatches
+        subplot.ax.set_facecolor("#cccccc")
+        subplot.standard_layers()
+        grey_patch = mpatches.Patch(color="#cccccc", label="No data")
+        subplot.ax.legend(handles=[grey_patch], loc="lower left", fontsize=8)
+    else:
+        plotter.plot_field(subplot, plot_vals, **style_kwargs)
     # subplot.ax.add_geometries(
     #     state["lam_envelope"],
     #     edgecolor="black",

@@ -150,6 +150,8 @@ rule plot_summary_stat_maps:
         OUT_ROOT / "results/{experiment}/metrics/spatial/runs/{run_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
+    log:
+        OUT_ROOT / "logs/plot_summary_stat_maps/{experiment}/{run_id}-{param}-{metric}-{region}-{season}-{leadtime}.log",
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
@@ -161,7 +163,7 @@ rule plot_summary_stat_maps:
         uv run python {input.script} \
             --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} --metric {wildcards.metric} \
-            --season {wildcards.season}
+            --season {wildcards.season} > {log} 2>&1
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
         #     --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
@@ -175,6 +177,8 @@ use rule plot_summary_stat_maps as plot_summary_stat_maps_baseline with:
         verif_file=OUT_ROOT / "data/baselines/{baseline_id}/verif_aggregated.nc",
     output:
         OUT_ROOT / "results/{experiment}/metrics/spatial/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
+    log:
+        OUT_ROOT / "logs/plot_summary_stat_maps/{experiment}/{baseline_id}-{param}-{metric}-{region}-{season}-{leadtime}.log",
     params:
         nc_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/baselines/{wc.baseline_id}/verif_aggregated.nc"
