@@ -34,8 +34,6 @@ rule plot_meteogram:
     output:
         OUT_ROOT
         / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{sta}.png",
-    wildcard_constraints:
-        showcase=r"[^/]+"  # without /
     # localrule: True
     resources:
         slurm_partition="postproc",
@@ -135,8 +133,6 @@ rule make_forecast_animation:
     output:
         OUT_ROOT
         / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
-    wildcard_constraints:
-        showcase=r"[^/]+"  # without /
     params:
         delay=lambda wc: 10 * int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
     shell:
