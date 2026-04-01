@@ -16,7 +16,7 @@ include: "rules/common.smk"
 include: "rules/summary.smk"
 include: "rules/data.smk"
 include: "rules/inference.smk"
-include: "rules/verif.smk"
+include: "rules/verification.smk"
 include: "rules/report.smk"
 include: "rules/plot.smk"
 
@@ -123,7 +123,7 @@ rule experiment_all:
             experiment=EXPERIMENT_NAME,
         ),
         expand(
-            rules.verif_metrics_plot.output,
+            rules.verification_metrics_plot.output,
             experiment=EXPERIMENT_NAME,
         ),
 
@@ -153,12 +153,12 @@ rule sandbox_all:
     """Target rule for creating a sandbox for inference."""
     input:
         expand(
-            rules.create_inference_sandbox.output.sandbox,
+            rules.inference_create_sandbox.output.sandbox,
             run_id=CANDIDATES,
         ),
 
 
-rule run_inference_all:
+rule inference_all:
     """Run inference for all reference times as defined in the configuration."""
     input:
         expand(
@@ -168,19 +168,19 @@ rule run_inference_all:
         ),
 
 
-rule verif_metrics_all:
+rule verification_metrics_all:
     input:
         expand(
-            rules.verif_metrics.output,
+            rules.verification_metrics.output,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=CANDIDATES,
         ),
 
 
-rule verif_metrics_plot_all:
+rule verification_metrics_plot_all:
     """Run verification plot metrics for all studies."""
     input:
         expand(
-            rules.verif_metrics_plot.output,
+            rules.verification_metrics_plot.output,
             experiment=EXPERIMENT_NAME,
         ),

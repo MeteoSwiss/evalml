@@ -10,7 +10,7 @@ else:
     output_peakweather_root = OUT_ROOT / "data/observations/peakweather"
 
 
-rule download_obs_from_peakweather:
+rule data_download_obs_from_peakweather:
     localrule: True
     output:
         root=directory(output_peakweather_root),
