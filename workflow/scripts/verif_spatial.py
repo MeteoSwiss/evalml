@@ -138,6 +138,27 @@ def open_truth_zarr(root: Path, param: str) -> xr.DataArray:
 
 
 # ---------------------------------------------------------------------------
+# GRIB step helpers
+# ---------------------------------------------------------------------------
+
+# Parameters whose GRIB values are cumulative totals and must be disaggregated
+# via diff before verification. For these, the preceding step must also be
+# loaded so that load_fct_data_from_grib's diff produces a valid result.
+_CUMULATIVE_PARAMS = {"TOT_PREC"}
+
+
+def _preceding_step(grib_dir: Path, step: int) -> int | None:
+    """Return the largest available step smaller than *step* in *grib_dir*."""
+    available = sorted(
+        int(f.stem.split("_")[-1])
+        for f in grib_dir.glob("*.grib")
+        if f.stem.split("_")[-1].isdigit()
+    )
+    smaller = [s for s in available if s < step]
+    return smaller[-1] if smaller else None
+
+
+# ---------------------------------------------------------------------------
 # Init-time discovery
 # ---------------------------------------------------------------------------
 
@@ -219,13 +240,30 @@ def main(args: Namespace) -> None:
             valid_time,
         )
 
+        first_iter = n_ok == 0
+
         # --- load forecast ---
         grib_params = list(_DERIVED[args.param]) if args.param in _DERIVED else [args.param]
+
+        # Cumulative params (e.g. TOT_PREC) are disaggregated via diff inside
+        # load_fct_data_from_grib, so we need to also load the preceding step
+        # to get a valid result at the requested step.
+        if args.param in _CUMULATIVE_PARAMS:
+            prev_step = _preceding_step(grib_dir, args.step)
+            if prev_step is None:
+                LOG.warning("No preceding step found for cumulative param %s at step %d, skipping %s",
+                            args.param, args.step, reftime)
+                n_skip += 1
+                continue
+            load_steps = [prev_step, args.step]
+        else:
+            load_steps = [args.step]
+
         try:
             fcst = load_fct_data_from_grib(
                 root=grib_dir,
                 reftime=reftime,
-                steps=[args.step],
+                steps=load_steps,
                 params=grib_params,
             )
         except Exception as exc:
@@ -233,7 +271,7 @@ def main(args: Namespace) -> None:
             n_skip += 1
             continue
 
-        # Drop lead_time dimension (single step requested).
+        # Drop lead_time dimension (select only the requested step).
         if "lead_time" in fcst.dims:
             fcst = fcst.sel(lead_time=np.timedelta64(args.step, "h"))
 
@@ -241,11 +279,31 @@ def main(args: Namespace) -> None:
         if args.param in _DERIVED:
             fcst = fcst.assign({args.param: _compute_derived(fcst, args.param)})
 
+        if first_iter:
+            LOG.info("fcst (after step selection): %s", fcst)
+            fcst_raw = fcst[args.param].values if args.param in fcst else None
+            if fcst_raw is not None:
+                n_nan_fcst = int(np.isnan(fcst_raw).sum())
+                LOG.info("fcst[%s]: shape=%s, min=%.4g, max=%.4g, n_nan=%d",
+                         args.param, fcst_raw.shape,
+                         float(np.nanmin(fcst_raw)) if n_nan_fcst < fcst_raw.size else float("nan"),
+                         float(np.nanmax(fcst_raw)) if n_nan_fcst < fcst_raw.size else float("nan"),
+                         n_nan_fcst)
+
         # --- load truth slice ---
         truth_slice = truth_da.sel(time=valid_time).compute()
         # For derived variables truth_da is already the derived DataArray,
         # so wrap it in a Dataset for map_forecast_to_truth compatibility.
         truth_ds = truth_slice.to_dataset(name=args.param) if isinstance(truth_slice, xr.DataArray) else truth_slice
+
+        if first_iter:
+            truth_raw = truth_slice.values
+            n_nan_truth = int(np.isnan(truth_raw).sum())
+            LOG.info("truth_slice[%s]: shape=%s, min=%.4g, max=%.4g, n_nan=%d",
+                     args.param, truth_raw.shape,
+                     float(np.nanmin(truth_raw)) if n_nan_truth < truth_raw.size else float("nan"),
+                     float(np.nanmax(truth_raw)) if n_nan_truth < truth_raw.size else float("nan"),
+                     n_nan_truth)
 
         # --- map forecast onto truth grid ---
         try:
@@ -263,6 +321,25 @@ def main(args: Namespace) -> None:
         fcst_vals = fcst_param.values
         truth_vals = truth_slice.values
         error = fcst_vals - truth_vals  # shape: spatial dims of truth
+
+        if first_iter:
+            n_nan_mapped = int(np.isnan(fcst_vals).sum())
+            LOG.info("fcst_mapped[%s]: shape=%s, min=%.4g, max=%.4g, n_nan=%d",
+                     args.param, fcst_vals.shape,
+                     float(np.nanmin(fcst_vals)) if n_nan_mapped < fcst_vals.size else float("nan"),
+                     float(np.nanmax(fcst_vals)) if n_nan_mapped < fcst_vals.size else float("nan"),
+                     n_nan_mapped)
+            n_nan_err = int(np.isnan(error).sum())
+            LOG.info("error: shape=%s, min=%.4g, max=%.4g, n_nan=%d / %d",
+                     error.shape,
+                     float(np.nanmin(error)) if n_nan_err < error.size else float("nan"),
+                     float(np.nanmax(error)) if n_nan_err < error.size else float("nan"),
+                     n_nan_err, error.size)
+
+        n_nan_error = int(np.isnan(error).sum())
+        if n_nan_error == error.size:
+            LOG.warning("reftime=%s: error is all-NaN (%d points) — nothing accumulated.",
+                        reftime.strftime(DATETIME_FMT), error.size)
 
         # --- initialise accumulators on first valid sample ---
         if accum_n["all"] is None:
