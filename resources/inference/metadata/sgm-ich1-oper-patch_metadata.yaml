@@ -4,7 +4,7 @@ config:
       dataset:
         cutout:
           - dataset: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-ifsnames-v1.0.zarr
-          - dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2025-6h-v1-for-single-v2.zarr
+          - dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2025-6h-v1-combined-land.zarr
 dataset:
   variables_metadata:
     10u:
@@ -300,8 +300,8 @@ dataset:
         step: 12
         time: 0
       period:
-      - 6h
-      - 12h
+        - 6h
+        - 12h
       process: accumulation
     u_100:
       mars:
