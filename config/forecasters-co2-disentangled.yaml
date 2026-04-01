@@ -76,3 +76,25 @@ profile:
     runtime: "1h"
     gpus: 0
   jobs: 50
+
+spatial_verification:
+  params:
+    - T_2M
+    - TD_2M
+    - U_10M
+    - V_10M
+    - SP_10M
+    - PS
+    - PMSL
+    - TOT_PREC
+  leadtimes:
+    - 6
+    - 24
+  metrics:
+    - BIAS
+    - RMSE
+  regions:
+    - switzerland
+    - centraleurope
+  seasons:
+    - all

@@ -65,6 +65,7 @@ def execute_workflow(
     unlock: bool,
     report: Path | None,
     extra_smk_args: tuple[str, ...] = (),
+    extra_targets: list[str] = [],
 ):
     config = ConfigModel.model_validate(load_yaml(configfile))
 
@@ -80,7 +81,7 @@ def execute_workflow(
     if report and not dry_run:
         command += ["--report-after-run", "--report", str(report)]
 
-    command.append(target)
+    command += [target] + extra_targets
     command += list(extra_smk_args)
     if not verbose:
         command += ["--quiet", "rules"]  # reduce verobosity of snakemake output
@@ -97,8 +98,14 @@ def cli():
 @click.argument(
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
+@click.option(
+    "--spatial",
+    is_flag=True,
+    default=False,
+    help="Also run spatial verification (computationally intensive).",
+)
 @workflow_options
-def experiment(configfile, cores, verbose, dry_run, unlock, report, extra_smk_args):
+def experiment(configfile, spatial, cores, verbose, dry_run, unlock, report, extra_smk_args):
     execute_workflow(
         configfile,
         "experiment_all",
@@ -108,6 +115,7 @@ def experiment(configfile, cores, verbose, dry_run, unlock, report, extra_smk_ar
         unlock,
         report,
         extra_smk_args,
+        extra_targets=["spatial_all"] if spatial else [],
     )
 
 

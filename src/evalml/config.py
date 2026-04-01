@@ -200,6 +200,34 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
+class SpatialVerificationConfig(BaseModel):
+    """Parameters controlling which spatial verification plots are produced."""
+
+    params: List[str] = Field(
+        default=["T_2M", "TD_2M", "U_10M", "V_10M", "SP_10M", "PS", "PMSL", "TOT_PREC"],
+        description=(
+            "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
+            "PS, PMSL, TOT_PREC (native), and SP_10M (derived wind speed from U_10M/V_10M)."
+        ),
+    )
+    leadtimes: List[int] = Field(
+        default=list(range(6, 121, 6)),
+        description="List of lead times (hours) to plot.",
+    )
+    metrics: List[str] = Field(
+        default=["BIAS", "RMSE", "MAE"],
+        description="List of verification metrics to plot.",
+    )
+    regions: List[str] = Field(
+        default=["switzerland", "centraleurope"],
+        description="List of regions to plot.",
+    )
+    seasons: List[str] = Field(
+        default=["all", "DJF", "MAM", "JJA", "SON"],
+        description="List of seasons to plot.",
+    )
+
+
 class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
 
@@ -310,6 +338,10 @@ class ConfigModel(BaseModel):
     stratification: Stratification
     locations: Locations
     profile: Profile
+    spatial_verification: SpatialVerificationConfig = Field(
+        default_factory=SpatialVerificationConfig,
+        description="Parameters for spatial verification plots (used with --spatial flag).",
+    )
 
     model_config = {
         "extra": "forbid",  # fail on misspelled keys

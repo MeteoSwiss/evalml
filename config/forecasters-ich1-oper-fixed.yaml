@@ -7,8 +7,8 @@ dates:
   # end: 2025-06-20T00:00
   # frequency: 54h
   # or
-  - 2024-01-01T12:00
-  - 2024-02-01T18:00
+  # - 2024-01-01T12:00
+  # - 2024-02-01T18:00
   - 2025-03-01T00:00
 
 
@@ -68,3 +68,25 @@ profile:
   jobs: 50
   batch_rules:
     plot_forecast_frame: 32
+
+spatial_verification:
+  params:
+    - T_2M
+    - TD_2M
+    - U_10M
+    - V_10M
+    - SP_10M
+    - PS
+    - PMSL
+    - TOT_PREC
+  leadtimes:
+    - 6
+    - 24
+  metrics:
+    - BIAS
+    - RMSE
+  regions:
+    - switzerland
+    - centraleurope
+  seasons:
+    - all
