@@ -96,42 +96,6 @@ rule verif_metrics:
             --output {output} > {log} 2>&1
         """
 
-rule verif_metrics_spatial:
-    input:
-        "src/verification/__init__.py",
-        "src/data_input/__init__.py",
-        script="workflow/scripts/verif_spatial.py",
-        inference_okfiles=lambda wc: expand(
-            rules.execute_inference.output.okfile,
-            init_time=_restrict_reftimes_to_hours(REFTIMES),
-            allow_missing=True,
-        ),
-        truth=config["truth"]["root"],
-    output:
-        OUT_ROOT / "data/runs/{run_id}/verif_spatial/{param}_{leadtime}.nc",
-    # wildcard_constraints:
-    # run_id="^" # to avoid ambiguitiy with run_baseline_verif
-    # TODO: implement logic to use experiment name instead of run_id as wildcard
-    params:
-        fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
-        fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
-        truth_label=config["truth"]["label"],
-    log:
-        OUT_ROOT / "logs/verif_metrics_spatial/{run_id}-{param}-{leadtime}.log",
-    resources:
-        cpus_per_task=24,
-        mem_mb=50_000,
-        runtime="60m",
-        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230"
-    shell:
-        """
-        uv run workflow/scripts/verif_spatial.py \
-            --run_root output/data/runs/{wildcards.run_id} \
-            --truth {input.truth} \
-            --step {wildcards.leadtime} \
-            --param {wildcards.param} \
-            --output {output} > {log} 2>&1
-        """
 
 
 def _restrict_reftimes_to_hours(reftimes, hours=None):
@@ -198,4 +162,77 @@ rule verif_metrics_plot:
     shell:
         """
         uv run {input.script} {input.verif} --output_dir {output} > {log} 2>&1
+        """
+
+rule verif_metrics_spatial:
+    input:
+        "src/verification/__init__.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/verif_spatial.py",
+        inference_okfiles=lambda wc: expand(
+            rules.execute_inference.output.okfile,
+            init_time=_restrict_reftimes_to_hours(REFTIMES),
+            allow_missing=True,
+        ),
+        truth=config["truth"]["root"],
+    output:
+        OUT_ROOT / "data/runs/{run_id}/verif_spatial/{param}_{leadtime}.nc",
+    # wildcard_constraints:
+    # run_id="^" # to avoid ambiguitiy with run_baseline_verif
+    # TODO: implement logic to use experiment name instead of run_id as wildcard
+    params:
+        fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
+        fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
+        truth_label=config["truth"]["label"],
+    log:
+        OUT_ROOT / "logs/verif_metrics_spatial/{run_id}-{param}-{leadtime}.log",
+    resources:
+        cpus_per_task=24,
+        mem_mb=50_000,
+        runtime="60m",
+        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230"
+    shell:
+        """
+        uv run {input.script} \
+            --run_root output/data/runs/{wildcards.run_id} \
+            --truth {input.truth} \
+            --step {wildcards.leadtime} \
+            --param {wildcards.param} \
+            --output {output} > {log} 2>&1
+        """
+
+rule verif_metrics_spatial_baseline:
+    input:
+        script="workflow/scripts/verif_spatial_baseline.py",
+        baseline_zarrs=lambda wc: expand(
+            "{root}/FCST{year}.zarr",
+            root=BASELINE_CONFIGS[wc.baseline_id].get("root"),
+            year=sorted({t.strftime("%y") for t in REFTIMES}),
+        ),
+        truth=config["truth"]["root"],
+    output:
+        OUT_ROOT / "data/baselines/{baseline_id}/verif_spatial/{param}_{leadtime}.nc",
+    params:
+        baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
+        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
+        baseline_root=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("root"),
+        truth_label=config["truth"]["label"],
+    log:
+        OUT_ROOT / "logs/verif_metrics_spatial_baseline/{baseline_id}-{param}-{leadtime}.log",
+    resources:
+        cpus_per_task=24,
+        mem_mb=50_000,
+        runtime="60m",
+        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230"
+    shell:
+        """
+        uv run {input.script} \
+            --baseline_root {params.baseline_root} \
+            --truth {input.truth} \
+            --step {wildcards.leadtime} \
+            --param {wildcards.param} \
+            --label "{params.baseline_label}" \
+            --steps "{params.baseline_steps}" \
+            --truth_label "{params.truth_label}" \
+            --output {output} > {log} 2>&1
         """

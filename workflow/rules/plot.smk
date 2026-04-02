@@ -174,7 +174,7 @@ rule plot_summary_stat_maps:
 use rule plot_summary_stat_maps as plot_summary_stat_maps_baseline with:
     input:
         script="workflow/scripts/plot_summary_stat_maps.mo.py",
-        verif_file=OUT_ROOT / "data/baselines/{baseline_id}/verif_aggregated.nc",
+        verif_file=OUT_ROOT / "data/baselines/{baseline_id}/verif_spatial/{param}_{leadtime}.nc",
     output:
         OUT_ROOT / "results/{experiment}/metrics/spatial/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
     log:
