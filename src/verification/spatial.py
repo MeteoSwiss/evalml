@@ -121,7 +121,17 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
     xr.Dataset
         Mapped forecast dataset.
     """
-    # TODO: return fcst unchanged when forecast and truth are already aligned
+    fcst_lat = fcst["lat"].values
+    fcst_lon = fcst["lon"].values
+    truth_lat = truth["lat"].values
+    truth_lon = truth["lon"].values
+    if (
+        fcst_lat.shape == truth_lat.shape
+        and fcst_lon.shape == truth_lon.shape
+        and np.max(np.abs(fcst_lat - truth_lat)) < 1e-6
+        and np.max(np.abs(fcst_lon - truth_lon)) < 1e-6
+    ):
+        return fcst
 
     truth_is_grid = "y" in truth.dims and "x" in truth.dims
 
