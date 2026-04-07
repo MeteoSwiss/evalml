@@ -123,7 +123,9 @@ def load_fct_data_from_grib(
         # which is directly comparable to the analysis zarr's TOT_PREC_6H.
         # Do NOT apply diff here — that would only be correct for cumulative-from-start
         # data (as in the operational baseline zarr handled by load_baseline_from_zarr).
-        LOG.info("Clipping precipitation to non-negative values (already period-accumulated)")
+        LOG.info(
+            "Clipping precipitation to non-negative values (already period-accumulated)"
+        )
         ds = ds.assign(TOT_PREC=lambda x: x.TOT_PREC.fillna(0).clip(min=0.0))
     # make sure time coordinate is available, and valid_time is not
     if "valid_time" in ds.coords:
