@@ -9,7 +9,7 @@
    method         = 'GMESTAT'                     ! Model Equivalent Calculator
    model          = 'ML'                          ! forecast model. One of "COSMO" "ICON" "ML"
    input          = './input_mod'                 ! input data path
-   data           = '/oprusers/osm/opr.emme/data/'      ! data path for auxiliary data
+   data           = '/oprusers/osm/opr.inn/data/'      ! data path for auxiliary data
    obsinput       = './input_obs'                 ! observation input data path
    output         = '.'                           ! output data to working directory
    time_ana       = {{ init_time }}00             ! analysis date YYYYMMDDHHMMSS
@@ -55,7 +55,7 @@
   prefix_in     = 'mon'           ! prefix for input files. ekf or mon
   prefix_out    = 'ver'
   rm_old        = 2                  ! overwrite entries in verification file ?
-  fc_file       = 'fc__FCR_TIME_00'  ! template for forecast file name
+  fc_file       = 'VVVMM.grib'  ! template for forecast file name 
   time_range    = 1
   ekf_concat    = F
   ref_runtype   = 'any'  ! accept any runtype for the reference state
