@@ -14,6 +14,8 @@ import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
 from earthkit.data.sources.stream import StreamFieldList  # noqa: E402
 
+from data_input import parse_steps  # noqa: E402
+
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -124,16 +126,6 @@ class ScriptConfig(Namespace):
     params: list[str]
 
 
-def _parse_steps(steps: str) -> int:
-    # check that steps is in the format "start/stop/step"
-    if "/" not in steps:
-        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
-    if len(steps.split("/")) != 3:
-        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
-    start, end, step = map(int, steps.split("/"))
-    return list(range(start, end + 1, step))
-
-
 def main(cfg: ScriptConfig):
     input = get_input(cfg.archive_dir)
     delta_h = 12
@@ -206,7 +198,7 @@ if __name__ == "__main__":
         help="Path to the output zarr store.",
     )
 
-    parser.add_argument("--steps", type=_parse_steps, default="0/120/6")
+    parser.add_argument("--steps", type=parse_steps, default="0/120/6")
 
     parser.add_argument("--run_id", type=str, default="000")
 

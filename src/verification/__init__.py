@@ -75,6 +75,7 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
 def _compute_scores(
     fcst: xr.DataArray,
     obs: xr.DataArray,
+    dim: list[str],
     prefix="",
     suffix="",
     source="",
@@ -83,7 +84,6 @@ def _compute_scores(
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
     Returns a xarray Dataset with the computed metrics.
     """
-    dim = ["x", "y"] if "x" in fcst.dims and "y" in fcst.dims else ["values"]
     error = fcst - obs
     scores = xr.Dataset(
         {
@@ -101,6 +101,7 @@ def _compute_scores(
 
 def _compute_statistics(
     data: xr.DataArray,
+    dim: list[str],
     prefix="",
     suffix="",
     source="",
@@ -109,7 +110,6 @@ def _compute_statistics(
     Compute basic statistics of a xarray DataArray (data).
     Returns a xarray Dataset with the computed statistics.
     """
-    dim = ["x", "y"] if "x" in data.dims and "y" in data.dims else ["values"]
     stats = xr.Dataset(
         {
             f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),
@@ -146,6 +146,7 @@ def verify(
     fcst_label: str,
     obs_label: str,
     regions: list[str] | None = None,
+    dim: list[str] | None = None,
 ) -> xr.Dataset:
     """
     Compare two xarray Datasets (fcst and obs) and return pandas DataFrame with
@@ -153,15 +154,21 @@ def verify(
     """
     start = time.time()
 
+    if dim is None:
+        if "x" in fcst.dims and "y" in fcst.dims:
+            dim = ["x", "y"]
+        elif "values" in fcst.dims:
+            dim = ["values"]
+        else:
+            dim = ["values"]
+
     # rewrite the verification to use dask and xarray
     # chunk the data to avoid memory issues
     # compute the metrics in parallel
     # return the results as a xarray Dataset
     fcst_aligned, obs_aligned = xr.align(fcst, obs, join="inner", copy=False)
     region_polygons = ShapefileSpatialAggregationMasks(shp=regions)
-    masks = region_polygons.get_masks(
-        lon=obs_aligned["longitude"], lat=obs_aligned["latitude"]
-    )
+    masks = region_polygons.get_masks(lon=obs_aligned["lon"], lat=obs_aligned["lat"])
 
     scores = []
     statistics = []
@@ -180,19 +187,29 @@ def verify(
             # scores vs time (reduce spatially)
             score.append(
                 _compute_scores(
-                    fcst_param, obs_param, prefix=param + ".", source=fcst_label
+                    fcst_param,
+                    obs_param,
+                    prefix=param + ".",
+                    source=fcst_label,
+                    dim=dim,
                 ).expand_dims(region=[region])
             )
 
             # statistics vs time (reduce spatially)
             fcst_statistics.append(
                 _compute_statistics(
-                    fcst_param, prefix=param + ".", source=fcst_label
+                    fcst_param,
+                    prefix=param + ".",
+                    source=fcst_label,
+                    dim=dim,
                 ).expand_dims(region=[region])
             )
             obs_statistics.append(
                 _compute_statistics(
-                    obs_param, prefix=param + ".", source=obs_label
+                    obs_param,
+                    prefix=param + ".",
+                    source=obs_label,
+                    dim=dim,
                 ).expand_dims(region=[region])
             )
 

@@ -1,13 +1,16 @@
 
 # ICON-CH1 templates
-- - {levtype: pl}
+- - {levtype: pl, param: [T, QV, U, V, OMEGA, FI]}
   - resources/icon-ch1-typeOfLevel=isobaricInhPa.grib
 
 - - {levtype: sfc, param: [T_2M, TD_2M, U_10M, V_10M]}
   - resources/icon-ch1-typeOfLevel=heightAboveGround.grib
 
-- - {levtype: sfc, param: [FR_LAND, TOC_PREC, PMSL, PS, FIS, T_G]}
+- - {levtype: sfc, param: [FR_LAND, PS, FIS, T_G, SKT]}
   - resources/icon-ch1-typeOfLevel=surface.grib
+
+- - {levtype: sfc, param: [PMSL]}
+  - resources/icon-ch1-typeOfLevel=meanSea.grib
 
 - - {levtype: sfc, param: [TOT_PREC]}
   - resources/icon-ch1-shortName=TOT_PREC.grib

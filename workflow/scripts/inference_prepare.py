@@ -47,7 +47,13 @@ def prepare_workdir(workdir: Path, resources_root: Path):
     """
     workdir.mkdir(parents=True, exist_ok=True)
     (workdir / "grib").mkdir(parents=True, exist_ok=True)
-    shutil.copytree(resources_root / "templates", workdir / "resources")
+    (workdir / "resources").mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        resources_root / "templates", workdir / "resources", dirs_exist_ok=True
+    )
+    shutil.copytree(
+        resources_root / "metadata", workdir / "resources", dirs_exist_ok=True
+    )
 
 
 def prepare_interpolator(smk):
@@ -124,7 +130,7 @@ def prepare_forecaster(smk):
 # TODO: just pass a dictionary of config overrides to the rule's params
 def _overrides_from_params(smk) -> dict:
     return {
-        "checkpoint": f"{smk.params.checkpoints_path}/inference-last.ckpt",
+        "checkpoint": str(Path(smk.input.checkpoint).resolve()),
         "date": smk.params.reftime_to_iso,
         "lead_time": smk.params.lead_time,
     }

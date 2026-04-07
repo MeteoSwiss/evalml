@@ -26,7 +26,7 @@ include: "rules/verif_obs.smk"
 # -----------------------------------------------------
 
 RUN_CMD = Path(".evalml_snakemake_cmd.txt").read_text().strip()
-CONFIG_HASH = short_hash_config()
+CONFIG_HASH = master_hash()
 WHEN = datetime.now().strftime("%Y%m%d")
 CONFIG_FILE = workflow.config_settings.configfiles[0]
 CONFIG_LABEL = config["config_label"] or CONFIG_FILE.stem
@@ -38,8 +38,11 @@ LOGS_DIR = OUT_ROOT / "logs"
 RESULTS_DIR = OUT_ROOT / "results" / EXPERIMENT_NAME
 
 
-# prefer one rule because snakemake complains about ambiguous rules (same output)
-ruleorder: prepare_inference_forecaster > prepare_inference_interpolator
+# Since run_id now contains "/" (format: "{env_id}/{r_hash}"), Snakemake wildcards
+# would greedily absorb part of run_id into {showcase} when matching paths of the
+# form results/{showcase}/{run_id}/... — constrain showcase to a single path component.
+wildcard_constraints:
+    showcase=r"[^/]+",
 
 
 # optional messages, log and error handling

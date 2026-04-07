@@ -40,4 +40,4 @@ output:
         - assign_mask: # fill local/global overlapping points with nan
             mask: "global/cutout_mask"
 
-patch_metadata: resources/sgm-ich1-oper-patch_metadata.yaml
+patch_metadata: resources/sgm-multidataset-ich1-oper-patch.yaml
