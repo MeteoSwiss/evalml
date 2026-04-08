@@ -40,7 +40,7 @@ dates:
   frequency: 60h
 
 runs:
-  # Each item is either `forecaster` or `interpolator`.
+  # Each item is either `forecaster`, `interpolator` or `baseline`
   - forecaster:
       # `checkpoint` may point to a supported MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.
       checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/228/runs/2f962c89ff644ca7940072fa9cd088ec
@@ -58,10 +58,7 @@ runs:
       label: M-1 forecaster
       steps: 0/120/6
       config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
-
-baselines:
   - baseline:
-      baseline_id: COSMO-E
       label: COSMO-E
       root: /store_new/mch/msopr/ml/COSMO-E
       steps: 0/120/6

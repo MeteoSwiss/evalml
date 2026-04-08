@@ -37,6 +37,13 @@ LOGS_DIR = OUT_ROOT / "logs"
 RESULTS_DIR = OUT_ROOT / "results" / EXPERIMENT_NAME
 
 
+# Since run_id now contains "/" (format: "{env_id}/{r_hash}"), Snakemake wildcards
+# would greedily absorb part of run_id into {showcase} when matching paths of the
+# form results/{showcase}/{run_id}/... — constrain showcase to a single path component.
+wildcard_constraints:
+    showcase=r"[^/]+",
+
+
 # optional messages, log and error handling
 # -----------------------------------------------------
 
