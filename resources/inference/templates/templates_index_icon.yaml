@@ -6,7 +6,7 @@
 - - {levtype: sfc, param: [T_2M, TD_2M, U_10M, V_10M]}
   - resources/icon-ch1-typeOfLevel=heightAboveGround.grib
 
-- - {levtype: sfc, param: [FR_LAND, PS, FIS, T_G, SKT]}
+- - {levtype: sfc, param: [FR_LAND, PS, FIS, T_G, SKT, SSO_SIGMA,SSO_STDH]}
   - resources/icon-ch1-typeOfLevel=surface.grib
 
 - - {levtype: sfc, param: [PMSL]}
