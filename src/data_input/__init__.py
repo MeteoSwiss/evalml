@@ -123,10 +123,14 @@ def load_fct_data_from_grib(
         # which is directly comparable to the analysis zarr's TOT_PREC_6H.
         # Do NOT apply diff here — that would only be correct for cumulative-from-start
         # data (as in the operational baseline zarr handled by load_baseline_from_zarr).
+        # Do NOT apply fillna(0) — step 0 has no TOT_PREC in the GRIB (the encoding
+        # shifts the date for negative startStep), so the structural NaN must be
+        # preserved to avoid fake zero-precipitation at lead time 0.
+        # Also, do not clip negative precipitations to zero. Seeing negative precipitations
+        # when they are there is an important sanity-check, e.g. in Meteograms. 
         LOG.info(
-            "Clipping precipitation to non-negative values (already period-accumulated)"
+            "Precipitation is already period-accumulated, no further processing"
         )
-        ds = ds.assign(TOT_PREC=lambda x: x.TOT_PREC.fillna(0).clip(min=0.0))
     # make sure time coordinate is available, and valid_time is not
     if "valid_time" in ds.coords:
         ds = ds.rename({"valid_time": "time"})
