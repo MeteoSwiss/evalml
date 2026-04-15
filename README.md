@@ -204,15 +204,17 @@ All outputs are rooted at `OUT_ROOT` (from `locations.output_root` in the config
 ```
 {OUT_ROOT}/
 ├── data/
-│   ├── runs/{run_id}/                        # per-run artefacts
+│   ├── runs/{env_id}/                        # per-environment artefacts (shared across config changes)
 │   │   ├── inference-last.ckpt
 │   │   ├── requirements.txt
 │   │   ├── venv.squashfs
-│   │   ├── summary.md
-│   │   └── {init_time}/                      # per-initialisation-time artefacts
-│   │       ├── config.yaml
-│   │       ├── grib/
-│   │       └── verif.nc
+│   │   └── {config_hash}/                    # per-run-config artefacts
+│   │       ├── summary.md
+│   │       ├── verif_aggregated.nc
+│   │       └── {init_time}/                  # per-initialisation-time artefacts
+│   │           ├── config.yaml
+│   │           ├── grib/
+│   │           └── verif.nc
 │   ├── baselines/{baseline_id}/
 │   │   └── {init_time}/verif.nc
 │   └── observations/
@@ -226,7 +228,8 @@ All outputs are rooted at `OUT_ROOT` (from `locations.output_root` in the config
 
 | Wildcard | Format | Example |
 |---|---|---|
-| `{run_id}` | `{type}-{ckpt_hash}-{run_hash}` | `forecaster-1a2b-c3d4` |
+| `{env_id}` | `{type}-{model_id}-{env_hash}` | `forecaster-1a2b-c3d4` |
+| `{run_id}` | `{env_id}/{config_hash}` | `forecaster-1a2b-c3d4/e5f6` |
 | `{baseline_id}` | slug derived from root path | `COSMO-E` |
 | `{init_time}` | `%Y%m%d%H%M` | `202001011200` |
 | `{experiment}` | `{YYYYMMDD}_{label}_{hash}` | `20260331_demo_a1b2` |
