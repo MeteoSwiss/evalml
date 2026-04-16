@@ -172,9 +172,9 @@ def _override_recursive(original: dict, updates: dict) -> dict:
 
 def main(smk):
     """Main function to run the Snakemake workflow."""
-    if smk.rule == "prepare_inference_forecaster":
+    if smk.rule == "inference_prepare_forecaster":
         prepare_forecaster(smk)
-    elif smk.rule == "prepare_inference_interpolator":
+    elif smk.rule == "inference_prepare_interpolator":
         prepare_interpolator(smk)
     else:
         raise ValueError(f"Unknown rule: {smk.rule}")

@@ -14,6 +14,20 @@ config:
 dataset:
   data:
     variables_metadata:
+      slor:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: SSO_SIGMA
+          step: 12
+          time: 0
+      sdor:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: SSO_STDH
+          step: 12
+          time: 0
       10u:
         mars:
           date: 20050101
