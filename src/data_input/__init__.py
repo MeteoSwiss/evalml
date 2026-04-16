@@ -128,9 +128,7 @@ def load_fct_data_from_grib(
         # preserved to avoid fake zero-precipitation at lead time 0.
         # Also, do not clip negative precipitations to zero. Seeing negative precipitations
         # when they are there is an important sanity-check, e.g. in Meteograms.
-        LOG.info(
-            "Precipitation is already period-accumulated, no further processing"
-        )
+        LOG.info("Precipitation is already period-accumulated, no further processing")
     # make sure time coordinate is available, and valid_time is not
     if "valid_time" in ds.coords:
         ds = ds.rename({"valid_time": "time"})
