@@ -156,14 +156,20 @@ def load_baseline_from_zarr(
     baseline = baseline.rename(
         {"forecast_reference_time": "ref_time", "step": "lead_time"}
     ).sortby("lead_time")
+    lead_times = np.array(steps, dtype="timedelta64[h]")
     if "TOT_PREC" in baseline.data_vars:
         if baseline.TOT_PREC.units == "kg m-2":
             baseline = baseline.assign(TOT_PREC=lambda x: x.TOT_PREC / 1000)
             baseline.TOT_PREC.attrs["units"] = "m"
-        ## disaggregate precipitation
+        ## disaggregate precipitation: select the requested lead times BEFORE
+        ## differencing so that .diff() computes accumulations over the full
+        ## step interval (e.g. 6 h) rather than between consecutive hourly
+        ## steps in the zarr.
+        ## Do NOT apply fillna(0) — if a selected step is genuinely missing,
+        ## it is better to see NaN than to silently substitute zero precip.
         baseline = baseline.assign(
             TOT_PREC=lambda x: (
-                x.TOT_PREC.fillna(0)
+                x.TOT_PREC.sel(lead_time=lead_times)
                 .diff("lead_time")
                 .pad(lead_time=(1, 0), constant_value=None)
                 .clip(min=0.0)
@@ -171,7 +177,7 @@ def load_baseline_from_zarr(
         )
     baseline = baseline[params].sel(
         ref_time=reftime,
-        lead_time=np.array(steps, dtype="timedelta64[h]"),
+        lead_time=lead_times,
     )
     baseline = baseline.assign_coords(time=baseline.ref_time + baseline.lead_time)
     if "latitude" in baseline.coords and "longitude" in baseline:
