@@ -127,7 +127,7 @@ def load_fct_data_from_grib(
         # shifts the date for negative startStep), so the structural NaN must be
         # preserved to avoid fake zero-precipitation at lead time 0.
         # Also, do not clip negative precipitations to zero. Seeing negative precipitations
-        # when they are there is an important sanity-check, e.g. in Meteograms. 
+        # when they are there is an important sanity-check, e.g. in Meteograms.
         LOG.info(
             "Precipitation is already period-accumulated, no further processing"
         )
