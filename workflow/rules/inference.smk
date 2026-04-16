@@ -195,9 +195,7 @@ rule prepare_inference_forecaster:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
         grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
-        okfile=touch(
-            OUT_ROOT / "logs/prepare_inference_forecaster/{run_id}-{init_time}.ok"
-        ),
+        okfile=OUT_ROOT / "logs/prepare_inference_forecaster/{run_id}-{init_time}.ok",
     params:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
@@ -236,9 +234,7 @@ rule prepare_inference_interpolator:
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
         grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
         forecaster=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/forecaster"),
-        okfile=touch(
-            OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.ok"
-        ),
+        okfile=OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.ok",
     params:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
@@ -280,7 +276,7 @@ rule execute_inference:
         image=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
     output:
-        okfile=touch(OUT_ROOT / "logs/execute_inference/{run_id}-{init_time}.ok"),
+        okfile=OUT_ROOT / "logs/execute_inference/{run_id}-{init_time}.ok",
     log:
         OUT_ROOT / "logs/execute_inference/{run_id}-{init_time}.log",
     params:
@@ -331,4 +327,5 @@ rule execute_inference:
             anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
         '
         ) > {log} 2>&1
+        touch {output.okfile}
         """

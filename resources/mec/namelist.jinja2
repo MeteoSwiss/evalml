@@ -18,6 +18,7 @@
    grib_library   = 2                             ! GRIB-API used: 1=GRIBEX  2=GRIB2-API
    cosmo_refatm   = 2                             ! reference atmosphere to be used for COSMO:1or2
    fc_hours       = 0                             ! Default is 3h. Has to be set to 0 if one wants to verify +0h leadtime
+   grid_file      = '/oprusers/osm/opr.inn/data/grid_descriptions/icon_grid_0001_R19B08_mch.nc'  ! grid description file for ICON (needed for REA-L)
    nproc1         = 1
    nproc2         = 1
  /
@@ -55,7 +56,7 @@
   prefix_in     = 'mon'           ! prefix for input files. ekf or mon
   prefix_out    = 'ver'
   rm_old        = 2                  ! overwrite entries in verification file ?
-  fc_file       = 'VVVMM.grib'  ! template for forecast file name 
+  fc_file       = 'VVVMM.grib'  ! template for forecast file name
   time_range    = 1
   ekf_concat    = F
   ref_runtype   = 'any'  ! accept any runtype for the reference state

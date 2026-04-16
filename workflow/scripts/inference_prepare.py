@@ -99,6 +99,9 @@ def prepare_interpolator(smk):
         config_content = f.read()
     LOG.info("Config: \n%s", config_content)
 
+    okfile = Path(smk.output.okfile)
+    okfile.parent.mkdir(parents=True, exist_ok=True)
+    okfile.touch()
     LOG.info("Interpolator preparation complete.")
 
 
@@ -124,6 +127,9 @@ def prepare_forecaster(smk):
         config_content = f.read()
     LOG.info("Config: \n%s", config_content)
 
+    okfile = Path(smk.output.okfile)
+    okfile.parent.mkdir(parents=True, exist_ok=True)
+    okfile.touch()
     LOG.info("Forecaster preparation complete.")
 
 

@@ -43,6 +43,12 @@ RESULTS_DIR = OUT_ROOT / "results" / EXPERIMENT_NAME
 # form results/{showcase}/{run_id}/... — constrain showcase to a single path component.
 wildcard_constraints:
     showcase=r"[^/]+",
+    run_id=r"[^/]+/[^/]+",
+    init_time=r"\d{12}",
+
+
+# prefer one rule because snakemake complains about ambiguous rules (same output)
+ruleorder: prepare_inference_forecaster > prepare_inference_interpolator
 
 
 # optional messages, log and error handling

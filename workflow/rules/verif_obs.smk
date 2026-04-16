@@ -2,6 +2,17 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 
+def _parse_timedelta(s: str) -> timedelta:
+    """Parse a frequency string like '12h' or '1d' into a timedelta."""
+    if s.endswith("h"):
+        return timedelta(hours=int(s[:-1]))
+    if s.endswith("d"):
+        return timedelta(days=int(s[:-1]))
+    raise ValueError(
+        f"Unsupported frequency format: {s! r} (expected e.g. '12h' or '1d')"
+    )
+
+
 # TODO: merge _parse_steps from generate_mec_namelist.py and verif_single_init.py?
 def _parse_steps(steps: str) -> list[int]:
     # check that steps is in the format "start/stop/step"
@@ -89,6 +100,7 @@ rule prepare_mec_input:
         # collect observations (ekfSYNOP) and/or (monSYNOP from DWD; includes precip) files
         cp /store_new/mch/msopr/osm/KENDA-1/EKF/${{ym}}/ekfSYNOP_${{init}}00.nc {output.ekf_file}
         cp /scratch/mch/paa/mec/MEC_ML_input/monFiles2020/hpc/uwork/swahl/temp/feedback/monSYNOP.${{init:0:10}} {output.obs}/monSYNOP.nc
+        echo "Copied obs files to {output.obs}"
 
         ) > {log} 2>&1
         """
@@ -98,6 +110,7 @@ rule prepare_mec_input:
 rule link_mec_input:
     input:
         # depend on ALL source grib dirs: for each lead l, source_init = init_time - l hours
+        obs_file=rules.prepare_mec_input.output.ekf_file,
         src_dirs=lambda wc: expand(
             str(OUT_ROOT / "data/runs/{run_id}/{src_init}/grib"),
             run_id=wc.run_id,
@@ -177,8 +190,6 @@ rule run_mec:
         mod_dir=directory(rules.link_mec_input.output.mod),
     output:
         fdbk_file=OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}00.nc",
-    wildcard_constraints:
-        init_time=r"\d{12}",
     log:
         OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/run_mec.log",
     shell:
