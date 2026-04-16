@@ -167,14 +167,9 @@ def load_baseline_from_zarr(
         ## steps in the zarr.
         ## Do NOT apply fillna(0) — if a selected step is genuinely missing,
         ## it is better to see NaN than to silently substitute zero precip.
-        baseline = baseline.assign(
-            TOT_PREC=lambda x: (
-                x.TOT_PREC.sel(lead_time=lead_times)
-                .diff("lead_time")
-                .pad(lead_time=(1, 0), constant_value=None)
-                .clip(min=0.0)
-            )
-        )
+        cumul = baseline.TOT_PREC.sel(lead_time=lead_times)
+        precip = cumul.diff("lead_time").clip(min=0.0).reindex(lead_time=lead_times)
+        baseline = baseline.assign(TOT_PREC=precip)
     baseline = baseline[params].sel(
         ref_time=reftime,
         lead_time=lead_times,
