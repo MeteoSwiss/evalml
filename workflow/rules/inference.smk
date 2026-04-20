@@ -18,7 +18,7 @@ rule inference_get_checkpoint:
             ENV_CONFIGS[wc.env_id]["checkpoint"]
         ),
     log:
-        OUT_ROOT / "logs/inference_prepare_checkpoint/{run_id}.log",
+        OUT_ROOT / "logs/inference_prepare_checkpoint/{env_id}.log",
     shell:
         r"""(
         mkdir -p $(dirname {output.checkpoint})
@@ -53,7 +53,7 @@ rule inference_extract_requirements:
     """
     localrule: True
     input:
-        metadata=OUT_ROOT / "data/runs/{run_id}/anemoi.json",
+        metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
         script="workflow/scripts/inference_extract_requirements.py",
     output:
         requirements=OUT_ROOT / "data/runs/{env_id}/requirements.txt",
@@ -62,7 +62,7 @@ rule inference_extract_requirements:
             ENV_CONFIGS[wc.env_id].get("extra_requirements", [])
         ),
     log:
-        OUT_ROOT / "logs/inference_extract_checkpoint_requirements/{run_id}.log",
+        OUT_ROOT / "logs/inference_extract_checkpoint_requirements/{env_id}.log",
     shell:
         """(
         echo "[$(date)] Starting requirement extraction..."
@@ -87,7 +87,7 @@ rule inference_create_venv:
     output:
         venv=temp(directory(OUT_ROOT / "data/runs/{env_id}/.venv")),
     log:
-        OUT_ROOT / "logs/inference_create_venv/{run_id}.log",
+        OUT_ROOT / "logs/inference_create_venv/{env_id}.log",
     shell:
         """(
 
@@ -124,7 +124,7 @@ rule inference_make_squashfs_image:
     output:
         image=OUT_ROOT / "data/runs/{env_id}/venv.squashfs",
     log:
-        OUT_ROOT / "logs/inference_make_squashfs_image/{run_id}.log",
+        OUT_ROOT / "logs/inference_make_squashfs_image/{env_id}.log",
     shell:
         # we can safely ignore the many warnings "Unrecognised xattr prefix..."
         "mksquashfs $(realpath {input.venv}) {output.image}"
@@ -278,7 +278,8 @@ rule inference_execute:
     localrule: True
     input:
         okfile=_inference_routing_fn,
-        image=rules.inference_make_squashfs_image.output.image,
+        image=lambda wc: OUT_ROOT
+        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
     output:
         okfile=touch(OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok"),
     log:
