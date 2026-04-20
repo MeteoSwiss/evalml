@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime
 
 
-rule prepare_checkpoint:
+rule inference_get_checkpoint:
     localrule: True
     output:
         checkpoint=OUT_ROOT / "data/runs/{env_id}/inference-last.ckpt",
@@ -18,7 +18,7 @@ rule prepare_checkpoint:
             ENV_CONFIGS[wc.env_id]["checkpoint"]
         ),
     log:
-        OUT_ROOT / "logs/prepare_checkpoint/{env_id}.log",
+        OUT_ROOT / "logs/inference_prepare_checkpoint/{run_id}.log",
     shell:
         r"""(
         mkdir -p $(dirname {output.checkpoint})
@@ -43,7 +43,7 @@ rule prepare_checkpoint:
         """
 
 
-rule extract_checkpoint_requirements:
+rule inference_extract_requirements:
     """
     Generate a pyproject.toml that contains the information needed
     to set up a virtual environment for inference of a specific checkpoint.
@@ -53,7 +53,8 @@ rule extract_checkpoint_requirements:
     """
     localrule: True
     input:
-        metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
+        metadata=OUT_ROOT / "data/runs/{run_id}/anemoi.json",
+        script="workflow/scripts/inference_extract_requirements.py",
     output:
         requirements=OUT_ROOT / "data/runs/{env_id}/requirements.txt",
     params:
@@ -61,11 +62,11 @@ rule extract_checkpoint_requirements:
             ENV_CONFIGS[wc.env_id].get("extra_requirements", [])
         ),
     log:
-        OUT_ROOT / "logs/extract_checkpoint_requirements/{env_id}.log",
+        OUT_ROOT / "logs/inference_extract_checkpoint_requirements/{run_id}.log",
     shell:
         """(
         echo "[$(date)] Starting requirement extraction..."
-        python workflow/scripts/inference_get_requirements.py {input.metadata} \
+        python {input.script} {input.metadata} \
             --overrides "{params.extra_requirements}" > {output.requirements}
         echo "[$(date)] Extracted requirements from metadata: {output.requirements}"
         echo $(cat {output.requirements})
@@ -73,7 +74,7 @@ rule extract_checkpoint_requirements:
         """
 
 
-rule create_inference_venv:
+rule inference_create_venv:
     """
     Create a virtual environment for inference, using the pyproject.toml created above.
     The virtual environment is managed with uv. The created virtual environment is relocatable,
@@ -86,7 +87,7 @@ rule create_inference_venv:
     output:
         venv=temp(directory(OUT_ROOT / "data/runs/{env_id}/.venv")),
     log:
-        OUT_ROOT / "logs/create_inference_venv/{env_id}.log",
+        OUT_ROOT / "logs/inference_create_venv/{run_id}.log",
     shell:
         """(
 
@@ -111,7 +112,7 @@ rule create_inference_venv:
         """
 
 
-rule make_squashfs_image:
+rule inference_make_squashfs_image:
     """
     Create a squashfs image for the inference virtual environment of
     a specific checkpoint. Find more about this at
@@ -119,11 +120,11 @@ rule make_squashfs_image:
     """
     localrule: True
     input:
-        venv=rules.create_inference_venv.output.venv,
+        venv=rules.inference_create_venv.output.venv,
     output:
         image=OUT_ROOT / "data/runs/{env_id}/venv.squashfs",
     log:
-        OUT_ROOT / "logs/make_squashfs_image/{env_id}.log",
+        OUT_ROOT / "logs/inference_make_squashfs_image/{run_id}.log",
     shell:
         # we can safely ignore the many warnings "Unrecognised xattr prefix..."
         "mksquashfs $(realpath {input.venv}) {output.image}"
@@ -131,7 +132,7 @@ rule make_squashfs_image:
         " > {log} 2>/dev/null"
 
 
-rule create_inference_sandbox:
+rule inference_create_sandbox:
     """
     Create a zipped directory that, when extracted, can be used as a sandbox
     for running inference jobs for a specific checkpoint. Its main purpose is
@@ -155,7 +156,7 @@ rule create_inference_sandbox:
     output:
         sandbox=OUT_ROOT / "data/runs/{run_id}/sandbox.zip",
     log:
-        OUT_ROOT / "logs/create_inference_sandbox/{run_id}.log",
+        OUT_ROOT / "logs/inference_create_inference_sandbox/{run_id}.log",
     localrule: True
     shell:
         """
@@ -185,7 +186,7 @@ def get_leadtime(wc):
     return f"{end}h"
 
 
-rule prepare_inference_forecaster:
+rule inference_prepare_forecaster:
     localrule: True
     input:
         checkpoint=lambda wc: OUT_ROOT
@@ -196,7 +197,7 @@ rule prepare_inference_forecaster:
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
         grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
         okfile=touch(
-            OUT_ROOT / "logs/prepare_inference_forecaster/{run_id}-{init_time}.ok"
+            OUT_ROOT / "logs/inference_prepare_forecaster/{run_id}-{init_time}.ok"
         ),
     params:
         lead_time=lambda wc: get_leadtime(wc),
@@ -206,7 +207,7 @@ rule prepare_inference_forecaster:
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
     log:
-        OUT_ROOT / "logs/prepare_inference_forecaster/{run_id}-{init_time}.log",
+        OUT_ROOT / "logs/inference_prepare_forecaster/{run_id}-{init_time}.log",
     script:
         "../scripts/inference_prepare.py"
 
@@ -216,7 +217,7 @@ def _get_forecaster_run_id(run_id):
     return RUN_CONFIGS[run_id]["forecaster"]["run_id"]
 
 
-rule prepare_inference_interpolator:
+rule inference_prepare_interpolator:
     """Run the interpolator for a specific run ID."""
     localrule: True
     input:
@@ -226,7 +227,7 @@ rule prepare_inference_interpolator:
         forecasts=lambda wc: (
             [
                 OUT_ROOT
-                / f"logs/execute_inference/{_get_forecaster_run_id(wc.run_id)}-{wc.init_time}.ok"
+                / f"logs/inference_execute/{_get_forecaster_run_id(wc.run_id)}-{wc.init_time}.ok"
             ]
             if RUN_CONFIGS[wc.run_id].get("forecaster") is not None
             else []
@@ -237,7 +238,7 @@ rule prepare_inference_interpolator:
         grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
         forecaster=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/forecaster"),
         okfile=touch(
-            OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.ok"
+            OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.ok"
         ),
     params:
         lead_time=lambda wc: get_leadtime(wc),
@@ -252,7 +253,7 @@ rule prepare_inference_interpolator:
             else _get_forecaster_run_id(wc.run_id)
         ),
     log:
-        OUT_ROOT / "logs/prepare_inference_interpolator/{run_id}-{init_time}.log",
+        OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.log",
     script:
         "../scripts/inference_prepare.py"
 
@@ -262,10 +263,10 @@ def _inference_routing_fn(wc):
     run_config = RUN_CONFIGS[wc.run_id]
 
     if run_config["model_type"] == "forecaster":
-        input_path = f"logs/prepare_inference_forecaster/{wc.run_id}-{wc.init_time}.ok"
+        input_path = f"logs/inference_prepare_forecaster/{wc.run_id}-{wc.init_time}.ok"
     elif run_config["model_type"] == "interpolator":
         input_path = (
-            f"logs/prepare_inference_interpolator/{wc.run_id}-{wc.init_time}.ok"
+            f"logs/inference_prepare_interpolator/{wc.run_id}-{wc.init_time}.ok"
         )
     else:
         raise ValueError(f"Unsupported model type: {run_config['model_type']}")
@@ -273,16 +274,15 @@ def _inference_routing_fn(wc):
     return OUT_ROOT / input_path
 
 
-rule execute_inference:
+rule inference_execute:
     localrule: True
     input:
         okfile=_inference_routing_fn,
-        image=lambda wc: OUT_ROOT
-        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
+        image=rules.inference_make_squashfs_image.output.image,
     output:
-        okfile=touch(OUT_ROOT / "logs/execute_inference/{run_id}-{init_time}.ok"),
+        okfile=touch(OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok"),
     log:
-        OUT_ROOT / "logs/execute_inference/{run_id}-{init_time}.log",
+        OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
     params:
         image_path=lambda wc, input: f"{Path(input.image).resolve()}",
         workdir=lambda wc: (

@@ -28,9 +28,9 @@ def _get_available_baselines(wc) -> list[dict[str, str]]:
 rule plot_meteogram:
     input:
         script="workflow/scripts/plot_meteogram.mo.py",
-        inference_okfile=rules.execute_inference.output.okfile,
+        inference_okfile=rules.inference_execute.output.okfile,
         truth=config["truth"]["root"],
-        peakweather_dir=rules.download_obs_from_peakweather.output.root,
+        peakweather_dir=rules.data_download_obs_from_peakweather.output.root,
     output:
         OUT_ROOT
         / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{sta}.png",
@@ -86,7 +86,7 @@ rule plot_meteogram:
 rule plot_forecast_frame:
     input:
         script="workflow/scripts/plot_forecast_frame.mo.py",
-        inference_okfile=rules.execute_inference.output.okfile,
+        inference_okfile=rules.inference_execute.output.okfile,
     output:
         OUT_ROOT
         / "data/runs/{run_id}/{init_time}/frames/frame_{leadtime}_{param}_{region}.png",
