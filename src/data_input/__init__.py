@@ -166,7 +166,7 @@ def load_baseline_from_zarr(
         ## Do NOT apply fillna(0) — if a selected step is genuinely missing,
         ## it is better to see NaN than to silently substitute zero precip.
         cumul = baseline.TOT_PREC.sel(lead_time=lead_times)
-        precip = cumul.diff("lead_time").clip(min=0.0).reindex(lead_time=lead_times)
+        precip = cumul.diff("lead_time").reindex(lead_time=lead_times)
         baseline = baseline.assign(TOT_PREC=precip)
     baseline = baseline[params].sel(
         ref_time=reftime,
