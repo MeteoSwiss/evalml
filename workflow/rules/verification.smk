@@ -10,11 +10,11 @@ include: "common.smk"
 
 
 # TODO: make sure the boundaries aren't used
-rule verif_metrics_baseline:
+rule verification_metrics_baseline:
     input:
         "src/verification/__init__.py",
         "src/data_input/__init__.py",
-        script="workflow/scripts/verif_single_init.py",
+        script="workflow/scripts/verification_metrics.py",
         baseline_zarr=lambda wc: expand(
             "{root}/FCST{year}.zarr",
             root=BASELINE_CONFIGS[wc.baseline_id].get("root"),
@@ -29,7 +29,7 @@ rule verif_metrics_baseline:
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
     log:
-        OUT_ROOT / "logs/verif_metrics_baseline/{baseline_id}-{init_time}.log",
+        OUT_ROOT / "logs/verification_metrics_baseline/{baseline_id}-{init_time}.log",
     resources:
         cpus_per_task=24,
         mem_mb=50_000,
@@ -56,12 +56,12 @@ def _get_no_none(dict, key, replacement):
     return out
 
 
-rule verif_metrics:
+rule verification_metrics:
     input:
         "src/verification/__init__.py",
         "src/data_input/__init__.py",
-        script="workflow/scripts/verif_single_init.py",
-        inference_okfile=rules.execute_inference.output.okfile,
+        script="workflow/scripts/verification_metrics.py",
+        inference_okfile=rules.inference_execute.output.okfile,
         truth=config["truth"]["root"],
     output:
         OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.nc",
@@ -77,7 +77,7 @@ rule verif_metrics:
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
     log:
-        OUT_ROOT / "logs/verif_metrics/{run_id}-{init_time}.log",
+        OUT_ROOT / "logs/verification_metrics/{run_id}-{init_time}.log",
     resources:
         cpus_per_task=24,
         mem_mb=50_000,
@@ -104,18 +104,18 @@ def _restrict_reftimes_to_hours(reftimes, hours=None):
     return [t.strftime("%Y%m%d%H%M") for t in reftimes if t.hour in hours]
 
 
-rule verif_metrics_aggregation:
+rule verification_metrics_aggregation:
     input:
-        script="workflow/scripts/verif_aggregation.py",
+        script="workflow/scripts/verification_aggregation.py",
         verif_nc=lambda wc: expand(
-            rules.verif_metrics.output,
+            rules.verification_metrics.output,
             init_time=_restrict_reftimes_to_hours(REFTIMES),
             allow_missing=True,
         ),
     output:
         OUT_ROOT / "data/runs/{run_id}/verif_aggregated.nc",
     log:
-        OUT_ROOT / "logs/verif_metrics_aggregation/{run_id}.log",
+        OUT_ROOT / "logs/verification_metrics_aggregation/{run_id}.log",
     resources:
         cpus_per_task=24,
         mem_mb=250_000,
@@ -127,23 +127,23 @@ rule verif_metrics_aggregation:
         """
 
 
-use rule verif_metrics_aggregation as verif_metrics_aggregation_baseline with:
+use rule verification_metrics_aggregation as verification_metrics_aggregation_baseline with:
     input:
-        script="workflow/scripts/verif_aggregation.py",
+        script="workflow/scripts/verification_aggregation.py",
         verif_nc=lambda wc: expand(
-            rules.verif_metrics_baseline.output,
+            rules.verification_metrics_baseline.output,
             init_time=_restrict_reftimes_to_hours(REFTIMES),
             allow_missing=True,
         ),
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/verif_aggregated.nc",
     log:
-        OUT_ROOT / "logs/verif_metrics_aggregation_baseline/{baseline_id}.log",
+        OUT_ROOT / "logs/verification_metrics_aggregation_baseline/{baseline_id}.log",
 
 
-rule verif_metrics_plot:
+rule verification_metrics_plot:
     input:
-        script="workflow/scripts/verif_plot_metrics.py",
+        script="workflow/scripts/verification_plot_metrics.py",
         verif=list(EXPERIMENT_PARTICIPANTS.values()),
     output:
         report(
@@ -153,7 +153,7 @@ rule verif_metrics_plot:
     params:
         labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
     log:
-        OUT_ROOT / "logs/verif_metrics_plot/{experiment}.log",
+        OUT_ROOT / "logs/verification_metrics_plot/{experiment}.log",
     resources:
         cpus_per_task=16,
         mem_mb=50_000,
