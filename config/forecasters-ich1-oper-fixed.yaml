@@ -66,4 +66,4 @@ profile:
     gpus: 0
   jobs: 50
   batch_rules:
-    plot_forecast_frame: 32
+    plot_frame: 32

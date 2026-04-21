@@ -95,7 +95,7 @@ profile:
   jobs: 50
   batch_rules:
     # Group many small plotting jobs into fewer submissions.
-    plot_forecast_frame: 32
+    plot_frame: 32
 ```
 
 The `runs` list accepts both `forecaster` and `interpolator` entries. For `dates`, you can either provide a `start` / `end` / `frequency` block as above or an explicit list of ISO timestamps for case-study style runs.
