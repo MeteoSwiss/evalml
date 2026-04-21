@@ -9,6 +9,13 @@ include: "common.smk"
 import pandas as pd
 
 
+# Region names and modes are finite — constrain to disambiguate
+# `{param}_{region}_{mode}` splits in animation output filenames.
+wildcard_constraints:
+    region=r"(globe|europe|centraleurope|switzerland)",
+    mode=r"(forecast|truth|error)",
+
+
 def _get_available_baselines(wc) -> list[dict[str, str]]:
     """Get all available baseline zarr datasets for the given init time."""
     baselines = []
@@ -83,15 +90,29 @@ rule plot_meteogram:
         """
 
 
-rule plot_forecast_frame:
+def _frame_inputs(wc):
+    """Per-mode inputs for `plot_frame`: forecast needs inference output,
+    truth needs the truth zarr, error needs both."""
+    inputs = {"script": "workflow/scripts/plot_frame.mo.py"}
+    if wc.mode in ("forecast", "error"):
+        inputs["inference_okfile"] = expand(
+            rules.execute_inference.output.okfile,
+            run_id=wc.run_id,
+            init_time=wc.init_time,
+        )
+    if wc.mode in ("truth", "error"):
+        inputs["truth"] = config["truth"]["root"]
+    return inputs
+
+
+rule plot_frame:
     input:
-        script="workflow/scripts/plot_forecast_frame.mo.py",
-        inference_okfile=rules.execute_inference.output.okfile,
+        unpack(_frame_inputs),
     output:
         OUT_ROOT
-        / "data/runs/{run_id}/{init_time}/frames/frame_{leadtime}_{param}_{region}.png",
+        / "data/runs/{run_id}/{init_time}/{mode}_frames/frame_{leadtime}_{param}_{region}.png",
     wildcard_constraints:
-        leadtime=r"\d+",  # only digits
+        leadtime=r"\d+",
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
@@ -100,16 +121,25 @@ rule plot_forecast_frame:
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
+        truth_path=lambda wc, input: input.get("truth", ""),
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
-        python {input.script} \
-            --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]} \
-            --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region} \
-        # interactive editing (needs to set localrule: True and use only one core)
-        # marimo edit {input.script} -- \
-        #     --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]}\
-        #     --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region}\
+        CMD_ARGS=(
+            --mode {wildcards.mode}
+            --date {wildcards.init_time}
+            --outfn {output[0]}
+            --param {wildcards.param}
+            --leadtime {wildcards.leadtime}
+            --region {wildcards.region}
+        )
+        case "{wildcards.mode}" in
+            forecast|error) CMD_ARGS+=(--forecast {params.grib_out_dir}) ;;
+        esac
+        case "{wildcards.mode}" in
+            truth|error) CMD_ARGS+=(--truth {params.truth_path}) ;;
+        esac
+        python {input.script} "${{CMD_ARGS[@]}}"
         """
 
 
@@ -117,22 +147,22 @@ def get_leadtimes(wc):
     """Get all lead times from the run config."""
     start, end, step = map(int, RUN_CONFIGS[wc.run_id]["steps"].split("/"))
     # skip lead time 0 for diagnostic variables
-    if wc.param in ["tp", "TOT_PREC"]:  # TODO: make this more general
+    if wc.param in ["tp", "TOT_PREC"]:
         start += step
     return [f"{i:03}" for i in range(start, end + 1, step)]
 
 
-rule make_forecast_animation:
+rule make_animation:
     localrule: True
     input:
         expand(
-            rules.plot_forecast_frame.output,
+            rules.plot_frame.output,
             leadtime=lambda wc: get_leadtimes(wc),
             allow_missing=True,
         ),
     output:
         OUT_ROOT
-        / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
+        / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{region}_{mode}.gif",
     params:
         delay=lambda wc: 10 * int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
     shell:

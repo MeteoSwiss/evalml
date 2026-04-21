@@ -139,11 +139,21 @@ rule showcase_all:
     """Target rule for showcase workflow."""
     input:
         expand(
-            rules.make_forecast_animation.output,
+            rules.make_animation.output,
+            mode="forecast",
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=CANDIDATES,
             param=["T_2M", "SP_10M"],
             region=["globe", "europe", "switzerland"],
+            showcase=EXPERIMENT_NAME,
+        ),
+        expand(
+            rules.make_animation.output,
+            mode=["truth", "error"],
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            run_id=CANDIDATES,
+            param=["T_2M", "SP_10M"],
+            region=["europe", "switzerland"],
             showcase=EXPERIMENT_NAME,
         ),
         expand(
