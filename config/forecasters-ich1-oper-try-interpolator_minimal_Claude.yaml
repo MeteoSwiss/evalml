@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Evaluate skill of new time-interpolator (trained on ICON-REA-L, fine-tuned on KENDA-ICON-CH1)
+  driven by ICON-CH1 stage_E forecaster, using anemoi-inference patch from issue #482.
+
+dates:
+  start: 2025-03-01T00:00
+  end: 2025-03-02T00:00
+  frequency: 24h
+
+
+runs:
+
+  - interpolator:
+      inference_resources:
+          slurm_partition: normal-shared
+      checkpoint: /scratch/mch/miccatta/ICON_interpolator_checkpoints/checkpoint_stage-C-interpolator-n320-6hto1h-reduced-variables/f9279244ed6f4c458597bdcf335ab36f/inference-anemoi-by_epoch-epoch_000-step_001000.ckpt
+      label: interpolator_ICON-REA-L
+      steps: 0/120/1
+      config: resources/inference/configs/sgm-interpolator-global_trimedge_multi.yaml
+      forecaster:
+        checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/fd63e17043014af59170c7beca516b95
+        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+        steps: 0/120/6
+        extra_requirements:
+          - git+https://github.com/ecmwf/anemoi-inference.git@e369b1a90313e9701db13f63364a467aa281cf36
+      extra_requirements:
+        - git+https://github.com/ecmwf/anemoi-inference.git@e369b1a90313e9701db13f63364a467aa281cf36
+        - anemoi-datasets==0.5.35
+
+
+baselines:
+  - baseline:
+      baseline_id: ICON-CH2-EPS
+      label: ICON-CH2-ctrl
+      root: /scratch/mch/cmerker/ICON-CH2-EPS
+      steps: 0/120/6
+
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
+stratification:
+  regions:
+    - jura
+    - mittelland
+    - voralpen
+    - alpennordhang
+    - innerealpentaeler
+    - alpensuedseite
+  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50
+  batch_rules:
+    plot_forecast_frame: 32
