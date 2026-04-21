@@ -44,6 +44,68 @@ _CMAP_DEFAULTS = {
         "units": "mm",
         "levels": [0, 0.05, 0.1, 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 6, 7, 100],
     },
+    # Error-field colormaps: diverging, centered at zero. Used when plotting
+    # (forecast - truth) or (baseline - truth) differences.
+    "SP_error": {
+        "cmap": plt.get_cmap("RdBu_r", 21),
+        "vmin": -500,
+        "vmax": 500,
+        "units": "Pa",
+    },
+    "TD_2M_error": {
+        "cmap": plt.get_cmap("RdBu_r", 21),
+        "vmin": -10,
+        "vmax": 10,
+        "units": "degC",
+    },
+    "T_2M_error": {
+        "cmap": plt.get_cmap("RdBu_r", 21),
+        "vmin": -10,
+        "vmax": 10,
+        "units": "degC",
+    },
+    "U_10M_error": {
+        "cmap": plt.get_cmap("RdBu_r", 17),
+        "vmin": -8,
+        "vmax": 8,
+        "units": "m/s",
+    },
+    "V_10M_error": {
+        "cmap": plt.get_cmap("RdBu_r", 17),
+        "vmin": -8,
+        "vmax": 8,
+        "units": "m/s",
+    },
+    "SP_10M_error": {
+        "cmap": plt.get_cmap("RdBu_r", 17),
+        "vmin": -8,
+        "vmax": 8,
+        "units": "m/s",
+    },
+    "T_850_error": {
+        "cmap": plt.get_cmap("RdBu_r", 21),
+        "vmin": -10,
+        "vmax": 10,
+        "units": "K",
+    },
+    "FI_850_error": {
+        "cmap": plt.get_cmap("RdBu_r", 21),
+        "vmin": -500,
+        "vmax": 500,
+        "units": "m^2/s^2",
+    },
+    "QV_925_error": {
+        "cmap": plt.get_cmap("BrBG", 21),
+        "vmin": -0.002,
+        "vmax": 0.002,
+        "units": "kg/kg",
+    },
+    "TOT_PREC_error": {
+        "cmap": plt.get_cmap("BrBG", 21),
+        "vmin": -20,
+        "vmax": 20,
+        "units": "mm",
+    },
 }
 
 CMAP_DEFAULTS = defaultdict(_fallback, _CMAP_DEFAULTS)

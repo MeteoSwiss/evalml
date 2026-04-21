@@ -1,18 +1,22 @@
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 import earthkit.data as ekd
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import xarray as xr
 from meteodatalab import data_source
 from meteodatalab import grib_decoder
 from shapely.geometry import MultiPoint
 
 
 def load_state_from_grib(
-    file: Path, paramlist: list[str] | None = None
-) -> dict[str, np.ndarray | dict[str, np.ndarray] | gpd.GeoSeries]:
+    file: Path,
+    paramlist: list[str] | None = None,
+    output_type: Literal["numpy", "xarray"] = "numpy",
+) -> dict[str, np.ndarray | dict[str, np.ndarray] | gpd.GeoSeries] | xr.Dataset:
     reftime = datetime.strptime(file.parents[1].name, "%Y%m%d%H%M")
     lead_time_hours = int(file.stem.split("_")[-1])
     fds = data_source.FileDataSource(datafiles=[str(file)])
@@ -67,7 +71,25 @@ def load_state_from_grib(
                     param, np.full(lats.size, np.nan, dtype=float)
                 )
                 state["fields"][param] = np.concatenate([base, add])
-    return state
+    if output_type == "numpy":
+        return state
+    if output_type == "xarray":
+        lead_time = pd.Timedelta(hours=lead_time_hours).to_numpy()
+        ds_xr = xr.Dataset(
+            data_vars={
+                p: ("values", state["fields"][p]) for p in state["fields"]
+            },
+            coords={
+                "lon": ("values", state["longitudes"]),
+                "lat": ("values", state["latitudes"]),
+                "ref_time": np.datetime64(state["forecast_reference_time"], "ns"),
+                "lead_time": lead_time,
+                "time": np.datetime64(state["valid_time"], "ns"),
+            },
+        )
+        ds_xr.attrs["lam_envelope"] = state["lam_envelope"]
+        return ds_xr
+    raise ValueError(f"Unsupported output_type: {output_type!r}")
 
 
 def load_state_from_raw(
