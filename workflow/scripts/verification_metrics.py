@@ -129,8 +129,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--regions",
-        type=lambda x: x.split(","),
-        help="Comma-separated list of shapefile paths defining regions for stratification.",
+        type=lambda x: [r for r in x.split(",") if r],
+        help="Comma-separated list of region names for stratification. Empty means no spatial stratification.",
         default="",
     )
     parser.add_argument(

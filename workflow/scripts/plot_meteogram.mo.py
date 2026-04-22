@@ -125,9 +125,9 @@ def _(ArgumentParser, Path, datetime, parse_steps):
         baseline_labels,
         baseline_steps,
         baseline_zarrs,
+        forecast_grib_dir,
         forecast_label,
         forecast_steps,
-        forecast_grib_dir,
         init_time,
         outfn,
         param,
@@ -173,8 +173,8 @@ def load_data(
     analysis_zarr,
     baseline_steps,
     baseline_zarrs,
-    forecast_steps,
     forecast_grib_dir,
+    forecast_steps,
     init_time,
     load_forecast_data,
     load_truth_data,
@@ -204,7 +204,6 @@ def load_data(
         )
         for zarr, step in zip(baseline_zarrs, baseline_steps)
     ]
-
     return analysis_ds, baseline_ds_list, forecast_ds
 
 
@@ -222,7 +221,13 @@ def _(PeakWeatherDataset, peakweather_dir, station):
 
 
 @app.cell
-def _(analysis_ds, baseline_ds_list, forecast_ds, station_ds, map_forecast_to_truth):
+def _(
+    analysis_ds,
+    baseline_ds_list,
+    forecast_ds,
+    map_forecast_to_truth,
+    station_ds,
+):
     forecast_station_ds = map_forecast_to_truth(forecast_ds, station_ds)
     analysis_station_ds = map_forecast_to_truth(analysis_ds, station_ds)
     baseline_station_ds_list = [
@@ -234,11 +239,11 @@ def _(analysis_ds, baseline_ds_list, forecast_ds, station_ds, map_forecast_to_tr
 @app.cell
 def _(
     analysis_label,
-    baseline_labels,
     analysis_station_ds,
+    baseline_labels,
     baseline_station_ds_list,
-    forecast_label,
     forecast_ds,
+    forecast_label,
     forecast_station_ds,
     init_time,
     outfn,

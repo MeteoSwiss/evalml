@@ -469,7 +469,7 @@
       "description": "Stratification settings for the analysis.",
       "properties": {
         "regions": {
-          "description": "List of region names for stratification.",
+          "description": "List of region names for stratification. Empty list means no spatial stratification.",
           "items": {
             "type": "string"
           },
@@ -483,7 +483,6 @@
         }
       },
       "required": [
-        "regions",
         "root"
       ],
       "title": "Stratification",

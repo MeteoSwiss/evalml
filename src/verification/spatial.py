@@ -6,6 +6,8 @@ and plotting scripts to map data between different spatial supports.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import xarray as xr
 from scipy.spatial import cKDTree
@@ -34,6 +36,7 @@ def spherical_nearest_neighbor_indices(
     -------
     np.ndarray
         Integer indices into source points, one index per target point.
+        Target points with missing (NaN/inf) coordinates are assigned index -1.
     """
 
     source_lat = np.asarray(source_lat).ravel()
@@ -41,10 +44,30 @@ def spherical_nearest_neighbor_indices(
     target_lat = np.asarray(target_lat).ravel()
     target_lon = np.asarray(target_lon).ravel()
 
+    source_valid = np.isfinite(source_lat) & np.isfinite(source_lon)
+    n_source_invalid = (~source_valid).sum()
+    if n_source_invalid:
+        warnings.warn(
+            f"Dropping {n_source_invalid} source point(s) with missing lat/lon values.",
+            UserWarning,
+            stacklevel=2,
+        )
+        source_lat = source_lat[source_valid]
+        source_lon = source_lon[source_valid]
+
+    target_valid = np.isfinite(target_lat) & np.isfinite(target_lon)
+    n_target_invalid = (~target_valid).sum()
+    if n_target_invalid:
+        warnings.warn(
+            f"{n_target_invalid} target point(s) have missing lat/lon values and will be assigned index -1.",
+            UserWarning,
+            stacklevel=2,
+        )
+
     source_lat_rad = np.deg2rad(source_lat)
     source_lon_rad = np.deg2rad(source_lon)
-    target_lat_rad = np.deg2rad(target_lat)
-    target_lon_rad = np.deg2rad(target_lon)
+    target_lat_rad = np.deg2rad(target_lat[target_valid])
+    target_lon_rad = np.deg2rad(target_lon[target_valid])
 
     source_xyz = np.c_[
         np.cos(source_lat_rad) * np.cos(source_lon_rad),
@@ -58,8 +81,11 @@ def spherical_nearest_neighbor_indices(
     ]
 
     tree = cKDTree(source_xyz)
-    _, nearest_idx = tree.query(target_xyz, k=1)
-    return np.asarray(nearest_idx, dtype=int)
+    _, valid_nearest_idx = tree.query(target_xyz, k=1)
+
+    nearest_idx = np.full(len(target_valid), -1, dtype=int)
+    nearest_idx[target_valid] = valid_nearest_idx
+    return nearest_idx
 
 
 def nearest_grid_yx_indices(

@@ -20,8 +20,6 @@ def _get_available_baselines(wc) -> list[dict[str, str]]:
         baseline_zarr = f"{root}/FCST{year}.zarr"
         if Path(baseline_zarr).exists():
             baselines.append({"zarr": baseline_zarr, "steps": steps, "label": label})
-    if not baselines:
-        raise ValueError(f"No baseline zarr found for init time {wc.init_time}")
     return baselines
 
 

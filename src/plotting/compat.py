@@ -5,8 +5,6 @@ import earthkit.data as ekd
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-from meteodatalab import data_source
-from meteodatalab import grib_decoder
 from shapely.geometry import MultiPoint
 
 
@@ -15,58 +13,61 @@ def load_state_from_grib(
 ) -> dict[str, np.ndarray | dict[str, np.ndarray] | gpd.GeoSeries]:
     reftime = datetime.strptime(file.parents[1].name, "%Y%m%d%H%M")
     lead_time_hours = int(file.stem.split("_")[-1])
-    fds = data_source.FileDataSource(datafiles=[str(file)])
-    ds = grib_decoder.load(fds, {"param": paramlist})
+    fds = ekd.from_source("file", str(file))
+    lats = fds.metadata("latitudes")[0]
+    lons = fds.metadata("longitudes")[0]
+    if max(lons) > 180:
+        lons = ((lons + 180) % 360) - 180
+    is_global = (lons.max() - lons.min()) > 350
     state = {}
-    lats = ds[paramlist[0]].lat.data.flatten()
-    lons = ds[paramlist[0]].lon.data.flatten()
     state["forecast_reference_time"] = reftime
     state["valid_time"] = reftime + pd.to_timedelta(lead_time_hours, unit="h")
     state["longitudes"] = lons
     state["latitudes"] = lats
-    # Add the limited-area model envelope polygon (convex hull) before global coords are added
-    lam_hull = MultiPoint(list(zip(lons.tolist(), lats.tolist()))).convex_hull
-    state["lam_envelope"] = gpd.GeoSeries([lam_hull], crs="EPSG:4326")
+    if not is_global:
+        lam_hull = MultiPoint(list(zip(lons.tolist(), lats.tolist()))).convex_hull
+        state["lam_envelope"] = gpd.GeoSeries([lam_hull], crs="EPSG:4326")
+    ds = {
+        u.metadata("param"): u.values.flatten()
+        for u in fds
+        if paramlist is None or u.metadata("param") in paramlist
+    }
     state["fields"] = {}
     for param in paramlist or []:
-        if param in ds:
-            state["fields"][param] = ds[param].values.flatten()
-        else:
-            # initialize with NaNs to keep consistent length
-            state["fields"][param] = np.full(lats.size, np.nan, dtype=float)
-    global_file = str(file.parent / f"ifs-{file.stem}.grib")
-    if Path(global_file).exists():
-        global_file = str(file.parent / f"ifs-{file.stem}.grib")
-        fds_global = ekd.from_source("file", global_file)
-        ds_global = {
-            u.metadata("param"): u.values
-            for u in fds_global
-            if u.metadata("param") in paramlist
-        }
-        # Use first key from ds_global instead of paramlist[0]
-        ref_key = next(iter(ds_global), None)
-        if ref_key is not None:
-            global_lats = fds_global.metadata("latitudes")[0]
-            global_lons = fds_global.metadata("longitudes")[0]
-            if max(global_lons) > 180:
-                global_lons = ((global_lons + 180) % 360) - 180
-            mask = np.where(~np.isnan(ds_global[ref_key]))[0]
-            n_add = int(mask.size)
-            state["longitudes"] = np.concatenate(
-                [state["longitudes"], global_lons[mask]]
-            )
-            state["latitudes"] = np.concatenate([state["latitudes"], global_lats[mask]])
-            for param in paramlist or state["fields"].keys():
-                add = (
-                    ds_global[param][mask]
-                    if param in ds_global
-                    else np.full(n_add, np.nan, dtype=float)
+        state["fields"][param] = ds.get(param, np.full(lats.size, np.nan, dtype=float))
+    if not is_global:
+        global_file = file.parent / f"ifs-{file.stem}.grib"
+        if global_file.exists():
+            fds_global = ekd.from_source("file", str(global_file))
+            ds_global = {
+                u.metadata("param"): u.values
+                for u in fds_global
+                if paramlist is None or u.metadata("param") in paramlist
+            }
+            ref_key = next(iter(ds_global), None)
+            if ref_key is not None:
+                global_lats = fds_global.metadata("latitudes")[0]
+                global_lons = fds_global.metadata("longitudes")[0]
+                if max(global_lons) > 180:
+                    global_lons = ((global_lons + 180) % 360) - 180
+                mask = np.where(~np.isnan(ds_global[ref_key]))[0]
+                n_add = int(mask.size)
+                state["longitudes"] = np.concatenate(
+                    [state["longitudes"], global_lons[mask]]
                 )
-                # ensure base array exists (in case param wasn't in local ds)
-                base = state["fields"].get(
-                    param, np.full(lats.size, np.nan, dtype=float)
+                state["latitudes"] = np.concatenate(
+                    [state["latitudes"], global_lats[mask]]
                 )
-                state["fields"][param] = np.concatenate([base, add])
+                for param in paramlist or list(state["fields"].keys()):
+                    add = (
+                        ds_global[param][mask]
+                        if param in ds_global
+                        else np.full(n_add, np.nan, dtype=float)
+                    )
+                    base = state["fields"].get(
+                        param, np.full(lats.size, np.nan, dtype=float)
+                    )
+                    state["fields"][param] = np.concatenate([base, add])
     return state
 
 

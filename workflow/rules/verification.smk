@@ -83,6 +83,7 @@ rule verification_metrics:
         runtime="60m",
     shell:
         """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {params.grib_out_dir} \
             --truth {input.truth} \

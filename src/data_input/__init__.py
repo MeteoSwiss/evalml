@@ -1,13 +1,8 @@
 import yaml
 import logging
-import os
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from functools import lru_cache
-
-eccodes_definition_path = Path(sys.prefix) / "share/eccodes-cosmo-resources/definitions"
-os.environ["ECCODES_DEFINITION_PATH"] = str(eccodes_definition_path)
 
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
@@ -73,7 +68,12 @@ def load_analysis_data_from_zarr(
     PARAMS_MAP_COSMO1 = {
         v: v.replace("TOT_PREC", "TOT_PREC_6H") for v in PARAMS_MAP_COSMO2.keys()
     }
-    PARAMS_MAP = PARAMS_MAP_COSMO2 if "co2" in root.name else PARAMS_MAP_COSMO1
+    USE_IFS_NAMES = {"-co2-", "-ea-"}
+    PARAMS_MAP = (
+        PARAMS_MAP_COSMO2
+        if any(tag in root.name for tag in USE_IFS_NAMES)
+        else PARAMS_MAP_COSMO1
+    )
 
     ds = xr.open_zarr(root, consolidated=False)
 
@@ -87,7 +87,7 @@ def load_analysis_data_from_zarr(
     ds = ds.sel(variable=[PARAMS_MAP[p] for p in params]).squeeze("ensemble", drop=True)
 
     # recover original 2D shape
-    if len(ds.attrs["field_shape"]) == 2:
+    if "field_shape" in ds.attrs and len(ds.attrs["field_shape"]) == 2:
         ny, nx = ds.attrs["field_shape"]
         y_idx, x_idx = np.unravel_index(np.arange(ny * nx), shape=(ny, nx))
         ds = ds.assign_coords({"y": ("cell", y_idx), "x": ("cell", x_idx)})
@@ -97,7 +97,10 @@ def load_analysis_data_from_zarr(
     # set lat lon as coords (optional)
     if "latitudes" in ds and "longitudes" in ds:
         ds = ds.rename({"latitudes": "lat", "longitudes": "lon"})
-    ds = ds.set_coords(["lat", "lon"])
+    if "latitude" in ds and "longitude" in ds:
+        ds = ds.rename({"latitude": "lat", "longitude": "lon"})
+    if "lat" in ds and "lon" in ds:
+        ds = ds.set_coords(["lat", "lon"])
     ds = (
         ds["data"]
         .to_dataset("variable")
@@ -119,6 +122,7 @@ def load_fct_data_from_grib(
     files = sorted(root.glob(f"{reftime:%Y%m%d%H%M}*.grib"))
 
     profile = earthkit_xarray_engine_profile()
+    LOG.debug(f"loading GRIB for params {params} and steps {steps} from {root}")
     ds: xr.Dataset = (
         ekd.from_source("file", files)
         .sel(param=params, step=steps)
@@ -141,6 +145,14 @@ def load_fct_data_from_grib(
                 .clip(min=0.0)
             )
         )
+    # set lat lon as coords (optional)
+    if "latitudes" in ds and "longitudes" in ds:
+        ds = ds.rename({"latitudes": "lat", "longitudes": "lon"})
+    if "latitude" in ds and "longitude" in ds:
+        ds = ds.rename({"latitude": "lat", "longitude": "lon"})
+    if "lat" in ds and "lon" in ds:
+        ds = ds.set_coords(["lat", "lon"])
+
     # make sure time coordinate is available, and valid_time is not
     if "valid_time" in ds.coords:
         ds = ds.rename({"valid_time": "time"})
@@ -249,7 +261,7 @@ def load_truth_data(
 ) -> xr.Dataset:
     """Load truth data from analysis Zarr or PeakWeather observations."""
     if root.suffix == ".zarr":
-        LOG.info("Loading ground truth from an analysis zarr dataset...")
+        LOG.info(f"Loading ground truth from {root}")
         truth = load_analysis_data_from_zarr(
             root=root,
             reftime=reftime,
@@ -262,7 +274,7 @@ def load_truth_data(
             else {"values": -1}
         )
     elif "peakweather" in str(root):
-        LOG.info("Loading ground truth from PeakWeather observations...")
+        LOG.info(f"Loading ground truth from {root}")
         truth = load_obs_data_from_peakweather(
             root=root,
             reftime=reftime,
@@ -280,7 +292,7 @@ def load_forecast_data(
     """Load forecast data from GRIB files or a baseline Zarr dataset."""
 
     if any(root.glob("*.grib")):
-        LOG.info("Loading forecasts from GRIB files...")
+        LOG.info(f"Loading forecasts from GRIB files from {root}")
         fcst = load_fct_data_from_grib(
             root=root,
             reftime=reftime,
@@ -288,7 +300,7 @@ def load_forecast_data(
             params=params,
         )
     else:
-        LOG.info("Loading baseline forecasts from zarr dataset...")
+        LOG.info(f"Loading baseline forecasts from zarr dataset from {root}")
         fcst = load_baseline_from_zarr(
             root=root,
             reftime=reftime,
