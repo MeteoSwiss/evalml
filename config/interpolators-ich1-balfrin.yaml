@@ -6,7 +6,7 @@ description: |
 
 dates:
   start: 2025-03-01T00:00
-  end: 2025-03-02T00:00
+  end: 2025-03-03T00:00
   frequency: 24h
 
 
@@ -14,6 +14,8 @@ runs:
   - interpolator:
       inference_resources:
           slurm_partition: normal-shared
+      # for checkpoints trained on a different HPC, using mlflow doesn't work due to difference in
+      # paths, so we directly specify the checkpoint path here
       checkpoint: /store_new/mch/msopr/ml/tmp/inference-last.ckpt
       label: interpolator_ICON-REA-L
       steps: 0/120/1
@@ -26,6 +28,7 @@ runs:
           - git+https://github.com/ecmwf/anemoi-inference.git@e369b1a90313e9701db13f63364a467aa281cf36
       extra_requirements:
         - git+https://github.com/ecmwf/anemoi-inference.git@e369b1a90313e9701db13f63364a467aa281cf36
+        # pinned anemoi-datasets because of ecmwf/anemoi-utils#284, can be removed when fixed
         - anemoi-datasets==0.5.35
 
 
