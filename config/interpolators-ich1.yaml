@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
   Evaluate skill of new time-interpolator (trained on ICON-REA-L, fine-tuned on KENDA-ICON-CH1)
-  driven by ICON-CH1 stage_E forecaster with subgrid orography, using anemoi-inference patch from 
+  driven by ICON-CH1 stage_E forecaster with subgrid orography, using anemoi-inference patch from
   issue #482.
 
 dates:
