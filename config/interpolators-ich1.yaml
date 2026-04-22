@@ -34,7 +34,7 @@ baselines:
       baseline_id: ICON-CH2-EPS
       label: ICON-CH2-ctrl
       root: /scratch/mch/cmerker/ICON-CH2-EPS
-      steps: 0/120/6
+      steps: 0/120/1
 
 truth:
   label: KENDA-CH1
