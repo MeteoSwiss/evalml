@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 
 from pathlib import Path
@@ -122,11 +123,11 @@ def _compute_statistics(
     return stats
 
 
-def _merge_metrics(ds: xr.Dataset) -> xr.Dataset:
+def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
     out = xr.merge(ds, compat="no_conflicts")
     if "ref_time" not in out.dims:
         out = out.expand_dims("ref_time").set_coords("ref_time")
-    out = out.compute(num_workers=4, scheduler="threads")
+    out = out.compute(num_workers=num_workers, scheduler="threads")
     return out
 
 
@@ -147,12 +148,19 @@ def verify(
     obs_label: str,
     regions: list[str] | None = None,
     dim: list[str] | None = None,
+    num_workers: int | None = None,
 ) -> xr.Dataset:
     """
     Compare two xarray Datasets (fcst and obs) and return pandas DataFrame with
     basic verification metrics and statistics for both fcst and obs.
     """
     start = time.time()
+
+    if num_workers is None:
+        try:
+            num_workers = len(os.sched_getaffinity(0))
+        except AttributeError:
+            num_workers = max((os.cpu_count() or 6) - 2, 1)
 
     if dim is None:
         if "x" in fcst.dims and "y" in fcst.dims:
@@ -218,8 +226,8 @@ def verify(
         obs_statistics = xr.concat(obs_statistics, dim="region")
         param_statistics = xr.concat([fcst_statistics, obs_statistics], dim="source")
         # Compute eagerly per parameter to prevent dask graph bloat
-        scores.append(_merge_metrics([score]))
-        statistics.append(_merge_metrics([param_statistics]))
+        scores.append(_merge_metrics([score], num_workers=num_workers))
+        statistics.append(_merge_metrics([param_statistics], num_workers=num_workers))
 
     out = xr.merge(scores + statistics, join="outer", compat="no_conflicts")
     LOG.info("Computed metrics in %.2f seconds", time.time() - start)
