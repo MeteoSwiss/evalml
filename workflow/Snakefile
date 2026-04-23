@@ -142,7 +142,7 @@ rule showcase_all:
             rules.make_forecast_animation.output,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=CANDIDATES,
-            param=["T_2M", "SP_10M"],
+            param=["T_2M", "SP_10M", "TOT_PREC"],
             region=["globe", "europe", "switzerland"],
             showcase=EXPERIMENT_NAME,
         ),

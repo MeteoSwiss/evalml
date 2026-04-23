@@ -53,7 +53,9 @@ def _(ArgumentParser, Path):
     parser.add_argument("--leadtime", type=str, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
     parser.add_argument("--region", type=str, help="name of region")
-    parser.add_argument("--accu", type=int, default=1, help="accumulation period in hours")
+    parser.add_argument(
+        "--accu", type=int, default=1, help="accumulation period in hours"
+    )
 
     args = parser.parse_args()
     grib_dir = Path(args.input)
@@ -223,7 +225,9 @@ def _(
     # preprocess field (unit conversion, derived quantities)
     field, units_override = preprocess_field(param, state)
 
-    plotter.plot_field(subplot, field, **get_style(args.param, units_override, accu=accu))
+    plotter.plot_field(
+        subplot, field, **get_style(args.param, units_override, accu=accu)
+    )
     subplot.ax.add_geometries(
         state["lam_envelope"],
         edgecolor="black",
