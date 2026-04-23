@@ -41,7 +41,7 @@ runs:
 
   - baseline:
       label: ICON-CH2-EPS
-      root: /scratch/mch/cmerker/ICON-CH2-EPS
+      root: /store_new/mch/msopr/ml/ICON-CH2-EPS
       steps: 0/120/6
 
 truth:
