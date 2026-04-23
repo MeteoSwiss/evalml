@@ -140,7 +140,9 @@ def load_fct_data_from_grib(
     LOG.debug(f"loading GRIB for params {params} and steps {steps} from {root}")
     # Extend param selection to include IFS aliases (e.g. "tp" for "TOT_PREC") so
     # that both COSMO-named and IFS-named GRIB files (global models) are handled.
-    params_sel = list({p for p in params} | {_COSMO_TO_IFS[p] for p in params if p in _COSMO_TO_IFS})
+    params_sel = list(
+        {p for p in params} | {_COSMO_TO_IFS[p] for p in params if p in _COSMO_TO_IFS}
+    )
     # Precipitation params don't have a step=0 field (accumulation is zero at
     # analysis time and is often not written), so loading them together with
     # other variables causes an inconsistent-step error in earthkit-data.
@@ -151,13 +153,21 @@ def load_fct_data_from_grib(
     fieldlist = ekd.from_source("file", files)
     datasets = []
     if other_params:
-        datasets.append(fieldlist.sel(param=other_params, step=steps).to_xarray(profile=profile))
+        datasets.append(
+            fieldlist.sel(param=other_params, step=steps).to_xarray(profile=profile)
+        )
     if prec_params:
         prec_steps = [s for s in steps if s > 0]
-        datasets.append(fieldlist.sel(param=prec_params, step=prec_steps).to_xarray(profile=profile))
-    ds: xr.Dataset = xr.merge(datasets, join="outer") if len(datasets) > 1 else datasets[0]
+        datasets.append(
+            fieldlist.sel(param=prec_params, step=prec_steps).to_xarray(profile=profile)
+        )
+    ds: xr.Dataset = (
+        xr.merge(datasets, join="outer") if len(datasets) > 1 else datasets[0]
+    )
     # Rename any IFS names back to COSMO names
-    ifs_rename = {ifs: cosmo for ifs, cosmo in _IFS_TO_COSMO.items() if ifs in ds.data_vars}
+    ifs_rename = {
+        ifs: cosmo for ifs, cosmo in _IFS_TO_COSMO.items() if ifs in ds.data_vars
+    }
     if ifs_rename:
         ds = ds.rename(ifs_rename)
 
