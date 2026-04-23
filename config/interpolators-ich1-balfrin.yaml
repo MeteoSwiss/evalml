@@ -17,7 +17,7 @@ runs:
       # for checkpoints trained on a different HPC, using mlflow doesn't work due to difference in
       # paths, so we directly specify the checkpoint path here
       checkpoint: /store_new/mch/msopr/ml/tmp/inference-last.ckpt
-      label: interpolator_ICON-REA-L
+      label: Varda-Single
       steps: 0/120/1
       config: resources/inference/configs/sgm-interpolator-global_trimedge_multi.yaml
       forecaster:
