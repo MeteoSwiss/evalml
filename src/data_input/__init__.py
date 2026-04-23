@@ -10,6 +10,21 @@ import earthkit.data as ekd  # noqa: E402
 
 LOG = logging.getLogger(__name__)
 
+# IFS shortNames that COSMO eccodes definitions don't remap to COSMO names.
+# These need explicit aliasing so callers can use COSMO names consistently.
+_IFS_TO_COSMO = {
+    "tp": "TOT_PREC",
+    "msl": "PMSL",
+    "10u": "U_10M",
+    "10v": "V_10M",
+    "2t": "T_2M",
+    "2d": "TD_2M",
+    "sp": "PS",
+    "lsm": "FR_LAND",
+    "z": "FIS",
+}
+_COSMO_TO_IFS = {v: k for k, v in _IFS_TO_COSMO.items()}
+
 
 @lru_cache(maxsize=1)
 def earthkit_xarray_engine_profile() -> dict:
@@ -123,11 +138,28 @@ def load_fct_data_from_grib(
 
     profile = earthkit_xarray_engine_profile()
     LOG.debug(f"loading GRIB for params {params} and steps {steps} from {root}")
-    ds: xr.Dataset = (
-        ekd.from_source("file", files)
-        .sel(param=params, step=steps)
-        .to_xarray(profile=profile)
-    )
+    # Extend param selection to include IFS aliases (e.g. "tp" for "TOT_PREC") so
+    # that both COSMO-named and IFS-named GRIB files (global models) are handled.
+    params_sel = list({p for p in params} | {_COSMO_TO_IFS[p] for p in params if p in _COSMO_TO_IFS})
+    # Precipitation params don't have a step=0 field (accumulation is zero at
+    # analysis time and is often not written), so loading them together with
+    # other variables causes an inconsistent-step error in earthkit-data.
+    # Load them separately with step>0, then merge.
+    _PREC_PARAMS = {"tp", "TOT_PREC"}
+    prec_params = [p for p in params_sel if p in _PREC_PARAMS]
+    other_params = [p for p in params_sel if p not in _PREC_PARAMS]
+    fieldlist = ekd.from_source("file", files)
+    datasets = []
+    if other_params:
+        datasets.append(fieldlist.sel(param=other_params, step=steps).to_xarray(profile=profile))
+    if prec_params:
+        prec_steps = [s for s in steps if s > 0]
+        datasets.append(fieldlist.sel(param=prec_params, step=prec_steps).to_xarray(profile=profile))
+    ds: xr.Dataset = xr.merge(datasets, join="outer") if len(datasets) > 1 else datasets[0]
+    # Rename any IFS names back to COSMO names
+    ifs_rename = {ifs: cosmo for ifs, cosmo in _IFS_TO_COSMO.items() if ifs in ds.data_vars}
+    if ifs_rename:
+        ds = ds.rename(ifs_rename)
 
     for var, da in ds.data_vars.items():
         if "z" in da.dims and da.sizes["z"] == 1:

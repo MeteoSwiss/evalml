@@ -8,6 +8,21 @@ import pandas as pd
 from shapely.geometry import MultiPoint
 
 
+# IFS shortNames that COSMO eccodes definitions don't remap to COSMO names.
+# These need explicit aliasing so callers can use COSMO names consistently.
+_IFS_TO_COSMO = {
+    "tp": "TOT_PREC",
+    "msl": "PMSL",
+    "10u": "U_10M",
+    "10v": "V_10M",
+    "2t": "T_2M",
+    "2d": "TD_2M",
+    "sp": "PS",
+    "lsm": "FR_LAND",
+    "z": "FIS",
+}
+
+
 def load_state_from_grib(
     file: Path, paramlist: list[str] | None = None
 ) -> dict[str, np.ndarray | dict[str, np.ndarray] | gpd.GeoSeries]:
@@ -28,9 +43,11 @@ def load_state_from_grib(
         lam_hull = MultiPoint(list(zip(lons.tolist(), lats.tolist()))).convex_hull
         state["lam_envelope"] = gpd.GeoSeries([lam_hull], crs="EPSG:4326")
     ds = {
-        u.metadata("param"): u.values.flatten()
+        _IFS_TO_COSMO.get(u.metadata("param"), u.metadata("param")): u.values.flatten()
         for u in fds
-        if paramlist is None or u.metadata("param") in paramlist
+        if paramlist is None
+        or u.metadata("param") in paramlist
+        or _IFS_TO_COSMO.get(u.metadata("param")) in paramlist
     }
     state["fields"] = {}
     for param in paramlist or []:
@@ -40,9 +57,11 @@ def load_state_from_grib(
         if global_file.exists():
             fds_global = ekd.from_source("file", str(global_file))
             ds_global = {
-                u.metadata("param"): u.values
+                _IFS_TO_COSMO.get(u.metadata("param"), u.metadata("param")): u.values
                 for u in fds_global
-                if paramlist is None or u.metadata("param") in paramlist
+                if paramlist is None
+                or u.metadata("param") in paramlist
+                or _IFS_TO_COSMO.get(u.metadata("param")) in paramlist
             }
             ref_key = next(iter(ds_global), None)
             if ref_key is not None:

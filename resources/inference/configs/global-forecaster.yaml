@@ -8,5 +8,7 @@ output:
   grib:
     path: grib/{date}{time:04}_{step:03}.grib
     negative_step_mode: skip
+    # templates:
+    #   samples: resources/templates_index_global-ea.yaml
 
 write_initial_state: true
