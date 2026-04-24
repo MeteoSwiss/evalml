@@ -116,14 +116,21 @@ def load_fct_data_from_grib(
         elif "z" in da.dims and da.sizes["z"] > 1:
             ds[var] = da.rename({"z": da.attrs["vcoord_type"]})
     ds = xr.merge([ds[p].rename(p) for p in ds], compat="no_conflicts")
+    lead_times = np.array(steps, dtype="timedelta64[h]")
+    # Restrict to the requested lead times so that the TOT_PREC disaggregation
+    # below operates on the correct step interval even if the GRIB contains
+    # extra (e.g. hourly) steps beyond those requested — e.g. when consuming
+    # output from an interpolator emulator or a baseline with sub-step output.
+    ds = ds.sel(lead_time=lead_times)
     if "TOT_PREC" in ds.data_vars:
-        LOG.info("Disaggregating precipitation")
+        ## disaggregate precipitation from cumulative-from-start (produced by
+        ## the accumulate_from_start_of_forecast post-processor in anemoi-
+        ## inference) to per-step accumulations. .diff() drops lead_time=0;
+        ## .reindex() restores it as NaN (no accumulation period exists at the
+        ## forecast initial time).
         ds = ds.assign(
-            TOT_PREC=lambda x: (
-                x.TOT_PREC.fillna(0)
-                .diff("lead_time")
-                .pad(lead_time=(1, 0), constant_value=None)
-                .clip(min=0.0)
+            TOT_PREC=lambda x: x.TOT_PREC.diff("lead_time").reindex(
+                lead_time=lead_times
             )
         )
     # make sure time coordinate is available, and valid_time is not
@@ -152,23 +159,22 @@ def load_baseline_from_zarr(
         {"forecast_reference_time": "ref_time", "step": "lead_time"}
     ).sortby("lead_time")
     lead_times = np.array(steps, dtype="timedelta64[h]")
+    # Restrict to the requested lead times up-front so that the TOT_PREC
+    # disaggregation below operates on the correct step interval, and so that
+    # all other variables avoid loading unused hourly steps from the zarr.
+    baseline = baseline[params].sel(ref_time=reftime, lead_time=lead_times)
     if "TOT_PREC" in baseline.data_vars:
         if baseline.TOT_PREC.units == "kg m-2":
             baseline = baseline.assign(TOT_PREC=lambda x: x.TOT_PREC / 1000)
             baseline.TOT_PREC.attrs["units"] = "m"
-        ## disaggregate precipitation: select the requested lead times BEFORE
-        ## differencing so that .diff() computes accumulations over the full
-        ## step interval (e.g. 6 h) rather than between consecutive hourly
-        ## steps in the zarr.
-        ## Do NOT apply fillna(0) — if a selected step is genuinely missing,
-        ## it is better to see NaN than to silently substitute zero precip.
-        cumul = baseline.TOT_PREC.sel(lead_time=lead_times)
-        precip = cumul.diff("lead_time").reindex(lead_time=lead_times)
-        baseline = baseline.assign(TOT_PREC=precip)
-    baseline = baseline[params].sel(
-        ref_time=reftime,
-        lead_time=lead_times,
-    )
+        ## disaggregate precipitation from cumulative-from-start to per-step
+        ## accumulations. .diff() drops lead_time=0; .reindex() restores it as
+        ## NaN (no accumulation period exists at the forecast initial time).
+        baseline = baseline.assign(
+            TOT_PREC=lambda x: x.TOT_PREC.diff("lead_time").reindex(
+                lead_time=lead_times
+            )
+        )
     baseline = baseline.assign_coords(time=baseline.ref_time + baseline.lead_time)
     if "latitude" in baseline.coords and "longitude" in baseline:
         baseline = baseline.rename({"latitude": "lat", "longitude": "lon"})
