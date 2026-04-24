@@ -123,16 +123,29 @@ def load_fct_data_from_grib(
     # output from an interpolator emulator or a baseline with sub-step output.
     ds = ds.sel(lead_time=lead_times)
     if "TOT_PREC" in ds.data_vars:
-        ## disaggregate precipitation from cumulative-from-start (produced by
-        ## the accumulate_from_start_of_forecast post-processor in anemoi-
-        ## inference) to per-step accumulations. .diff() drops lead_time=0;
-        ## .reindex() restores it as NaN (no accumulation period exists at the
-        ## forecast initial time).
-        ds = ds.assign(
-            TOT_PREC=lambda x: x.TOT_PREC.diff("lead_time").reindex(
-                lead_time=lead_times
+        ## Disaggregate TOT_PREC from cumulative-from-start (expected when the
+        ## accumulate_from_start_of_forecast post-processor is enabled in
+        ## anemoi-inference) to per-step accumulations.
+        ##
+        ## Detect whether the incoming data is actually cumulative: if .diff()
+        ## produces significantly negative values, TOT_PREC is already
+        ## period-accumulated and a second disaggregation would produce
+        ## garbage. In that case warn and leave the field as-is.
+        diff = ds.TOT_PREC.diff("lead_time")
+        min_diff = float(diff.min().compute())
+        if min_diff < -1e-4:  # -0.1 mm in precip-equivalent (units: m)
+            LOG.warning(
+                "TOT_PREC in the GRIB appears to already be "
+                "period-accumulated (min(.diff()) = %.3e m). Skipping "
+                "disaggregation. If this is a forecaster GRIB, check that "
+                "the accumulate_from_start_of_forecast post-processor is "
+                "enabled in the anemoi-inference config for this source.",
+                min_diff,
             )
-        )
+        else:
+            ## .diff() drops lead_time=0; .reindex() restores it as NaN
+            ## (no accumulation period exists at the forecast initial time).
+            ds = ds.assign(TOT_PREC=diff.reindex(lead_time=lead_times))
     # make sure time coordinate is available, and valid_time is not
     if "valid_time" in ds.coords:
         ds = ds.rename({"valid_time": "time"})
@@ -167,14 +180,28 @@ def load_baseline_from_zarr(
         if baseline.TOT_PREC.units == "kg m-2":
             baseline = baseline.assign(TOT_PREC=lambda x: x.TOT_PREC / 1000)
             baseline.TOT_PREC.attrs["units"] = "m"
-        ## disaggregate precipitation from cumulative-from-start to per-step
-        ## accumulations. .diff() drops lead_time=0; .reindex() restores it as
-        ## NaN (no accumulation period exists at the forecast initial time).
-        baseline = baseline.assign(
-            TOT_PREC=lambda x: x.TOT_PREC.diff("lead_time").reindex(
-                lead_time=lead_times
+        ## Disaggregate TOT_PREC from cumulative-from-start (the expected zarr
+        ## convention for processed NWP output) to per-step accumulations.
+        ##
+        ## Detect whether the incoming data is actually cumulative: if .diff()
+        ## produces significantly negative values, TOT_PREC is already
+        ## period-accumulated and a second disaggregation would produce
+        ## garbage. In that case warn and leave the field as-is.
+        diff = baseline.TOT_PREC.diff("lead_time")
+        min_diff = float(diff.min().compute())
+        if min_diff < -1e-4:  # -0.1 mm in precip-equivalent (units: m)
+            LOG.warning(
+                "TOT_PREC in the baseline zarr appears to already be "
+                "period-accumulated (min(.diff()) = %.3e m). Skipping "
+                "disaggregation.",
+                min_diff,
             )
-        )
+        else:
+            ## .diff() drops lead_time=0; .reindex() restores it as NaN
+            ## (no accumulation period exists at the forecast initial time).
+            baseline = baseline.assign(
+                TOT_PREC=diff.reindex(lead_time=lead_times)
+            )
     baseline = baseline.assign_coords(time=baseline.ref_time + baseline.lead_time)
     if "latitude" in baseline.coords and "longitude" in baseline:
         baseline = baseline.rename({"latitude": "lat", "longitude": "lon"})
