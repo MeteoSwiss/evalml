@@ -117,18 +117,15 @@ def load_fct_data_from_grib(
             ds[var] = da.rename({"z": da.attrs["vcoord_type"]})
     ds = xr.merge([ds[p].rename(p) for p in ds], compat="no_conflicts")
     if "TOT_PREC" in ds.data_vars:
-        # anemoi-inference outputs period-accumulated precipitation (e.g. 6h windows)
-        # because accumulate_from_start_of_forecast is not used. Each GRIB step
-        # already contains the precip for that period (startStep = endStep - period),
-        # which is directly comparable to the analysis zarr's TOT_PREC_6H.
-        # Do NOT apply diff here — that would only be correct for cumulative-from-start
-        # data (as in the operational baseline zarr handled by load_baseline_from_zarr).
-        # Do NOT apply fillna(0) — step 0 has no TOT_PREC in the GRIB (the encoding
-        # shifts the date for negative startStep), so the structural NaN must be
-        # preserved to avoid fake zero-precipitation at lead time 0.
-        # Also, do not clip negative precipitations to zero. Seeing negative precipitations
-        # when they are there is an important sanity-check, e.g. in Meteograms.
-        LOG.info("Precipitation is already period-accumulated, no further processing")
+        LOG.info("Disaggregating precipitation")
+        ds = ds.assign(
+            TOT_PREC=lambda x: (
+                x.TOT_PREC.fillna(0)
+                .diff("lead_time")
+                .pad(lead_time=(1, 0), constant_value=None)
+                .clip(min=0.0)
+            )
+        )
     # make sure time coordinate is available, and valid_time is not
     if "valid_time" in ds.coords:
         ds = ds.rename({"valid_time": "time"})
