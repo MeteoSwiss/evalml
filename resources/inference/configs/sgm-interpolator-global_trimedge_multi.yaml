@@ -1,0 +1,90 @@
+runner: time_multi_interpolator
+
+input:
+  cutout:
+    - lam_0:
+        grib:
+          path: forecaster/20*
+          namer: &namer
+            rules:
+              - - shortName: T
+                - t_{level}
+              - - shortName: U
+                - u_{level}
+              - - shortName: V
+                - v_{level}
+              - - shortName: W
+                - w_{level}
+              - - shortName: QV
+                - q_{level}
+              - - shortName: FI
+                - z_{level}
+              - - shortName: PMSL
+                - msl
+              - - shortName: FIS
+                - z
+              - - shortName: PS
+                - sp
+              - - shortName: T_2M
+                - 2t
+              - - shortName: TD_2M
+                - 2d
+              - - shortName: T_G
+                - skt
+              - - shortName: U_10M
+                - 10u
+              - - shortName: V_10M
+                - 10v
+              - - shortName: FR_LAND
+                - lsm
+              - - shortName: TOT_PREC
+                - tp
+    - global:
+        grib:
+          path: forecaster/ifs*
+          namer: *namer
+
+constant_forcings:
+  test:
+    use_original_paths: true
+
+patch_metadata: resources/sgm-interpolator-ich1-oper-patch.yaml
+
+output:
+  tee:
+    - grib:
+        path: grib/{dateTime}_{step:03}.grib
+        encoding:
+          typeOfGeneratingProcess: 2
+        templates:
+            samples: resources/templates_index_icon.yaml
+        post_processors:
+          - extract_mask: # removes global points
+              mask: "lam_0/cutout_mask"
+              as_slice: true
+          - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
+              accumulations:
+                - tp
+          # here, the trimedge mask can be specified when available
+
+    - grib:
+        path: grib/ifs-{dateTime}_{step:03}.grib
+        encoding:
+          typeOfGeneratingProcess: 2
+        templates:
+          samples: resources/templates_index_ifs.yaml
+        post_processors:
+          - extract_mask: # removes lam points
+              mask: "lam_0/cutout_mask"
+              as_slice: true
+              inverse: true
+          - assign_mask: # fill local/global overlapping points with nan
+              mask: "global/cutout_mask"
+          - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
+              accumulations:
+                - tp
+
+# silenced due to bug in anemoi-inference for multi-step interpolators, can be removed when fixed
+verbosity: 0
+allow_nans: true
+output_frequency: "1h"
