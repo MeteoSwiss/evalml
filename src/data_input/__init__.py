@@ -61,8 +61,9 @@ def load_analysis_data_from_zarr(
         "PMSL": "msl",
         "TOT_PREC": "tp",
     }
+    tot_prec_string = "TOT_PREC_6H" if min(np.diff(steps)) == 6 else "TOT_PREC_1H"
     PARAMS_MAP_COSMO1 = {
-        v: v.replace("TOT_PREC", "TOT_PREC_6H") for v in PARAMS_MAP_COSMO2.keys()
+        v: v.replace("TOT_PREC", tot_prec_string) for v in PARAMS_MAP_COSMO2.keys()
     }
     PARAMS_MAP = PARAMS_MAP_COSMO2 if "co2" in root.name else PARAMS_MAP_COSMO1
 
