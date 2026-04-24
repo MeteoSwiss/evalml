@@ -16,6 +16,10 @@ output:
               typeOfGeneratingProcess: 2
             templates:
               samples: resources/templates_index_cosmo.yaml
+            post_processors:
+              - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
+                  accumulations:
+                    - tp
     - printer
 
 write_initial_state: true

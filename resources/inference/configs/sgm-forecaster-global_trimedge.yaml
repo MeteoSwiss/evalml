@@ -27,6 +27,9 @@ output:
               as_slice: true
           - assign_mask:  # fill boundary "trimmed" points with nan
               mask: "source0/trimedge_mask"
+          - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
+              accumulations:
+                - tp
 
     - grib:
         path: grib/ifs-{dateTime}_{step:03}.grib
