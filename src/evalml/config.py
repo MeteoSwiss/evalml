@@ -227,6 +227,19 @@ class Stratification(BaseModel):
     )
 
 
+class Threshold(BaseModel):
+    """Configuration for thresholds used in verification metrics."""
+
+    thresholds: Dict[str, List[float]] = Field(
+        default_factory=dict,
+        description=(
+            "Dictionary mapping parameter names to lists of thresholds. "
+            "These thresholds will be used for computing classification metrics at different cutoffs. "
+            "Example: {'temperature': [0, 10, 20], 'precipitation': [0, 1.0]}"
+        ),
+    )
+
+
 class DefaultResources(BaseModel):
     """Default resource settings for job execution."""
 
@@ -316,6 +329,7 @@ class ConfigModel(BaseModel):
     )
     truth: TruthConfig | None
     stratification: Stratification
+    thresholds: Threshold
     locations: Locations
     profile: Profile
 

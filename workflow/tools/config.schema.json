@@ -489,6 +489,24 @@
       "title": "Stratification",
       "type": "object"
     },
+    "Threshold": {
+      "description": "Configuration for thresholds used in verification metrics.",
+      "properties": {
+        "thresholds": {
+          "additionalProperties": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "description": "Dictionary mapping parameter names to lists of thresholds. These thresholds will be used for computing classification metrics at different cutoffs. Example: {'temperature': [0, 10, 20], 'precipitation': [0, 1.0]}",
+          "title": "Thresholds",
+          "type": "object"
+        }
+      },
+      "title": "Threshold",
+      "type": "object"
+    },
     "TruthConfig": {
       "description": "Configuration for the truth data used in the verification.",
       "properties": {
@@ -584,6 +602,9 @@
     "stratification": {
       "$ref": "#/$defs/Stratification"
     },
+    "thresholds": {
+      "$ref": "#/$defs/Threshold"
+    },
     "locations": {
       "$ref": "#/$defs/Locations"
     },
@@ -597,6 +618,7 @@
     "runs",
     "truth",
     "stratification",
+    "thresholds",
     "locations",
     "profile"
   ],
