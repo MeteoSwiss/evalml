@@ -54,10 +54,24 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
         ds_mean.append(ds_grouped)
     out = xr.merge(ds_mean, compat="no_conflicts", join="outer")
 
+    # Derive STDE and R2 from aggregated component metrics
+    for var in list(out.data_vars):
+        if var.endswith(".MSE"):
+            prefix = var[: -len("MSE")]
+            bias_var = f"{prefix}BIAS"
+            if bias_var in out.data_vars:
+                out[f"{prefix}STDE"] = np.sqrt(
+                    np.maximum(out[var] - out[bias_var] ** 2, 0)
+                )
+        if var.endswith(".CORR"):
+            prefix = var[: -len("CORR")]
+            out[f"{prefix}R2"] = out[var] ** 2
+
+    # Square-root transform parameters: sqrt MSE -> RMSE; sqrt var -> std
     var_transform = {
-        d: d.replace("VAR", "STDE").replace("var", "std").replace("MSE", "RMSE")
+        d: d.replace("var", "std").replace("MSE", "RMSE")
         for d in out.data_vars
-        if "VAR" in d or "var" in d or "MSE" in d
+        if "MSE" in d or "var" in d
     }
     for var in var_transform:
         out[var] = np.sqrt(out[var])

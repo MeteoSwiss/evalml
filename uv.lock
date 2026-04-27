@@ -1125,7 +1125,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pyproj", specifier = ">=3.7.2" },
     { name = "pyzmq", specifier = ">=27.1.0" },
-    { name = "scores", specifier = ">=1.5.0" },
+    { name = "scores", specifier = ">=2.0.0" },
     { name = "shapely", specifier = ">=2.1.2" },
     { name = "snakemake", specifier = "<9.10" },
     { name = "snakemake-executor-plugin-slurm" },

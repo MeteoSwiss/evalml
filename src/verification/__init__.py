@@ -86,16 +86,16 @@ def _compute_scores(
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
     Returns a xarray Dataset with the computed metrics.
     """
-    corr = scores.continuous.pearsonr(fcst, obs, reduce_dims=dim)
-    error = fcst - obs
     result = xr.Dataset(
         {
-            f"{prefix}BIAS{suffix}": scores.continuous.bias(fcst, obs, reduce_dims=dim),
+            f"{prefix}BIAS{suffix}": scores.continuous.additive_bias(
+                fcst, obs, reduce_dims=dim
+            ),
             f"{prefix}MSE{suffix}": scores.continuous.mse(fcst, obs, reduce_dims=dim),
             f"{prefix}MAE{suffix}": scores.continuous.mae(fcst, obs, reduce_dims=dim),
-            f"{prefix}VAR{suffix}": error.var(dim=dim, skipna=True),
-            f"{prefix}CORR{suffix}": corr,
-            f"{prefix}R2{suffix}": corr**2,
+            f"{prefix}CORR{suffix}": scores.continuous.pearsonr(
+                fcst, obs, reduce_dims=dim
+            ),
         }
     )
     result = result.expand_dims({"source": [source]})
