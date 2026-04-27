@@ -207,7 +207,12 @@ def verify(
         score = []
         fcst_statistics = []
         obs_statistics = []
-        thresholds = threshold_dict.get(param, None)
+        thresholds = (
+            threshold_dict.get(param, None)
+            if isinstance(threshold_dict, dict)
+            else None
+        )
+        LOG.info(f"Thresholds for {param}: {thresholds}")
         for region in masks.region.values:
             LOG.info("Verifying parameter %s for region %s", param, region)
             fcst_param = fcst_aligned[param].where(masks.sel(region=region))
