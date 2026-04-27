@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 from argparse import Namespace
 from pathlib import Path
 
+import scores
 import numpy as np
 import xarray as xr
 
@@ -53,6 +54,24 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
         LOG.info("Aggregated by %s: \n %s", group, ds_grouped)
         ds_mean.append(ds_grouped)
     out = xr.merge(ds_mean, compat="no_conflicts", join="outer")
+
+    # convert contingency table elements to counts
+    for var in out.data_vars:
+        if "thresh" in var:
+            out[var] = out[var] * len(ds["ref_time"])
+            contingency_manager = scores.categorical.BasicContingencyManager(
+                {
+                    "tp_count": out[var].sel(contingency="tp_count"),
+                    "tn_count": out[var].sel(contingency="tn_count"),
+                    "fp_count": out[var].sel(contingency="fp_count"),
+                    "fn_count": out[var].sel(contingency="fn_count"),
+                    "total_count": out[var].sel(contingency="total_count"),
+                }
+            )
+            out[var.replace("thresh", "ETS")] = (
+                contingency_manager.equitable_threat_score()
+            )
+            out = out.drop_vars(var)
 
     # Derive STDE and R2 from aggregated component metrics
     for var in list(out.data_vars):
