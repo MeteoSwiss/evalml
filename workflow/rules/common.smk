@@ -176,7 +176,13 @@ def collect_all_runs() -> dict:
         if model_type == "baseline":
             continue
         run_config = run_entry[model_type]
-        runs |= register_run(model_type, run_config)
+        for run_id, run_cfg in register_run(model_type, run_config).items():
+            if run_id in runs and runs[run_id].get("_is_candidate", False):
+                # Preserve candidates by not letting a dependency registration
+                # (as_candidate=False) demote a run that was already registered as
+                # an explicit candidate. Order in config["runs"] must not matter.
+                run_cfg["_is_candidate"] = True
+            runs[run_id] = run_cfg
     return runs
 
 
