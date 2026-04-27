@@ -12,6 +12,7 @@ from shapely import contains_xy
 from shapely.ops import transform
 import pyproj
 import xarray as xr
+import scores.continuous
 
 import abc
 from shapely.geometry import Polygon
@@ -85,19 +86,20 @@ def _compute_scores(
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
     Returns a xarray Dataset with the computed metrics.
     """
+    corr = scores.continuous.pearsonr(fcst, obs, reduce_dims=dim)
     error = fcst - obs
-    scores = xr.Dataset(
+    result = xr.Dataset(
         {
-            f"{prefix}BIAS{suffix}": error.mean(dim=dim, skipna=True),
-            f"{prefix}MSE{suffix}": (error**2).mean(dim=dim, skipna=True),
-            f"{prefix}MAE{suffix}": abs(error).mean(dim=dim, skipna=True),
+            f"{prefix}BIAS{suffix}": scores.continuous.bias(fcst, obs, reduce_dims=dim),
+            f"{prefix}MSE{suffix}": scores.continuous.mse(fcst, obs, reduce_dims=dim),
+            f"{prefix}MAE{suffix}": scores.continuous.mae(fcst, obs, reduce_dims=dim),
             f"{prefix}VAR{suffix}": error.var(dim=dim, skipna=True),
-            f"{prefix}CORR{suffix}": xr.corr(fcst, obs, dim=dim),
-            f"{prefix}R2{suffix}": xr.corr(fcst, obs, dim=dim) ** 2,
+            f"{prefix}CORR{suffix}": corr,
+            f"{prefix}R2{suffix}": corr**2,
         }
     )
-    scores = scores.expand_dims({"source": [source]})
-    return scores
+    result = result.expand_dims({"source": [source]})
+    return result
 
 
 def _compute_statistics(
