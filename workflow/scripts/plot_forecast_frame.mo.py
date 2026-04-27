@@ -78,7 +78,7 @@ def _(ArgumentParser, Path):
 
 
 @app.cell
-def _(grib_dir, init_time, lead_time, load_state_from_grib, param):
+def _(accu, grib_dir, init_time, lead_time, load_state_from_grib, param):
     # load grib file
     grib_file = grib_dir / f"{init_time}_{lead_time}.grib"
     if param == "SP_10M":
@@ -88,6 +88,15 @@ def _(grib_dir, init_time, lead_time, load_state_from_grib, param):
     else:
         paramlist = [param]
     state = load_state_from_grib(grib_file, paramlist=paramlist)
+    # tp is accumulated from start of forecast; de-accumulate to get the period [lt-accu, lt]
+    if param == "TOT_PREC":
+        prev_lt = int(lead_time) - accu
+        if prev_lt > 0:
+            prev_grib_file = grib_dir / f"{init_time}_{prev_lt:03d}.grib"
+            prev_state = load_state_from_grib(prev_grib_file, paramlist=paramlist)
+            state["fields"]["TOT_PREC"] = (
+                state["fields"]["TOT_PREC"] - prev_state["fields"]["TOT_PREC"][:len(state["fields"]["TOT_PREC"])]
+            )
     return (state,)
 
 
@@ -184,7 +193,7 @@ def _(LOG, np):
             v = fields["V"]
             return np.sqrt(u**2 + v**2), "m/s"
         if param == "TOT_PREC":
-            return _m_to_mm(fields[param]), "mm"
+            return np.maximum(_m_to_mm(fields[param]), 0), "mm"
         # default: passthrough
         return fields[param], None
 
