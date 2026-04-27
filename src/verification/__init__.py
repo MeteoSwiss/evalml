@@ -81,6 +81,7 @@ def _compute_scores(
     prefix="",
     suffix="",
     source="",
+    thresholds: list[float] | None = None,
 ) -> xr.Dataset:
     """
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
@@ -93,11 +94,27 @@ def _compute_scores(
             ),
             f"{prefix}MSE{suffix}": scores.continuous.mse(fcst, obs, reduce_dims=dim),
             f"{prefix}MAE{suffix}": scores.continuous.mae(fcst, obs, reduce_dims=dim),
-            f"{prefix}CORR{suffix}": scores.continuous.pearsonr(
-                fcst, obs, reduce_dims=dim
+            f"{prefix}CORR{suffix}": scores.continuous.correlation.pearsonr(
+                fcst,
+                obs,
+                reduce_dims=dim,
             ),
         }
     )
+    LOG.info(f"Compute scores for {prefix} {suffix}")
+    LOG.info(f"compute thresholds for {thresholds}")
+    if thresholds is not None:
+        # check if thresholds is a list, if not convert to list
+        if not isinstance(thresholds, list):
+            thresholds = [thresholds]
+        for threshold in thresholds:
+            event_operator = scores.categorical.ThresholdEventOperator(
+                default_event_threshold=threshold
+            )
+            contingency_manager = event_operator.make_contingency_manager(fcst, obs)
+            result[f"{prefix}thresh_{threshold}{suffix}"] = (
+                contingency_manager.get_table()
+            )
     result = result.expand_dims({"source": [source]})
     return result
 
@@ -150,6 +167,7 @@ def verify(
     obs_label: str,
     regions: list[str] | None = None,
     dim: list[str] | None = None,
+    threshold_dict: dict[str, list[float]] | None = None,
     num_workers: int | None = None,
 ) -> xr.Dataset:
     """
@@ -189,6 +207,7 @@ def verify(
         score = []
         fcst_statistics = []
         obs_statistics = []
+        thresholds = threshold_dict.get(param, None)
         for region in masks.region.values:
             LOG.info("Verifying parameter %s for region %s", param, region)
             fcst_param = fcst_aligned[param].where(masks.sel(region=region))
@@ -202,6 +221,7 @@ def verify(
                     prefix=param + ".",
                     source=fcst_label,
                     dim=dim,
+                    thresholds=thresholds,
                 ).expand_dims(region=[region])
             )
 
