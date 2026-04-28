@@ -58,6 +58,24 @@ stratification:
     - alpensuedseite
   root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
 
+thresholds:
+  TOT_PREC:
+    - 0.0   # 0 mm
+    - 0.001 # 1 mm
+    - 0.005 # 5 mm
+  U_10M:
+    - 2.5
+    - 5.0
+    - 10.0
+  V_10M:
+    - 2.5
+    - 5.0
+    - 10.0
+  T_2M:
+    - 273.15 #  0.0 deg C
+    - 288.15 # 15.0 deg C
+    - 298.15 # 25.0 deg C
+
 locations:
   output_root: output/
 
