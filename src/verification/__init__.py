@@ -107,14 +107,21 @@ def _compute_scores(
         # check if thresholds is a list, if not convert to list
         if not isinstance(thresholds, list):
             thresholds = [thresholds]
+        contingency_table = []
+        thresholds_param = xr.DataArray(
+            data=thresholds, dims=f"{prefix}threshold{suffix}"
+        )
         for threshold in thresholds:
             event_operator = scores.categorical.ThresholdEventOperator(
                 default_event_threshold=threshold
             )
             contingency_manager = event_operator.make_contingency_manager(fcst, obs)
-            result[f"{prefix}thresh_{threshold}{suffix}"] = (
-                contingency_manager.get_table()
+            contingency_table.append(
+                contingency_manager.transform(reduce_dims=dim).get_table()
             )
+        result[f"{prefix}contingency_table{suffix}"] = xr.concat(
+            contingency_table, dim=thresholds_param
+        )
     result = result.expand_dims({"source": [source]})
     return result
 
