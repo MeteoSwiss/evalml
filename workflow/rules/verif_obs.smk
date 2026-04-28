@@ -143,19 +143,30 @@ rule link_mec_input:
         init="{wildcards.init_time}"
         echo "Creating input_mod links for init $init (leads: {params.leads})"
 
-        # for each configured lead create a link named e.g. 01200.grib -> <source_init>/grib/<source_init>_012.grib
+        # for each configured lead copy (and optionally merge) source files into input_mod
         for lead in {params.leads}; do
             lead3=$(printf "%03d" "$lead")
-            linkname="${{lead3}}00.grib"
             # compute source init such that source_init + lead = ref(init)
-            # construct a date string YYYYMMDD HH:MM which `date -d` reliably parses
             src_epoch=$(date -u -d "${{init:0:4}}-${{init:4:2}}-${{init:6:2}}T${{init:8:2}}:${{init:10:2}}:00Z" +%s)
             source_init=$(date -u -d "@$(( src_epoch - lead * 3600 ))" +"%Y%m%d%H%M")
             src_rel="$source_init/grib/${{source_init}}_${{lead3}}.grib"
 
             if [[ -e "$src_rel" ]]; then
-                echo "Linking $src_rel -> {wildcards.init_time}/mec/input_mod/$linkname"
-                ln -sf "$(realpath -m "$PWD/$src_rel")" {wildcards.init_time}/mec/input_mod/"$linkname"
+                dest="{wildcards.init_time}/mec/input_mod/${{source_init}}.grib"
+                if [[ "$lead" -eq 0 ]]; then
+                    echo "Copying $src_rel -> $dest"
+                    cp "$src_rel" "$dest"
+                else
+                    prev_lead3=$(printf "%03d" "$(( lead - 6 ))")
+                    prev_rel="$source_init/grib/${{source_init}}_${{prev_lead3}}.grib"
+                    if [[ -e "$prev_rel" ]]; then
+                        echo "Merging $prev_rel + $src_rel -> $dest"
+                        cat "$prev_rel" "$src_rel" > "$dest"
+                    else
+                        echo "WARNING: previous lead file $prev_rel not found, copying $src_rel only" >&2
+                        cp "$src_rel" "$dest"
+                    fi
+                fi
             else
                 echo "WARNING: source file $src_rel not found" >&2
             fi
