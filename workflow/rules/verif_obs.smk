@@ -9,7 +9,7 @@ def _parse_timedelta(s: str) -> timedelta:
     if s.endswith("d"):
         return timedelta(days=int(s[:-1]))
     raise ValueError(
-        f"Unsupported frequency format: {s! r} (expected e.g. '12h' or '1d')"
+        f"Unsupported frequency format: {s!r} (expected e.g. '12h' or '1d')"
     )
 
 
@@ -75,7 +75,7 @@ def init_times_for_mec(wc):
 rule prepare_mec_input:
     input:
         inference_ok=lambda wc: expand(
-            rules.execute_inference.output.okfile,
+            rules.inference_execute.output.okfile,
             run_id=wc.run_id,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
         ),
@@ -98,8 +98,9 @@ rule prepare_mec_input:
         echo "init time: ${{init}}"
 
         # collect observations (ekfSYNOP) and/or (monSYNOP from DWD; includes precip) files
-        cp /store_new/mch/msopr/osm/KENDA-1/EKF/${{ym}}/ekfSYNOP_${{init}}00.nc {output.ekf_file}
-        cp /scratch/mch/paa/mec/MEC_ML_input/monFiles2020/hpc/uwork/swahl/temp/feedback/monSYNOP.${{init:0:10}} {output.obs}/monSYNOP.nc
+        cp /store_new/mch/msopr/osm/KENDA-CH1/EKF/${{ym}}/ekfSYNOP_${{init}}00.nc {output.ekf_file}
+        cp /scratch/mch/paa/mec/MEC_ML_input/monFiles2025/${{init:0:10}}/monSYNOP.nc {output.obs}/monSYNOP.nc
+        ######cp /scratch/mch/paa/mec/MEC_ML_input/monFiles2020/hpc/uwork/swahl/temp/feedback/monSYNOP.${{init:0:10}} {output.obs}/monSYNOP.nc
         echo "Copied obs files to {output.obs}"
 
         ) > {log} 2>&1

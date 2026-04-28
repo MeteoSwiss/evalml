@@ -48,7 +48,7 @@ wildcard_constraints:
 
 
 # prefer one rule because snakemake complains about ambiguous rules (same output)
-ruleorder: prepare_inference_forecaster > prepare_inference_interpolator
+ruleorder: inference_prepare_forecaster > inference_prepare_interpolator
 
 
 # optional messages, log and error handling
@@ -181,7 +181,7 @@ rule inference_all:
     """Run inference for all reference times as defined in the configuration."""
     input:
         expand(
-            rules.execute_inference.output.okfile,
+            rules.inference_execute.output.okfile,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=CANDIDATES,
         ),
