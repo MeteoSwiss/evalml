@@ -8,6 +8,14 @@ import scores
 import numpy as np
 import xarray as xr
 
+CATEGORICAL_METRICS = {
+    "ETS": lambda m: m.equitable_threat_score(),
+    "FBI": lambda m: m.frequency_bias(),
+    "POD": lambda m: m.probability_of_detection(),
+    "FAR": lambda m: m.false_alarm_ratio(),
+}
+
+
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -55,9 +63,9 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
         ds_mean.append(ds_grouped)
     out = xr.merge(ds_mean, compat="no_conflicts", join="outer")
 
-    # convert contingency table elements to counts
     for var in out.data_vars:
-        if "thresh" in var:
+        if "contingency_table" in var:
+            # convert contingency table elements to counts
             out[var] = out[var] * len(ds["ref_time"])
             contingency_manager = scores.categorical.BasicContingencyManager(
                 {
@@ -68,10 +76,9 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
                     "total_count": out[var].sel(contingency="total_count"),
                 }
             )
-            out[var.replace("thresh", "ETS")] = (
-                contingency_manager.equitable_threat_score()
-            )
-            out = out.drop_vars(var)
+            for metric, fn in CATEGORICAL_METRICS.items():
+                out[var.replace("contingency_table", metric)] = fn(contingency_manager)
+            # out = out.drop_vars(var)
 
     # Derive STDE and R2 from aggregated component metrics
     for var in list(out.data_vars):
