@@ -136,9 +136,10 @@
             </div>
             <div class="control-group">
                 <label>Metric(s)</label>
+                {% set default_metrics = ['RMSE', 'BIAS', 'std', 'mean'] %}
                 <select id="metric-select" multiple>
                     {% for metric in metrics %}
-                    <option value="{{metric}}" selected>{{metric}}</option>
+                    <option value="{{metric}}"{% if metric in default_metrics %} selected{% endif %}>{{metric}}</option>
                     {% endfor %}
                 </select>
             </div>
