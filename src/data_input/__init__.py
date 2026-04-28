@@ -162,9 +162,7 @@ def load_fct_data_from_grib(
         ## accumulation period exists at the forecast initial time). Clip
         ## small float-noise negatives to zero (anything below -0.1 mm has
         ## already been caught by the check above).
-        ds = ds.assign(
-            TOT_PREC=diff.clip(min=0.0).reindex(lead_time=lead_times)
-        )
+        ds = ds.assign(TOT_PREC=diff.clip(min=0.0).reindex(lead_time=lead_times))
     # make sure time coordinate is available, and valid_time is not
     if "valid_time" in ds.coords:
         ds = ds.rename({"valid_time": "time"})
