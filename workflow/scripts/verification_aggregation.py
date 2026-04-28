@@ -78,7 +78,21 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
             )
             for metric, fn in CATEGORICAL_METRICS.items():
                 out[var.replace("contingency_table", metric)] = fn(contingency_manager)
-            # out = out.drop_vars(var)
+            # split by threshold dimension into data variables
+
+            out = out.drop_vars(var)
+
+    # second loop to split along thresholds dimension, could be moved to plotting/dashboards scripts
+    for var in out.data_vars:
+        dim = list(filter(lambda x: "threshold" in x, out[var].dims))
+        if dim:
+            rename_dict = {d: f"{var}_{d}" for d in out.coords[dim[0]].values}
+            out = xr.merge(
+                [
+                    out[var].to_dataset(dim=dim[0]).rename(rename_dict),
+                    out.drop_vars(var),
+                ]
+            )
 
     # Derive STDE and R2 from aggregated component metrics
     for var in list(out.data_vars):
