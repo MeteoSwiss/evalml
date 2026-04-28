@@ -208,6 +208,23 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
+class ShowcaseConfig(BaseModel):
+    """Configuration for the showcase workflow."""
+
+    meteograms: bool = Field(
+        default=True,
+        description="Whether to generate meteograms (time series plots at stations).",
+    )
+    animations: bool = Field(
+        default=True,
+        description="Whether to generate forecast animations (GIFs per param and region).",
+    )
+    stations: List[str] = Field(
+        default=["GVE", "KLO", "LUG"],
+        description="List of PeakWeather station IDs to generate meteograms for.",
+    )
+
+
 class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
 
@@ -318,6 +335,10 @@ class ConfigModel(BaseModel):
     stratification: Stratification
     locations: Locations
     profile: Profile
+    showcase: ShowcaseConfig = Field(
+        default_factory=ShowcaseConfig,
+        description="Settings for the showcase workflow.",
+    )
 
     model_config = {
         "extra": "forbid",  # fail on misspelled keys

@@ -465,6 +465,38 @@
       "title": "Profile",
       "type": "object"
     },
+    "ShowcaseConfig": {
+      "description": "Configuration for the showcase workflow.",
+      "properties": {
+        "meteograms": {
+          "default": true,
+          "description": "Whether to generate meteograms (time series plots at stations).",
+          "title": "Meteograms",
+          "type": "boolean"
+        },
+        "animations": {
+          "default": true,
+          "description": "Whether to generate forecast animations (GIFs per param and region).",
+          "title": "Animations",
+          "type": "boolean"
+        },
+        "stations": {
+          "default": [
+            "GVE",
+            "KLO",
+            "LUG"
+          ],
+          "description": "List of PeakWeather station IDs to generate meteograms for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Stations",
+          "type": "array"
+        }
+      },
+      "title": "ShowcaseConfig",
+      "type": "object"
+    },
     "Stratification": {
       "description": "Stratification settings for the analysis.",
       "properties": {
@@ -589,6 +621,10 @@
     },
     "profile": {
       "$ref": "#/$defs/Profile"
+    },
+    "showcase": {
+      "$ref": "#/$defs/ShowcaseConfig",
+      "description": "Settings for the showcase workflow."
     }
   },
   "required": [

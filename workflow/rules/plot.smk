@@ -38,7 +38,7 @@ rule plot_meteogram:
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
-        runtime="10m",
+        runtime="60m",
     params:
         ana_label=lambda wc: config["truth"]["label"],
         fcst_grib=lambda wc: (
