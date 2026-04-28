@@ -12,7 +12,8 @@ from shapely import contains_xy
 from shapely.ops import transform
 import pyproj
 import xarray as xr
-import scores.continuous
+import scores
+import operator
 
 import abc
 from shapely.geometry import Polygon
@@ -113,7 +114,7 @@ def _compute_scores(
         )
         for threshold in thresholds:
             event_operator = scores.categorical.ThresholdEventOperator(
-                default_event_threshold=threshold
+                default_event_threshold=threshold, default_op_fn=operator.gt
             )
             contingency_manager = event_operator.make_contingency_manager(fcst, obs)
             contingency_table.append(
