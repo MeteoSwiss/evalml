@@ -30,7 +30,7 @@ def get_input(root: Path) -> list[Path]:
         input_files = [f.parent.parent for f in gribfiles]
     if not input_files:
         raise ValueError(f"No files found in {root}.")
-    return input_files[:1]
+    return input_files
 
 
 def get_reftime(file: Path) -> datetime:
