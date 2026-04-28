@@ -128,25 +128,43 @@ def load_fct_data_from_grib(
         ## accumulate_from_start_of_forecast post-processor is enabled in
         ## anemoi-inference) to per-step accumulations.
         ##
-        ## Detect whether the incoming data is actually cumulative: if .diff()
-        ## produces significantly negative values, TOT_PREC is already
+        ## anemoi-inference sometimes omits step 0 from the GRIB even with
+        ## accumulate_from_start_of_forecast enabled. After the outer-join
+        ## merge above, lead_time=0 of TOT_PREC is then NaN, which would
+        ## propagate through .diff() and wipe out the first period
+        ## accumulation. Set it explicitly to 0 (cumulative-from-start has
+        ## nothing accumulated at the forecast initial time by definition).
+        ## Restricting to lead_time=0 leaves any other NaNs (e.g. from
+        ## boundary-trim masks) untouched.
+        ds = ds.assign(
+            TOT_PREC=xr.where(
+                ds.lead_time == np.timedelta64(0, "h"),
+                0.0,
+                ds.TOT_PREC,
+            )
+        )
+        ## Sanity-check that the incoming data is actually cumulative: if
+        ## .diff() produces significantly negative values, TOT_PREC is already
         ## period-accumulated and a second disaggregation would produce
-        ## garbage. In that case warn and leave the field as-is.
+        ## garbage. In that case raise — we always expect cumulative-from-
+        ## start precipitation here.
         diff = ds.TOT_PREC.diff("lead_time")
         min_diff = float(diff.min().compute())
         if min_diff < -1e-4:  # -0.1 mm in precip-equivalent (units: m)
-            LOG.warning(
-                "TOT_PREC in the GRIB appears to already be "
-                "period-accumulated (min(.diff()) = %.3e m). Skipping "
-                "disaggregation. If this is a forecaster GRIB, check that "
-                "the accumulate_from_start_of_forecast post-processor is "
-                "enabled in the anemoi-inference config for this source.",
-                min_diff,
+            raise ValueError(
+                f"TOT_PREC in the GRIB appears to already be "
+                f"period-accumulated (min(.diff()) = {min_diff:.3e} m). "
+                f"Check that the accumulate_from_start_of_forecast "
+                f"post-processor is enabled in the anemoi-inference config "
+                f"for this source."
             )
-        else:
-            ## .diff() drops lead_time=0; .reindex() restores it as NaN
-            ## (no accumulation period exists at the forecast initial time).
-            ds = ds.assign(TOT_PREC=diff.reindex(lead_time=lead_times))
+        ## .diff() drops lead_time=0; .reindex() restores it as NaN (no
+        ## accumulation period exists at the forecast initial time). Clip
+        ## small float-noise negatives to zero (anything below -0.1 mm has
+        ## already been caught by the check above).
+        ds = ds.assign(
+            TOT_PREC=diff.clip(min=0.0).reindex(lead_time=lead_times)
+        )
     # make sure time coordinate is available, and valid_time is not
     if "valid_time" in ds.coords:
         ds = ds.rename({"valid_time": "time"})
@@ -184,25 +202,25 @@ def load_baseline_from_zarr(
         ## Disaggregate TOT_PREC from cumulative-from-start (the expected zarr
         ## convention for processed NWP output) to per-step accumulations.
         ##
-        ## Detect whether the incoming data is actually cumulative: if .diff()
-        ## produces significantly negative values, TOT_PREC is already
+        ## Sanity-check that the incoming data is actually cumulative: if
+        ## .diff() produces significantly negative values, TOT_PREC is already
         ## period-accumulated and a second disaggregation would produce
-        ## garbage. In that case warn and leave the field as-is.
+        ## garbage. In that case raise — we always expect cumulative-from-
+        ## start precipitation here.
         diff = baseline.TOT_PREC.diff("lead_time")
         min_diff = float(diff.min().compute())
         if min_diff < -1e-4:  # -0.1 mm in precip-equivalent (units: m)
-            LOG.warning(
-                "TOT_PREC in the baseline zarr appears to already be "
-                "period-accumulated (min(.diff()) = %.3e m). Skipping "
-                "disaggregation.",
-                min_diff,
+            raise ValueError(
+                f"TOT_PREC in the baseline zarr appears to already be "
+                f"period-accumulated (min(.diff()) = {min_diff:.3e} m)."
             )
-        else:
-            ## .diff() drops lead_time=0; .reindex() restores it as NaN
-            ## (no accumulation period exists at the forecast initial time).
-            baseline = baseline.assign(
-                TOT_PREC=diff.reindex(lead_time=lead_times)
-            )
+        ## .diff() drops lead_time=0; .reindex() restores it as NaN (no
+        ## accumulation period exists at the forecast initial time). Clip
+        ## small float-noise negatives to zero (anything below -0.1 mm has
+        ## already been caught by the check above).
+        baseline = baseline.assign(
+            TOT_PREC=diff.clip(min=0.0).reindex(lead_time=lead_times)
+        )
     baseline = baseline.assign_coords(time=baseline.ref_time + baseline.lead_time)
     if "latitude" in baseline.coords and "longitude" in baseline:
         baseline = baseline.rename({"latitude": "lat", "longitude": "lon"})
