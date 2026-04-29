@@ -30,7 +30,7 @@ def get_input(root: Path) -> list[Path]:
         input_files = [f.parent.parent for f in gribfiles]
     if not input_files:
         raise ValueError(f"No files found in {root}.")
-    return input_files[:3]
+    return input_files
 
 
 def get_reftime(file: Path) -> datetime:
@@ -264,7 +264,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--params",
         type=lambda x: x.split(","),
-        default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"],
+        default=[
+            "T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC",
+            "CLCT", "CLCL", "CLCM", "CLCH",
+            "ASWDIFD_S", "ASWDIR_S",
+        ],
     )
 
     parser.add_argument(
