@@ -114,6 +114,9 @@ def _compute_scores(
     """
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
     Returns a xarray Dataset with the computed metrics.
+    Computation of scores for continuous and categorical forecasts are supported.
+    Categorical forecasts are specified with a list of events via the thresholds argument
+    (e.g. [">= 10.0", "< 0.0"]).
     """
     result = xr.Dataset(
         {
@@ -210,8 +213,36 @@ def verify(
     num_workers: int | None = None,
 ) -> xr.Dataset:
     """
-    Compare two xarray Datasets (fcst and obs) and return pandas DataFrame with
-    basic verification metrics and statistics for both fcst and obs.
+    Compute verification metrics and statistics comparing forecast and observation datasets.
+
+    This function aligns the forecast (fcst) and observation (obs) xarray Datasets, applies spatial region masks,
+    and computes standard verification metrics (e.g., BIAS, MSE, MAE, CORR) and basic statistics (mean, var, min, max)
+    for each parameter and region. Optionally, categorical metrics using thresholds can be computed.
+
+    Parameters
+    ----------
+    fcst : xr.Dataset
+        Forecast dataset with named data variables (parameters) and spatial/temporal coordinates.
+    obs : xr.Dataset
+        Observation (truth) dataset, aligned with fcst.
+    fcst_label : str
+        Label for the forecast source (used in output dataset).
+    obs_label : str
+        Label for the observation source (used in output dataset).
+    regions : list[str] or None, optional
+        List of shapefile paths or region names to use for spatial aggregation. If None, uses default region ('all').
+    dim : list[str] or None, optional
+        List of dimension names to reduce over when computing metrics/statistics. If None, tries to infer from fcst.
+    threshold_dict : dict[str, list[float]] or None, optional
+        Dictionary mapping parameter names to threshold lists for categorical metrics. If None, no thresholds used.
+    num_workers : int or None, optional
+        Number of parallel workers for computation. If None, uses available CPU cores minus 2.
+
+    Returns
+    -------
+    xr.Dataset
+        Dataset containing computed verification metrics and statistics for each parameter, region, and source.
+        Dimensions typically include region, source, and any non-reduced dimensions from the input datasets.
     """
     start = time.time()
 
