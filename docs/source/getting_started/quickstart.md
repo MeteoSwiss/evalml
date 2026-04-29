@@ -2,7 +2,7 @@
 
 This page walks through running your first experiment end-to-end. It assumes
 you have already followed [Installation](installation.md) and
-[Credentials setup](credentials.md).
+[Credentials setup](auth.md).
 
 ## 1. Pick an example config
 

@@ -35,7 +35,7 @@ src-layout packages: `evalml`, `verification`, `data_input`, `plotting`.
 :maxdepth: 2
 
 getting_started/installation
-getting_started/credentials
+getting_started/auth
 getting_started/workspace
 getting_started/quickstart
 ```
