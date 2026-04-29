@@ -214,7 +214,11 @@ def main(cfg: ScriptConfig):
     for i in indices:
         file = input[i]
         ds = extract(
-            file, cfg.steps, cfg.params, run_id=cfg.run_id, ensemble_mean=cfg.ensemble_mean
+            file,
+            cfg.steps,
+            cfg.params,
+            run_id=cfg.run_id,
+            ensemble_mean=cfg.ensemble_mean,
         )
 
         LOG.info(f"Extracted: {ds}")
@@ -264,11 +268,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--params",
         type=lambda x: x.split(","),
-        default=[
-            "T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC",
-            "CLCT", "CLCL", "CLCM", "CLCH",
-            "ASWDIFD_S", "ASWDIR_S",
-        ],
+        default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"],
     )
 
     parser.add_argument(
