@@ -86,7 +86,7 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
     for var in out.data_vars:
         dim = list(filter(lambda x: "threshold" in x, out[var].dims))
         if dim:
-            rename_dict = {d: f"{var}_{d}" for d in out.coords[dim[0]].values}
+            rename_dict = {d: f"{var} {d}" for d in out.coords[dim[0]].values}
             out = xr.merge(
                 [
                     out[var].to_dataset(dim=dim[0]).rename(rename_dict),

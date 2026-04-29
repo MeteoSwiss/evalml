@@ -230,7 +230,7 @@ class Stratification(BaseModel):
 class Threshold(BaseModel):
     """Configuration for thresholds used in verification metrics."""
 
-    thresholds: Dict[str, List[float]] = Field(
+    thresholds: Dict[str, List[str]] = Field(
         default_factory=dict,
         description=(
             "Dictionary mapping parameter names to lists of thresholds. "

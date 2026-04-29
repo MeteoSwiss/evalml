@@ -13,12 +13,21 @@ from shapely.ops import transform
 import pyproj
 import xarray as xr
 import scores
-import operator
+import operator as op
 
 import abc
 from shapely.geometry import Polygon
 
 LOG = logging.getLogger(__name__)
+
+OPS = {
+    ">": op.gt,
+    ">=": op.ge,
+    "<": op.lt,
+    "<=": op.le,
+    "==": op.eq,
+    "!=": op.ne,
+}
 
 
 class AggregationMasks(abc.ABC):
@@ -75,6 +84,24 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
         return xr.DataArray(mask, coords=lon.coords, dims=lon.dims)
 
 
+# deconstruct the threshold string into the value and the operator
+
+
+def _threshold_value_and_operator(threshold: str):
+    """
+    Parse a threshold string like '> 10.0' into (operator.gt, 10.0).
+    Supported operators: >, >=, <, <=, ==, !=
+    """
+    splits = " ".join(threshold.split()).split(" ")  # remove multiple whitespaces
+    if len(splits) == 2 and splits[0] in OPS:
+        try:
+            value = float(splits[1])
+        except ValueError:
+            raise ValueError(f"Invalid threshold value: '{splits[1]}'")
+        return OPS[splits[0]], value
+    raise ValueError(f"Invalid threshold string: '{threshold}'")
+
+
 def _compute_scores(
     fcst: xr.DataArray,
     obs: xr.DataArray,
@@ -113,8 +140,12 @@ def _compute_scores(
             data=thresholds, dims=f"{prefix}threshold{suffix}"
         )
         for threshold in thresholds:
+            threshold_operator, threshold_value = _threshold_value_and_operator(
+                threshold
+            )
             event_operator = scores.categorical.ThresholdEventOperator(
-                default_event_threshold=threshold, default_op_fn=operator.gt
+                default_event_threshold=threshold_value,
+                default_op_fn=threshold_operator,
             )
             contingency_manager = event_operator.make_contingency_manager(fcst, obs)
             contingency_table.append(

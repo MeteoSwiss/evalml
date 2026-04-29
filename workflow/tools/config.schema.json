@@ -495,7 +495,7 @@
         "thresholds": {
           "additionalProperties": {
             "items": {
-              "type": "number"
+              "type": "string"
             },
             "type": "array"
           },
