@@ -117,8 +117,8 @@ def _extract_member(
 def extract(
     file: Path,
     lead_times: list[int],
-    run_id: str,
     params: list[str],
+    run_id: str | None = None,
     ensemble_mean: bool = False,
 ) -> xr.Dataset:
     LOG.info(f"Extracting fields from {file}.")
@@ -133,6 +133,9 @@ def extract(
         gribname = "i2eff"
     else:
         raise ValueError("Currently only COSMO-E/1E and ICON-CH1/2-EPS are supported.")
+
+    if not ensemble_mean and run_id is None:
+        raise ValueError("run_id must be provided when ensemble_mean=False.")
 
     if ensemble_mean:
         run_ids = get_run_ids(file, gribname)
@@ -211,7 +214,7 @@ def main(cfg: ScriptConfig):
     for i in indices:
         file = input[i]
         ds = extract(
-            file, cfg.steps, cfg.run_id, cfg.params, ensemble_mean=cfg.ensemble_mean
+            file, cfg.steps, cfg.params, run_id=cfg.run_id, ensemble_mean=cfg.ensemble_mean
         )
 
         LOG.info(f"Extracted: {ds}")
