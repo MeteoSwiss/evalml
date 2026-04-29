@@ -30,7 +30,7 @@ def get_input(root: Path) -> list[Path]:
         input_files = [f.parent.parent for f in gribfiles]
     if not input_files:
         raise ValueError(f"No files found in {root}.")
-    return input_files
+    return input_files[:3]
 
 
 def get_reftime(file: Path) -> datetime:
@@ -282,24 +282,14 @@ To submit as a batch job on compute nodes
 sbatch --wrap "uv run python ..."
 
 python workflow/scripts/data_extract_baseline.py \
-    --archive_dir /archive/mch/msopr/osm/COSMO-E/FCST20 \
-    --output_store /store_new/mch/msopr/ml/COSMO-E-CTRL/FCST20.zarr \
-    --steps 0/120/6
-
-python workflow/scripts/data_extract_baseline.py \
-    --archive_dir /archive/mch/s83/osm/from_GPFS/COSMO-1E/FCST20 \
-    --output_store /store_new/mch/msopr/ml/COSMO-1E-CTRL/FCST20.zarr \
-    --steps 0/33/1
-
-python workflow/scripts/data_extract_baseline.py \
-    --archive_dir /store_new/mch/msopr/osm/ICON-CH1/FCST24 \
+    --archive_dir /store_new/mch/msopr/osm/ICON-CH1-EPS/FCST24 \
     --output_store /store_new/mch/msopr/ml/ICON-CH1-CTRL/FCST24.zarr \
     --steps 0/33/1
 
 python workflow/scripts/data_extract_baseline.py \
-    --archive_dir /store_new/mch/msopr/osm/ICON-CH1/FCST25 \
-    --output_store /store_new/mch/msopr/ml/ICON-CH1-CTRL/FCST25.zarr \
-    --steps 0/33/1
+    --archive_dir /store_new/mch/msopr/osm/ICON-CH2-EPS/FCST25 \
+    --output_store /store_new/mch/msopr/ml/ICON-CH2-CTRL/FCST25.zarr \
+    --steps 0/121/1
 
 python workflow/scripts/data_extract_baseline.py \
     --archive_dir /store_new/mch/msopr/osm/ICON-CH1-EPS/FCST25 \
