@@ -283,21 +283,27 @@ sbatch --wrap "uv run python ..."
 
 python workflow/scripts/data_extract_baseline.py \
     --archive_dir /archive/mch/msopr/osm/COSMO-E/FCST20 \
-    --output_store /store_new/mch/msopr/ml/COSMO-E/FCST20.zarr \
+    --output_store /store_new/mch/msopr/ml/COSMO-E-CTRL/FCST20.zarr \
     --steps 0/120/6
 
 python workflow/scripts/data_extract_baseline.py \
     --archive_dir /archive/mch/s83/osm/from_GPFS/COSMO-1E/FCST20 \
-    --output_store /store_new/mch/msopr/ml/COSMO-1E/FCST20.zarr \
+    --output_store /store_new/mch/msopr/ml/COSMO-1E-CTRL/FCST20.zarr \
     --steps 0/33/1
 
 python workflow/scripts/data_extract_baseline.py \
-    --archive_dir /store_new/mch/msopr/osm/ICON-CH1-EPS/FCST24 \
-    --output_store /store_new/mch/msopr/ml/ICON-CH1-EPS/FCST24.zarr \
+    --archive_dir /store_new/mch/msopr/osm/ICON-CH1/FCST24 \
+    --output_store /store_new/mch/msopr/ml/ICON-CH1-CTRL/FCST24.zarr \
+    --steps 0/33/1
+
+python workflow/scripts/data_extract_baseline.py \
+    --archive_dir /store_new/mch/msopr/osm/ICON-CH1/FCST25 \
+    --output_store /store_new/mch/msopr/ml/ICON-CH1-CTRL/FCST25.zarr \
     --steps 0/33/1
 
 python workflow/scripts/data_extract_baseline.py \
     --archive_dir /store_new/mch/msopr/osm/ICON-CH1-EPS/FCST25 \
-    --output_store /store_new/mch/msopr/ml/ICON-CH1-EPS/FCST25.zarr \
-    --steps 0/33/1
+    --output_store /store_new/mch/msopr/ml/ICON-CH1-MEAN/FCST25.zarr \
+    --steps 0/33/1 \
+    --ensemble_mean
 """
