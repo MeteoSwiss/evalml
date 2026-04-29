@@ -102,6 +102,29 @@ def _threshold_value_and_operator(threshold: str):
     raise ValueError(f"Invalid threshold string: '{threshold}'")
 
 
+def _binary_confusion_matrix(
+    fcst: xr.DataArray, obs: xr.DataArray, threshold_array: xr.DataArray, dim: list[str]
+) -> xr.DataArray:
+    """
+    Compute counts of the confusion matrix (contingency table, e.g. hits, misses, ...)
+
+    Return an xarray.DataArray with the definition of the events in the dimension as given by
+    `threshold_array` and the elements of the confusion matrix in the dimension `contingency`.
+    """
+    contingency_table = []
+    for threshold in threshold_array.values.flat:
+        threshold_operator, threshold_value = _threshold_value_and_operator(threshold)
+        event_operator = scores.categorical.ThresholdEventOperator(
+            default_event_threshold=threshold_value,
+            default_op_fn=threshold_operator,
+        )
+        contingency_manager = event_operator.make_contingency_manager(fcst, obs)
+        contingency_table.append(
+            contingency_manager.transform(reduce_dims=dim).get_table()
+        )
+    return xr.concat(contingency_table, dim=threshold_array)
+
+
 def _compute_scores(
     fcst: xr.DataArray,
     obs: xr.DataArray,
@@ -138,25 +161,13 @@ def _compute_scores(
         # check if thresholds is a list, if not convert to list
         if not isinstance(thresholds, list):
             thresholds = [thresholds]
-        contingency_table = []
-        thresholds_param = xr.DataArray(
+        threshold_array = xr.DataArray(
             data=thresholds, dims=f"{prefix}threshold{suffix}"
         )
-        for threshold in thresholds:
-            threshold_operator, threshold_value = _threshold_value_and_operator(
-                threshold
-            )
-            event_operator = scores.categorical.ThresholdEventOperator(
-                default_event_threshold=threshold_value,
-                default_op_fn=threshold_operator,
-            )
-            contingency_manager = event_operator.make_contingency_manager(fcst, obs)
-            contingency_table.append(
-                contingency_manager.transform(reduce_dims=dim).get_table()
-            )
-        result[f"{prefix}contingency_table{suffix}"] = xr.concat(
-            contingency_table, dim=thresholds_param
+        result[f"{prefix}contingency_table{suffix}"] = _binary_confusion_matrix(
+            fcst, obs, threshold_array, dim
         )
+
     result = result.expand_dims({"source": [source]})
     return result
 
