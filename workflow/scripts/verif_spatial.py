@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 import xarray as xr
 
-from data_input import load_fct_data_from_grib
+from data_input import load_fct_data_from_grib, load_baseline_from_zarr
 from verification.spatial import map_forecast_to_truth
 
 LOG = logging.getLogger(__name__)
@@ -185,6 +185,24 @@ def iter_init_dirs(run_root: Path) -> list[tuple[datetime, Path]]:
     return result
 
 
+def iter_baseline_init_times(zarr_paths: list[Path], step: int) -> list[datetime]:
+    """Return all init times from baseline zarr(s) that have the requested step available."""
+    step_td = np.timedelta64(step, "h")
+    reftimes = []
+    for zarr_path in zarr_paths:
+        if not zarr_path.exists():
+            LOG.warning("Baseline zarr not found: %s", zarr_path)
+            continue
+        ds = xr.open_zarr(zarr_path, consolidated=True, decode_timedelta=True)
+        if step_td not in ds["step"].values:
+            LOG.warning("Step %dh not in %s, skipping", step, zarr_path)
+            continue
+        for rt in ds["forecast_reference_time"].values:
+            ts = (rt - np.datetime64("1970-01-01T00:00:00")) / np.timedelta64(1, "s")
+            reftimes.append(datetime.utcfromtimestamp(float(ts)))
+    return sorted(reftimes)
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -209,8 +227,21 @@ def main(args: Namespace) -> None:
     truth_times = set(truth_da.time.values)  # keep as datetime64, tolist() yields ints for ns precision
     LOG.info("Truth opened lazily: %s", truth_da)
 
-    init_dirs = iter_init_dirs(args.run_root)
-    LOG.info("Found %d init time directories", len(init_dirs))
+    if args.baseline_root:
+        init_items = [(rt, None) for rt in iter_baseline_init_times(args.baseline_zarrs, args.step)]
+        LOG.info("Found %d baseline init times", len(init_items))
+    else:
+        init_items = iter_init_dirs(args.run_root)
+        LOG.info("Found %d init time directories", len(init_items))
+
+    # Restrict to the experiment's configured init times if provided.
+    # Without this, baseline zarrs (which contain a continuous archive) would
+    # cause the script to process every init time in the file rather than
+    # only those in the user's hindcast period.
+    if args.reftimes:
+        wanted = {datetime.strptime(s, DATETIME_FMT) for s in args.reftimes}
+        init_items = [(rt, d) for rt, d in init_items if rt in wanted]
+        LOG.info("Filtered to %d init times matching --reftimes", len(init_items))
 
     step_td = timedelta(hours=args.step)
 
@@ -226,7 +257,7 @@ def main(args: Namespace) -> None:
     n_ok = 0
     n_skip = 0
 
-    for reftime, grib_dir in init_dirs:
+    for reftime, grib_dir in init_items:
         valid_time = np.datetime64(reftime + step_td).astype("datetime64[ns]")
 
         if valid_time not in truth_times:
@@ -243,31 +274,38 @@ def main(args: Namespace) -> None:
         first_iter = n_ok == 0
 
         # --- load forecast ---
-        grib_params = list(_DERIVED[args.param]) if args.param in _DERIVED else [args.param]
-
-        # Cumulative params (e.g. TOT_PREC) are disaggregated via diff inside
-        # load_fct_data_from_grib, so we need to also load the preceding step
-        # to get a valid result at the requested step.
-        if args.param in _CUMULATIVE_PARAMS:
-            prev_step = _preceding_step(grib_dir, args.step)
-            if prev_step is None:
-                LOG.warning("No preceding step found for cumulative param %s at step %d, skipping %s",
-                            args.param, args.step, reftime)
-                n_skip += 1
-                continue
-            load_steps = [prev_step, args.step]
-        else:
-            load_steps = [args.step]
+        fct_params = list(_DERIVED[args.param]) if args.param in _DERIVED else [args.param]
 
         try:
-            fcst = load_fct_data_from_grib(
-                root=grib_dir,
-                reftime=reftime,
-                steps=load_steps,
-                params=grib_params,
-            )
+            if args.baseline_root:
+                zarr_path = args.baseline_root / f"FCST{reftime.strftime('%y')}.zarr"
+                fcst = load_baseline_from_zarr(
+                    root=zarr_path,
+                    reftime=reftime,
+                    steps=[args.step],
+                    params=fct_params,
+                )
+            else:
+                # Cumulative params (e.g. TOT_PREC) are disaggregated via diff inside
+                # load_fct_data_from_grib, so we need to also load the preceding step.
+                if args.param in _CUMULATIVE_PARAMS:
+                    prev_step = _preceding_step(grib_dir, args.step)
+                    if prev_step is None:
+                        LOG.warning("No preceding step for cumulative param %s at step %d, skipping %s",
+                                    args.param, args.step, reftime)
+                        n_skip += 1
+                        continue
+                    load_steps = [prev_step, args.step]
+                else:
+                    load_steps = [args.step]
+                fcst = load_fct_data_from_grib(
+                    root=grib_dir,
+                    reftime=reftime,
+                    steps=load_steps,
+                    params=fct_params,
+                )
         except Exception as exc:
-            LOG.warning("Could not load GRIB for %s: %s", reftime, exc)
+            LOG.warning("Could not load forecast for %s: %s", reftime, exc)
             n_skip += 1
             continue
 
@@ -404,7 +442,7 @@ def main(args: Namespace) -> None:
         attrs={
             "param": args.param,
             "step_h": args.step,
-            "run_root": str(args.run_root),
+            "source": str(args.baseline_root if args.baseline_root else args.run_root),
             "n_processed": n_ok,
             "n_skipped": n_skip,
         },
@@ -419,14 +457,29 @@ def main(args: Namespace) -> None:
 if __name__ == "__main__":
     parser = ArgumentParser(
         description=(
-            "Compute spatial maps of temporally-aggregated forecast errors "
-            "by streaming over GRIB files from a model run."
+            "Compute spatial maps of temporally-aggregated forecast errors. "
+            "Supports both model runs (GRIB) and baselines (zarr). "
+            "Exactly one of --run_root or --baseline_root must be provided."
         )
     )
     parser.add_argument(
         "--run_root",
         type=Path,
+        default=None,
         help="Root directory of a model run (e.g. output/data/runs/<run_id>).",
+    )
+    parser.add_argument(
+        "--baseline_root",
+        type=Path,
+        default=None,
+        help="Root directory of a baseline (e.g. /path/to/ICON-CH1-EPS), containing FCST<YY>.zarr files.",
+    )
+    parser.add_argument(
+        "--baseline_zarrs",
+        type=Path,
+        nargs="+",
+        default=None,
+        help="Explicit list of baseline zarr paths (used by Snakemake for dependency tracking).",
     )
     parser.add_argument(
         "--truth",
@@ -447,19 +500,27 @@ if __name__ == "__main__":
         help="Variable to verify (e.g. T_2M, TD_2M, U_10M).",
     )
     parser.add_argument(
+        "--reftimes",
+        nargs="+",
+        default=None,
+        help=(
+            "Optional list of init times (YYYYMMDDHHMM) to restrict processing to. "
+            "Required for baselines whose zarr contains a continuous archive."
+        ),
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=None,
-        help=(
-            "Output NetCDF file. "
-            "Default: <run_root>/verif_spatial_<param>_step<NNN>h.nc"
-        ),
+        help="Output NetCDF file.",
     )
     args = parser.parse_args()
 
+    if bool(args.run_root) == bool(args.baseline_root):
+        parser.error("Exactly one of --run_root or --baseline_root must be provided.")
+
     if args.output is None:
-        args.output = (
-            args.run_root / f"verif_spatial_{args.param}_step{args.step:03d}h.nc"
-        )
+        source = args.run_root or args.baseline_root
+        args.output = source / f"verif_spatial_{args.param}_step{args.step:03d}h.nc"
 
     main(args)

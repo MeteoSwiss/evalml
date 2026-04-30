@@ -184,6 +184,7 @@ rule verif_metrics_spatial:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         truth_label=config["truth"]["label"],
+        reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
     log:
         OUT_ROOT / "logs/verif_metrics_spatial/{run_id}-{param}-{leadtime}.log",
     resources:
@@ -195,6 +196,7 @@ rule verif_metrics_spatial:
         """
         uv run {input.script} \
             --run_root output/data/runs/{wildcards.run_id} \
+            --reftimes {params.reftimes} \
             --truth {input.truth} \
             --step {wildcards.leadtime} \
             --param {wildcards.param} \
@@ -203,7 +205,7 @@ rule verif_metrics_spatial:
 
 rule verif_metrics_spatial_baseline:
     input:
-        script="workflow/scripts/verif_spatial_baseline.py",
+        script="workflow/scripts/verif_spatial.py",
         baseline_zarrs=lambda wc: expand(
             "{root}/FCST{year}.zarr",
             root=BASELINE_CONFIGS[wc.baseline_id].get("root"),
@@ -213,10 +215,8 @@ rule verif_metrics_spatial_baseline:
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/verif_spatial/{param}_{leadtime}.nc",
     params:
-        baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
-        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         baseline_root=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("root"),
-        truth_label=config["truth"]["label"],
+        reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
     log:
         OUT_ROOT / "logs/verif_metrics_spatial_baseline/{baseline_id}-{param}-{leadtime}.log",
     resources:
@@ -228,11 +228,10 @@ rule verif_metrics_spatial_baseline:
         """
         uv run {input.script} \
             --baseline_root {params.baseline_root} \
+            --baseline_zarrs {input.baseline_zarrs} \
+            --reftimes {params.reftimes} \
             --truth {input.truth} \
             --step {wildcards.leadtime} \
             --param {wildcards.param} \
-            --label "{params.baseline_label}" \
-            --steps "{params.baseline_steps}" \
-            --truth_label "{params.truth_label}" \
             --output {output} > {log} 2>&1
         """
