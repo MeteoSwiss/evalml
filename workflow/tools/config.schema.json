@@ -56,6 +56,24 @@
       "title": "BaselineItem",
       "type": "object"
     },
+    "Dashboard": {
+      "description": "Settings for the dashboard",
+      "properties": {
+        "stratification": {
+          "description": "Stratifications to include in the dashboard (any of season, region, init_hour)",
+          "items": {
+            "type": "string"
+          },
+          "title": "Stratification",
+          "type": "array"
+        }
+      },
+      "required": [
+        "stratification"
+      ],
+      "title": "Dashboard",
+      "type": "object"
+    },
     "Dates": {
       "description": "Start/stop of the hindcast period and the launch frequency.",
       "properties": {
@@ -584,6 +602,9 @@
     "stratification": {
       "$ref": "#/$defs/Stratification"
     },
+    "dashboard": {
+      "$ref": "#/$defs/Dashboard"
+    },
     "locations": {
       "$ref": "#/$defs/Locations"
     },
@@ -597,6 +618,7 @@
     "runs",
     "truth",
     "stratification",
+    "dashboard",
     "locations",
     "profile"
   ],

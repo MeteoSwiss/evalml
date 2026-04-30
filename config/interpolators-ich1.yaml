@@ -55,6 +55,12 @@ stratification:
     - alpensuedseite
   root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
 
+dashboard:
+  stratification:
+    # - region
+    # - init_hour
+    - season
+
 locations:
   output_root: output/
 
