@@ -24,12 +24,12 @@ runs:
 
   - baseline:
       label: ICON-CH1-ctrl
-      root: /scratch/mch/cmerker/ICON-CH1-EPS
+      root: /store_new/mch/msopr/ml/ICON-CH1-EPS
       steps: 0/33/6
 
   - baseline:
       label: ICON-CH2-ctrl
-      root: /scratch/mch/cmerker/ICON-CH2-EPS
+      root: /store_new/mch/msopr/ml/ICON-CH2-EPS
       steps: 0/120/6
 
 truth:

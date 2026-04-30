@@ -16,6 +16,9 @@ output:
           - extract_mask: # removes global points
               mask: "source0/cutout_mask"
               as_slice: true
+          - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
+              accumulations:
+                - tp
     - grib:
         path: grib/ifs-{dateTime}_{step:03}.grib
         encoding:
@@ -29,5 +32,8 @@ output:
             inverse: true
         - assign_mask: # fill local/global overlapping points with nan
             mask: "global/cutout_mask"
+        - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
+            accumulations:
+              - tp
 
 write_initial_state: true
