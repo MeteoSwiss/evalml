@@ -95,7 +95,8 @@ def _(accu, grib_dir, init_time, lead_time, load_state_from_grib, param):
             prev_grib_file = grib_dir / f"{init_time}_{prev_lt:03d}.grib"
             prev_state = load_state_from_grib(prev_grib_file, paramlist=paramlist)
             state["fields"]["TOT_PREC"] = (
-                state["fields"]["TOT_PREC"] - prev_state["fields"]["TOT_PREC"][:len(state["fields"]["TOT_PREC"])]
+                state["fields"]["TOT_PREC"]
+                - prev_state["fields"]["TOT_PREC"][: len(state["fields"]["TOT_PREC"])]
             )
     return (state,)
 
