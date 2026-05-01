@@ -18,8 +18,15 @@ def load_state_from_grib(
     fds = data_source.FileDataSource(datafiles=[str(file)])
     ds = grib_decoder.load(fds, {"param": paramlist})
     state = {}
-    lats = ds[paramlist[0]].lat.data.flatten()
-    lons = ds[paramlist[0]].lon.data.flatten()
+    ref_param = next((p for p in (paramlist or []) if p in ds), None)
+    if ref_param is None:
+        raise ValueError(
+            f"None of the requested params {paramlist} found in {file}. "
+            "The GRIB file may not contain these fields at this lead time "
+            "(e.g. accumulated fields like TOT_PREC are undefined at step 0)."
+        )
+    lats = ds[ref_param].lat.data.flatten()
+    lons = ds[ref_param].lon.data.flatten()
     state["forecast_reference_time"] = reftime
     state["valid_time"] = reftime + pd.to_timedelta(lead_time_hours, unit="h")
     state["longitudes"] = lons

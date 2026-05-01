@@ -208,6 +208,22 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
+class RegionConfig(BaseModel):
+    """A custom map region defined by name, extent, and projection."""
+
+    name: str = Field(..., description="Name for the custom region (used as wildcard).")
+    extent: List[float] | None = Field(
+        None,
+        description="Geographic extent as [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates. None means full globe.",
+    )
+    projection: str = Field(
+        "orthographic",
+        description="Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class ShowcaseConfig(BaseModel):
     """Configuration for the showcase workflow."""
 
@@ -219,9 +235,22 @@ class ShowcaseConfig(BaseModel):
         default=True,
         description="Whether to generate forecast animations (GIFs per param and region).",
     )
+    params: List[str] = Field(
+        default=["T_2M", "SP_10M"],
+        description="List of parameters to generate animations and meteograms for.",
+    )
     stations: List[str] = Field(
         default=["GVE", "KLO", "LUG"],
         description="List of PeakWeather station IDs to generate meteograms for.",
+    )
+    regions: List[str | RegionConfig] = Field(
+        default=["globe", "europe", "switzerland"],
+        description=(
+            "Regions to generate animations for. Each entry is either a named region "
+            "(e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, "
+            "or a custom region dict with 'name', optional 'extent' "
+            "[lon_min, lon_max, lat_min, lat_max], and optional 'projection'."
+        ),
     )
 
 

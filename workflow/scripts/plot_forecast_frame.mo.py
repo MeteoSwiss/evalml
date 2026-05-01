@@ -15,6 +15,7 @@ def _():
     import numpy as np
 
     from plotting import DOMAINS
+    from plotting import get_projection
     from plotting import StatePlotter
     from plotting.colormap_defaults import CMAP_DEFAULTS
     from plotting.compat import load_state_from_grib
@@ -29,6 +30,7 @@ def _():
         logging,
         np,
         DOMAINS,
+        get_projection,
         ccrs,
     )
 
@@ -53,6 +55,20 @@ def _(ArgumentParser, Path):
     parser.add_argument("--leadtime", type=str, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
     parser.add_argument("--region", type=str, help="name of region")
+    parser.add_argument(
+        "--extent",
+        type=float,
+        nargs=4,
+        default=None,
+        metavar=("LON_MIN", "LON_MAX", "LAT_MIN", "LAT_MAX"),
+        help="custom geographic extent in PlateCarree coordinates; overrides DOMAINS lookup",
+    )
+    parser.add_argument(
+        "--projection",
+        type=str,
+        default=None,
+        help="projection name (e.g. 'orthographic'); used only together with --extent",
+    )
 
     args = parser.parse_args()
     grib_dir = Path(args.input)
@@ -191,6 +207,7 @@ def _(
     StatePlotter,
     args,
     get_style,
+    get_projection,
     outfn,
     param,
     preprocess_field,
@@ -205,11 +222,17 @@ def _(
         state["latitudes"],
         outfn.parent,
     )
+    if args.extent is not None:
+        _projection = get_projection(args.projection or "orthographic")
+        _extent = args.extent
+    else:
+        _projection = DOMAINS[region]["projection"]
+        _extent = DOMAINS[region]["extent"]
     fig = plotter.init_geoaxes(
         nrows=1,
         ncols=1,
-        projection=DOMAINS[region]["projection"],
-        bbox=DOMAINS[region]["extent"],
+        projection=_projection,
+        bbox=_extent,
         name=region,
         size=(6, 6),
     )

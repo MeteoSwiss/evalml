@@ -80,6 +80,26 @@ def parse_regions():
     return regions_txt
 
 
+def parse_showcase_regions():
+    """Parse showcase regions from config.
+
+    Returns a dict mapping region name -> {extent, projection}.
+    Named regions (strings) have extent=None and projection=None,
+    meaning the plot script will fall back to the DOMAINS lookup.
+    Custom regions carry their explicit extent and projection.
+    """
+    result = {}
+    for r in config["showcase"]["regions"]:
+        if isinstance(r, str):
+            result[r] = {"extent": None, "projection": None}
+        else:
+            result[r["name"]] = {
+                "extent": r.get("extent"),
+                "projection": r.get("projection", "orthographic"),
+            }
+    return result
+
+
 # ============================================================================
 # Run entries configuration management
 # ============================================================================
@@ -294,6 +314,7 @@ def master_hash() -> str:
 
 
 REGIONS = parse_regions()
+SHOWCASE_REGIONS = parse_showcase_regions()
 REFTIMES = parse_reference_times()
 RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
