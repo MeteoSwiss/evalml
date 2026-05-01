@@ -10,7 +10,6 @@ input:
   test:
     use_original_paths: true
 
-
 # outputs
 output:
   tee:
@@ -36,14 +35,14 @@ output:
         templates:
           samples: resources/templates_index_ifs.yaml
         post_processors:
-        - extract_mask: # removes lam points
-            mask: "lam_0/cutout_mask"
-            as_slice: true
-            inverse: true
-        - assign_mask: # fill local/global overlapping points with nan
-            mask: "global/cutout_mask"
-        - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
-            accumulations:
-              - tp
+          - extract_mask: # removes lam points
+              mask: "lam_0/cutout_mask"
+              as_slice: true
+              inverse: true
+          - assign_mask: # fill local/global overlapping points with nan
+              mask: "global/cutout_mask"
+          - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
+              accumulations:
+                - tp
 
 patch_metadata: resources/sgm-multidataset-ich1-oper-patch.yaml
