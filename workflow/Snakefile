@@ -133,6 +133,12 @@ rule experiment_all:
             rules.verification_metrics_plot.output,
             experiment=EXPERIMENT_NAME,
         ),
+        expand(
+            rules.report_scorecard.output,
+            run_id=CANDIDATES,
+            baseline=BASELINE_CONFIGS.keys(),
+            experiment=EXPERIMENT_NAME,
+        ),
 
 
 rule showcase_all:

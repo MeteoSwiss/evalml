@@ -43,3 +43,38 @@ rule report_experiment_dashboard:
             --configfile "{input.configfile}" \
             --output {output} > {log} 2>&1
         """
+
+
+rule report_scorecard:
+    localrule: True
+    input:
+        script="workflow/scripts/report_scorecard.mo.py",
+        verif_run=lambda wc: EXPERIMENT_PARTICIPANTS[wc.run_id],
+        verif_baseline=lambda wc: EXPERIMENT_PARTICIPANTS[wc.baseline],
+    output:
+        report(
+            OUT_ROOT / "results/{experiment}/plot/scorecard_{run_id}vs{baseline}.png",
+        ),
+    params:
+        lead_times="6/33/6",
+        regions=["all", "mittelland", "berge"],
+        vars_metrics={"T_2M": ["RMSE", "MAE"]},
+    log:
+        OUT_ROOT / "logs/report_scorecard/{experiment}_{run_id}vs{baseline}.log",
+    shell:
+        """
+        # python {input.script} \
+        #     --verif_run {input.verif_run} \
+        #     --verif_baseline {input.verif_baseline} \
+        #     --lead_times {params.lead_times} \
+        #     --regions {params.regions} \
+        #     --vars_metrics {params.vars_metrics} \
+        #     --output {output} > {log} 2>&1
+
+
+        # interactive editing (needs to set localrule: True and use only one core)
+        marimo edit {input.script} \
+            --verif_run {input.verif_run} \
+            --verif_baseline {input.verif_baseline} \
+            --output {output} > {log} 2>&1
+        """
