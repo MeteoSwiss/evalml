@@ -89,7 +89,9 @@ def parse_showcase_regions():
     Custom regions carry their explicit extent and projection.
     """
     result = {}
-    for r in config.get("showcase", {}).get("regions", ["globe", "europe", "switzerland"]):
+    for r in config.get("showcase", {}).get(
+        "regions", ["globe", "europe", "switzerland"]
+    ):
         if isinstance(r, str):
             result[r] = {"extent": None, "projection": None}
         else:
