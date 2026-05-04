@@ -235,7 +235,6 @@ class Threshold(BaseModel):
         description=(
             "Dictionary mapping parameter names to lists of thresholds. "
             "These thresholds will be used for computing classification metrics at different cutoffs. "
-            "Example: {'temperature': [0, 10, 20], 'precipitation': [0, 1.0]}"
         ),
     )
 
