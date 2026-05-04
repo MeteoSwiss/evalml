@@ -5,6 +5,16 @@ input:
 allow_nans: true
 
 
+post_processors:
+  - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
+      accumulations:
+        - tp
+  - forward_transform_filter:
+      rescale:
+        scale: 1000 # convert units from m to kg m-2
+        offset: 0
+        param: tp
+
 output:
   tee:
     outputs:
@@ -16,15 +26,6 @@ output:
               typeOfGeneratingProcess: 2
             templates:
               samples: resources/templates_index_cosmo.yaml
-            post_processors:
-              - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
-                  accumulations:
-                    - tp
-              - forward_transform_filter:
-                  rescale:
-                    scale: 1000 # convert units from m to kg m-2
-                    offset: 0
-                    param: tp
     - printer
 
 write_initial_state: true
