@@ -504,8 +504,10 @@ def _(
     # ── Helpers ──────────────────────────────────────────────────────────────────
     def is_model_better(d, metric):
         """True if a positive `d` (signed diff %) means the model beats the baseline."""
-        if metric in higher_is_better: return d > 0
-        if metric in lower_is_better:  return d < 0
+        if metric in higher_is_better: 
+            return d > 0
+        if metric in lower_is_better:  
+            return d < 0
         return None
 
     def dot_size(d):
