@@ -465,6 +465,44 @@
       "title": "Profile",
       "type": "object"
     },
+    "RegionConfig": {
+      "additionalProperties": false,
+      "description": "A custom map region defined by name, extent, and projection.",
+      "properties": {
+        "name": {
+          "description": "Name for the custom region (used as wildcard).",
+          "title": "Name",
+          "type": "string"
+        },
+        "extent": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Geographic extent as [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates. None means full globe.",
+          "title": "Extent"
+        },
+        "projection": {
+          "default": "orthographic",
+          "description": "Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
+          "title": "Projection",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "RegionConfig",
+      "type": "object"
+    },
     "ShowcaseConfig": {
       "description": "Configuration for the showcase workflow.",
       "properties": {
@@ -480,6 +518,18 @@
           "title": "Animations",
           "type": "boolean"
         },
+        "params": {
+          "default": [
+            "T_2M",
+            "SP_10M"
+          ],
+          "description": "List of parameters to generate animations and meteograms for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
         "stations": {
           "default": [
             "GVE",
@@ -491,6 +541,26 @@
             "type": "string"
           },
           "title": "Stations",
+          "type": "array"
+        },
+        "regions": {
+          "default": [
+            "globe",
+            "europe",
+            "switzerland"
+          ],
+          "description": "Regions to generate animations for. Each entry is either a named region (e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, or a custom region dict with 'name', optional 'extent' [lon_min, lon_max, lat_min, lat_max], and optional 'projection'.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/RegionConfig"
+              }
+            ]
+          },
+          "title": "Regions",
           "type": "array"
         }
       },
