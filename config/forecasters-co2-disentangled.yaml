@@ -77,24 +77,28 @@ profile:
     gpus: 0
   jobs: 50
 
-spatial_verification:
+metric_maps:
   params:
     - T_2M
-    - TD_2M
-    - U_10M
-    - V_10M
-    - SP_10M
-    - PS
-    - PMSL
-    - TOT_PREC
+    # - TD_2M
+    # - U_10M
+    # - V_10M
+    # - SP_10M
+    # - PS
+    # - PMSL
+    # - TOT_PREC
   leadtimes:
-    - 6
     - 24
   metrics:
     - BIAS
-    - RMSE
+    # - RMSE
+    # - MAE
   regions:
     - switzerland
-    - centraleurope
+    # - centraleurope
   seasons:
     - all
+    # - DJF
+    # - MAM
+    # - JJA
+    # - SON
