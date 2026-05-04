@@ -85,6 +85,42 @@
             font-weight: bold;
             display: block;
         }
+
+        #vis-outer {
+            position: relative;
+            overflow: auto;
+            max-height: calc(100vh - 280px);
+        }
+
+        #col-sticky-bar,
+        #row-sticky-bar,
+        #sticky-corner {
+            position: absolute;
+            z-index: 20;
+            background: white;
+            pointer-events: none;
+            font-family: system-ui, sans-serif;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        #col-sticky-bar {
+            top: 0;
+            left: 0;
+            right: 0;
+        }
+
+        #row-sticky-bar {
+            top: 0;
+            left: 0;
+            bottom: 0;
+        }
+
+        #sticky-corner {
+            top: 0;
+            left: 0;
+            z-index: 21;
+        }
     </style>
 
 
@@ -151,7 +187,12 @@
                 </select>
             </div>
         </div>
-        <div id="vis"></div>
+        <div id="vis-outer">
+            <div id="col-sticky-bar"></div>
+            <div id="row-sticky-bar"></div>
+            <div id="sticky-corner"></div>
+            <div id="vis"></div>
+        </div>
     </div>
 
 

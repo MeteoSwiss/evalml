@@ -180,7 +180,85 @@ function updateChart() {
     newSpec.transform = [{ filter: { and: filters } }];
   }
 
-  vegaEmbed('#vis', newSpec, { actions: false });
+  vegaEmbed('#vis', newSpec, { actions: false }).then(() => {
+    // Small delay to ensure SVG is fully laid out before reading positions
+    setTimeout(setupStickyHeaders, 100);
+  });
+}
+
+function setupStickyHeaders() {
+  const visOuter = document.getElementById('vis-outer');
+  const vis = document.getElementById('vis');
+  const svg = vis.querySelector('svg');
+  if (!svg) return;
+
+  const colBar = document.getElementById('col-sticky-bar');
+  const rowBar = document.getElementById('row-sticky-bar');
+  const corner = document.getElementById('sticky-corner');
+
+  colBar.innerHTML = '';
+  rowBar.innerHTML = '';
+
+  const outerRect = visOuter.getBoundingClientRect();
+
+  // --- Column headers (param names, top of chart) ---
+  const colTexts = svg.querySelectorAll('g.mark-group.role-column-header g.mark-text text');
+  let colBarHeight = 0;
+
+  colTexts.forEach(el => {
+    const r = el.getBoundingClientRect();
+    if (!r.width) return;
+    const span = document.createElement('div');
+    span.textContent = el.textContent.trim();
+    span.style.cssText = `
+      position: absolute;
+      left: ${r.left - outerRect.left + visOuter.scrollLeft}px;
+      width: ${r.width}px;
+      text-align: center;
+      white-space: nowrap;
+      padding: 2px 4px;
+      background: white;
+    `;
+    colBar.appendChild(span);
+    if (r.height + 4 > colBarHeight) colBarHeight = r.height + 4;
+  });
+  colBar.style.height = colBarHeight + 'px';
+
+  // --- Row headers (metric names, left/right of chart) ---
+  const rowTexts = svg.querySelectorAll('g.mark-group.role-row-header g.mark-text text');
+  let rowBarWidth = 0;
+
+  rowTexts.forEach(el => {
+    const r = el.getBoundingClientRect();
+    if (!r.height) return;
+    const div = document.createElement('div');
+    div.textContent = el.textContent.trim();
+    div.style.cssText = `
+      position: absolute;
+      top: ${r.top - outerRect.top + visOuter.scrollTop}px;
+      height: ${r.height}px;
+      line-height: ${r.height}px;
+      white-space: nowrap;
+      padding: 0 4px;
+      background: white;
+    `;
+    rowBar.appendChild(div);
+    if (r.width + 8 > rowBarWidth) rowBarWidth = r.width + 8;
+  });
+  rowBar.style.width = rowBarWidth + 'px';
+
+  corner.style.width = rowBarWidth + 'px';
+  corner.style.height = colBarHeight + 'px';
+
+  // --- Scroll handler: move bars to track scroll ---
+  visOuter.removeEventListener('scroll', visOuter._stickyHandler);
+  visOuter._stickyHandler = () => {
+    colBar.style.top = visOuter.scrollTop + 'px';
+    rowBar.style.left = visOuter.scrollLeft + 'px';
+    corner.style.top = visOuter.scrollTop + 'px';
+    corner.style.left = visOuter.scrollLeft + 'px';
+  };
+  visOuter.addEventListener('scroll', visOuter._stickyHandler);
 }
 
 // Initial chart
