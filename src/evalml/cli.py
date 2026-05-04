@@ -99,13 +99,13 @@ def cli():
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
 @click.option(
-    "--spatial",
+    "--maps",
     is_flag=True,
     default=False,
-    help="Also run spatial verification (computationally intensive).",
+    help="Also produce metric maps (computationally intensive).",
 )
 @workflow_options
-def experiment(configfile, spatial, cores, verbose, dry_run, unlock, report, extra_smk_args):
+def experiment(configfile, maps, cores, verbose, dry_run, unlock, report, extra_smk_args):
     execute_workflow(
         configfile,
         "experiment_all",
@@ -115,7 +115,7 @@ def experiment(configfile, spatial, cores, verbose, dry_run, unlock, report, ext
         unlock,
         report,
         extra_smk_args,
-        extra_targets=["spatial_all"] if spatial else [],
+        extra_targets=["metric_maps_all"] if maps else [],
     )
 
 

@@ -420,46 +420,8 @@
       "title": "Locations",
       "type": "object"
     },
-    "Profile": {
-      "description": "Workflow execution profile.",
-      "properties": {
-        "executor": {
-          "description": "Job executor, e.g. 'slurm'.",
-          "title": "Executor",
-          "type": "string"
-        },
-        "global_resources": {
-          "$ref": "#/$defs/GlobalResources"
-        },
-        "default_resources": {
-          "$ref": "#/$defs/DefaultResources"
-        },
-        "jobs": {
-          "description": "Maximum number of parallel jobs.",
-          "minimum": 1,
-          "title": "Jobs",
-          "type": "integer"
-        },
-        "batch_rules": {
-          "additionalProperties": {
-            "type": "integer"
-          },
-          "description": "Define batches of the same rule that shall be executed within one job submission.",
-          "title": "Batch Rules",
-          "type": "object"
-        }
-      },
-      "required": [
-        "executor",
-        "global_resources",
-        "default_resources",
-        "jobs"
-      ],
-      "title": "Profile",
-      "type": "object"
-    },
-    "SpatialVerificationConfig": {
-      "description": "Parameters controlling which spatial verification plots are produced.",
+    "MetricMapsConfig": {
+      "description": "Parameters controlling which metric map plots are produced.",
       "properties": {
         "params": {
           "default": [
@@ -550,7 +512,45 @@
           "type": "array"
         }
       },
-      "title": "SpatialVerificationConfig",
+      "title": "MetricMapsConfig",
+      "type": "object"
+    },
+    "Profile": {
+      "description": "Workflow execution profile.",
+      "properties": {
+        "executor": {
+          "description": "Job executor, e.g. 'slurm'.",
+          "title": "Executor",
+          "type": "string"
+        },
+        "global_resources": {
+          "$ref": "#/$defs/GlobalResources"
+        },
+        "default_resources": {
+          "$ref": "#/$defs/DefaultResources"
+        },
+        "jobs": {
+          "description": "Maximum number of parallel jobs.",
+          "minimum": 1,
+          "title": "Jobs",
+          "type": "integer"
+        },
+        "batch_rules": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Define batches of the same rule that shall be executed within one job submission.",
+          "title": "Batch Rules",
+          "type": "object"
+        }
+      },
+      "required": [
+        "executor",
+        "global_resources",
+        "default_resources",
+        "jobs"
+      ],
+      "title": "Profile",
       "type": "object"
     },
     "Stratification": {
@@ -675,9 +675,9 @@
     "profile": {
       "$ref": "#/$defs/Profile"
     },
-    "spatial_verification": {
-      "$ref": "#/$defs/SpatialVerificationConfig",
-      "description": "Parameters for spatial verification plots (used with --spatial flag)."
+    "metric_maps": {
+      "$ref": "#/$defs/MetricMapsConfig",
+      "description": "Parameters for metric map plots (used with --maps flag)."
     }
   },
   "required": [

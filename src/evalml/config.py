@@ -200,8 +200,8 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
-class SpatialVerificationConfig(BaseModel):
-    """Parameters controlling which spatial verification plots are produced."""
+class MetricMapsConfig(BaseModel):
+    """Parameters controlling which metric map plots are produced."""
 
     params: List[str] = Field(
         default=["T_2M", "TD_2M", "U_10M", "V_10M", "SP_10M", "PS", "PMSL", "TOT_PREC"],
@@ -338,9 +338,9 @@ class ConfigModel(BaseModel):
     stratification: Stratification
     locations: Locations
     profile: Profile
-    spatial_verification: SpatialVerificationConfig = Field(
-        default_factory=SpatialVerificationConfig,
-        description="Parameters for spatial verification plots (used with --spatial flag).",
+    metric_maps: MetricMapsConfig = Field(
+        default_factory=MetricMapsConfig,
+        description="Parameters for metric map plots (used with --maps flag).",
     )
 
     model_config = {

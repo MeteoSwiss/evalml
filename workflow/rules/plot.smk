@@ -145,7 +145,7 @@ rule plot_summary_stat_maps:
     localrule: True
     input:
         script="workflow/scripts/plot_summary_stat_maps.mo.py",
-        verif_file=OUT_ROOT / "data/runs/{run_id}/verif_spatial/{param}_{leadtime}.nc",
+        verif_file=OUT_ROOT / "data/runs/{run_id}/metric_maps/{param}_{leadtime}.nc",
     output:
         OUT_ROOT / "results/{experiment}/plots/maps/runs/{run_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
     wildcard_constraints:
@@ -174,7 +174,7 @@ rule plot_summary_stat_maps:
 use rule plot_summary_stat_maps as plot_summary_stat_maps_baseline with:
     input:
         script="workflow/scripts/plot_summary_stat_maps.mo.py",
-        verif_file=OUT_ROOT / "data/baselines/{baseline_id}/verif_spatial/{param}_{leadtime}.nc",
+        verif_file=OUT_ROOT / "data/baselines/{baseline_id}/metric_maps/{param}_{leadtime}.nc",
     output:
         OUT_ROOT / "results/{experiment}/plots/maps/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
     log:

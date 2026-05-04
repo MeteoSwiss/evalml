@@ -52,39 +52,39 @@ _CMAP_DEFAULTS = {
     # always start at 0 so that the saturation of the colour corresponds to the error magnitude.
 
     # RMSE:
-    "U_10M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
-    "V_10M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
-    "SP_10M.RMSE.spatial":   {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
-    "TD_2M.RMSE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
-    "T_2M.RMSE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
-    "PMSL.RMSE.spatial":     {"cmap": plt.get_cmap("Reds", 7), "levels": [0, 50, 100, 150, 200, 250, 300, 350]} | {"units": "Pa"},
-    "PS.RMSE.spatial":       {"cmap": plt.get_cmap("Reds", 7), "levels": [0, 50, 100, 150, 200, 250, 300, 350]} | {"units": "Pa"},
-    "TOT_PREC.RMSE.spatial": {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 1, 1.5, 2, 3, 4]} | {"units": "mm"},
+    "U_10M.RMSE.map":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
+    "V_10M.RMSE.map":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
+    "SP_10M.RMSE.map":   {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
+    "TD_2M.RMSE.map":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
+    "T_2M.RMSE.map":     {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
+    "PMSL.RMSE.map":     {"cmap": plt.get_cmap("Reds", 7), "levels": [0, 50, 100, 150, 200, 250, 300, 350]} | {"units": "Pa"},
+    "PS.RMSE.map":       {"cmap": plt.get_cmap("Reds", 7), "levels": [0, 50, 100, 150, 200, 250, 300, 350]} | {"units": "Pa"},
+    "TOT_PREC.RMSE.map": {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 1, 1.5, 2, 3, 4]} | {"units": "mm"},
     # would ideally want a 6th colour on the high end of the colour scale, but somehow 
     # matplotlib does not do that -> ?
 
     # MAE:
-    "U_10M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
-    "V_10M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
-    "SP_10M.MAE.spatial":   {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
-    "TD_2M.MAE.spatial":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
-    "T_2M.MAE.spatial":     {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
-    "PMSL.MAE.spatial":     {"cmap": plt.get_cmap("Reds", 7), "levels": [0, 50, 100, 150, 200, 250, 300, 350]} | {"units": "Pa"},
-    "PS.MAE.spatial":       {"cmap": plt.get_cmap("Reds", 7), "levels": [0, 50, 100, 150, 200, 250, 300, 350]} | {"units": "Pa"},
-    "TOT_PREC.MAE.spatial": {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 1, 1.5, 2, 3, 4]} | {"units": "mm"}, 
+    "U_10M.MAE.map":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
+    "V_10M.MAE.map":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
+    "SP_10M.MAE.map":   {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "m/s"},
+    "TD_2M.MAE.map":    {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
+    "T_2M.MAE.map":     {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]} | {"units": "°C"},
+    "PMSL.MAE.map":     {"cmap": plt.get_cmap("Reds", 7), "levels": [0, 50, 100, 150, 200, 250, 300, 350]} | {"units": "Pa"},
+    "PS.MAE.map":       {"cmap": plt.get_cmap("Reds", 7), "levels": [0, 50, 100, 150, 200, 250, 300, 350]} | {"units": "Pa"},
+    "TOT_PREC.MAE.map": {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 1, 1.5, 2, 3, 4]} | {"units": "mm"}, 
     # the levels for precip are a bit on the bright side, but still worth keeping consistent with RMSE. 
 
     # Bias:
     # diverging colour scheme for the Bias to reflect the nature of the data (can be positive or negative, symmetric).
     # Red-Blue colour scheme for all variables except precipitation, where a Brown-Green scheme is more suggestive.
-    "U_10M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu_r",  9), "levels": np.arange(start = -2.25, stop = 2.26, step = 0.5)} | {"units": "m/s"}, 
-    "V_10M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu_r",  9), "levels": np.arange(start = -2.25, stop = 2.26, step = 0.5)} | {"units": "m/s"},
-    "SP_10M.BIAS.spatial":   {"cmap": plt.get_cmap("RdBu_r",  9), "levels": np.arange(start = -2.25, stop = 2.26, step = 0.5)} | {"units": "m/s"},
-    "TD_2M.BIAS.spatial":    {"cmap": plt.get_cmap("RdBu_r", 11), "levels": np.arange(start = -2.75, stop = 2.76, step = 0.5)} | {"units": "°C"},
-    "T_2M.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu_r", 11), "levels": np.arange(start = -2.75, stop = 2.76, step = 0.5)} | {"units": "°C"},
-    "PMSL.BIAS.spatial":     {"cmap": plt.get_cmap("RdBu_r", 11), "levels": np.arange(start = -110, stop = 111, step = 20)} | {"units": "Pa"},
-    "PS.BIAS.spatial":       {"cmap": plt.get_cmap("RdBu_r", 11), "levels": np.arange(start = -110, stop = 111, step = 20)} | {"units": "Pa"},
-    "TOT_PREC.BIAS.spatial": {"cmap": plt.get_cmap("BrBG", 9), "levels": [-1, -0.5, -0.25, -0.1, 0.1, 0.25, 0.5, 1]} | {"units": "mm"}
+    "U_10M.BIAS.map":    {"cmap": plt.get_cmap("RdBu_r",  9), "levels": np.arange(start = -2.25, stop = 2.26, step = 0.5)} | {"units": "m/s"}, 
+    "V_10M.BIAS.map":    {"cmap": plt.get_cmap("RdBu_r",  9), "levels": np.arange(start = -2.25, stop = 2.26, step = 0.5)} | {"units": "m/s"},
+    "SP_10M.BIAS.map":   {"cmap": plt.get_cmap("RdBu_r",  9), "levels": np.arange(start = -2.25, stop = 2.26, step = 0.5)} | {"units": "m/s"},
+    "TD_2M.BIAS.map":    {"cmap": plt.get_cmap("RdBu_r", 11), "levels": np.arange(start = -2.75, stop = 2.76, step = 0.5)} | {"units": "°C"},
+    "T_2M.BIAS.map":     {"cmap": plt.get_cmap("RdBu_r", 11), "levels": np.arange(start = -2.75, stop = 2.76, step = 0.5)} | {"units": "°C"},
+    "PMSL.BIAS.map":     {"cmap": plt.get_cmap("RdBu_r", 11), "levels": np.arange(start = -110, stop = 111, step = 20)} | {"units": "Pa"},
+    "PS.BIAS.map":       {"cmap": plt.get_cmap("RdBu_r", 11), "levels": np.arange(start = -110, stop = 111, step = 20)} | {"units": "Pa"},
+    "TOT_PREC.BIAS.map": {"cmap": plt.get_cmap("BrBG", 9), "levels": [-1, -0.5, -0.25, -0.1, 0.1, 0.25, 0.5, 1]} | {"units": "mm"}
 }
 
 CMAP_DEFAULTS = defaultdict(_fallback, _CMAP_DEFAULTS)

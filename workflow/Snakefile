@@ -128,27 +128,27 @@ rule experiment_all:
         ),
 
 
-rule spatial_all:
-    """Target rule for spatial verification (opt-in via evalml experiment --spatial)."""
+rule metric_maps_all:
+    """Target rule for metric maps (opt-in via evalml experiment --maps)."""
     input:
         expand(
             rules.plot_summary_stat_maps.output,
             run_id=collect_all_candidates(),
-            leadtime = config["spatial_verification"]["leadtimes"],
-            metric   = config["spatial_verification"]["metrics"],
-            param    = config["spatial_verification"]["params"],
-            region   = config["spatial_verification"]["regions"],
-            season   = config["spatial_verification"]["seasons"],
+            leadtime = config["metric_maps"]["leadtimes"],
+            metric   = config["metric_maps"]["metrics"],
+            param    = config["metric_maps"]["params"],
+            region   = config["metric_maps"]["regions"],
+            season   = config["metric_maps"]["seasons"],
             experiment=EXPERIMENT_NAME,
         ),
         expand(
             rules.plot_summary_stat_maps_baseline.output,
             baseline_id=list(BASELINE_CONFIGS),
-            leadtime = config["spatial_verification"]["leadtimes"],
-            metric   = config["spatial_verification"]["metrics"],
-            param    = config["spatial_verification"]["params"],
-            region   = config["spatial_verification"]["regions"],
-            season   = config["spatial_verification"]["seasons"],
+            leadtime = config["metric_maps"]["leadtimes"],
+            metric   = config["metric_maps"]["metrics"],
+            param    = config["metric_maps"]["params"],
+            region   = config["metric_maps"]["regions"],
+            season   = config["metric_maps"]["seasons"],
             experiment=EXPERIMENT_NAME,
         ),
 

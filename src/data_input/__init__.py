@@ -110,7 +110,7 @@ def load_fct_data_from_grib(
     # TODO: this function carries a large per-call setup cost that is
     # independent of data volume (likely eccodes/FileDataSource init or GRIB
     # index build, not decoding). It dominates runtime in any rule that calls
-    # it inside a per-init-time loop (e.g. verif_metrics_spatial) and also
+    # it inside a per-init-time loop (e.g. verif_metrics_maps) and also
     # adds noticeable overhead to verif_metrics and the plot rules.
     files = sorted(root.glob(f"{reftime:%Y%m%d%H%M}*.grib"))
     fds = data_source.FileDataSource(datafiles=files)

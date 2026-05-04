@@ -110,7 +110,7 @@ def _(CMAP_DEFAULTS, ekp):
         Needed because cmap/norm does not work in Style(colors=cmap),
         still needs to be passed as arguments to tripcolor()/tricontourf().
         """
-        metric_key = f"{param}.{metric}.spatial"
+        metric_key = f"{param}.{metric}.map"
         cfg = CMAP_DEFAULTS[metric_key] if metric_key in CMAP_DEFAULTS else CMAP_DEFAULTS.get(param, {})
         units = units_override if units_override is not None else cfg.get("units", "")
         return {
