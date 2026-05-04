@@ -109,6 +109,7 @@ rule plot_forecast_frame:
             if SHOWCASE_REGIONS.get(wc.region, {}).get("extent") is not None
             else ""
         ),
+        accu=lambda wc: int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
@@ -116,10 +117,12 @@ rule plot_forecast_frame:
             --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region} \
             {params.region_extra}
+            --accu {params.accu} \
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
         #     --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]}\
         #     --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region}\
+        #     --accu {params.accu}\
         """
 
 
