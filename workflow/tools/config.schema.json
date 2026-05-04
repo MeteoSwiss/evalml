@@ -489,24 +489,6 @@
       "title": "Stratification",
       "type": "object"
     },
-    "Threshold": {
-      "description": "Configuration for thresholds used in verification metrics.",
-      "properties": {
-        "thresholds": {
-          "additionalProperties": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "description": "Dictionary mapping parameter names to lists of thresholds. These thresholds will be used for computing classification metrics at different cutoffs. ",
-          "title": "Thresholds",
-          "type": "object"
-        }
-      },
-      "title": "Threshold",
-      "type": "object"
-    },
     "TruthConfig": {
       "description": "Configuration for the truth data used in the verification.",
       "properties": {
@@ -603,7 +585,18 @@
       "$ref": "#/$defs/Stratification"
     },
     "thresholds": {
-      "$ref": "#/$defs/Threshold"
+      "additionalProperties": {
+        "additionalProperties": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "type": "object"
+      },
+      "description": "Dictionary mapping parameter names to threshold dicts. Each dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of threshold values.",
+      "title": "Thresholds",
+      "type": "object"
     },
     "locations": {
       "$ref": "#/$defs/Locations"
@@ -618,7 +611,6 @@
     "runs",
     "truth",
     "stratification",
-    "thresholds",
     "locations",
     "profile"
   ],

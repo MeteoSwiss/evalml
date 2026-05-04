@@ -21,12 +21,12 @@ from shapely.geometry import Polygon
 LOG = logging.getLogger(__name__)
 
 OPS = {
-    ">": op.gt,
-    ">=": op.ge,
-    "<": op.lt,
-    "<=": op.le,
-    "==": op.eq,
-    "!=": op.ne,
+    "gt": op.gt,
+    "ge": op.ge,
+    "lt": op.lt,
+    "le": op.le,
+    "eq": op.eq,
+    "ne": op.ne,
 }
 
 
@@ -84,45 +84,30 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
         return xr.DataArray(mask, coords=lon.coords, dims=lon.dims)
 
 
-# deconstruct the threshold string into the value and the operator
-
-
-def _threshold_value_and_operator(threshold: str):
-    """
-    Parse a threshold string like '> 10.0' into (operator.gt, 10.0).
-    Supported operators: >, >=, <, <=, ==, !=
-    """
-    splits = " ".join(threshold.split()).split(" ")  # remove multiple whitespaces
-    if len(splits) == 2 and splits[0] in OPS:
-        try:
-            value = float(splits[1])
-        except ValueError:
-            raise ValueError(f"Invalid threshold value: '{splits[1]}'")
-        return OPS[splits[0]], value
-    raise ValueError(f"Invalid threshold string: '{threshold}'")
-
-
 def _binary_confusion_matrix(
-    fcst: xr.DataArray, obs: xr.DataArray, threshold_array: xr.DataArray, dim: list[str]
+    fcst: xr.DataArray,
+    obs: xr.DataArray,
+    thresholds: list[tuple],
+    labels: xr.DataArray,
+    dim: list[str],
 ) -> xr.DataArray:
     """
     Compute counts of the confusion matrix (contingency table, e.g. hits, misses, ...)
 
     Return an xarray.DataArray with the definition of the events in the dimension as given by
-    `threshold_array` and the elements of the confusion matrix in the dimension `contingency`.
+    `labels` and the elements of the confusion matrix in the dimension `contingency`.
     """
     contingency_table = []
-    for threshold in threshold_array.values.flat:
-        threshold_operator, threshold_value = _threshold_value_and_operator(threshold)
+    for op_fn, value in thresholds:
         event_operator = scores.categorical.ThresholdEventOperator(
-            default_event_threshold=threshold_value,
-            default_op_fn=threshold_operator,
+            default_event_threshold=value,
+            default_op_fn=op_fn,
         )
         contingency_manager = event_operator.make_contingency_manager(fcst, obs)
         contingency_table.append(
             contingency_manager.transform(reduce_dims=dim).get_table()
         )
-    return xr.concat(contingency_table, dim=threshold_array)
+    return xr.concat(contingency_table, dim=labels)
 
 
 def _compute_scores(
@@ -132,14 +117,14 @@ def _compute_scores(
     prefix="",
     suffix="",
     source="",
-    thresholds: list[float] | None = None,
+    thresholds: dict[str, list[float]] | None = None,
 ) -> xr.Dataset:
     """
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
     Returns a xarray Dataset with the computed metrics.
     Computation of scores for continuous and categorical forecasts are supported.
-    Categorical forecasts are specified with a list of events via the thresholds argument
-    (e.g. [">= 10.0", "< 0.0"]).
+    Categorical forecasts are specified via a dict mapping operator keys (gt, ge, lt, le, eq, ne)
+    to lists of threshold values (e.g. {"gt": [10.0], "lt": [0.0]}).
     """
     result = xr.Dataset(
         {
@@ -158,14 +143,21 @@ def _compute_scores(
     LOG.info(f"Compute scores for {prefix} {suffix}")
     LOG.info(f"compute thresholds for {thresholds}")
     if thresholds is not None:
-        # check if thresholds is a list, if not convert to list
-        if not isinstance(thresholds, list):
-            thresholds = [thresholds]
-        threshold_array = xr.DataArray(
-            data=thresholds, dims=f"{prefix}threshold{suffix}"
+        threshold_pairs = [
+            (OPS[op_key], val)
+            for op_key, values in thresholds.items()
+            for val in values
+        ]
+        labels = xr.DataArray(
+            data=[
+                f"{op_key}_{str(val).replace('.', 'p')}"
+                for op_key, values in thresholds.items()
+                for val in values
+            ],
+            dims=f"{prefix}threshold{suffix}",
         )
         result[f"{prefix}contingency_table{suffix}"] = _binary_confusion_matrix(
-            fcst, obs, threshold_array, dim
+            fcst, obs, threshold_pairs, labels, dim
         )
 
     result = result.expand_dims({"source": [source]})
@@ -220,7 +212,7 @@ def verify(
     obs_label: str,
     regions: list[str] | None = None,
     dim: list[str] | None = None,
-    threshold_dict: dict[str, list[float]] | None = None,
+    threshold_dict: dict[str, dict[str, list[float]]] | None = None,
     num_workers: int | None = None,
 ) -> xr.Dataset:
     """
@@ -244,8 +236,10 @@ def verify(
         List of shapefile paths or region names to use for spatial aggregation. If None, uses default region ('all').
     dim : list[str] or None, optional
         List of dimension names to reduce over when computing metrics/statistics. If None, tries to infer from fcst.
-    threshold_dict : dict[str, list[float]] or None, optional
-        Dictionary mapping parameter names to threshold lists for categorical metrics. If None, no thresholds used.
+    threshold_dict : dict[str, dict[str, list[float]]] or None, optional
+        Dictionary mapping parameter names to threshold dicts for categorical metrics.
+        Each threshold dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of values.
+        If None, no thresholds used.
     num_workers : int or None, optional
         Number of parallel workers for computation. If None, uses available CPU cores minus 2.
 

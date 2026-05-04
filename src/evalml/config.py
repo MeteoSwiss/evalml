@@ -227,18 +227,6 @@ class Stratification(BaseModel):
     )
 
 
-class Threshold(BaseModel):
-    """Configuration for thresholds used in verification metrics."""
-
-    thresholds: Dict[str, List[str]] = Field(
-        default_factory=dict,
-        description=(
-            "Dictionary mapping parameter names to lists of thresholds. "
-            "These thresholds will be used for computing classification metrics at different cutoffs. "
-        ),
-    )
-
-
 class DefaultResources(BaseModel):
     """Default resource settings for job execution."""
 
@@ -328,7 +316,29 @@ class ConfigModel(BaseModel):
     )
     truth: TruthConfig | None
     stratification: Stratification
-    thresholds: Threshold
+    thresholds: Dict[str, Dict[str, List[float]]] = Field(
+        default_factory=dict,
+        description=(
+            "Dictionary mapping parameter names to threshold dicts. "
+            "Each dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of threshold values."
+        ),
+    )
+
+    @field_validator("thresholds")
+    @classmethod
+    def validate_threshold_operators(
+        cls, v: Dict[str, Dict[str, List[float]]]
+    ) -> Dict[str, Dict[str, List[float]]]:
+        _VALID_OPS = {"gt", "ge", "lt", "le", "eq", "ne"}
+        for param, op_dict in v.items():
+            invalid = set(op_dict) - _VALID_OPS
+            if invalid:
+                raise ValueError(
+                    f"Invalid operator key(s) {invalid!r} for parameter '{param}'. "
+                    f"Must be one of {_VALID_OPS}."
+                )
+        return v
+
     locations: Locations
     profile: Profile
 
