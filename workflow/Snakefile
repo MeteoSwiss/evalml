@@ -143,7 +143,7 @@ rule showcase_all:
                 rules.make_forecast_animation.output,
                 init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
                 run_id=CANDIDATES,
-                param=config["showcase"]["params"],
+                param=SHOWCASE_PARAMS,
                 region=list(SHOWCASE_REGIONS.keys()),
                 showcase=EXPERIMENT_NAME,
             )
@@ -155,7 +155,7 @@ rule showcase_all:
                 rules.plot_meteogram.output,
                 init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
                 run_id=CANDIDATES,
-                param=config["showcase"]["params"],
+                param=SHOWCASE_PARAMS,
                 sta=config["showcase"]["stations"],
                 showcase=EXPERIMENT_NAME,
             )

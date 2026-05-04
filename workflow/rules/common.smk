@@ -89,7 +89,7 @@ def parse_showcase_regions():
     Custom regions carry their explicit extent and projection.
     """
     result = {}
-    for r in config["showcase"]["regions"]:
+    for r in config.get("showcase", {}).get("regions", ["globe", "europe", "switzerland"]):
         if isinstance(r, str):
             result[r] = {"extent": None, "projection": None}
         else:
@@ -315,6 +315,7 @@ def master_hash() -> str:
 
 REGIONS = parse_regions()
 SHOWCASE_REGIONS = parse_showcase_regions()
+SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])
 REFTIMES = parse_reference_times()
 RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
