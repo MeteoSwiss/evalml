@@ -97,7 +97,6 @@ rule verif_metrics:
         """
 
 
-
 def _restrict_reftimes_to_hours(reftimes, hours=None):
     """Restrict the reference times to specific hours."""
     if hours is None:
@@ -120,7 +119,7 @@ rule verif_metrics_aggregation:
     resources:
         cpus_per_task=24,
         mem_mb=250_000,
-        runtime="24h",
+        runtime="2h",
         slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230"
     shell:
         """

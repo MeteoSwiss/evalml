@@ -78,13 +78,12 @@ def _compute_scores(
     dim: list[str],
     prefix="",
     suffix="",
-    source=""
+    source="",
 ) -> xr.Dataset:
     """
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
     Returns a xarray Dataset with the computed metrics.
     """
-    
     error = fcst - obs
     if dim == []:
         scores = xr.Dataset(
