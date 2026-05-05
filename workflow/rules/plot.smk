@@ -116,7 +116,7 @@ rule plot_forecast_frame:
         python {input.script} \
             --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region} \
-            {params.region_extra}
+            {params.region_extra} \
             --accu {params.accu} \
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \

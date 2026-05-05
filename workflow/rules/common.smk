@@ -81,16 +81,16 @@ def parse_regions():
 
 
 def parse_showcase_regions():
-    """Parse showcase regions from config.
+    """Parse showcase domains from config.
 
-    Returns a dict mapping region name -> {extent, projection}.
-    Named regions (strings) have extent=None and projection=None,
+    Returns a dict mapping domain name -> {extent, projection}.
+    Named domains (strings) have extent=None and projection=None,
     meaning the plot script will fall back to the DOMAINS lookup.
-    Custom regions carry their explicit extent and projection.
+    Custom domains carry their explicit extent and projection.
     """
     result = {}
     for r in config.get("showcase", {}).get(
-        "regions", ["globe", "europe", "switzerland"]
+        "domains", ["globe", "europe", "switzerland"]
     ):
         if isinstance(r, str):
             result[r] = {"extent": None, "projection": None}

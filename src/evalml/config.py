@@ -243,12 +243,12 @@ class ShowcaseConfig(BaseModel):
         default=["GVE", "KLO", "LUG"],
         description="List of PeakWeather station IDs to generate meteograms for.",
     )
-    regions: List[str | RegionConfig] = Field(
+    domains: List[str | RegionConfig] = Field(
         default=["globe", "europe", "switzerland"],
         description=(
-            "Regions to generate animations for. Each entry is either a named region "
+            "Domains to generate animations for. Each entry is either a named domain "
             "(e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, "
-            "or a custom region dict with 'name', optional 'extent' "
+            "or a custom domain dict with 'name', optional 'extent' "
             "[lon_min, lon_max, lat_min, lat_max], and optional 'projection'."
         ),
     )

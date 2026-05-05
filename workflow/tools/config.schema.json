@@ -543,13 +543,13 @@
           "title": "Stations",
           "type": "array"
         },
-        "regions": {
+        "domains": {
           "default": [
             "globe",
             "europe",
             "switzerland"
           ],
-          "description": "Regions to generate animations for. Each entry is either a named region (e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, or a custom region dict with 'name', optional 'extent' [lon_min, lon_max, lat_min, lat_max], and optional 'projection'.",
+          "description": "Domains to generate animations for. Each entry is either a named domain (e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, or a custom domain dict with 'name', optional 'extent' [lon_min, lon_max, lat_min, lat_max], and optional 'projection'.",
           "items": {
             "anyOf": [
               {
@@ -560,7 +560,7 @@
               }
             ]
           },
-          "title": "Regions",
+          "title": "Domains",
           "type": "array"
         }
       },
