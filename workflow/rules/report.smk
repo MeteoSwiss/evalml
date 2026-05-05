@@ -58,23 +58,25 @@ rule report_scorecard:
     params:
         lead_times="6/33/6",
         regions=["all", "mittelland", "berge"],
-        vars_metrics={"T_2M": ["RMSE", "MAE"]},
+        variables=["T_2M:RMSE,MAE"],
+        run_source=lambda wc: wc.run_id,
+        baseline_source=lambda wc: wc.baseline,
     log:
         OUT_ROOT / "logs/report_scorecard/{experiment}_{run_id}vs{baseline}.log",
     shell:
         """
-        # python {input.script} \
-        #     --verif_run {input.verif_run} \
-        #     --verif_baseline {input.verif_baseline} \
-        #     --lead_times {params.lead_times} \
-        #     --regions {params.regions} \
-        #     --vars_metrics {params.vars_metrics} \
-        #     --output {output} > {log} 2>&1
+        VAR_ARGS=()
+        for v in {params.variables:q}; do
+            VAR_ARGS+=(--variable "$v")
+        done
 
-
-        # interactive editing (needs to set localrule: True and use only one core)
-        marimo edit {input.script} \
-            --verif_run {input.verif_run} \
-            --verif_baseline {input.verif_baseline} \
-            --output {output} > {log} 2>&1
+        python {input.script} \
+            --verif_run {input.verif_run:q} \
+            --verif_baseline {input.verif_baseline:q} \
+            --run_source {params.run_source:q} \
+            --baseline_source {params.baseline_source:q} \
+            --lead_times {params.lead_times:q} \
+            --regions {params.regions:q} \
+            "${{VAR_ARGS[@]}}" \
+            --output {output:q} > {log} 2>&1
         """

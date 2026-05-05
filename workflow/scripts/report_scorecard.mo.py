@@ -1,84 +1,134 @@
 import marimo
 
-__generated_with = "0.23.4"
+__generated_with = "0.19.6"
 app = marimo.App(width="full")
 
 
 @app.cell
 def _():
-    import marimo as mo
-
-    return (mo,)
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    # Verification scorecard
-    """)
-    return
-
-
-@app.cell
-def _():
     import os
+    from argparse import ArgumentParser
+    from pathlib import Path
 
     import numpy as np
     import pandas as pd
     import xarray as xr
-    # import yaml
 
     import matplotlib.pyplot as plt
     from matplotlib.transforms import ScaledTranslation
 
-    return ScaledTranslation, np, os, pd, plt, xr
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## 1. Configuration
-
-    All settings are hardcoded in the cell below. The "params" block at the top
-    holds the values that the Snakemake rule will pass as placeholders for this run.
-    """)
-    return
+    return ArgumentParser, Path, ScaledTranslation, np, os, pd, plt, xr
 
 
 @app.cell
-def _():
-    # ── Params & participants (placeholder — eventually overridden by Snakemake/CLI) ─────────────
-    lead_times = "6/33/6"
-    # regions = ["all"]
-    # vars_metrics = {"T_2M": ["RMSE", "MAE"]}
-    regions = ["all", "mittelland", "berge", "alpennordseite", "alpensuedseite", "jura"]
-    vars_metrics = {
-        "U_10M": ["RMSE", "MAE", "STDE", "CORR", "R2"],
-        "V_10M": ["RMSE", "MAE", "STDE", "CORR", "R2"],
-        "T_2M": ["RMSE", "MAE", "STDE", "CORR", "R2"],
-        "PMSL": ["RMSE", "MAE", "STDE", "CORR", "R2"],
-        "TD_2M": ["RMSE", "MAE", "STDE", "CORR", "R2"],
-        "TOT_PREC": ["RMSE", "MAE", "STDE", "CORR", "R2"],
-    }
+def config(ArgumentParser, Path):
+    """Build config from CLI args plus stable plotting defaults."""
 
-    _model = {
-        "path": "/scratch/mch/ned/evalml/output/data/runs/interpolator-tmp-d5aa-on-forecaster-c304-1e7e/86c2/verif_aggregated.nc",
-        "source": "Varda-Single",
-    }
+    def _parse_var_metrics(spec: str):
+        """Parse a 'VAR:M1,M2,...' (or 'VAR' alone) item into (var, [metrics])."""
+        if ":" in spec:
+            var, metrics = spec.split(":", 1)
+            return var.strip(), [m.strip() for m in metrics.split(",") if m.strip()]
+        return spec.strip(), None  # None → use all_metrics for this variable
 
-    _baseline = {
-        "path": "/scratch/mch/ned/evalml/output/data/baselines/ICON-CH1-EPS/verif_aggregated.nc",
-        "source": "ICON-CH1-ctrl",
-    }
+    parser = ArgumentParser(description="Render a verification scorecard PNG.")
+    parser.add_argument(
+        "--verif_run",
+        type=str,
+        required=True,
+        help="Path to the model verif_aggregated.nc file.",
+    )
+    parser.add_argument(
+        "--verif_baseline",
+        type=str,
+        required=True,
+        help="Path to the baseline verif_aggregated.nc file.",
+    )
+    parser.add_argument(
+        "--run_source",
+        type=str,
+        required=True,
+        help="Value of the 'source' dim to select inside --verif_run.",
+    )
+    parser.add_argument(
+        "--baseline_source",
+        type=str,
+        required=True,
+        help="Value of the 'source' dim to select inside --verif_baseline.",
+    )
+    parser.add_argument(
+        "--lead_times",
+        type=str,
+        default="6/33/6",
+        help="Lead-time grid 'start/stop/step' in hours (default: 6/33/6).",
+    )
+    parser.add_argument(
+        "--regions",
+        type=str,
+        nargs="+",
+        default=[
+            "all",
+            "mittelland",
+            "berge",
+            "alpennordseite",
+            "alpensuedseite",
+            "jura",
+        ],
+        help="Space-separated list of regions to include.",
+    )
+    parser.add_argument(
+        "--variable",
+        action="append",
+        default=None,
+        help=(
+            "Variable + optional metric subset, format 'VAR:M1,M2'. "
+            "Repeat once per variable. Omit ':...' to use all metrics. "
+            "If not given at all, falls back to a default 6-variable set."
+        ),
+    )
+    parser.add_argument(
+        "--season",
+        type=str,
+        default="all",
+        help="Value of the 'season' dim to select (default: all).",
+    )
+    parser.add_argument(
+        "--init_hour",
+        type=int,
+        default=-999,
+        help="Value of the 'init_hour' dim (default: -999 = aggregated).",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        required=True,
+        help="Output PNG path.",
+    )
 
-    # ── Stable settings ─────────────────────────
+    args = parser.parse_args()
+
+    # Fall back to a default 6-variable set when --variable is not given.
+    if args.variable:
+        vars_metrics = dict(_parse_var_metrics(s) for s in args.variable)
+    else:
+        vars_metrics = {
+            "U_10M": ["RMSE", "MAE", "STDE", "CORR", "R2"],
+            "V_10M": ["RMSE", "MAE", "STDE", "CORR", "R2"],
+            "T_2M": ["RMSE", "MAE", "STDE", "CORR", "R2"],
+            "PMSL": ["RMSE", "MAE", "STDE", "CORR", "R2"],
+            "TD_2M": ["RMSE", "MAE", "STDE", "CORR", "R2"],
+            "TOT_PREC": ["RMSE", "MAE", "STDE", "CORR", "R2"],
+        }
+
+    outfn = Path(args.output)
+
     cfg = {
-        "model": _model,  # from params
-        "baseline": _baseline,  # from params
-        "season": "all",
-        "init_hour": -999,  # convention used by the dataset: -999 = aggregated over all init hours
-        "regions": regions,  # from params
-        "lead_times": lead_times,  # from params; "start/stop/step" in hours; null = use all common lead times
+        "model": {"path": args.verif_run, "source": args.run_source},
+        "baseline": {"path": args.verif_baseline, "source": args.baseline_source},
+        "season": args.season,
+        "init_hour": args.init_hour,
+        "regions": args.regions,
+        "lead_times": args.lead_times,
         "all_metrics": [
             "RMSE",
             "MAE",
@@ -90,7 +140,7 @@ def _():
             "lower_is_better": ["RMSE", "MAE", "STDE"],
             "higher_is_better": ["CORR", "R2"],
         },
-        "variables": vars_metrics,  # from params; null entry → use all_metrics; list → restrict to that subset
+        "variables": vars_metrics,  # null entry → use all_metrics; list → restrict to that subset
         "plot": {
             "rcparams": {
                 "font_family": "sans-serif",
@@ -98,8 +148,8 @@ def _():
                 "dpi": 250,
             },
             "colors": {
-                "model_better": "#4878d0",  # seaborn muted blue   — model outperforms baseline
-                "baseline_better": "#d65f5f",  # seaborn muted red    — baseline outperforms model
+                "model_better": "#4878d0",  # seaborn muted blue
+                "baseline_better": "#d65f5f",  # seaborn muted red
                 "neutral": "#cccccc",  # |diff|% below dots.neutral_threshold_pct
                 "missing": "#999999",  # NaN / no data marker
                 "leads": "#666666",  # lead-time tick labels
@@ -118,7 +168,7 @@ def _():
                 "neutral_threshold_pct": 5,  # |diff|% below which the dot is drawn neutral grey
                 "size_cap_pct": 30,  # |diff|% at which the dot reaches max area
                 "max_area": 250,  # max dot area (matplotlib scatter `s` units)
-                "alpha": 0.9,  # dot transparency (old: 0.85)
+                "alpha": 0.9,  # dot transparency
                 "missing_marker_size": 8,  # size of the "x" marker drawn for NaN values
                 "missing_marker_lw": 1.5,  # line width of the "x" marker
             },
@@ -148,7 +198,7 @@ def _():
             },
             "legend": {
                 "width_in": 6.5,  # physical width (inches) of the dot row
-                "dot_below_pt": 40,  # fixed gap below axes bottom to dot centres (points); if you add n to this, add it to label_below_pt too
+                "dot_below_pt": 40,  # fixed gap below axes bottom to dot centres (points); keep in sync with label_below_pt
                 "label_below_pt": 54,  # fixed gap below axes bottom to labels (points)
                 "sample_pcts": [
                     30,
@@ -163,26 +213,16 @@ def _():
     }
 
     cfg
-    return (cfg,)
+    return cfg, outfn
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## 2. Validate the configuration
-
-    Fail fast with explicit messages if the config is incomplete or inconsistent
-    with the actual datasets. Every check below corresponds to an assumption made
-    later in the pipeline.
-    """)
-    return
-
-
+# todo: shorten or remove this part & other validations
 @app.cell
-def _(cfg, os, xr):
+def validate_config(cfg, os, xr):
+    """Validate config keys, metric directions, lead-time grid and dataset selections; fail fast."""
     errors = []
 
-    # ── 1. Required top-level keys ────────────────────────────────────────────────
+    # 1) Required top-level keys.
     REQUIRED_TOP_KEYS = (
         "model",
         "baseline",
@@ -196,14 +236,14 @@ def _(cfg, os, xr):
         if _key not in cfg:
             errors.append(f"Missing required key: '{_key}'")
 
-    # ── 2. model/baseline must each have `path` and `source` ──────────────────────
+    # 2) model/baseline must each have `path` and `source`.
     for role in ("model", "baseline"):
         if role in cfg:
             for sub in ("path", "source"):
                 if sub not in (cfg[role] or {}):
                     errors.append(f"cfg['{role}'] is missing '{sub}'")
 
-    # ── 3. metric_directions must partition all_metrics (no overlap, no gap) ──────
+    # 3) metric_directions must partition all_metrics (no overlap, no gap).
     if "metric_directions" in cfg and "all_metrics" in cfg:
         md_cfg = cfg["metric_directions"] or {}
         lb = md_cfg.get("lower_is_better")
@@ -243,7 +283,7 @@ def _(cfg, os, xr):
                     f"Metrics in metric_directions but not in all_metrics: {sorted(extra)}"
                 )
 
-    # ── 4. Per-variable metric overrides must be a subset of all_metrics ──────────
+    # 4) Per-variable metric overrides must be a subset of all_metrics.
     if "all_metrics" in cfg and cfg.get("variables"):
         all_m = set(cfg["all_metrics"] or [])
         for _var_name, _var_metrics in cfg["variables"].items():
@@ -253,7 +293,7 @@ def _(cfg, os, xr):
                         f"variables.{_var_name}: metric '{_m}' is not in all_metrics"
                     )
 
-    # ── 5. lead_times format: "start/stop/step" with integers and step > 0 ────────
+    # 5) lead_times format: "start/stop/step" with integers and step > 0.
     if cfg.get("lead_times"):
         try:
             parts = str(cfg["lead_times"]).split("/")
@@ -270,7 +310,7 @@ def _(cfg, os, xr):
                 f"lead_times must be 'start/stop/step' integers, got: '{cfg['lead_times']}' ({e})"
             )
 
-    # ── 6. Files exist; source/season/init_hour/regions are valid in each dataset ─
+    # 6) Files exist; source/season/init_hour/regions are valid in each dataset.
     if not errors:
         for role in ("model", "baseline"):
             path = cfg[role]["path"]
@@ -308,7 +348,7 @@ def _(cfg, os, xr):
 
             ds_meta.close()
 
-    # ── 7. Variables in config must exist in the model dataset ────────────────────
+    # 7) Variables in config must exist in the model dataset.
     if not errors and cfg.get("variables"):
         ds_check = xr.open_dataset(cfg["model"]["path"])
         prefixes = {v.split(".")[0] for v in ds_check.data_vars}
@@ -317,7 +357,7 @@ def _(cfg, os, xr):
             if _var_name not in prefixes:
                 errors.append(f"Variable '{_var_name}' not found in model dataset")
 
-    # ── 8. Plot section: required subsections must exist ──────────────────────────
+    # 8) Plot section: required subsections must exist.
     if "plot" in cfg:
         required_plot_subkeys = (
             "rcparams",
@@ -334,7 +374,7 @@ def _(cfg, os, xr):
             if k not in (cfg["plot"] or {}):
                 errors.append(f"plot.{k} is missing")
 
-    # ── Report ────────────────────────────────────────────────────────────────────
+    # 9) Report.
     if errors:
         for e in errors:
             print(f"❌  {e}")
@@ -345,26 +385,10 @@ def _(cfg, os, xr):
     return
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## 3. "Align" datasets and compute relative difference
-
-    Open both datasets, select the requested season / init_hour / source so
-    that each Dataset is reduced to `(region, lead_time)` plus the data variables.
-    Then compute the relative difference `(model − baseline) / |baseline|` in
-    percent. This is what the scorecard visualises.
-
-    Sign convention: a *positive* `diff` means the model value is higher than the
-    baseline value. Whether that is good or bad depends on the metric (handled
-    later via `metric_directions`).
-    """)
-    return
-
-
 @app.cell
-def _(cfg, np, xr):
-    # Convenience aliases used throughout the rest of the notebook.
+def align_and_diff(cfg, np, xr):
+    """Open + select model and baseline, then compute (model − baseline) / |baseline| in %."""
+
     all_metrics = cfg["all_metrics"]
     lower_is_better = cfg["metric_directions"].get("lower_is_better") or []
     higher_is_better = cfg["metric_directions"].get("higher_is_better") or []
@@ -372,8 +396,7 @@ def _(cfg, np, xr):
     model_source = cfg["model"]["source"]
     baseline_source = cfg["baseline"]["source"]
 
-    # Open + select. `squeeze(drop=True)` collapses any singleton dimensions
-    # (e.g. `eps` when only one ensemble member exists).
+    # squeeze(drop=True) collapses singleton dims left over from .sel().
     model = (
         xr.open_dataset(cfg["model"]["path"])
         .sel(
@@ -410,8 +433,8 @@ def _(cfg, np, xr):
     m = model[common_vars].sel(lead_time=common_leads)
     b = baseline[common_vars].sel(lead_time=common_leads)
 
-    # Relative difference in percent.
-    # baseline = 0 → ±inf; we mask those to NaN and the plot shows them as a grey "x".
+    # Relative difference in percent; baseline=0 → ±inf masked to NaN
+    # so the plot renders those cells as a grey "x".
     diff = (m - b) / abs(b) * 100
     diff = diff.where(np.isfinite(diff))
 
@@ -430,23 +453,10 @@ def _(cfg, np, xr):
     )
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## 4. Apply config filters
-
-    Three filters are applied to `diff`, in order:
-    1. **regions**: keep only the regions listed in the config (and in the order they appear).
-    2. **lead_times**: keep only the lead times that match the `start/stop/step` grid *and* exist in the data.
-    3. **variables / metrics**: keep only the requested combinations (in the order they appear in all_metrics).
-
-    Any filter is a no-op if its config value is `null`.
-    """)
-    return
-
-
 @app.cell
-def _(all_metrics, b, cfg, diff, m, pd):
+def filter_diff(all_metrics, b, cfg, diff, m, pd):
+    """Filter diff by regions, lead-time grid and variable/metric selection."""
+
     def to_h(td):
         """Convert timedelta64[ns] into integer hours. Raises if not a whole number of hours."""
         h = pd.Timedelta(td).total_seconds() / 3600
@@ -518,25 +528,8 @@ def _(all_metrics, b, cfg, diff, m, pd):
     return diff_filtered, to_h
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## 5. Plot the scorecard
-
-    Each row is a `(variable, metric)` pair, each column is a `(region, lead_time)`
-    pair. The dot's colour indicates which dataset performs better for that metric;
-    the dot's size grows linearly with `|diff|%` and saturates at `dots.size_cap_pct`.
-    Values smaller than `dots.neutral_threshold_pct` are drawn neutral grey, and NaN
-    values appear as a grey "x".
-
-    Every visual parameter (colours, fonts, dot sizes, layout offsets, legend)
-    is read from `cfg["plot"]`.
-    """)
-    return
-
-
 @app.cell
-def _(
+def plot_scorecard(
     ScaledTranslation,
     baseline_source,
     cfg,
@@ -545,10 +538,11 @@ def _(
     lower_is_better,
     model_source,
     np,
+    outfn,
     plt,
     to_h,
 ):
-    # ── Read the plot config ──────────────────────────────────────────────────────
+    """Render the scorecard PNG; colours, fonts, dot sizes and legend all read from cfg['plot']."""
     plot = cfg["plot"]
     colors = plot["colors"]
     fonts = plot["fonts"]
@@ -559,12 +553,10 @@ def _(
     vline = plot["vline"]
     legend = plot["legend"]
 
-    # rcParams = matplotlib's global defaults; setting them once applies to every plot below.
     plt.rcParams["font.family"] = plot["rcparams"]["font_family"]
     plt.rcParams["font.sans-serif"] = [plot["rcparams"]["font_sans"]]
     plt.rcParams["figure.dpi"] = plot["rcparams"]["dpi"]
 
-    # ── Helpers ──────────────────────────────────────────────────────────────────
     def is_model_better(d, metric):
         """True if a positive `d` (signed diff %) means the model beats the baseline."""
         if metric in higher_is_better:
@@ -580,15 +572,14 @@ def _(
         )
 
     # ── Figure size and layout precomputation ────────────────────────────────────
-    # Layout building blocks: one row per (variable, metric), one column per lead time.
+    # One row per (variable, metric), one column per lead time.
     rows = [tuple(v.rsplit(".", 1)) for v in diff_filtered.data_vars]
     regions_ = list(diff_filtered.region.values)
-    n_leads = diff_filtered.sizes["lead_time"]  # .sizes -> {dim: length};
+    n_leads = diff_filtered.sizes["lead_time"]
     lead_hours = [to_h(lt) for lt in diff_filtered.lead_time.values]
 
-    # Measure the longest region label so col_width is wide enough that adjacent
-    # region headers never overlap. We render the text on a throwaway figure and
-    # read its bounding box from the renderer.
+    # Measure the longest region label on a throwaway figure so col_width can grow
+    # to prevent adjacent region headers from overlapping.
     _longest_region = max(regions_, key=len).capitalize()
     _fig_tmp, _ax_tmp = plt.subplots(dpi=plot["rcparams"]["dpi"])
     _t = _ax_tmp.text(
@@ -602,69 +593,59 @@ def _(
     _fig_tmp.canvas.draw()
     _text_w_in = (
         _t.get_window_extent(_fig_tmp.canvas.get_renderer()).width / _fig_tmp.dpi
-    )  # pixels -> inches
+    )
     plt.close(_fig_tmp)
 
-    # Final figure dimensions in inches and data-coordinate bounds.
-    # x-axis uses "column units" (one per lead time, plus region_gap empty units between regions);
-    # y-axis uses "row units" (one per metric row).
     col_width = max(figure["col_width"], _text_w_in / (n_leads + layout["region_gap"]))
     plot_width = len(regions_) * (n_leads + layout["region_gap"]) - layout["region_gap"]
     fig_width = max(figure["width_min"], plot_width * col_width + figure["width_pad"])
-    fig_height = len(rows) * figure["row_height"] + figure["height_pad"]
-    y_bottom = -(
-        len(rows) - 0.5
-    )  # = -(last_row_y) - 0.5: last row is at y=-(len(rows)-1), add 0.5 units of clearance below it
+    # Last row is at y=-(len(rows)-1); add 0.5 units of clearance below it.
+    y_bottom = -(len(rows) - 0.5)
     y_top = layout["region_y"] + layout["region_y_pad"]
+    has_missing = any(
+        np.isnan(diff_filtered[v].values).any() for v in diff_filtered.data_vars
+    )
+    small_fs = fonts["legend"] * legend["label_fontsize_factor"]
+    _legend_h_in = (
+        legend["label_below_pt"]
+        + legend.get("missing_dot_offset_pt", 0) * has_missing
+        + small_fs * 1.4
+    ) / 72
+    _overhead_in = figure["title_margin_in"] + _legend_h_in
+    fig_height = _overhead_in + figure["row_height"] * (y_top - y_bottom)
 
     # Left margin fixed in inches so content does not shift right when col_width is large.
     _left_margin_col = figure.get("left_margin_in", 2.5) / col_width
     xlim_left = layout["metric_x"] - _left_margin_col
 
-    # Small precomputed values reused later.
     init_label = "all" if cfg["init_hour"] == -999 else f"{cfg['init_hour']:02d}Z"
     neutral_size = dot_size(dots["neutral_threshold_pct"])
-    has_missing = any(
-        np.isnan(diff_filtered[v].values).any() for v in diff_filtered.data_vars
-    )
 
     # ── Figure ───────────────────────────────────────────────────────────────────
-    # fig = the whole canvas (physical size in inches); ax = the drawing area inside it.
-    # matplotlib has three coordinate systems we use below:
-    #   • transData   -> the data values you pass to ax.scatter / ax.text (column units, row units here)
-    #   • transAxes   -> 0..1 fraction of the axes box (handy for legends and overlays)
-    #   • transFigure -> 0..1 fraction of the whole figure (used for the title)
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
-    # xlim/ylim pin the x/y coordinate ranges of the axes box: here x goes from
-    # xlim_left to plot_width (column units), y from y_bottom to y_top (row units).
-    # Must be set here because further below we manually convert those ranges to
-    # axes-fraction (0..1) — if xlim/ylim changed later, those positions would shift.
+    # xlim/ylim are pinned here because data→axes-fraction conversions below
+    # depend on these bounds; changing them later would shift those positions.
     ax.set_xlim(xlim_left, plot_width)
     ax.set_ylim(y_bottom, y_top)
 
-    # Group labels: same x as metric labels, shifted left by a fixed number of points.
-    # ScaledTranslation(dx, dy, dpi_scale_trans) builds an offset of (dx, dy) inches;
-    # adding it to ax.transData gives "data position + fixed inch offset" so the gap
-    # stays constant regardless of figure width.
-    # Unit conversion: typography uses points, 1 inch = 72 pt -> divide pt by 72 to get inches.
+    # Group labels: same x as metric labels, shifted left by a fixed point offset
+    # so the gap stays constant regardless of figure width.
     group_transform = ax.transData + ScaledTranslation(
         -layout["group_offset_pt"] / 72,
         0,
         fig.dpi_scale_trans,
     )
 
-    # The horizontal separator lines must start just to the right of the metric
-    # labels. The problem is that metric labels are placed in data coords, but
-    # the line-drawing function expects positions in axes-fraction (0..1).
-    # So we convert: metric label x → 0..1, then add the small physical gap.
+    # Horizontal separators start just right of the metric labels. axhline expects
+    # axes-fraction, so convert metric_x from data coords and add the physical gap.
     xlim_range = plot_width - xlim_left
-    metric_frac = (layout["metric_x"] - xlim_left) / xlim_range  # data coords → 0..1
-    ax_w_in = fig_width * ax.get_position().width  # axes width in inches
-    gap_frac = (hline["gap_pt"] / 72) / ax_w_in  # gap: pt → inches → 0..1
+    metric_frac = (layout["metric_x"] - xlim_left) / xlim_range
+    ax_w_in = fig_width * ax.get_position().width
+    gap_frac = (hline["gap_pt"] / 72) / ax_w_in
     hline_x_start = metric_frac + gap_frac
 
-    # Title placed in figure coords (top-left), so it stays put regardless of axes margins.
+    # Title in figure coords so it is unaffected by axes margin changes.
     fig.text(
         0.01,
         0.99,
@@ -673,19 +654,17 @@ def _(
         fontsize=fonts["title"],
         fontweight="bold",
         ha="left",
-        va="top",  # ha/va = horizontal/vertical alignment of the text anchor
+        va="top",
         transform=fig.transFigure,
     )
 
     # ── Dots and row labels ──────────────────────────────────────────────────────
-    # y is negated because matplotlib y grows upward, but we want row 0 at the top.
+    # y is negated so row 0 sits at the top.
     cur_group = None
     for row_idx, (group, metric) in enumerate(rows):
         y = -row_idx
         name = f"{group}.{metric}"
 
-        # When entering a new variable group: write its bold name (e.g. "U_10M")
-        # and draw a thin horizontal separator above the row (skipped on the very first row).
         if group != cur_group:
             ax.text(
                 layout["metric_x"],
@@ -696,18 +675,17 @@ def _(
                 fontsize=fonts["group"],
                 fontweight="bold",
                 transform=group_transform,
-            )  # data coords + the fixed inch offset built above
+            )
             if row_idx > 0:
                 ax.axhline(
                     y=y + 0.5,
                     xmin=hline_x_start,
-                    xmax=hline["x_end"],  # xmin/xmax in axes-fraction (0..1)
+                    xmax=hline["x_end"],
                     color=colors["hline"],
                     lw=hline["linewidth"],
                 )
             cur_group = group
 
-        # Metric label on the left of the row (e.g. "RMSE", "MAE").
         ax.text(
             layout["metric_x"],
             y,
@@ -717,15 +695,12 @@ def _(
             fontsize=fonts["metric"],
         )
 
-        # For every (region, lead_time) cell of this row, draw one marker.
-        # Three cases:
-        #   • NaN data            -> small grey "x"
-        #   • |diff|% < threshold -> small grey neutral dot (a tie)
-        #   • otherwise           -> coloured dot, sized by |diff|%, blue if model wins, red otherwise
+        # Marker per (region, lead_time) cell:
+        #   NaN                   -> grey "x"
+        #   |diff|% < threshold   -> neutral grey dot (tie)
+        #   else                  -> coloured dot sized by |diff|%, blue=model, red=baseline
         for sec_idx, region in enumerate(regions_):
-            x_off = sec_idx * (
-                n_leads + layout["region_gap"]
-            )  # left edge of region block, in data coords
+            x_off = sec_idx * (n_leads + layout["region_gap"])
             for lt_idx, d in enumerate(diff_filtered[name].sel(region=region).values):
                 x = x_off + lt_idx
                 if np.isnan(d):
@@ -736,7 +711,7 @@ def _(
                         color=colors["missing"],
                         ms=dots["missing_marker_size"],
                         mew=dots["missing_marker_lw"],
-                    )  # ms = markersize (pt), mew = marker edge width (pt)
+                    )
                     continue
                 if abs(d) < dots["neutral_threshold_pct"]:
                     color, size = colors["neutral"], neutral_size
@@ -747,16 +722,12 @@ def _(
                         else colors["baseline_better"]
                     )
                     size = dot_size(d)
-                ax.scatter(
-                    x, y, s=size, c=color, alpha=dots["alpha"], linewidths=0
-                )  # s = marker area in pt²
+                ax.scatter(x, y, s=size, c=color, alpha=dots["alpha"], linewidths=0)
 
     # ── Region headers, lead-time ticks, vertical separators ─────────────────────
-    # Second pass over regions to draw the elements that frame each region block:
     for sec_idx, region in enumerate(regions_):
         x_off = sec_idx * (n_leads + layout["region_gap"])
 
-        # Region name, bold, centred above the block.
         ax.text(
             x_off + (n_leads - 1) / 2,
             layout["region_y"],
@@ -767,7 +738,6 @@ def _(
             fontweight="bold",
         )
 
-        # Vertical line between this block and the previous one (skipped before the first block).
         if sec_idx > 0:
             x_sep = x_off - (layout["region_gap"] + 1) / 2
             ax.plot(
@@ -777,7 +747,6 @@ def _(
                 lw=vline["linewidth"],
             )
 
-        # Rotated lead-time tick labels (e.g. "6h", "12h", ...) below the bottom row.
         for lt_idx, h in enumerate(lead_hours):
             ax.text(
                 x_off + lt_idx,
@@ -790,27 +759,20 @@ def _(
                 color=colors["leads"],
             )
 
-    ax.axis("off")  # hide default x/y axis frame, ticks and labels (we draw our own)
+    ax.axis("off")
 
-    title_margin_in = figure["title_margin_in"]
-    small_fs = fonts["legend"] * legend["label_fontsize_factor"]
-    legend_bottom_in = (
-        legend["label_below_pt"]
-        + legend.get("missing_dot_offset_pt", 0) * has_missing
-        + small_fs * 1.4
-    ) / 72
     plt.tight_layout()
     plt.subplots_adjust(
-        top=1 - title_margin_in / fig_height,
-        bottom=legend_bottom_in / fig_height,
+        top=1 - figure["title_margin_in"] / fig_height,
+        bottom=_legend_h_in / fig_height,
     )
 
     # ── Legend ───────────────────────────────────────────────────────────────────
-    sample_pcts = legend["sample_pcts"]  # e.g. [30, 15, 5]
+    sample_pcts = legend["sample_pcts"]
     neutral_pct = dots["neutral_threshold_pct"]
 
-    # List of (diff_value, color, label) tuples — one per legend dot, left to right:
-    # baseline-better (red) large→small | neutral (grey) | model-better (blue) small→large
+    # Legend dots, left to right: baseline-better (red) large→small,
+    # neutral (grey), model-better (blue) small→large.
     dot_specs = (
         [(p, colors["baseline_better"], f"-{p}%") for p in sample_pcts]
         + [(neutral_pct, colors["neutral"], f"|Δ|<{neutral_pct}%")]
@@ -819,27 +781,15 @@ def _(
     dot_specs[0] = (sample_pcts[0], colors["baseline_better"], f"≤-{sample_pcts[0]}%")
     dot_specs[-1] = (sample_pcts[0], colors["model_better"], f"≥+{sample_pcts[0]}%")
 
-    # The legend sits below the plot area, so all positions are in axes-fraction
-    # (0 = left edge of axes, 1 = right edge) rather than data coords — this way
-    # the legend never moves no matter how many columns the plot has.
+    # Legend uses axes-fraction so it stays stable across plot widths.
+    # Cap at 0.8 to leave room for the side labels.
+    ax_w_in = ax.get_position().width * fig.get_figwidth()
+    x_span = min(legend["width_in"] / ax_w_in, 0.8)
+    _data_ctr = (plot_width / 2 - xlim_left) / (plot_width - xlim_left)
+    x_dots = np.linspace(_data_ctr - x_span / 2, _data_ctr + x_span / 2, len(dot_specs))
 
-    # Convert the desired physical width (inches) to axes-fraction so we know
-    # how much of the 0..1 range the dot row should occupy.
-    # Cap at 0.8 to leave room for the "baseline better ←" / "→ model better" labels on the sides.
-    ax_w_in = ax.get_position().width * fig.get_figwidth()  # axes box width in inches
-    x_span = min(
-        legend["width_in"] / ax_w_in, 0.8
-    )  # desired legend width in axes-fraction
-    x_dots = np.linspace(
-        0.5 - x_span / 2, 0.5 + x_span / 2, len(dot_specs)
-    )  # x positions of each dot, evenly spaced and centred
-    small_fs = (
-        fonts["legend"] * legend["label_fontsize_factor"]
-    )  # smaller font for the % labels under each dot
-
-    # Builds transforms anchored at a fixed physical distance below the axes bottom,
-    # so spacing is constant regardless of figure height (unlike axes-fraction coords).
-    # y=0 in ax.transAxes = axes bottom; ScaledTranslation then shifts down by the given points.
+    # Anchor at a fixed physical offset below the axes so spacing is independent
+    # of figure height.
     dot_trans = ax.transAxes + ScaledTranslation(
         0, -legend["dot_below_pt"] / 72, fig.dpi_scale_trans
     )
@@ -857,8 +807,7 @@ def _(
         fig.dpi_scale_trans,
     )
 
-    # Draw each dot and its label underneath.
-    # clip_on=False is needed because the legend sits below the axes box.
+    # clip_on=False because the legend sits below the axes box.
     for x, (_val, col, lbl) in zip(x_dots, dot_specs):
         s = neutral_size if col == colors["neutral"] else dot_size(_val)
         ax.scatter(
@@ -882,7 +831,6 @@ def _(
             clip_on=False,
         )
 
-    # "baseline better ←" to the left of the dot row, "→ model better" to the right.
     ax.text(
         x_dots[0] - legend["side_text_offset"],
         0,
@@ -904,7 +852,6 @@ def _(
         clip_on=False,
     )
 
-    # If any NaN values exist in the data, add a small example showing what the "x" marker means.
     if has_missing:
         ax.plot(
             [0.5],
@@ -928,87 +875,10 @@ def _(
             clip_on=False,
         )
 
+    outfn.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(outfn, bbox_inches="tight")
+    print(f"saved: {outfn}")
     plt.show()
-    return (init_label,)
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ---
-
-    ## Appendix: distribution of |diff|%
-
-    Just a tuning aid for `plot.dots.size_cap_pct`: the histogram below shows where
-    the bulk of the data lies, which informs at what value the dot size should
-    saturate.
-    """)
-    return
-
-
-@app.cell
-def _(baseline_source, cfg, diff_filtered, init_label, model_source, np, plt):
-    all_vals = np.concatenate(
-        [diff_filtered[v].values.flatten() for v in diff_filtered.data_vars]
-    )
-    abs_vals = np.abs(all_vals[np.isfinite(all_vals)])
-
-    _fig, _ax = plt.subplots(figsize=(8, 4))
-    _ax.set_title(
-        f"|diff|% distribution — {model_source} vs {baseline_source}\n"
-        f"season={cfg['season']}   init={init_label}",
-        fontsize=11,
-        loc="left",
-    )
-    _ax.hist(abs_vals, bins=60, color="steelblue", alpha=0.75)
-    _ax.set_xlabel("|diff|  (%)")
-    _ax.set_ylabel("count")
-    label_y = {"p50": 0.95, "p90": 0.95, "p95": 0.75, "p99": 0.95}
-    for label, pct in [("p50", 50), ("p90", 90), ("p95", 95), ("p99", 99)]:
-        _val = np.percentile(abs_vals, pct)
-        _ax.axvline(_val, color="red", ls="--", alpha=0.6, lw=1)
-        _ax.text(
-            _val,
-            _ax.get_ylim()[1] * label_y[label],
-            f" {label}={_val:.0f}",
-            color="red",
-            fontsize=9,
-            va="top",
-        )
-    plt.tight_layout()
-    plt.show()
-
-    print(
-        f"min={abs_vals.min():.2f}  max={abs_vals.max():.2f}  "
-        f"median={np.median(abs_vals):.2f}  mean={abs_vals.mean():.2f}\n"
-    )
-    n = len(abs_vals)
-    for label, mask in [
-        ("< 50%  ", abs_vals < 50),
-        ("50–100%", (abs_vals >= 50) & (abs_vals <= 100)),
-        ("> 100% ", abs_vals > 100),
-    ]:
-        count = mask.sum()
-        print(f"  {label}  {count:>6}  ({100 * count / n:.1f}%)")
-
-    print()
-    edges = list(range(0, 110, 10)) + [float("inf")]
-    for lo, hi in zip(edges, edges[1:]):
-        mask = (abs_vals >= lo) & (abs_vals < hi)
-        count = mask.sum()
-        label = f"{lo:>3}–{int(hi):>3}%" if hi != float("inf") else f"{lo:>3}%+    "
-        print(f"  {label}  {count:>6}  ({100 * count / n:.1f}%)")
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ---
-    # To-do
-
-    - fix title top-left
-    """)
     return
 
 
