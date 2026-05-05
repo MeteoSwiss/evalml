@@ -179,8 +179,3 @@ use rule plot_summary_stat_maps as plot_summary_stat_maps_baseline with:
         OUT_ROOT / "results/{experiment}/metric_maps/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
     log:
         OUT_ROOT / "logs/plot_summary_stat_maps/{experiment}/{baseline_id}-{param}-{metric}-{region}-{season}-{leadtime}.log",
-    params:
-        nc_out_dir=lambda wc: (
-            Path(OUT_ROOT) / f"data/baselines/{wc.baseline_id}/verif_aggregated.nc"
-            # not sure if this is actually needed. Verification file is already specified above as input. Leave it for the time being. 
-        ).resolve()
