@@ -144,6 +144,7 @@ use rule verification_metrics_aggregation as verification_metrics_aggregation_ba
 
 rule verification_metrics_plot:
     input:
+        "src/verification/__init__.py",
         script="workflow/scripts/verification_plot_metrics.py",
         verif=list(EXPERIMENT_PARTICIPANTS.values()),
     output:
