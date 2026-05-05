@@ -156,7 +156,6 @@ rule plot_summary_stat_maps:
         slurm_partition="postproc",
         cpus_per_task=1,
         runtime="10m",
-        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230"
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
