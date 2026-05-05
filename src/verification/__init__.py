@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import time
 
 from pathlib import Path
@@ -19,15 +20,6 @@ import abc
 from shapely.geometry import Polygon
 
 LOG = logging.getLogger(__name__)
-
-OPS = {
-    "gt": op.gt,
-    "ge": op.ge,
-    "lt": op.lt,
-    "le": op.le,
-    "eq": op.eq,
-    "ne": op.ne,
-}
 
 
 class AggregationMasks(abc.ABC):
@@ -84,11 +76,25 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
         return xr.DataArray(mask, coords=lon.coords, dims=lon.dims)
 
 
+def decode_metric(label: str) -> str:
+    OP_DICT = {
+        "_gt_": " > ",
+        "_ge_": " >= ",
+        "_lt_": " < ",
+        "_le_": " <= ",
+        "_eq_": " == ",
+        "_ne_": " != ",
+    }
+    for k, v in OP_DICT.items():
+        label = label.replace(k, v)
+    label = re.sub(r"(?<=\d)p(?=\d)", ".", label)
+    return label
+
+
 def _binary_confusion_matrix(
     fcst: xr.DataArray,
     obs: xr.DataArray,
     thresholds: list[tuple],
-    labels: xr.DataArray,
     dim: list[str],
 ) -> xr.DataArray:
     """
@@ -97,8 +103,16 @@ def _binary_confusion_matrix(
     Return an xarray.DataArray with the definition of the events in the dimension as given by
     `labels` and the elements of the confusion matrix in the dimension `contingency`.
     """
+    threshold_dim = xr.DataArray(
+        data=[f"{key}_{str(val).replace('.', 'p')}" for key, val in thresholds],
+        dims="threshold",
+    )
     contingency_table = []
-    for op_fn, value in thresholds:
+    for op_txt, value in thresholds:
+        try:
+            op_fn = getattr(op, op_txt)
+        except AttributeError:
+            raise AttributeError(f"operator {op_txt} is not available")
         event_operator = scores.categorical.ThresholdEventOperator(
             default_event_threshold=value,
             default_op_fn=op_fn,
@@ -107,7 +121,7 @@ def _binary_confusion_matrix(
         contingency_table.append(
             contingency_manager.transform(reduce_dims=dim).get_table()
         )
-    return xr.concat(contingency_table, dim=labels)
+    return xr.concat(contingency_table, dim=threshold_dim)
 
 
 def _compute_scores(
@@ -126,6 +140,7 @@ def _compute_scores(
     Categorical forecasts are specified via a dict mapping operator keys (gt, ge, lt, le, eq, ne)
     to lists of threshold values (e.g. {"gt": [10.0], "lt": [0.0]}).
     """
+    LOG.info(f"Compute scores for {prefix} {suffix}")
     result = xr.Dataset(
         {
             f"{prefix}BIAS{suffix}": scores.continuous.additive_bias(
@@ -140,25 +155,17 @@ def _compute_scores(
             ),
         }
     )
-    LOG.info(f"Compute scores for {prefix} {suffix}")
-    LOG.info(f"compute thresholds for {thresholds}")
     if thresholds is not None:
+        LOG.info(f"compute thresholds for {thresholds}")
         threshold_pairs = [
-            (OPS[op_key], val)
-            for op_key, values in thresholds.items()
-            for val in values
+            (key, val) for key, values in thresholds.items() for val in values
         ]
-        labels = xr.DataArray(
-            data=[
-                f"{op_key}_{str(val).replace('.', 'p')}"
-                for op_key, values in thresholds.items()
-                for val in values
-            ],
-            dims=f"{prefix}threshold{suffix}",
+        confusion_matrix = (
+            _binary_confusion_matrix(fcst, obs, threshold_pairs, dim).rename(
+                {"threshold": f"{prefix}threshold{suffix}"}
+            )  # make threshold dimension unique
         )
-        result[f"{prefix}contingency_table{suffix}"] = _binary_confusion_matrix(
-            fcst, obs, threshold_pairs, labels, dim
-        )
+        result[f"{prefix}contingency_table{suffix}"] = confusion_matrix
 
     result = result.expand_dims({"source": [source]})
     return result
