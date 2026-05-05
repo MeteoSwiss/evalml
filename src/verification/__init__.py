@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 
 from pathlib import Path
@@ -45,7 +46,7 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
         regions["all"] = [
             Polygon(list(zip([1.5, 16, 16, 1.5, 1.5], [43, 43, 49.5, 49.5, 43])))
         ]
-        if shp != []:
+        if shp and shp != [""]:
             shp = [shp] if isinstance(shp, str) else shp
             for shapefile in shp:
                 region_name = Path(shapefile).stem
@@ -131,11 +132,11 @@ def _compute_statistics(
     return stats
 
 
-def _merge_metrics(ds: xr.Dataset) -> xr.Dataset:
+def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
     out = xr.merge(ds, compat="no_conflicts")
     if "ref_time" not in out.dims:
         out = out.expand_dims("ref_time").set_coords("ref_time")
-    out = out.compute(num_workers=4, scheduler="threads")
+    out = out.compute(num_workers=num_workers, scheduler="threads")
     return out
 
 
@@ -156,12 +157,19 @@ def verify(
     obs_label: str,
     regions: list[str] | None = None,
     dim: list[str] | None = None,
+    num_workers: int | None = None,
 ) -> xr.Dataset:
     """
     Compare two xarray Datasets (fcst and obs) and return pandas DataFrame with
     basic verification metrics and statistics for both fcst and obs.
     """
     start = time.time()
+
+    if num_workers is None:
+        try:
+            num_workers = len(os.sched_getaffinity(0))
+        except AttributeError:
+            num_workers = max((os.cpu_count() or 6) - 2, 1)
 
     if dim is None:
         if "x" in fcst.dims and "y" in fcst.dims:
@@ -225,14 +233,12 @@ def verify(
         score = xr.concat(score, dim="region")
         fcst_statistics = xr.concat(fcst_statistics, dim="region")
         obs_statistics = xr.concat(obs_statistics, dim="region")
-        statistics.append(xr.concat([fcst_statistics, obs_statistics], dim="source"))
-        scores.append(
-            xr.merge([score], join="outer", compat="no_conflicts")
-        )
+        param_statistics = xr.concat([fcst_statistics, obs_statistics], dim="source")
+        # Compute eagerly per parameter to prevent dask graph bloat
+        scores.append(_merge_metrics([score], num_workers=num_workers))
+        statistics.append(_merge_metrics([param_statistics], num_workers=num_workers))
 
-    scores = _merge_metrics(scores)
-    statistics = _merge_metrics(statistics)
-    out = xr.merge([scores, statistics], join="outer", compat="no_conflicts")
+    out = xr.merge(scores + statistics, join="outer", compat="no_conflicts")
     LOG.info("Computed metrics in %.2f seconds", time.time() - start)
     LOG.info("Metrics dataset: \n%s", out)
     return out

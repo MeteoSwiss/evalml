@@ -7,8 +7,8 @@ import jinja2
 import xarray as xr
 
 _sys.path.append(str(Path(__file__).parent))
-from verif_plot_metrics import _ensure_unique_lead_time
-from verif_plot_metrics import _select_best_sources
+from verification_plot_metrics import _ensure_unique_lead_time
+from verification_plot_metrics import _select_best_sources
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(

@@ -1,12 +1,10 @@
-runner: time_interpolator
+runner: time_multi_interpolator
 
 input:
   cutout:
     - lam_0:
         grib:
           path: forecaster/20*
-          pre_processors:
-            - extract_mask: "source0/trimedge_mask"
           namer: &namer
             rules:
               - - shortName: T
@@ -50,9 +48,7 @@ constant_forcings:
   test:
     use_original_paths: true
 
-patch_metadata:
-  dataset:
-    constant_fields: [z, lsm]
+patch_metadata: resources/sgm-interpolator-ich1-oper-patch.yaml
 
 output:
   tee:
@@ -61,16 +57,15 @@ output:
         encoding:
           typeOfGeneratingProcess: 2
         templates:
-            samples: resources/templates_index_cosmo.yaml
+            samples: resources/templates_index_icon.yaml
         post_processors:
           - extract_mask: # removes global points
               mask: "lam_0/cutout_mask"
               as_slice: true
-          - assign_mask:  # fill boundary "trimmed" points with nan
-              mask: "source0/trimedge_mask"
           - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
               accumulations:
                 - tp
+          # here, the trimedge mask can be specified when available
 
     - grib:
         path: grib/ifs-{dateTime}_{step:03}.grib
@@ -89,6 +84,7 @@ output:
               accumulations:
                 - tp
 
-verbosity: 1
+# silenced due to bug in anemoi-inference for multi-step interpolators, can be removed when fixed
+verbosity: 0
 allow_nans: true
 output_frequency: "1h"

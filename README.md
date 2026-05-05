@@ -40,7 +40,7 @@ dates:
   frequency: 60h
 
 runs:
-  # Each item is either `forecaster` or `interpolator`.
+  # Each item is either `forecaster`, `interpolator` or `baseline`
   - forecaster:
       # `checkpoint` may point to a supported MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.
       checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/228/runs/2f962c89ff644ca7940072fa9cd088ec
@@ -58,10 +58,7 @@ runs:
       label: M-1 forecaster
       steps: 0/120/6
       config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
-
-baselines:
   - baseline:
-      baseline_id: COSMO-E
       label: COSMO-E
       root: /store_new/mch/msopr/ml/COSMO-E
       steps: 0/120/6
@@ -152,3 +149,90 @@ ln -s $SCRATCH/evalenv/output output
 This way data will be written to your scratch, but you will still be able to browse it with your IDE.
 
 If you are using VSCode, we advise that you install the YAML extension, which will enable config validation, autocompletion, hovering support, and more.
+
+## Workflow development guidelines
+
+This section defines the conventions to follow when adding or modifying rules, scripts, and outputs inside `workflow/`.
+
+### Rule names
+
+Rules use the pattern `{module}_{operation}[_{sub_operation}]` in snake_case. The module prefix groups rules by their place in the pipeline:
+
+| Module | Rules prefix | Purpose |
+|---|---|---|
+| {module}.smk | `data_` | Input data preparation |
+| {module}.smk | `inference_` | Model checkpoint retrieval, environment setup, and execution |
+| {module}.smk | `verification_` | Metrics calculation, aggregation, and metric plots |
+| {module}.smk | `plot_` | Forecast visualisation (frames, animations, meteograms) |
+| {module}.smk | `report_` | Dashboard and HTML report generation |
+
+Aggregate target rules follow the pattern `{module}_all` (e.g. `inference_all`, `verification_metrics_all`). Top-level entry points are named after the workflow mode: `experiment_all`, `showcase_all`, `sandbox_all`.
+
+### Script names
+
+Scripts live in `workflow/scripts/` and mirror the rule that calls them:
+
+```
+{module}_{operation}.py         # standard Python scripts
+{module}_{operation}.mo.py      # interactive Marimo notebooks
+```
+
+Examples: `inference_prepare.py`, `verification_metrics.py`, `verification_aggregation.py`, `plot_forecast_frame.mo.py`.
+
+In some cases, a single script may be shared by more than one rule (e.g. `inference_prepare.py` is used by both `inference_prepare_forecaster` and `inference_prepare_interpolator`).
+
+### Log file paths
+
+Every rule declares a log file under:
+
+```
+{OUT_ROOT}/logs/{rule_name}/{wildcards}.log
+```
+
+When a rule produces a sentinel file (`.ok`) to mark successful completion, it is placed alongside the log:
+
+```
+{OUT_ROOT}/logs/{rule_name}/{wildcards}.ok
+```
+
+Multiple wildcards are joined with a hyphen: `{run_id}-{init_time}.log`.
+
+### Output directory layout
+
+All outputs are rooted at `OUT_ROOT` (from `locations.output_root` in the config):
+
+```
+{OUT_ROOT}/
+├── data/
+│   ├── runs/{env_id}/                        # per-environment artefacts (shared across config changes)
+│   │   ├── inference-last.ckpt
+│   │   ├── requirements.txt
+│   │   ├── venv.squashfs
+│   │   └── {config_hash}/                    # per-run-config artefacts
+│   │       ├── summary.md
+│   │       ├── verif_aggregated.nc
+│   │       └── {init_time}/                  # per-initialisation-time artefacts
+│   │           ├── config.yaml
+│   │           ├── grib/
+│   │           └── verif.nc
+│   ├── baselines/{baseline_id}/
+│   │   └── {init_time}/verif.nc
+│   └── observations/
+├── logs/                                      # one sub-directory per rule
+└── results/{experiment_name}/               # final products
+    ├── dashboard/
+    └── plots/
+```
+
+### Wildcard conventions
+
+| Wildcard | Format | Example |
+|---|---|---|
+| `{env_id}` | `{type}-{model_id}-{env_hash}` | `forecaster-1a2b-c3d4` |
+| `{run_id}` | `{env_id}/{config_hash}` | `forecaster-1a2b-c3d4/e5f6` |
+| `{baseline_id}` | slug derived from root path | `COSMO-E` |
+| `{init_time}` | `%Y%m%d%H%M` | `202001011200` |
+| `{experiment}` | `{YYYYMMDD}_{label}_{hash}` | `20260331_demo_a1b2` |
+| `{param}` | variable name | `T_2M`, `TOT_PREC` |
+| `{region}` | geographic region slug | `switzerland`, `globe` |
+| `{leadtime}` | zero-padded hours | `000`, `006`, `024` |

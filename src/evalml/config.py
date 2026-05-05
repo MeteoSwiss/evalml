@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, ClassVar, FrozenSet
 
 from pydantic import BaseModel, Field, RootModel, field_validator
 
@@ -60,6 +60,14 @@ class InferenceResources(BaseModel):
 
 
 class RunConfig(BaseModel):
+    # Identity contract: fields that determine the inference ENVIRONMENT (venv, squashfs).
+    # Changing any of these requires a new environment to be built.
+    ENV_FIELDS: ClassVar[FrozenSet[str]] = frozenset(
+        {"checkpoint", "extra_requirements", "disable_local_eccodes_definitions"}
+    )
+    # Fields excluded from ALL hashing (display/resource metadata only).
+    HASH_EXCLUDE: ClassVar[FrozenSet[str]] = frozenset({"label", "inference_resources"})
+
     checkpoint: str = Field(
         ...,
         description="The mlflow run ID, as a 32-character hexadecimal string.",
@@ -151,10 +159,10 @@ class InterpolatorConfig(RunConfig):
 class BaselineConfig(BaseModel):
     """Configuration for a single baseline to include in the verification."""
 
-    baseline_id: str = Field(
-        ...,
+    baseline_id: str | None = Field(
+        None,
         min_length=1,
-        description="Identifier for the baseline, e.g. 'COSMO-E'.",
+        description="Deprecated compatibility field. Workflow baseline IDs are derived from the stem of `root`.",
     )
     label: str = Field(
         ...,
@@ -164,7 +172,7 @@ class BaselineConfig(BaseModel):
     root: str = Field(
         ...,
         min_length=1,
-        description="Root directory where the baseline data is stored.",
+        description="Root directory where the baseline data is stored. The workflow derives the baseline ID from the stem of this path.",
     )
     steps: str = Field(
         ...,
@@ -326,13 +334,13 @@ class ConfigModel(BaseModel):
         description="Optional label for the experiment that will be used in the experiment directory name. Defaults to the config file name if not provided.",
     )
     dates: Dates | ExplicitDates
-    runs: List[ForecasterItem | InterpolatorItem] = Field(
+    runs: List[ForecasterItem | InterpolatorItem | BaselineItem] = Field(
         ...,
-        description="Dictionary of runs to execute, with run IDs as keys and configurations as values.",
+        description="List of experiment participants, including forecaster/interpolator ML runs and baselines.",
     )
     baselines: List[BaselineItem] = Field(
-        ...,
-        description="Dictionary of baselines to include in the verification.",
+        default_factory=list,
+        description="Deprecated top-level baselines list. Prefer defining baseline entries directly in `runs`.",
     )
     truth: TruthConfig | None
     stratification: Stratification
@@ -352,6 +360,11 @@ class ConfigModel(BaseModel):
 def generate_config_schema() -> str:
     """Generate the JSON schema for the ConfigModel."""
     return ConfigModel.model_json_schema()
+
+
+# Module-level constants for use in Snakemake and elsewhere
+RUN_ENV_FIELDS = RunConfig.ENV_FIELDS
+RUN_HASH_EXCLUDE = RunConfig.HASH_EXCLUDE
 
 
 if __name__ == "__main__":
