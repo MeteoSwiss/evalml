@@ -91,4 +91,3 @@ def load_state_from_raw(
         if key.startswith("field_"):
             state["fields"][key.removeprefix("field_")] = value
     return state
-
