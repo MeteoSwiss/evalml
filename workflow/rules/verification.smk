@@ -34,7 +34,6 @@ rule verification_metrics_baseline:
         cpus_per_task=24,
         mem_mb=50_000,
         runtime="60m",
-        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230",
     shell:
         """
         uv run {input.script} \
@@ -82,7 +81,6 @@ rule verification_metrics:
         cpus_per_task=24,
         mem_mb=50_000,
         runtime="60m",
-        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230",
     shell:
         """
         uv run {input.script} \
@@ -120,7 +118,6 @@ rule verification_metrics_aggregation:
         cpus_per_task=24,
         mem_mb=250_000,
         runtime="2h",
-        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230",
     shell:
         """
         uv run {input.script} {input.verif_nc} --output {output} > {log} 2>&1
@@ -191,7 +188,6 @@ rule verification_metrics_maps:
         cpus_per_task=24,
         mem_mb=50_000,
         runtime="60m",
-        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230",
     shell:
         """
         uv run {input.script} \
@@ -225,7 +221,6 @@ rule verification_metrics_maps_baseline:
         cpus_per_task=24,
         mem_mb=50_000,
         runtime="60m",
-        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230",
     shell:
         """
         uv run {input.script} \
