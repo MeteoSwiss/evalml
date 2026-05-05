@@ -10,7 +10,6 @@ def _():
     from argparse import ArgumentParser
     from pathlib import Path
 
-    import cartopy.crs as ccrs
     import earthkit.plots as ekp
     import numpy as np
     import xarray as xr
@@ -18,6 +17,7 @@ def _():
     from plotting import DOMAINS
     from plotting import StatePlotter
     from plotting.colormap_defaults import CMAP_DEFAULTS
+
     return (
         ArgumentParser,
         CMAP_DEFAULTS,
@@ -44,15 +44,24 @@ def _(ArgumentParser, Path, np):
     parser = ArgumentParser()
 
     parser.add_argument(
-        "--input", type=str, default=None, help="Directory to .nc data containing the error fields"
+        "--input",
+        type=str,
+        default=None,
+        help="Directory to .nc data containing the error fields",
     )
     parser.add_argument("--outfn", type=str, help="output filename")
     parser.add_argument("--leadtime", type=str, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
     parser.add_argument("--region", type=str, help="name of region")
-    parser.add_argument("--metric", type=str, help = "Evaluation Metric. So far Bias, RMSE or MAE are implemented.")
+    parser.add_argument(
+        "--metric",
+        type=str,
+        help="Evaluation Metric. So far Bias, RMSE or MAE are implemented.",
+    )
     parser.add_argument("--season", type=str, default="all", help="season filter")
-    parser.add_argument("--init_hour", type=str, default="all", help="initialization hour filter")
+    parser.add_argument(
+        "--init_hour", type=str, default="all", help="initialization hour filter"
+    )
 
     args = parser.parse_args()
     verif_file = Path(args.input)
@@ -70,7 +79,7 @@ def _(ArgumentParser, Path, np):
         else:
             raise ValueError("init_hour must be 'all' or an integer hour")
 
-    lead_time = np.timedelta64(lead_time, 'h')
+    lead_time = np.timedelta64(lead_time, "h")
     return (
         init_hour,
         lead_time,
@@ -90,9 +99,17 @@ def _(LOG, metric, param, season, verif_file, xr):
     var = f"{param}.{metric}"
     LOG.info("Selecting variable '%s' for season '%s'", var, season)
     ds = ds[var].sel(season=season)
-    LOG.info("Selected DataArray: dims=%s, shape=%s, dtype=%s", ds.dims, ds.shape, ds.dtype)
-    LOG.info("Value range: min=%.4g, max=%.4g, n_nan=%d", float(ds.min()), float(ds.max()), int(ds.isnull().sum()))
+    LOG.info(
+        "Selected DataArray: dims=%s, shape=%s, dtype=%s", ds.dims, ds.shape, ds.dtype
+    )
+    LOG.info(
+        "Value range: min=%.4g, max=%.4g, n_nan=%d",
+        float(ds.min()),
+        float(ds.max()),
+        int(ds.isnull().sum()),
+    )
     return (ds,)
+
 
 @app.cell
 def _(CMAP_DEFAULTS, ekp):
@@ -102,7 +119,11 @@ def _(CMAP_DEFAULTS, ekp):
         still needs to be passed as arguments to tripcolor()/tricontourf().
         """
         metric_key = f"{param}.{metric}.map"
-        cfg = CMAP_DEFAULTS[metric_key] if metric_key in CMAP_DEFAULTS else CMAP_DEFAULTS.get(param, {})
+        cfg = (
+            CMAP_DEFAULTS[metric_key]
+            if metric_key in CMAP_DEFAULTS
+            else CMAP_DEFAULTS.get(param, {})
+        )
         units = units_override if units_override is not None else cfg.get("units", "")
         return {
             "style": ekp.styles.Style(
@@ -118,6 +139,7 @@ def _(CMAP_DEFAULTS, ekp):
             "vmax": cfg.get("vmax", None),
             "colors": cfg.get("colors", None),
         }
+
     return (get_style,)
 
 
@@ -137,7 +159,6 @@ def _(
     season,
 ):
     # plot individual fields
-    import matplotlib.pyplot as plt
 
     plotter = StatePlotter(
         ds["lon"].values.ravel(),
@@ -160,8 +181,14 @@ def _(
     LOG.info("style_kwargs: %s", style_kwargs)
 
     if np.all(np.isnan(plot_vals)):
-        LOG.warning("All values are NaN for %s %s season=%s — plotting empty map.", param, metric, season)
+        LOG.warning(
+            "All values are NaN for %s %s season=%s — plotting empty map.",
+            param,
+            metric,
+            season,
+        )
         import matplotlib.patches as mpatches
+
         subplot.ax.set_facecolor("#cccccc")
         subplot.standard_layers()
         grey_patch = mpatches.Patch(color="#cccccc", label="No data")
@@ -170,10 +197,9 @@ def _(
         plotter.plot_field(subplot, plot_vals, **style_kwargs)
 
     # black coast lines and country borders for better visibility
-    # grey is hardly visible, especially when the shading colours are intense. 
+    # grey is hardly visible, especially when the shading colours are intense.
     subplot.coastlines(edgecolor="black", linewidth=1.0, zorder=5)
     subplot.borders(edgecolor="black", linewidth=0.5, zorder=5)
-
 
     fig.title(f"{metric} of {param}, Season: {season}, Lead Time: {lead_time}")
 

@@ -75,7 +75,7 @@ def main(args: ScriptConfig):
     for ds in [fcst, truth]:
         if "U_10M" in ds and "V_10M" in ds:
             LOG.info("Calculating Wind Speed (SP_10M)...")
-            ds["SP_10M"] = (ds["U_10M"]**2 + ds["V_10M"]**2)**0.5
+            ds["SP_10M"] = (ds["U_10M"] ** 2 + ds["V_10M"] ** 2) ** 0.5
             # Optional: Add metadata for the netCDF output
             ds["SP_10M"].attrs = {"units": "m/s", "long_name": "10m Wind Speed"}
 

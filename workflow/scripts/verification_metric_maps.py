@@ -48,6 +48,7 @@ def _season_of(dt: datetime) -> str:
         return "JJA"
     return "SON"
 
+
 # Maps from standard parameter names to zarr variable names.
 # COSMO-2e zarrs use short CF names; COSMO-1e zarrs keep the COSMO names.
 _PARAMS_MAP_CO2 = {
@@ -82,6 +83,7 @@ def _compute_derived(ds: xr.Dataset, param: str) -> xr.DataArray:
 # Truth loading
 # ---------------------------------------------------------------------------
 
+
 def _open_zarr_component(root: Path, param: str) -> xr.DataArray:
     """Open a single native zarr variable lazily as a DataArray."""
     zarr_param = _params_map(root)[param]
@@ -111,11 +113,15 @@ def _open_zarr_component(root: Path, param: str) -> xr.DataArray:
     if lat is not None and lon is not None:
         if spatial_dim is not None:
             # flat 1-D case: cell/values dim
-            da = da.assign_coords(lat=(spatial_dim, lat.values), lon=(spatial_dim, lon.values))
+            da = da.assign_coords(
+                lat=(spatial_dim, lat.values), lon=(spatial_dim, lon.values)
+            )
         else:
             # 2-D case: lat/lon still on original flat index — attach via unstack
-            da = da.assign_coords(lat=(["y", "x"], lat.values.reshape(ny, nx)),
-                                  lon=(["y", "x"], lon.values.reshape(ny, nx)))
+            da = da.assign_coords(
+                lat=(["y", "x"], lat.values.reshape(ny, nx)),
+                lon=(["y", "x"], lon.values.reshape(ny, nx)),
+            )
 
     return da
 
@@ -162,6 +168,7 @@ def _preceding_step(grib_dir: Path, step: int) -> int | None:
 # Init-time discovery
 # ---------------------------------------------------------------------------
 
+
 def iter_init_dirs(run_root: Path) -> list[tuple[datetime, Path]]:
     """Return ``(reftime, grib_dir)`` pairs for every complete init time.
 
@@ -207,6 +214,7 @@ def iter_baseline_init_times(zarr_paths: list[Path], step: int) -> list[datetime
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main(args: Namespace) -> None:
     LOG.info("=" * 60)
     LOG.info("Spatial verification  param=%s  step=%dh", args.param, args.step)
@@ -224,11 +232,16 @@ def main(args: Namespace) -> None:
     # Rename flat spatial dim to 'values' if the zarr uses 'cell'.
     if "cell" in truth_da.dims:
         truth_da = truth_da.rename({"cell": "values"})
-    truth_times = set(truth_da.time.values)  # keep as datetime64, tolist() yields ints for ns precision
+    truth_times = set(
+        truth_da.time.values
+    )  # keep as datetime64, tolist() yields ints for ns precision
     LOG.info("Truth opened lazily: %s", truth_da)
 
     if args.baseline_root:
-        init_items = [(rt, None) for rt in iter_baseline_init_times(args.baseline_zarrs, args.step)]
+        init_items = [
+            (rt, None)
+            for rt in iter_baseline_init_times(args.baseline_zarrs, args.step)
+        ]
         LOG.info("Found %d baseline init times", len(init_items))
     else:
         init_items = iter_init_dirs(args.run_root)
@@ -248,8 +261,8 @@ def main(args: Namespace) -> None:
     # Running accumulators per season – initialised on the first successfully
     # processed sample so that we can infer the spatial shape from the data.
     # Each entry is a numpy array over the spatial dimension(s).
-    accum_n:      dict[str, np.ndarray | None] = {s: None for s in SEASONS}
-    accum_sum_e:  dict[str, np.ndarray | None] = {s: None for s in SEASONS}
+    accum_n: dict[str, np.ndarray | None] = {s: None for s in SEASONS}
+    accum_sum_e: dict[str, np.ndarray | None] = {s: None for s in SEASONS}
     accum_sum_se: dict[str, np.ndarray | None] = {s: None for s in SEASONS}
     accum_sum_ae: dict[str, np.ndarray | None] = {s: None for s in SEASONS}
     ref_truth_slice: xr.DataArray | None = None  # kept for output coordinates
@@ -274,7 +287,9 @@ def main(args: Namespace) -> None:
         first_iter = n_ok == 0
 
         # --- load forecast ---
-        fct_params = list(_DERIVED[args.param]) if args.param in _DERIVED else [args.param]
+        fct_params = (
+            list(_DERIVED[args.param]) if args.param in _DERIVED else [args.param]
+        )
 
         try:
             if args.baseline_root:
@@ -291,8 +306,12 @@ def main(args: Namespace) -> None:
                 if args.param in _CUMULATIVE_PARAMS:
                     prev_step = _preceding_step(grib_dir, args.step)
                     if prev_step is None:
-                        LOG.warning("No preceding step for cumulative param %s at step %d, skipping %s",
-                                    args.param, args.step, reftime)
+                        LOG.warning(
+                            "No preceding step for cumulative param %s at step %d, skipping %s",
+                            args.param,
+                            args.step,
+                            reftime,
+                        )
                         n_skip += 1
                         continue
                     load_steps = [prev_step, args.step]
@@ -322,26 +341,44 @@ def main(args: Namespace) -> None:
             fcst_raw = fcst[args.param].values if args.param in fcst else None
             if fcst_raw is not None:
                 n_nan_fcst = int(np.isnan(fcst_raw).sum())
-                LOG.info("fcst[%s]: shape=%s, min=%.4g, max=%.4g, n_nan=%d",
-                         args.param, fcst_raw.shape,
-                         float(np.nanmin(fcst_raw)) if n_nan_fcst < fcst_raw.size else float("nan"),
-                         float(np.nanmax(fcst_raw)) if n_nan_fcst < fcst_raw.size else float("nan"),
-                         n_nan_fcst)
+                LOG.info(
+                    "fcst[%s]: shape=%s, min=%.4g, max=%.4g, n_nan=%d",
+                    args.param,
+                    fcst_raw.shape,
+                    float(np.nanmin(fcst_raw))
+                    if n_nan_fcst < fcst_raw.size
+                    else float("nan"),
+                    float(np.nanmax(fcst_raw))
+                    if n_nan_fcst < fcst_raw.size
+                    else float("nan"),
+                    n_nan_fcst,
+                )
 
         # --- load truth slice ---
         truth_slice = truth_da.sel(time=valid_time).compute()
         # For derived variables truth_da is already the derived DataArray,
         # so wrap it in a Dataset for map_forecast_to_truth compatibility.
-        truth_ds = truth_slice.to_dataset(name=args.param) if isinstance(truth_slice, xr.DataArray) else truth_slice
+        truth_ds = (
+            truth_slice.to_dataset(name=args.param)
+            if isinstance(truth_slice, xr.DataArray)
+            else truth_slice
+        )
 
         if first_iter:
             truth_raw = truth_slice.values
             n_nan_truth = int(np.isnan(truth_raw).sum())
-            LOG.info("truth_slice[%s]: shape=%s, min=%.4g, max=%.4g, n_nan=%d",
-                     args.param, truth_raw.shape,
-                     float(np.nanmin(truth_raw)) if n_nan_truth < truth_raw.size else float("nan"),
-                     float(np.nanmax(truth_raw)) if n_nan_truth < truth_raw.size else float("nan"),
-                     n_nan_truth)
+            LOG.info(
+                "truth_slice[%s]: shape=%s, min=%.4g, max=%.4g, n_nan=%d",
+                args.param,
+                truth_raw.shape,
+                float(np.nanmin(truth_raw))
+                if n_nan_truth < truth_raw.size
+                else float("nan"),
+                float(np.nanmax(truth_raw))
+                if n_nan_truth < truth_raw.size
+                else float("nan"),
+                n_nan_truth,
+            )
 
         # --- map forecast onto truth grid ---
         try:
@@ -362,28 +399,41 @@ def main(args: Namespace) -> None:
 
         if first_iter:
             n_nan_mapped = int(np.isnan(fcst_vals).sum())
-            LOG.info("fcst_mapped[%s]: shape=%s, min=%.4g, max=%.4g, n_nan=%d",
-                     args.param, fcst_vals.shape,
-                     float(np.nanmin(fcst_vals)) if n_nan_mapped < fcst_vals.size else float("nan"),
-                     float(np.nanmax(fcst_vals)) if n_nan_mapped < fcst_vals.size else float("nan"),
-                     n_nan_mapped)
+            LOG.info(
+                "fcst_mapped[%s]: shape=%s, min=%.4g, max=%.4g, n_nan=%d",
+                args.param,
+                fcst_vals.shape,
+                float(np.nanmin(fcst_vals))
+                if n_nan_mapped < fcst_vals.size
+                else float("nan"),
+                float(np.nanmax(fcst_vals))
+                if n_nan_mapped < fcst_vals.size
+                else float("nan"),
+                n_nan_mapped,
+            )
             n_nan_err = int(np.isnan(error).sum())
-            LOG.info("error: shape=%s, min=%.4g, max=%.4g, n_nan=%d / %d",
-                     error.shape,
-                     float(np.nanmin(error)) if n_nan_err < error.size else float("nan"),
-                     float(np.nanmax(error)) if n_nan_err < error.size else float("nan"),
-                     n_nan_err, error.size)
+            LOG.info(
+                "error: shape=%s, min=%.4g, max=%.4g, n_nan=%d / %d",
+                error.shape,
+                float(np.nanmin(error)) if n_nan_err < error.size else float("nan"),
+                float(np.nanmax(error)) if n_nan_err < error.size else float("nan"),
+                n_nan_err,
+                error.size,
+            )
 
         n_nan_error = int(np.isnan(error).sum())
         if n_nan_error == error.size:
-            LOG.warning("reftime=%s: error is all-NaN (%d points) — nothing accumulated.",
-                        reftime.strftime(DATETIME_FMT), error.size)
+            LOG.warning(
+                "reftime=%s: error is all-NaN (%d points) — nothing accumulated.",
+                reftime.strftime(DATETIME_FMT),
+                error.size,
+            )
 
         # --- initialise accumulators on first valid sample ---
         if accum_n["all"] is None:
             for s in SEASONS:
-                accum_n[s]      = np.zeros(error.shape, dtype=np.int64)
-                accum_sum_e[s]  = np.zeros(error.shape, dtype=np.float64)
+                accum_n[s] = np.zeros(error.shape, dtype=np.int64)
+                accum_sum_e[s] = np.zeros(error.shape, dtype=np.float64)
                 accum_sum_se[s] = np.zeros(error.shape, dtype=np.float64)
                 accum_sum_ae[s] = np.zeros(error.shape, dtype=np.float64)
             ref_truth_slice = truth_slice
@@ -392,8 +442,8 @@ def main(args: Namespace) -> None:
         season = _season_of(reftime)
         valid = ~np.isnan(error)
         for s in [season, "all"]:
-            accum_n[s][valid]      += 1
-            accum_sum_e[s][valid]  += error[valid]
+            accum_n[s][valid] += 1
+            accum_sum_e[s][valid] += error[valid]
             accum_sum_se[s][valid] += error[valid] ** 2
             accum_sum_ae[s][valid] += np.abs(error[valid])
         n_ok += 1
@@ -435,9 +485,7 @@ def main(args: Namespace) -> None:
             f"{args.param}.MAE": _seasonal_da(
                 lambda n, s: np.where(n > 0, accum_sum_ae[s] / n, np.nan)
             ),
-            f"{args.param}.N": _seasonal_da(
-                lambda n, s: np.where(n > 0, n, np.nan)
-            ),
+            f"{args.param}.N": _seasonal_da(lambda n, s: np.where(n > 0, n, np.nan)),
         },
         attrs={
             "param": args.param,
@@ -521,6 +569,8 @@ if __name__ == "__main__":
 
     if args.output is None:
         source = args.run_root or args.baseline_root
-        args.output = source / f"verification_metric_maps_{args.param}_step{args.step:03d}h.nc"
+        args.output = (
+            source / f"verification_metric_maps_{args.param}_step{args.step:03d}h.nc"
+        )
 
     main(args)

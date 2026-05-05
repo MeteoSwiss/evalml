@@ -150,16 +150,18 @@ rule plot_summary_stat_maps:
         script="workflow/scripts/plot_summary_stat_maps.mo.py",
         verif_file=OUT_ROOT / "data/runs/{run_id}/metric_maps/{param}_{leadtime}.nc",
     output:
-        OUT_ROOT / "results/{experiment}/metric_maps/runs/{run_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
+        OUT_ROOT
+        / "results/{experiment}/metric_maps/runs/{run_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
     log:
-        OUT_ROOT / "logs/plot_summary_stat_maps/{experiment}/{run_id}-{param}-{metric}-{region}-{season}-{leadtime}.log",
+        OUT_ROOT
+        / "logs/plot_summary_stat_maps/{experiment}/{run_id}-{param}-{metric}-{region}-{season}-{leadtime}.log",
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
         runtime="10m",
-        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230"
+        slurm_extra="--exclude=nid001229,nid001225,nid001226,nid001227,nid001230",
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
@@ -174,11 +176,15 @@ rule plot_summary_stat_maps:
         #     --season {wildcards.season}
         """
 
+
 use rule plot_summary_stat_maps as plot_summary_stat_maps_baseline with:
     input:
         script="workflow/scripts/plot_summary_stat_maps.mo.py",
-        verif_file=OUT_ROOT / "data/baselines/{baseline_id}/metric_maps/{param}_{leadtime}.nc",
+        verif_file=OUT_ROOT
+        / "data/baselines/{baseline_id}/metric_maps/{param}_{leadtime}.nc",
     output:
-        OUT_ROOT / "results/{experiment}/metric_maps/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
+        OUT_ROOT
+        / "results/{experiment}/metric_maps/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
     log:
-        OUT_ROOT / "logs/plot_summary_stat_maps/{experiment}/{baseline_id}-{param}-{metric}-{region}-{season}-{leadtime}.log",
+        OUT_ROOT
+        / "logs/plot_summary_stat_maps/{experiment}/{baseline_id}-{param}-{metric}-{region}-{season}-{leadtime}.log",

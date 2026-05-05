@@ -172,7 +172,16 @@ def cli():
 )
 @workflow_options
 def experiment(
-    configfile, maps, cores, verbose, dry_run, unlock, report, dag, rulegraph, extra_smk_args
+    configfile,
+    maps,
+    cores,
+    verbose,
+    dry_run,
+    unlock,
+    report,
+    dag,
+    rulegraph,
+    extra_smk_args,
 ):
     execute_workflow(
         configfile,
