@@ -6,25 +6,17 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
-
-    # this sure stays the same.
     import logging
     from argparse import ArgumentParser
     from pathlib import Path
 
-    # this sure stays the same.
     import cartopy.crs as ccrs
     import earthkit.plots as ekp
     import numpy as np
     import xarray as xr
 
-    # this stays the same as well.
     from plotting import DOMAINS
-
-    # no changes to StatePlotter required according to ChatGPT.
     from plotting import StatePlotter
-
-    # Added some new colour maps for the Bias / MAE / RMSE map plots. 
     from plotting.colormap_defaults import CMAP_DEFAULTS
     return (
         ArgumentParser,
@@ -100,8 +92,7 @@ def _(LOG, metric, param, season, verif_file, xr):
     ds = ds[var].sel(season=season)
     LOG.info("Selected DataArray: dims=%s, shape=%s, dtype=%s", ds.dims, ds.shape, ds.dtype)
     LOG.info("Value range: min=%.4g, max=%.4g, n_nan=%d", float(ds.min()), float(ds.max()), int(ds.isnull().sum()))
-    ds
-    return ds, var
+    return (ds,)
 
 @app.cell
 def _(CMAP_DEFAULTS, ekp):
@@ -144,7 +135,6 @@ def _(
     param,
     region,
     season,
-    var,
 ):
     # plot individual fields
     import matplotlib.pyplot as plt
@@ -178,25 +168,11 @@ def _(
         subplot.ax.legend(handles=[grey_patch], loc="lower left", fontsize=8)
     else:
         plotter.plot_field(subplot, plot_vals, **style_kwargs)
-    # subplot.ax.add_geometries(
-    #     state["lam_envelope"],
-    #     edgecolor="black",
-    #     facecolor="none",
-    #     crs=ccrs.PlateCarree(),
-    # )
-
-    # validtime = state["valid_time"].strftime("%Y%m%d%H%M")
-    # # leadtime = int(state["lead_time"].total_seconds() // 3600)
 
     fig.title(f"{metric} of {param}, Season: {season}, Lead Time: {lead_time}")
 
     fig.save(outfn, bbox_inches="tight", dpi=200)
     LOG.info(f"saved: {outfn}")
-    return
-
-
-@app.cell
-def _():
     return
 
 
