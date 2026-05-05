@@ -62,7 +62,7 @@ showcase:
     - TOT_PREC
   meteograms: false
   animations: true
-  regions:
+  domains:
     - europe
     - switzerland
     - name: alpine_arc
