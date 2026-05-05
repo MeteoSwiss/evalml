@@ -169,6 +169,12 @@ def _(
     else:
         plotter.plot_field(subplot, plot_vals, **style_kwargs)
 
+    # black coast lines and country borders for better visibility
+    # grey is hardly visible, especially when the shading colours are intense. 
+    subplot.coastlines(edgecolor="black", linewidth=1.0, zorder=5)
+    subplot.borders(edgecolor="black", linewidth=0.5, zorder=5)
+
+
     fig.title(f"{metric} of {param}, Season: {season}, Lead Time: {lead_time}")
 
     fig.save(outfn, bbox_inches="tight", dpi=200)
