@@ -7,9 +7,11 @@ from .colormap_loader import load_ncl_colormap
 from matplotlib.colors import BoundaryNorm
 import numpy as np
 
+
 def _fallback():
     warnings.warn("No colormap found for this parameter, using fallback.", UserWarning)
     return {"cmap": plt.get_cmap("viridis"), "norm": None, "units": ""}
+
 
 _CMAP_DEFAULTS = {
     "SP": {"cmap": plt.get_cmap("coolwarm", 11), "vmin": 800 * 100, "vmax": 1100 * 100},
