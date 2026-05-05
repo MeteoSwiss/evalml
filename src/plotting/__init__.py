@@ -32,9 +32,10 @@ DOMAINS = {
     # The domains which are originally called "centraleurope" and "switzerland"
     # are mostly the same. I suggest making domain "switzerland" much smaller, 
     # so that more spatial detail can be seen, especially in the complex 
-    # topography of the alps. 
+    # topography of the alps. Also, make domain "centraleurope" slightly smaller, 
+    # to zoom in more on the LAM area, so that less plotting area outside is lost. 
     "centraleurope": {
-        "extent": [-2.6, 19.5, 40.2, 52.3],
+        "extent": [-1.5, 18, 41.5, 51],
         "projection": _PROJECTIONS["orthographic"],
     },
     "switzerland": {
