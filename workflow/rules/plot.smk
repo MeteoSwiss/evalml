@@ -137,11 +137,17 @@ def get_leadtimes(wc):
 
 rule make_forecast_animation:
     localrule: True
+    wildcard_constraints:
+        param="|".join(map(re.escape, SHOWCASE_PARAMS)),
+        region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
     input:
-        expand(
+        lambda wc: expand(
             rules.plot_forecast_frame.output,
-            leadtime=lambda wc: get_leadtimes(wc),
-            allow_missing=True,
+            run_id=wc.run_id,
+            init_time=wc.init_time,
+            param=wc.param,
+            region=wc.region,
+            leadtime=get_leadtimes(wc),
         ),
     output:
         OUT_ROOT
