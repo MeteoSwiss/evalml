@@ -59,11 +59,9 @@ rule collect_system_metrics:
         log_dir=str(OUT_ROOT / "logs/inference_execute"),
     run:
         import json
-        import sys
         from pathlib import Path
 
-        sys.path.insert(0, str(Path(workflow.snakefile).parent / "scripts"))
-        from parse_inference_logs import parse_logs
+        from diagnostics import parse_logs
 
         records = parse_logs(
             log_files=params.log_files,
