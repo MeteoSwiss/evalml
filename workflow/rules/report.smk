@@ -47,22 +47,44 @@ rule report_experiment_dashboard:
 
 rule report_scorecard:
     localrule: True
+    wildcard_constraints:
+        run_id="[^/]+/[^/]+",  # env_id/r_hash — exactly one slash
+        baseline="[^/]+",
     input:
         script="workflow/scripts/report_scorecard.mo.py",
         verif_run=lambda wc: EXPERIMENT_PARTICIPANTS[wc.run_id],
         verif_baseline=lambda wc: EXPERIMENT_PARTICIPANTS[wc.baseline],
     output:
         report(
-            OUT_ROOT / "results/{experiment}/plot/scorecard_{run_id}vs{baseline}.png",
+            OUT_ROOT
+            / "results/{experiment}/scorecard_plots/{run_id}/scorecard_{baseline}.png",
         ),
     params:
         lead_times="6/33/6",
-        regions=["all", "mittelland", "berge"],
-        variables=["T_2M:RMSE,MAE"],
-        run_source=lambda wc: wc.run_id,
-        baseline_source=lambda wc: wc.baseline,
+        regions=[
+            "all",
+            "mittelland",
+            "voralpen",
+            "alpennordhang",
+            "innerealpentaeler",
+            "alpensuedseite",
+            "jura",
+        ],
+        variables=[
+            "U_10M:RMSE,MAE,STDE,CORR,R2",
+            "V_10M:RMSE,MAE,STDE,CORR,R2",
+            "T_2M:RMSE,MAE,STDE,CORR,R2",
+            "PMSL:RMSE,MAE,STDE,CORR,R2",
+            "TD_2M:RMSE,MAE,STDE,CORR,R2",
+            "TOT_PREC:RMSE,MAE,STDE,CORR,R2",
+        ],
+        run_source=lambda wc: RUN_CONFIGS[wc.run_id].get("label", wc.run_id),
+        baseline_source=lambda wc: BASELINE_CONFIGS[wc.baseline].get(
+            "label", wc.baseline
+        ),
     log:
-        OUT_ROOT / "logs/report_scorecard/{experiment}_{run_id}vs{baseline}.log",
+        OUT_ROOT
+        / "logs/report_scorecard/{experiment}/{run_id}/scorecard_{baseline}.log",
     shell:
         """
         VAR_ARGS=()

@@ -6,7 +6,6 @@ app = marimo.App(width="full")
 
 @app.cell
 def _():
-    import os
     from argparse import ArgumentParser
     from pathlib import Path
 
@@ -17,7 +16,7 @@ def _():
     import matplotlib.pyplot as plt
     from matplotlib.transforms import ScaledTranslation
 
-    return ArgumentParser, Path, ScaledTranslation, np, os, pd, plt, xr
+    return ArgumentParser, Path, ScaledTranslation, np, pd, plt, xr
 
 
 @app.cell
@@ -207,182 +206,11 @@ def config(ArgumentParser, Path):
                 ],  # |diff|% values shown on each side of neutral
                 "label_fontsize_factor": 0.85,  # factor applied to fonts.legend for the small labels
                 "side_text_offset": 0.02,  # gap (axes fraction) between outer dot and side label
-                "missing_dot_offset_pt": 16,  # extra vertical gap for the "no data" example (points)
+                "missing_dot_offset_pt": 50,  # extra vertical gap (points) below the main legend row for the "no data" example
             },
         },
     }
-
-    cfg
     return cfg, outfn
-
-
-# todo: shorten or remove this part & other validations
-@app.cell
-def validate_config(cfg, os, xr):
-    """Validate config keys, metric directions, lead-time grid and dataset selections; fail fast."""
-    errors = []
-
-    # 1) Required top-level keys.
-    REQUIRED_TOP_KEYS = (
-        "model",
-        "baseline",
-        "season",
-        "init_hour",
-        "all_metrics",
-        "metric_directions",
-        "plot",
-    )
-    for _key in REQUIRED_TOP_KEYS:
-        if _key not in cfg:
-            errors.append(f"Missing required key: '{_key}'")
-
-    # 2) model/baseline must each have `path` and `source`.
-    for role in ("model", "baseline"):
-        if role in cfg:
-            for sub in ("path", "source"):
-                if sub not in (cfg[role] or {}):
-                    errors.append(f"cfg['{role}'] is missing '{sub}'")
-
-    # 3) metric_directions must partition all_metrics (no overlap, no gap).
-    if "metric_directions" in cfg and "all_metrics" in cfg:
-        md_cfg = cfg["metric_directions"] or {}
-        lb = md_cfg.get("lower_is_better")
-        hb = md_cfg.get("higher_is_better")
-        if lb is None:
-            errors.append(
-                "metric_directions.lower_is_better is missing or null (use [] for empty)"
-            )
-        elif not isinstance(lb, list):
-            errors.append(
-                f"metric_directions.lower_is_better must be a list, got: {type(lb).__name__}"
-            )
-        if hb is None:
-            errors.append(
-                "metric_directions.higher_is_better is missing or null (use [] for empty)"
-            )
-        elif not isinstance(hb, list):
-            errors.append(
-                f"metric_directions.higher_is_better must be a list, got: {type(hb).__name__}"
-            )
-        if isinstance(lb, list) and isinstance(hb, list):
-            lb_set, hb_set = set(lb), set(hb)
-            all_set = set(cfg["all_metrics"] or [])
-            overlap = lb_set & hb_set
-            _missing = all_set - (lb_set | hb_set)
-            extra = (lb_set | hb_set) - all_set
-            if overlap:
-                errors.append(
-                    f"Metrics in both lower_is_better and higher_is_better: {sorted(overlap)}"
-                )
-            if _missing:
-                errors.append(
-                    f"Metrics in all_metrics with no direction assigned: {sorted(_missing)}"
-                )
-            if extra:
-                errors.append(
-                    f"Metrics in metric_directions but not in all_metrics: {sorted(extra)}"
-                )
-
-    # 4) Per-variable metric overrides must be a subset of all_metrics.
-    if "all_metrics" in cfg and cfg.get("variables"):
-        all_m = set(cfg["all_metrics"] or [])
-        for _var_name, _var_metrics in cfg["variables"].items():
-            for _m in _var_metrics or []:
-                if _m not in all_m:
-                    errors.append(
-                        f"variables.{_var_name}: metric '{_m}' is not in all_metrics"
-                    )
-
-    # 5) lead_times format: "start/stop/step" with integers and step > 0.
-    if cfg.get("lead_times"):
-        try:
-            parts = str(cfg["lead_times"]).split("/")
-            assert len(parts) == 3, "must have exactly 3 parts"
-            lt_start, lt_stop, lt_step = int(parts[0]), int(parts[1]), int(parts[2])
-            if lt_step <= 0:
-                errors.append(f"lead_times step must be > 0, got {lt_step}")
-            if lt_stop < lt_start:
-                errors.append(
-                    f"lead_times stop ({lt_stop}) must be >= start ({lt_start})"
-                )
-        except (ValueError, AssertionError) as e:
-            errors.append(
-                f"lead_times must be 'start/stop/step' integers, got: '{cfg['lead_times']}' ({e})"
-            )
-
-    # 6) Files exist; source/season/init_hour/regions are valid in each dataset.
-    if not errors:
-        for role in ("model", "baseline"):
-            path = cfg[role]["path"]
-            source = cfg[role]["source"]
-            if not os.path.exists(path):
-                errors.append(f"{role} file not found:\n    {path}")
-                continue
-            ds_meta = xr.open_dataset(path)
-
-            # Check that each requested scalar selection exists in the dataset.
-            for dim, _val in [
-                ("source", source),
-                ("season", cfg["season"]),
-                ("init_hour", cfg["init_hour"]),
-            ]:
-                if dim in ds_meta.dims and _val not in ds_meta[dim].values:
-                    errors.append(
-                        f"{role}: '{_val}' not found in dim '{dim}'.\n"
-                        f"    Available: {list(ds_meta[dim].values)}"
-                    )
-
-            # Regions are a list, so check each element individually.
-            if cfg.get("regions"):
-                if "region" not in ds_meta.dims:
-                    errors.append(
-                        f"{role}: 'regions' specified in config but dataset has no 'region' dimension"
-                    )
-                else:
-                    _available = list(ds_meta["region"].values)
-                    _unknown = [r for r in cfg["regions"] if r not in _available]
-                    if _unknown:
-                        errors.append(
-                            f"{role}: region(s) {_unknown} not found.\n    Available: {_available}"
-                        )
-
-            ds_meta.close()
-
-    # 7) Variables in config must exist in the model dataset.
-    if not errors and cfg.get("variables"):
-        ds_check = xr.open_dataset(cfg["model"]["path"])
-        prefixes = {v.split(".")[0] for v in ds_check.data_vars}
-        ds_check.close()
-        for _var_name in cfg["variables"]:
-            if _var_name not in prefixes:
-                errors.append(f"Variable '{_var_name}' not found in model dataset")
-
-    # 8) Plot section: required subsections must exist.
-    if "plot" in cfg:
-        required_plot_subkeys = (
-            "rcparams",
-            "colors",
-            "fonts",
-            "dots",
-            "figure",
-            "layout",
-            "hline",
-            "vline",
-            "legend",
-        )
-        for k in required_plot_subkeys:
-            if k not in (cfg["plot"] or {}):
-                errors.append(f"plot.{k} is missing")
-
-    # 9) Report.
-    if errors:
-        for e in errors:
-            print(f"❌  {e}")
-        raise ValueError(
-            f"Config validation failed ({len(errors)} error(s)). Fix the config and re-run."
-        )
-    print("✅  Config OK")
-    return
 
 
 @app.cell
@@ -417,7 +245,6 @@ def align_and_diff(cfg, np, xr):
         .squeeze(drop=True)
     )
 
-    # Restrict to the variables and lead times present in both datasets.
     common_vars = [v for v in model.data_vars if v in baseline.data_vars]
     common_leads = sorted(set(model.lead_time.values) & set(baseline.lead_time.values))
 
@@ -440,78 +267,47 @@ def align_and_diff(cfg, np, xr):
 
     model.close()
     baseline.close()
-    diff
     return (
         all_metrics,
-        b,
         baseline_source,
         diff,
         higher_is_better,
         lower_is_better,
-        m,
         model_source,
     )
 
 
 @app.cell
-def filter_diff(all_metrics, b, cfg, diff, m, pd):
+def filter_diff(all_metrics, cfg, diff, pd):
     """Filter diff by regions, lead-time grid and variable/metric selection."""
 
     def to_h(td):
-        """Convert timedelta64[ns] into integer hours. Raises if not a whole number of hours."""
-        h = pd.Timedelta(td).total_seconds() / 3600
-        if h != int(h):
-            raise ValueError(f"Lead time {td} is not a whole number of hours ({h}h)")
-        return int(h)
+        return int(pd.Timedelta(td).total_seconds() / 3600)
 
-    model_leads_h = sorted(to_h(lt) for lt in m.lead_time.values)
-    baseline_leads_h = sorted(to_h(lt) for lt in b.lead_time.values)
-
-    # ── Regions ──────────────────────────────────────────────────────────────────
     diff_filtered = diff
     if cfg.get("regions"):
-        _available = list(diff_filtered.region.values)
-        _unknown = [r for r in cfg["regions"] if r not in _available]
-        if _unknown:
-            raise ValueError(
-                f"Unknown region(s): {_unknown}\n  Available: {_available}"
-            )
         diff_filtered = diff_filtered.sel(region=cfg["regions"])
 
-    # ── Lead times ───────────────────────────────────────────────────────────────
     if cfg.get("lead_times"):
         start, stop, step = (int(x) for x in cfg["lead_times"].split("/"))
         requested = {pd.Timedelta(h, "h") for h in range(start, stop + 1, step)}
         _available = {pd.Timedelta(lt) for lt in diff_filtered.lead_time.values}
         keep = sorted(requested & _available)
-        _missing = sorted(requested - _available)
-
-        if _missing:
-            print(
-                f"⚠️  Lead times not in dataset (skipped): {[to_h(lt) for lt in _missing]}h"
-            )
-            print(f"    model    (h): {model_leads_h}")
-            print(f"    baseline (h): {baseline_leads_h}")
         if not keep:
             raise ValueError(
-                f"No lead times match '{cfg['lead_times']}'.\n"
-                f"  model    (h): {model_leads_h}\n"
-                f"  baseline (h): {baseline_leads_h}"
+                f"No lead times match '{cfg['lead_times']}'. "
+                f"Available (h): {sorted(to_h(lt) for lt in _available)}"
             )
         diff_filtered = diff_filtered.sel(lead_time=keep)
 
-    # ── Variables and metrics ────────────────────────────────────────────────────
     # Order follows cfg["variables"] for groups; within each group, follows all_metrics.
     if cfg.get("variables"):
-        keep = []
-        for _var_name, _var_metrics in cfg["variables"].items():
-            allowed = _var_metrics or all_metrics
-            for _m in allowed:
-                _key = f"{_var_name}.{_m}"
-                if _key in diff_filtered.data_vars:
-                    keep.append(_key)
-                else:
-                    print(f"⚠️  {_key} not found in dataset, skipped")
+        keep = [
+            f"{_var_name}.{_m}"
+            for _var_name, _var_metrics in cfg["variables"].items()
+            for _m in (_var_metrics or all_metrics)
+            if f"{_var_name}.{_m}" in diff_filtered.data_vars
+        ]
         diff_filtered = diff_filtered[keep]
     else:
         diff_filtered = diff_filtered[
@@ -519,12 +315,7 @@ def filter_diff(all_metrics, b, cfg, diff, m, pd):
         ]
 
     if not diff_filtered.data_vars:
-        raise ValueError(
-            "No variables left after filtering. "
-            "Check that variables/metrics in the config exist in both datasets."
-        )
-
-    diff_filtered
+        raise ValueError("No variables left after filtering.")
     return diff_filtered, to_h
 
 
@@ -572,7 +363,6 @@ def plot_scorecard(
         )
 
     # ── Figure size and layout precomputation ────────────────────────────────────
-    # One row per (variable, metric), one column per lead time.
     rows = [tuple(v.rsplit(".", 1)) for v in diff_filtered.data_vars]
     regions_ = list(diff_filtered.region.values)
     n_leads = diff_filtered.sizes["lead_time"]
@@ -695,10 +485,6 @@ def plot_scorecard(
             fontsize=fonts["metric"],
         )
 
-        # Marker per (region, lead_time) cell:
-        #   NaN                   -> grey "x"
-        #   |diff|% < threshold   -> neutral grey dot (tie)
-        #   else                  -> coloured dot sized by |diff|%, blue=model, red=baseline
         for sec_idx, region in enumerate(regions_):
             x_off = sec_idx * (n_leads + layout["region_gap"])
             for lt_idx, d in enumerate(diff_filtered[name].sel(region=region).values):
@@ -771,8 +557,6 @@ def plot_scorecard(
     sample_pcts = legend["sample_pcts"]
     neutral_pct = dots["neutral_threshold_pct"]
 
-    # Legend dots, left to right: baseline-better (red) large→small,
-    # neutral (grey), model-better (blue) small→large.
     dot_specs = (
         [(p, colors["baseline_better"], f"-{p}%") for p in sample_pcts]
         + [(neutral_pct, colors["neutral"], f"|Δ|<{neutral_pct}%")]
@@ -853,8 +637,9 @@ def plot_scorecard(
     )
 
     if has_missing:
+        x_neutral = x_dots[len(sample_pcts)]
         ax.plot(
-            [0.5],
+            [x_neutral],
             [0],
             "x",
             color=colors["missing"],
@@ -864,13 +649,12 @@ def plot_scorecard(
             clip_on=False,
         )
         ax.text(
-            0.5,
+            x_neutral,
             0,
             "No data",
             ha="center",
             va="top",
             fontsize=small_fs,
-            color=colors["missing"],
             transform=miss_label_trans,
             clip_on=False,
         )
