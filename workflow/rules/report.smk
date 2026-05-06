@@ -30,8 +30,7 @@ rule collect_system_metrics:
     input:
         okfiles=[
             OUT_ROOT / f"logs/inference_execute/{run_id}-{t.strftime('%Y%m%d%H%M')}.ok"
-            for run_id, run_cfg in RUN_CONFIGS.items()
-            if run_cfg.get("_is_candidate", False)
+            for run_id in RUN_CONFIGS
             for t in REFTIMES
         ],
     output:
@@ -42,19 +41,15 @@ rule collect_system_metrics:
                 OUT_ROOT
                 / f"logs/inference_execute/{run_id}-{t.strftime('%Y%m%d%H%M')}.log"
             )
-            for run_id, run_cfg in RUN_CONFIGS.items()
-            if run_cfg.get("_is_candidate", False)
+            for run_id in RUN_CONFIGS
             for t in REFTIMES
         ],
         label_map={
             run_id: run_cfg.get("label", run_id)
             for run_id, run_cfg in RUN_CONFIGS.items()
-            if run_cfg.get("_is_candidate", False)
         },
         gpu_map={
-            run_id: _candidate_gpu(run_cfg)
-            for run_id, run_cfg in RUN_CONFIGS.items()
-            if run_cfg.get("_is_candidate", False)
+            run_id: _candidate_gpu(run_cfg) for run_id, run_cfg in RUN_CONFIGS.items()
         },
         log_dir=str(OUT_ROOT / "logs/inference_execute"),
     run:

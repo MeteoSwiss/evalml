@@ -13,14 +13,13 @@ _CHECKPOINT_SIZE = re.compile(r"Checkpoint size: ([\d.]+) GiB")
 _N_STEPS = re.compile(r"Forecasting (\d+) steps")
 _STEP_TIME = re.compile(r"Forecast\. Model call \d+:.+?: (\d+) seconds\.")
 
-# Human-readable names for wide-format columns used in the dashboard
+# Columns exposed as distribution metrics in the dashboard
 SYSMETRICS_COLS = {
     "wall_time_s": "Wall Time (s)",
     "gpu_hours": "GPU Hours",
     "mean_step_time_s": "Mean Step Time (s)",
     "max_step_time_s": "Max Step Time (s)",
-    "checkpoint_size_gib": "Checkpoint Size (GiB)",
-    "n_steps": "No. Steps",
+    "n_gpu": "GPUs",
 }
 
 
@@ -114,6 +113,7 @@ def parse_logs(
 
         label = label_map.get(run_id, run_id)
         n_gpu = int(gpu_map.get(run_id, 1))
+        model_type = run_id.split("-")[0]
 
         try:
             raw = parse_single_log(str(log_path))
@@ -133,6 +133,7 @@ def parse_logs(
             {
                 "source": label,
                 "run_id": run_id,
+                "model_type": model_type,
                 "init_time": init_iso,
                 "n_gpu": n_gpu,
                 "gpu_hours": gpu_hours,
@@ -144,19 +145,23 @@ def parse_logs(
     return records
 
 
-def melt_for_dashboard(records: list[dict]) -> tuple[str, list[str]]:
+def melt_for_dashboard(records: list[dict]) -> tuple[str, list[str], list[str]]:
     """Convert wide-format system metrics records to long format for Vega-Lite.
 
-    Returns (json_string, sorted_source_list).
+    Returns (json_string, sorted_source_list, sorted_model_type_list).
     """
     import json
 
     long_records = []
     for r in records:
-        base = {k: r.get(k) for k in ("source", "init_time", "n_gpu", "job_id")}
+        base = {
+            k: r.get(k)
+            for k in ("source", "model_type", "init_time", "n_gpu", "job_id")
+        }
         for col, label in SYSMETRICS_COLS.items():
             if r.get(col) is not None:
                 long_records.append({**base, "metric": label, "value": r[col]})
 
     sources = sorted({r["source"] for r in records})
-    return json.dumps(long_records), sources
+    model_types = sorted({r.get("model_type", "unknown") for r in records})
+    return json.dumps(long_records), sources, model_types

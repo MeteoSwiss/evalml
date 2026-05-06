@@ -193,6 +193,15 @@ const sysDataEl = document.getElementById("sysmetrics-data");
 const sysData = sysDataEl ? JSON.parse(sysDataEl.textContent) : [];
 
 if (sysData.length > 0) {
+  choicesInstances["sys-model-type-select"] = new Choices("#sys-model-type-select", {
+    searchEnabled: false,
+    removeItemButton: true,
+    shouldSort: false,
+    itemSelectText: "",
+    placeholder: false,
+  });
+  document.getElementById("sys-model-type-select").addEventListener("change", updateSysChart);
+
   choicesInstances["sys-source-select"] = new Choices("#sys-source-select", {
     searchEnabled: false,
     removeItemButton: true,
@@ -209,42 +218,57 @@ if (sysData.length > 0) {
     },
     "resolve": { "scale": { "y": "independent" } },
     "spec": {
-      "width": 220,
-      "height": 220,
-      "layer": [
-        {
-          "mark": { "type": "bar", "opacity": 0.7 },
-          "encoding": {
-            "x": { "field": "source", "type": "nominal", "axis": { "labelAngle": -30, "title": null } },
-            "y": { "field": "value", "aggregate": "mean", "type": "quantitative", "title": "mean" },
-            "color": { "field": "source", "type": "nominal", "legend": { "orient": "top", "title": "Source" } },
-          },
+      "width": 280,
+      "height": 240,
+      "mark": { "type": "point", "filled": true, "size": 70, "opacity": 0.85 },
+      "encoding": {
+        "x": {
+          "field": "source",
+          "type": "nominal",
+          "axis": { "labelAngle": -30, "title": null }
         },
-        {
-          "mark": { "type": "point", "filled": true, "size": 40, "opacity": 0.9 },
-          "encoding": {
-            "x": { "field": "source", "type": "nominal" },
-            "y": { "field": "value", "type": "quantitative" },
-            "color": { "field": "source", "type": "nominal" },
-            "tooltip": [
-              { "field": "source", "type": "nominal", "title": "Source" },
-              { "field": "init_time", "type": "nominal", "title": "Init time" },
-              { "field": "metric", "type": "nominal", "title": "Metric" },
-              { "field": "value", "type": "quantitative", "title": "Value", "format": ".3f" },
-              { "field": "n_gpu", "type": "quantitative", "title": "GPUs" },
-              { "field": "job_id", "type": "nominal", "title": "Job ID" },
-            ],
-          },
+        "y": {
+          "field": "value",
+          "type": "quantitative",
+          "title": null,
+          "scale": { "zero": true }
         },
-      ],
+        "color": {
+          "field": "model_type",
+          "type": "nominal",
+          "legend": { "orient": "top", "title": "Model type" }
+        },
+        "shape": {
+          "field": "model_type",
+          "type": "nominal",
+          "legend": { "orient": "top", "title": "Model type" }
+        },
+        "tooltip": [
+          { "field": "source", "type": "nominal", "title": "Source" },
+          { "field": "model_type", "type": "nominal", "title": "Model type" },
+          { "field": "init_time", "type": "nominal", "title": "Init time" },
+          { "field": "metric", "type": "nominal", "title": "Metric" },
+          { "field": "value", "type": "quantitative", "title": "Value", "format": ".3f" },
+          { "field": "n_gpu", "type": "quantitative", "title": "GPUs" },
+          { "field": "job_id", "type": "nominal", "title": "Job ID" },
+        ],
+      },
     },
   };
 
   function updateSysChart() {
+    const selectedModelTypes = getSelectedValues("sys-model-type-select");
     const selectedSources = getSelectedValues("sys-source-select");
     const newSpec = JSON.parse(JSON.stringify(sysSpec));
+    const filters = [];
+    if (selectedModelTypes.length > 0) {
+      filters.push({ field: "model_type", oneOf: selectedModelTypes });
+    }
     if (selectedSources.length > 0) {
-      newSpec.transform = [{ filter: { field: "source", oneOf: selectedSources } }];
+      filters.push({ field: "source", oneOf: selectedSources });
+    }
+    if (filters.length > 0) {
+      newSpec.transform = [{ filter: { and: filters } }];
     }
     vegaEmbed("#sys-vis", newSpec, { actions: false });
   }

@@ -163,6 +163,14 @@
     <div id="tab_sysmetrics" class="tab-content">
         <div class="controls">
             <div class="control-group">
+                <label>Model type(s)</label>
+                <select id="sys-model-type-select" multiple>
+                    {% for model_type in sysmetrics_model_types %}
+                    <option value="{{model_type}}" selected>{{model_type}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="control-group">
                 <label>Source(s)</label>
                 <select id="sys-source-select" multiple>
                     {% for source in sysmetrics_sources %}

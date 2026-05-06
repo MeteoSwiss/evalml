@@ -19,15 +19,19 @@ logging.basicConfig(
 )
 
 
-def _load_sysmetrics(sysmetrics_file: Path) -> tuple[str, list[str]]:
+def _load_sysmetrics(sysmetrics_file: Path) -> tuple[str, list[str], list[str]]:
     """Load system metrics JSON and melt to long format for Vega-Lite."""
     if not sysmetrics_file or not sysmetrics_file.is_file():
-        return "[]", []
+        return "[]", [], []
     with open(sysmetrics_file) as fh:
         records = json.load(fh)
-    sysmetrics_json, sources = melt_for_dashboard(records)
-    LOG.info("Loaded system metrics for %d source(s)", len(sources))
-    return sysmetrics_json, sources
+    sysmetrics_json, sources, model_types = melt_for_dashboard(records)
+    LOG.info(
+        "Loaded system metrics for %d source(s), %d model type(s)",
+        len(sources),
+        len(model_types),
+    )
+    return sysmetrics_json, sources, model_types
 
 
 def program_summary_log(args):
@@ -90,7 +94,9 @@ def main(args):
     LOG.info("Size of embedded JSON data: %d bytes", json_size)
 
     # load system metrics
-    sysmetrics_json, sysmetrics_sources = _load_sysmetrics(args.sysmetrics_file)
+    sysmetrics_json, sysmetrics_sources, sysmetrics_model_types = _load_sysmetrics(
+        args.sysmetrics_file
+    )
 
     # read script
     with open(args.script, "r") as f:
@@ -116,6 +122,7 @@ def main(args):
         else "",
         sysmetrics_data=sysmetrics_json,
         sysmetrics_sources=sysmetrics_sources,
+        sysmetrics_model_types=sysmetrics_model_types,
     )
     LOG.info("Size of generated HTML: %d bytes", len(html.encode("utf-8")))
 
