@@ -252,6 +252,11 @@ class ShowcaseConfig(BaseModel):
             "[lon_min, lon_max, lat_min, lat_max], and optional 'projection'."
         ),
     )
+    animation_speed: float = Field(
+        default=10.0,
+        gt=0,
+        description="Animation playback speed in simulated hours per second.",
+    )
 
 
 class Locations(BaseModel):

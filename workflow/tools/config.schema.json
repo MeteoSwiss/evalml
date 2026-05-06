@@ -562,6 +562,13 @@
           },
           "title": "Domains",
           "type": "array"
+        },
+        "animation_speed": {
+          "default": 10.0,
+          "description": "Animation playback speed in simulated hours per second.",
+          "exclusiveMinimum": 0,
+          "title": "Animation Speed",
+          "type": "number"
         }
       },
       "title": "ShowcaseConfig",
