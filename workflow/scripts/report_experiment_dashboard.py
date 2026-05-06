@@ -7,8 +7,8 @@ import jinja2
 import xarray as xr
 
 _sys.path.append(str(Path(__file__).parent))
-from verification_plot_metrics import _ensure_unique_lead_time
-from verification_plot_metrics import _select_best_sources
+from verification_plot_metrics import _ensure_unique_lead_time, _select_best_sources
+from verification import decode_metric
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -42,11 +42,22 @@ def main(args):
     nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
     df = ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
     df[["param", "metric"]] = df["stack"].str.split(".", n=1, expand=True)
+    df["metric"] = df.metric.apply(decode_metric)
     df.drop(columns=["stack"], inplace=True)
     df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
     # convert numeric column init_hour to string in format HH:00 UTC and replace -999 with "all"
     df["init_hour"] = df["init_hour"].astype(str).str.zfill(2) + ":00 UTC"
     df["init_hour"] = df["init_hour"].where(df["init_hour"] != "-999:00 UTC", "all")
+
+    # retain only rows relevant for the active stratifications
+    stratification = args.stratification
+    if "region" not in stratification:
+        df = df[df["region"] == "all"]
+    if "season" not in stratification:
+        df = df[df["season"] == "all"]
+    if "init_hour" not in stratification:
+        df = df[df["init_hour"] == "all"]
+
     # create a new column for line styles and shapes in dashboard
     df["region_season_init"] = (
         "Region: "
@@ -64,9 +75,9 @@ def main(args):
     sources = df["source"].unique()
     params = df["param"].unique()
     metrics = df["metric"].unique()
-    regions = df["region"].unique()
-    seasons = df["season"].unique()
-    init_hours = df["init_hour"].unique()
+    regions = df["region"].unique() if "region" in stratification else []
+    seasons = df["season"].unique() if "season" in stratification else []
+    init_hours = df["init_hour"].unique() if "init_hour" in stratification else []
 
     # get json string to embed in the HTML
     df_json = df.to_json(orient="records", lines=False)
@@ -93,6 +104,7 @@ def main(args):
         regions=regions,
         seasons=seasons,
         init_hours=init_hours,
+        stratification=stratification,
         header_text=args.header_text,
         configfile_content=open(args.configfile, "r").read()
         if args.configfile.is_file()
@@ -133,6 +145,12 @@ if __name__ == "__main__":
         type=str,
         default="",
         help="Text to display in the header of the dashboard.",
+    )
+    parser.add_argument(
+        "--stratification",
+        nargs="*",
+        default=["region", "season", "init_hour"],
+        help="Stratification dimensions to include in the dashboard (any of region, season, init_hour).",
     )
     parser.add_argument(
         "--configfile",
