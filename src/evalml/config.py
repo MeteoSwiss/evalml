@@ -227,6 +227,15 @@ class Stratification(BaseModel):
     )
 
 
+class Dashboard(BaseModel):
+    """Settings for the dashboard"""
+
+    stratification: List[str] = Field(
+        ...,
+        description="Stratifications to include in the dashboard (any of season, region, init_hour)",
+    )
+
+
 class DefaultResources(BaseModel):
     """Default resource settings for job execution."""
 
@@ -339,6 +348,7 @@ class ConfigModel(BaseModel):
                 )
         return v
 
+    dashboard: Dashboard
     locations: Locations
     profile: Profile
 

@@ -68,6 +68,12 @@ thresholds:
   T_2M:
     lt: [273.15]
     gt: [288.15, 298.15]
+    
+dashboard:
+  stratification:
+    # - init_hour
+    # - region
+    - season
 
 locations:
   output_root: output/
