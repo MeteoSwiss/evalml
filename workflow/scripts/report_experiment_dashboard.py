@@ -1,10 +1,13 @@
 import argparse
+import json
 import logging
 import sys as _sys
 from pathlib import Path
 
 import jinja2
 import xarray as xr
+
+from diagnostics import melt_for_dashboard
 
 _sys.path.append(str(Path(__file__).parent))
 from verification_plot_metrics import _ensure_unique_lead_time
@@ -14,6 +17,17 @@ LOG = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+
+
+def _load_sysmetrics(sysmetrics_file: Path) -> tuple[str, list[str]]:
+    """Load system metrics JSON and melt to long format for Vega-Lite."""
+    if not sysmetrics_file or not sysmetrics_file.is_file():
+        return "[]", []
+    with open(sysmetrics_file) as fh:
+        records = json.load(fh)
+    sysmetrics_json, sources = melt_for_dashboard(records)
+    LOG.info("Loaded system metrics for %d source(s)", len(sources))
+    return sysmetrics_json, sources
 
 
 def program_summary_log(args):
@@ -75,6 +89,9 @@ def main(args):
     json_size = len(df_json.encode("utf-8"))
     LOG.info("Size of embedded JSON data: %d bytes", json_size)
 
+    # load system metrics
+    sysmetrics_json, sysmetrics_sources = _load_sysmetrics(args.sysmetrics_file)
+
     # read script
     with open(args.script, "r") as f:
         js_src = f.read()
@@ -97,6 +114,8 @@ def main(args):
         configfile_content=open(args.configfile, "r").read()
         if args.configfile.is_file()
         else "",
+        sysmetrics_data=sysmetrics_json,
+        sysmetrics_sources=sysmetrics_sources,
     )
     LOG.info("Size of generated HTML: %d bytes", len(html.encode("utf-8")))
 
@@ -138,6 +157,12 @@ if __name__ == "__main__":
         "--configfile",
         type=Path,
         help="Path to config file for the evalml run.",
+    )
+    parser.add_argument(
+        "--sysmetrics_file",
+        type=Path,
+        default=None,
+        help="Path to system metrics JSON produced by parse_inference_logs.py.",
     )
     parser.add_argument(
         "--output",

@@ -95,6 +95,9 @@
     <div class="header">
         <div class="tab-buttons">
             <button class="tab-link active" data-tab="tab_scores">Standard verification</button>
+            {% if sysmetrics_sources %}
+            <button class="tab-link" data-tab="tab_sysmetrics">System metrics</button>
+            {% endif %}
             <button class="tab-link" data-tab="tab_config">Config</button>
         </div>
     </div>
@@ -155,6 +158,23 @@
     </div>
 
 
+    <!-- System metrics tab -->
+    {% if sysmetrics_sources %}
+    <div id="tab_sysmetrics" class="tab-content">
+        <div class="controls">
+            <div class="control-group">
+                <label>Source(s)</label>
+                <select id="sys-source-select" multiple>
+                    {% for source in sysmetrics_sources %}
+                    <option value="{{source}}" selected>{{source}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div id="sys-vis"></div>
+    </div>
+    {% endif %}
+
     <!-- Config file tab -->
     <div id="tab_config" class="tab-content">
         <pre style="background:#f7f7f7; border:1px solid #ddd; padding:1em; overflow-x:auto; max-height:60vh;">
@@ -162,6 +182,10 @@
         </pre>
     </div>
 
+
+    <script id="sysmetrics-data" type="application/json">
+        {{ sysmetrics_data | safe | indent(8, false) }}
+    </script>
 
     <script id="verif-data" type="application/json">
         {{ verif_data | safe | indent(8, false)}}

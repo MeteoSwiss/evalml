@@ -185,3 +185,69 @@ function updateChart() {
 
 // Initial chart
 updateChart()
+
+
+// ---- System metrics tab ----
+
+const sysDataEl = document.getElementById("sysmetrics-data");
+const sysData = sysDataEl ? JSON.parse(sysDataEl.textContent) : [];
+
+if (sysData.length > 0) {
+  choicesInstances["sys-source-select"] = new Choices("#sys-source-select", {
+    searchEnabled: false,
+    removeItemButton: true,
+    shouldSort: false,
+    itemSelectText: "",
+    placeholder: false,
+  });
+  document.getElementById("sys-source-select").addEventListener("change", updateSysChart);
+
+  const sysSpec = {
+    "data": { "values": sysData },
+    "facet": {
+      "column": { "field": "metric", "type": "nominal", "title": null },
+    },
+    "resolve": { "scale": { "y": "independent" } },
+    "spec": {
+      "width": 220,
+      "height": 220,
+      "layer": [
+        {
+          "mark": { "type": "bar", "opacity": 0.7 },
+          "encoding": {
+            "x": { "field": "source", "type": "nominal", "axis": { "labelAngle": -30, "title": null } },
+            "y": { "field": "value", "aggregate": "mean", "type": "quantitative", "title": "mean" },
+            "color": { "field": "source", "type": "nominal", "legend": { "orient": "top", "title": "Source" } },
+          },
+        },
+        {
+          "mark": { "type": "point", "filled": true, "size": 40, "opacity": 0.9 },
+          "encoding": {
+            "x": { "field": "source", "type": "nominal" },
+            "y": { "field": "value", "type": "quantitative" },
+            "color": { "field": "source", "type": "nominal" },
+            "tooltip": [
+              { "field": "source", "type": "nominal", "title": "Source" },
+              { "field": "init_time", "type": "nominal", "title": "Init time" },
+              { "field": "metric", "type": "nominal", "title": "Metric" },
+              { "field": "value", "type": "quantitative", "title": "Value", "format": ".3f" },
+              { "field": "n_gpu", "type": "quantitative", "title": "GPUs" },
+              { "field": "job_id", "type": "nominal", "title": "Job ID" },
+            ],
+          },
+        },
+      ],
+    },
+  };
+
+  function updateSysChart() {
+    const selectedSources = getSelectedValues("sys-source-select");
+    const newSpec = JSON.parse(JSON.stringify(sysSpec));
+    if (selectedSources.length > 0) {
+      newSpec.transform = [{ filter: { field: "source", oneOf: selectedSources } }];
+    }
+    vegaEmbed("#sys-vis", newSpec, { actions: false });
+  }
+
+  updateSysChart();
+}
