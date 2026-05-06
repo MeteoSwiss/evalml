@@ -7,8 +7,8 @@ import jinja2
 import xarray as xr
 
 _sys.path.append(str(Path(__file__).parent))
-from verification_plot_metrics import _ensure_unique_lead_time
-from verification_plot_metrics import _select_best_sources
+from verification_plot_metrics import _ensure_unique_lead_time, _select_best_sources
+from verification import decode_metric
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -42,6 +42,7 @@ def main(args):
     nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
     df = ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
     df[["param", "metric"]] = df["stack"].str.split(".", n=1, expand=True)
+    df["metric"] = df.metric.apply(decode_metric)
     df.drop(columns=["stack"], inplace=True)
     df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
     # convert numeric column init_hour to string in format HH:00 UTC and replace -999 with "all"
