@@ -1,3 +1,4 @@
+from meteodatalab.icon_grid import load_grid_from_balfrin
 from argparse import ArgumentParser, Namespace
 from datetime import datetime, timedelta
 import logging
@@ -14,7 +15,6 @@ import earthkit.data as ekd  # noqa: E402
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
 from earthkit.data.sources.stream import StreamFieldList  # noqa: E402
-from meteodatalab.icon_grid import load_grid_from_balfrin
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
