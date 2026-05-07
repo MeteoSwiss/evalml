@@ -9,7 +9,7 @@ input:
             - forward_transform_filter:
                 # does not have an effect if the interpolator does not use tp as prognostic variable
                 rescale:
-                  scale: 1000 # convert from kg m-2 to m
+                  scale: 0.001 # convert from kg m-2 to m
                   offset: 0
                   param: tp
           namer: &namer
