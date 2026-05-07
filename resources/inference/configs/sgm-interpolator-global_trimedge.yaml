@@ -7,6 +7,11 @@ input:
           path: forecaster/20*
           pre_processors:
             - extract_mask: "source0/trimedge_mask"
+            - forward_transform_filter:
+                rescale:
+                  scale: 0.001 # convert from kg m-2 to m
+                  offset: 0
+                  param: tp
           namer: &namer
             rules:
               - - shortName: T
@@ -54,6 +59,16 @@ patch_metadata:
   dataset:
     constant_fields: [z, lsm]
 
+post_processors:
+  - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
+      accumulations:
+        - tp
+  - forward_transform_filter:
+      rescale:
+        scale: 1000 # convert units from m to kg m-2
+        offset: 0
+        param: tp
+
 output:
   tee:
     - grib:
@@ -68,9 +83,6 @@ output:
               as_slice: true
           - assign_mask:  # fill boundary "trimmed" points with nan
               mask: "source0/trimedge_mask"
-          - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
-              accumulations:
-                - tp
 
     - grib:
         path: grib/ifs-{dateTime}_{step:03}.grib
@@ -85,9 +97,6 @@ output:
               inverse: true
           - assign_mask: # fill local/global overlapping points with nan
               mask: "global/cutout_mask"
-          - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
-              accumulations:
-                - tp
 
 verbosity: 1
 allow_nans: true
