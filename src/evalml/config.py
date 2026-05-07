@@ -224,24 +224,25 @@ class RegionConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
-class ShowcaseConfig(BaseModel):
-    """Configuration for the showcase workflow."""
+class MeteogramConfig(BaseModel):
+    """Configuration for meteogram generation."""
 
-    meteograms: bool = Field(
+    enabled: bool = Field(
         default=True,
         description="Whether to generate meteograms (time series plots at stations).",
-    )
-    animations: bool = Field(
-        default=True,
-        description="Whether to generate forecast animations (GIFs per param and region).",
-    )
-    params: List[str] = Field(
-        default=["T_2M", "SP_10M"],
-        description="List of parameters to generate animations and meteograms for.",
     )
     stations: List[str] = Field(
         default=["GVE", "KLO", "LUG"],
         description="List of PeakWeather station IDs to generate meteograms for.",
+    )
+
+
+class AnimationsConfig(BaseModel):
+    """Configuration for animation generation."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether to generate forecast animations (GIFs per param and region).",
     )
     domains: List[str | RegionConfig] = Field(
         default=["globe", "europe", "switzerland"],
@@ -251,6 +252,23 @@ class ShowcaseConfig(BaseModel):
             "or a custom domain dict with 'name', optional 'extent' "
             "[lon_min, lon_max, lat_min, lat_max], and optional 'projection'."
         ),
+    )
+
+
+class ShowcaseConfig(BaseModel):
+    """Configuration for the showcase workflow."""
+
+    params: List[str] = Field(
+        default=["T_2M", "SP_10M"],
+        description="List of parameters to generate animations and meteograms for.",
+    )
+    meteograms: MeteogramConfig = Field(
+        default_factory=MeteogramConfig,
+        description="Configuration for meteogram generation.",
+    )
+    animations: AnimationsConfig = Field(
+        default_factory=AnimationsConfig,
+        description="Configuration for animation generation.",
     )
 
 

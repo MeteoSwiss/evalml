@@ -503,65 +503,70 @@
       "title": "RegionConfig",
       "type": "object"
     },
-    "ShowcaseConfig": {
-      "description": "Configuration for the showcase workflow.",
+    "MeteogramConfig": {
+      "description": "Configuration for meteogram generation.",
       "properties": {
-        "meteograms": {
+        "enabled": {
           "default": true,
           "description": "Whether to generate meteograms (time series plots at stations).",
-          "title": "Meteograms",
+          "title": "Enabled",
           "type": "boolean"
-        },
-        "animations": {
-          "default": true,
-          "description": "Whether to generate forecast animations (GIFs per param and region).",
-          "title": "Animations",
-          "type": "boolean"
-        },
-        "params": {
-          "default": [
-            "T_2M",
-            "SP_10M"
-          ],
-          "description": "List of parameters to generate animations and meteograms for.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Params",
-          "type": "array"
         },
         "stations": {
-          "default": [
-            "GVE",
-            "KLO",
-            "LUG"
-          ],
+          "default": ["GVE", "KLO", "LUG"],
           "description": "List of PeakWeather station IDs to generate meteograms for.",
-          "items": {
-            "type": "string"
-          },
+          "items": {"type": "string"},
           "title": "Stations",
           "type": "array"
+        }
+      },
+      "title": "MeteogramConfig",
+      "type": "object"
+    },
+    "AnimationsConfig": {
+      "description": "Configuration for animation generation.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to generate forecast animations (GIFs per param and region).",
+          "title": "Enabled",
+          "type": "boolean"
         },
         "domains": {
-          "default": [
-            "globe",
-            "europe",
-            "switzerland"
-          ],
+          "default": ["globe", "europe", "switzerland"],
           "description": "Domains to generate animations for. Each entry is either a named domain (e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, or a custom domain dict with 'name', optional 'extent' [lon_min, lon_max, lat_min, lat_max], and optional 'projection'.",
           "items": {
             "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "$ref": "#/$defs/RegionConfig"
-              }
+              {"type": "string"},
+              {"$ref": "#/$defs/RegionConfig"}
             ]
           },
           "title": "Domains",
           "type": "array"
+        }
+      },
+      "title": "AnimationsConfig",
+      "type": "object"
+    },
+    "ShowcaseConfig": {
+      "description": "Configuration for the showcase workflow.",
+      "properties": {
+        "params": {
+          "default": ["T_2M", "SP_10M"],
+          "description": "List of parameters to generate animations and meteograms for.",
+          "items": {"type": "string"},
+          "title": "Params",
+          "type": "array"
+        },
+        "meteograms": {
+          "$ref": "#/$defs/MeteogramConfig",
+          "default": {},
+          "description": "Configuration for meteogram generation."
+        },
+        "animations": {
+          "$ref": "#/$defs/AnimationsConfig",
+          "default": {},
+          "description": "Configuration for animation generation."
         }
       },
       "title": "ShowcaseConfig",

@@ -147,7 +147,7 @@ rule showcase_all:
                 region=list(SHOWCASE_REGIONS.keys()),
                 showcase=EXPERIMENT_NAME,
             )
-            if config["showcase"]["animations"]
+            if config["showcase"]["animations"]["enabled"]
             else []
         ),
         (
@@ -156,10 +156,10 @@ rule showcase_all:
                 init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
                 run_id=CANDIDATES,
                 param=SHOWCASE_PARAMS,
-                sta=config["showcase"]["stations"],
+                sta=config["showcase"]["meteograms"]["stations"],
                 showcase=EXPERIMENT_NAME,
             )
-            if config["showcase"]["meteograms"]
+            if config["showcase"]["meteograms"]["enabled"]
             else []
         ),
 
