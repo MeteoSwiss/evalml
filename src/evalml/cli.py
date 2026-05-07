@@ -1,4 +1,9 @@
+import base64
+import shlex
 import subprocess
+import urllib.error
+import urllib.request
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -10,8 +15,58 @@ from evalml.config import ConfigModel
 
 def run_command(command: list[str]) -> int:
     """Execute a shell command, optionally as dry-run."""
-    click.echo("Launching: " + " ".join(command))
+    Path(".evalml_snakemake_cmd.txt").write_text(shlex.join(command) + "\n")
     return subprocess.run(command).returncode
+
+
+def _base_snakemake_command(
+    config: ConfigModel, configfile: Path, cores: int
+) -> list[str]:
+    command = ["snakemake"]
+    command += config.profile.parsable()
+    command += ["--configfile", str(configfile)]
+    command += ["--cores", str(cores)]
+    return command
+
+
+def _dot_to_svg(dot_content: str) -> bytes:
+    compressed = zlib.compress(dot_content.encode(), 9)
+    encoded = base64.urlsafe_b64encode(compressed).decode()
+    req = urllib.request.Request(
+        f"https://kroki.io/graphviz/svg/{encoded}",
+        headers={"User-Agent": "curl/7.68.0"},
+    )
+    try:
+        with urllib.request.urlopen(req) as response:
+            return response.read()
+    except urllib.error.HTTPError as e:
+        raise click.ClickException(
+            f"kroki.io request failed: {e.code} {e.reason}"
+        ) from e
+    except urllib.error.URLError as e:
+        raise click.ClickException(f"kroki.io request failed: {e.reason}") from e
+
+
+def generate_graph(
+    configfile: Path,
+    target: str,
+    graph_type: str,
+    cores: int,
+    extra_smk_args: tuple[str, ...] = (),
+) -> None:
+    config = ConfigModel.model_validate(load_yaml(configfile))
+    command = _base_snakemake_command(config, configfile, cores)
+    command += [f"--{graph_type}", "dot", target]
+    command += list(extra_smk_args)
+
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        click.echo(result.stderr, err=True)
+        raise SystemExit(result.returncode)
+
+    output_file = Path(f"{graph_type}.svg")
+    output_file.write_bytes(_dot_to_svg(result.stdout))
+    click.echo(f"Graph saved to {output_file}")
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -46,6 +101,14 @@ def workflow_options(func):
         is_flag=False,
         flag_value=f"{command_name}_report.html",
     )(func)
+    func = click.option(
+        "--dag", is_flag=True, help="Generate a DAG and save as dag.svg."
+    )(func)
+    func = click.option(
+        "--rulegraph",
+        is_flag=True,
+        help="Generate a rule graph and save as rulegraph.svg.",
+    )(func)
     func = click.argument(
         "extra_smk_args",
         nargs=-1,
@@ -63,26 +126,30 @@ def execute_workflow(
     dry_run: bool,
     unlock: bool,
     report: Path | None,
+    dag: bool = False,
+    rulegraph: bool = False,
     extra_smk_args: tuple[str, ...] = (),
 ):
-    config = ConfigModel.model_validate(load_yaml(configfile))
+    if dag or rulegraph:
+        generate_graph(
+            configfile, target, "dag" if dag else "rulegraph", cores, extra_smk_args
+        )
+        return
 
-    command = ["snakemake"]
-    command += config.profile.parsable()
-    command += ["--configfile", str(configfile)]
-    command += ["--cores", str(cores)]
+    config = ConfigModel.model_validate(load_yaml(configfile))
+    command = _base_snakemake_command(config, configfile, cores)
 
     if dry_run:
         command.append("--dry-run")
     if unlock:
         command.append("--unlock")
-    if verbose:
-        command.append("--printshellcmds")
     if report and not dry_run:
         command += ["--report-after-run", "--report", str(report)]
 
     command.append(target)
     command += list(extra_smk_args)
+    if not verbose:
+        command += ["--quiet", "rules"]  # reduce verobosity of snakemake output
 
     raise SystemExit(run_command(command))
 
@@ -97,7 +164,9 @@ def cli():
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
 @workflow_options
-def experiment(configfile, cores, verbose, dry_run, unlock, report, extra_smk_args):
+def experiment(
+    configfile, cores, verbose, dry_run, unlock, report, dag, rulegraph, extra_smk_args
+):
     execute_workflow(
         configfile,
         "experiment_all",
@@ -106,6 +175,8 @@ def experiment(configfile, cores, verbose, dry_run, unlock, report, extra_smk_ar
         dry_run,
         unlock,
         report,
+        dag,
+        rulegraph,
         extra_smk_args,
     )
 
@@ -115,7 +186,9 @@ def experiment(configfile, cores, verbose, dry_run, unlock, report, extra_smk_ar
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
 @workflow_options
-def showcase(configfile, cores, verbose, dry_run, unlock, report, extra_smk_args):
+def showcase(
+    configfile, cores, verbose, dry_run, unlock, report, dag, rulegraph, extra_smk_args
+):
     execute_workflow(
         configfile,
         "showcase_all",
@@ -124,6 +197,8 @@ def showcase(configfile, cores, verbose, dry_run, unlock, report, extra_smk_args
         dry_run,
         unlock,
         report,
+        dag,
+        rulegraph,
         extra_smk_args,
     )
 
@@ -133,7 +208,9 @@ def showcase(configfile, cores, verbose, dry_run, unlock, report, extra_smk_args
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
 @workflow_options
-def sandbox(configfile, cores, verbose, dry_run, unlock, report, extra_smk_args):
+def sandbox(
+    configfile, cores, verbose, dry_run, unlock, report, dag, rulegraph, extra_smk_args
+):
     execute_workflow(
         configfile,
         "sandbox_all",
@@ -142,6 +219,8 @@ def sandbox(configfile, cores, verbose, dry_run, unlock, report, extra_smk_args)
         dry_run,
         unlock,
         report,
+        dag,
+        rulegraph,
         extra_smk_args,
     )
 
@@ -152,7 +231,18 @@ def sandbox(configfile, cores, verbose, dry_run, unlock, report, extra_smk_args)
 )
 @click.argument("target", type=str)
 @workflow_options
-def make(configfile, target, cores, verbose, dry_run, unlock, report, extra_smk_args):
+def make(
+    configfile,
+    target,
+    cores,
+    verbose,
+    dry_run,
+    unlock,
+    report,
+    dag,
+    rulegraph,
+    extra_smk_args,
+):
     execute_workflow(
         configfile,
         target,
@@ -161,5 +251,7 @@ def make(configfile, target, cores, verbose, dry_run, unlock, report, extra_smk_
         dry_run,
         unlock,
         report,
+        dag,
+        rulegraph,
         extra_smk_args,
     )

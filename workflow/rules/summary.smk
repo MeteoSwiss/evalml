@@ -13,7 +13,8 @@ rule write_summary:
     """
     Produce a human-readable summary of the configuration.
     """
-    input:
+    localrule: True
+    params:
         configfile=lambda wc: workflow.configfiles[0],
     output:
         OUT_ROOT / "data/runs/{run_id}/summary.md",
@@ -21,7 +22,7 @@ rule write_summary:
         import yaml
         from datetime import datetime
 
-        cfg_path = input.configfile
+        cfg_path = params.configfile
         cfg = yaml.safe_load(open(cfg_path))
 
         with open(output[0], "w") as out:

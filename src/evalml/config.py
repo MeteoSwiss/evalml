@@ -1,7 +1,7 @@
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, ClassVar, FrozenSet
 
-from pydantic import BaseModel, Field, RootModel, HttpUrl, field_validator
+from pydantic import BaseModel, Field, RootModel, field_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -60,10 +60,16 @@ class InferenceResources(BaseModel):
 
 
 class RunConfig(BaseModel):
-    mlflow_id: str = Field(
+    # Identity contract: fields that determine the inference ENVIRONMENT (venv, squashfs).
+    # Changing any of these requires a new environment to be built.
+    ENV_FIELDS: ClassVar[FrozenSet[str]] = frozenset(
+        {"checkpoint", "extra_requirements", "disable_local_eccodes_definitions"}
+    )
+    # Fields excluded from ALL hashing (display/resource metadata only).
+    HASH_EXCLUDE: ClassVar[FrozenSet[str]] = frozenset({"label", "inference_resources"})
+
+    checkpoint: str = Field(
         ...,
-        min_length=32,
-        max_length=32,
         description="The mlflow run ID, as a 32-character hexadecimal string.",
     )
     label: str | None = Field(
@@ -80,10 +86,10 @@ class RunConfig(BaseModel):
             "or '0/33/6' up to 30 h."
         ),
     )
-    extra_dependencies: List[str] = Field(
+    extra_requirements: List[str] = Field(
         default_factory=list,
         description="List of extra dependencies to install for this model. "
-        "These will be added to the pyproject.toml file in the run directory.",
+        "These will be added to the requirements.txt file in the run directory.",
     )
     inference_resources: InferenceResources | None = Field(
         None,
@@ -96,6 +102,8 @@ class RunConfig(BaseModel):
     )
 
     config: Dict[str, Any] | str
+
+    model_config = {"extra": "forbid"}
 
     @field_validator("steps")
     def validate_steps(cls, v: str) -> str:
@@ -151,10 +159,10 @@ class InterpolatorConfig(RunConfig):
 class BaselineConfig(BaseModel):
     """Configuration for a single baseline to include in the verification."""
 
-    baseline_id: str = Field(
-        ...,
+    baseline_id: str | None = Field(
+        None,
         min_length=1,
-        description="Identifier for the baseline, e.g. 'COSMO-E'.",
+        description="Deprecated compatibility field. Workflow baseline IDs are derived from the stem of `root`.",
     )
     label: str = Field(
         ...,
@@ -164,7 +172,7 @@ class BaselineConfig(BaseModel):
     root: str = Field(
         ...,
         min_length=1,
-        description="Root directory where the baseline data is stored.",
+        description="Root directory where the baseline data is stored. The workflow derives the baseline ID from the stem of this path.",
     )
     steps: str = Field(
         ...,
@@ -173,18 +181,18 @@ class BaselineConfig(BaseModel):
     )
 
 
-class AnalysisConfig(BaseModel):
-    """Configuration for the analysis data used in the verification."""
+class TruthConfig(BaseModel):
+    """Configuration for the truth data used in the verification."""
 
     label: str = Field(
         ...,
         min_length=1,
-        description="Label for the analysis that will be used in experiment results such as reports and figures.",
+        description="Label that will be used in experiment results such as reports and figures.",
     )
-    analysis_zarr: str = Field(
+    root: str = Field(
         ...,
         min_length=1,
-        description="Path to the zarr dataset containing the analysis data.",
+        description="Path to the root of the dataset.",
     )
 
 
@@ -204,10 +212,6 @@ class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
 
     output_root: Path = Field(..., description="Root directory for all output files.")
-    mlflow_uri: List[HttpUrl] = Field(
-        ...,
-        description="MLflow tracking URI(s) for the experiment. Can be a list of URIs if using multiple tracking servers.",
-    )
 
 
 class Stratification(BaseModel):
@@ -220,6 +224,15 @@ class Stratification(BaseModel):
     root: str = Field(
         ...,
         description="Root directory where the region shapefiles are stored.",
+    )
+
+
+class Dashboard(BaseModel):
+    """Settings for the dashboard"""
+
+    stratification: List[str] = Field(
+        ...,
+        description="Stratifications to include in the dashboard (any of season, region, init_hour)",
     )
 
 
@@ -297,21 +310,45 @@ class ConfigModel(BaseModel):
         ...,
         description="Description of the experiment, e.g. 'Hindcast of the 2023 season.'",
     )
-    experiment_label: str | None = Field(
+    config_label: str | None = Field(
         None,
         description="Optional label for the experiment that will be used in the experiment directory name. Defaults to the config file name if not provided.",
     )
     dates: Dates | ExplicitDates
-    runs: List[ForecasterItem | InterpolatorItem] = Field(
+    runs: List[ForecasterItem | InterpolatorItem | BaselineItem] = Field(
         ...,
-        description="Dictionary of runs to execute, with run IDs as keys and configurations as values.",
+        description="List of experiment participants, including forecaster/interpolator ML runs and baselines.",
     )
     baselines: List[BaselineItem] = Field(
-        ...,
-        description="Dictionary of baselines to include in the verification.",
+        default_factory=list,
+        description="Deprecated top-level baselines list. Prefer defining baseline entries directly in `runs`.",
     )
-    analysis: AnalysisConfig
+    truth: TruthConfig | None
     stratification: Stratification
+    thresholds: Dict[str, Dict[str, List[float]]] = Field(
+        default_factory=dict,
+        description=(
+            "Dictionary mapping parameter names to threshold dicts. "
+            "Each dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of threshold values."
+        ),
+    )
+
+    @field_validator("thresholds")
+    @classmethod
+    def validate_threshold_operators(
+        cls, v: Dict[str, Dict[str, List[float]]]
+    ) -> Dict[str, Dict[str, List[float]]]:
+        _VALID_OPS = {"gt", "ge", "lt", "le", "eq", "ne"}
+        for param, op_dict in v.items():
+            invalid = set(op_dict) - _VALID_OPS
+            if invalid:
+                raise ValueError(
+                    f"Invalid operator key(s) {invalid!r} for parameter '{param}'. "
+                    f"Must be one of {_VALID_OPS}."
+                )
+        return v
+
+    dashboard: Dashboard
     locations: Locations
     profile: Profile
 
@@ -324,6 +361,11 @@ class ConfigModel(BaseModel):
 def generate_config_schema() -> str:
     """Generate the JSON schema for the ConfigModel."""
     return ConfigModel.model_json_schema()
+
+
+# Module-level constants for use in Snakemake and elsewhere
+RUN_ENV_FIELDS = RunConfig.ENV_FIELDS
+RUN_HASH_EXCLUDE = RunConfig.HASH_EXCLUDE
 
 
 if __name__ == "__main__":

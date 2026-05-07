@@ -13,46 +13,48 @@ dates:
 
 runs:
   - interpolator:
-      mlflow_id: 8d1e0410ca7d4f74b368b3079878259a
+      checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/228/runs/8d1e0410ca7d4f74b368b3079878259a
       label: M-2 interpolator (KENDA)
       steps: 0/120/1
       config: resources/inference/configs/sgm-interpolator-global_trimedge_fromtest.yaml
       forecaster: null
-      extra_dependencies:
+      extra_requirements:
         - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
+
   - interpolator:
-      mlflow_id: 8d1e0410ca7d4f74b368b3079878259a
+      checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/228/runs/8d1e0410ca7d4f74b368b3079878259a
       label: M-2 interpolator (M-1 forecaster)
       steps: 0/120/1
       config: resources/inference/configs/sgm-interpolator-global_trimedge.yaml
       forecaster:
-        mlflow_id: d0846032fc7248a58b089cbe8fa4c511
+        checkpoint: https://mlflow.ecmwf.int/#/experiments/103/runs/d0846032fc7248a58b089cbe8fa4c511
         config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
         steps: 0/120/6
-      extra_dependencies:
+        extra_requirements:
+          - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
+      extra_requirements:
         - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
         - torch-geometric==2.6.1
         - anemoi-graphs==0.5.2
+
   - forecaster:
-      mlflow_id: d0846032fc7248a58b089cbe8fa4c511
+      checkpoint: https://mlflow.ecmwf.int/#/experiments/103/runs/d0846032fc7248a58b089cbe8fa4c511
       label: M-1 forecaster
       config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
       steps: 0/120/6
-      extra_dependencies:
+      extra_requirements:
         - git+https://github.com/ecmwf/anemoi-inference.git@0.8.3
 
-baselines:
   - baseline:
-      baseline_id: COSMO-E-1h
       label: COSMO-E
       root: /store_new/mch/msopr/ml/COSMO-E_hourly
       steps: 0/120/1
 
-analysis:
+truth:
   label: COSMO KENDA
-  analysis_zarr: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-1h-v3-pl13.zarr
+  root: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-1h-v3-pl13.zarr
 
 stratification:
   regions:
@@ -64,12 +66,25 @@ stratification:
     - alpensuedseite
   root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
 
+thresholds:
+  TOT_PREC:
+    gt: [0.0, 0.001, 0.005]
+  U_10M:
+    gt: [2.5, 5.0, 10.0]
+  V_10M:
+    gt: [2.5, 5.0, 10.0]
+  T_2M:
+    lt: [273.15]
+    gt: [288.15, 298.15]
+
+dashboard:
+  stratification:
+    # - init_hour
+    # - region
+    - season
+
 locations:
   output_root: output/
-  mlflow_uri:
-    # - https://service.meteoswiss.ch/mlstore
-    - https://servicedepl.meteoswiss.ch/mlstore
-    - https://mlflow.ecmwf.int
 
 profile:
   executor: slurm
@@ -82,3 +97,5 @@ profile:
     runtime: "1h"
     gpus: 0
   jobs: 50
+  batch_rules:
+    plot_forecast_frame: 32

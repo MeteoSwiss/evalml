@@ -12,15 +12,24 @@ document.querySelectorAll(".tab-link").forEach(button => {
 // Initialize selection widgets
 const choicesInstances = {};
 
-choicesInstances["region-select"] = new Choices("#region-select", {
+const choicesConfig = {
   searchEnabled: false,
   removeItemButton: true,
   shouldSort: false,
   itemSelectText: "",
   placeholder: false
-});
-document.getElementById("region-select").addEventListener("change", updateChart);
+};
 
+function initChoices(id) {
+  if (document.getElementById(id)) {
+    choicesInstances[id] = new Choices("#" + id, choicesConfig);
+    document.getElementById(id).addEventListener("change", updateChart);
+  }
+}
+
+initChoices("region-select");
+initChoices("season-select");
+initChoices("init-select");
 
 choicesInstances["source-select"] = new Choices("#source-select", {
   searchEnabled: false,
@@ -100,14 +109,14 @@ var spec = {
         "legend": { "orient": "top", "title": "Data Source", "offset": 0, "padding": 10 }
       },
       "shape": {
-        "field": "region",
+        "field": "region_season_init",
         "type": "nominal",
-        "legend": { "orient": "top", "title": "Region", "offset": 0, "padding": 10 }
+        "legend": { "orient": "top", "title": "Region, Season, Initialization", "offset": 0, "padding": 10 }
       },
       "strokeDash": {
-        "field": "region",
+        "field": "region_season_init",
         "type": "nominal",
-        "legend": null
+        "legend": { "orient": "top", "title": "Region, Season, Initialization", "offset": 0, "padding": 10 }
       },
       "tooltip": [
         { "field": "region", "type": "nominal", "title": "Region" },
@@ -129,7 +138,9 @@ function getSelectedValues(id) {
 }
 
 function updateChart() {
-  const selectedRegions = getSelectedValues("region-select");
+  const selectedRegions = choicesInstances["region-select"] ? getSelectedValues("region-select") : [];
+  const selectedSeasons = choicesInstances["season-select"] ? getSelectedValues("season-select") : [];
+  const selectedInits = choicesInstances["init-select"] ? getSelectedValues("init-select") : [];
   const selectedSources = getSelectedValues("source-select");
   const selectedparams = getSelectedValues("param-select");
   const selectedMetrics = getSelectedValues("metric-select");
@@ -137,9 +148,15 @@ function updateChart() {
   const newSpec = JSON.parse(JSON.stringify(spec));
   const filters = [];
 
-  newSpec.title = "Verification using " + header;
+  newSpec.title = header;
   if (selectedRegions.length > 0) {
     filters.push({ field: "region", oneOf: selectedRegions });
+  }
+  if (selectedSeasons.length > 0) {
+    filters.push({ field: "season", oneOf: selectedSeasons });
+  }
+  if (selectedInits.length > 0) {
+    filters.push({ field: "init_hour", oneOf: selectedInits });
   }
   if (selectedSources.length > 0) {
     filters.push({ field: "source", oneOf: selectedSources });

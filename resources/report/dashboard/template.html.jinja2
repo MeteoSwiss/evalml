@@ -102,6 +102,7 @@
     <!-- First tab -->
     <div id="tab_scores" class="tab-content active">
         <div class="controls">
+            {% if 'region' in stratification %}
             <div class="control-group">
                 <label>Region</label>
                 <select id="region-select" multiple>
@@ -110,6 +111,27 @@
                     {% endfor %}
                 </select>
             </div>
+            {% endif %}
+            {% if 'season' in stratification %}
+            <div class="control-group">
+                <label>Season</label>
+                <select id="season-select" multiple>
+                    {% for season in seasons %}
+                    <option value="{{season}}"{% if season == 'all' %} selected{% endif %}>{{season}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            {% if 'init_hour' in stratification %}
+            <div class="control-group">
+                <label>Initialization</label>
+                <select id="init-select" multiple>
+                    {% for init_hour in init_hours %}
+                    <option value="{{init_hour}}"{% if init_hour == 'all' %} selected{% endif %}>{{init_hour}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
             <div class="control-group">
                 <label>Source(s)</label>
                 <select id="source-select" multiple>
@@ -120,9 +142,10 @@
             </div>
             <div class="control-group">
                 <label>Metric(s)</label>
+                {% set default_metrics = ['RMSE', 'BIAS', 'std', 'mean'] %}
                 <select id="metric-select" multiple>
                     {% for metric in metrics %}
-                    <option value="{{metric}}" selected>{{metric}}</option>
+                    <option value="{{metric}}"{% if metric in default_metrics %} selected{% endif %}>{{metric}}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -156,6 +179,7 @@
     </script>
 
     <script>
+        const activeStratifications = {{ stratification | tojson }};
         {{ js_src | indent(8, true) }}
     </script>
 </body>
