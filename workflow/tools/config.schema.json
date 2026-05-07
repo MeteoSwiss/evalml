@@ -503,72 +503,110 @@
       "title": "RegionConfig",
       "type": "object"
     },
-    "ShowcaseConfig": {
-      "description": "Configuration for the showcase workflow.",
+    "AnimationComparison": {
       "properties": {
-        "meteograms": {
-          "default": true,
-          "description": "Whether to generate meteograms (time series plots at stations).",
-          "title": "Meteograms",
-          "type": "boolean"
+        "left": {
+          "description": "Label of the run shown in the left panel.",
+          "title": "Left",
+          "type": "string"
         },
-        "animations": {
+        "right": {
+          "description": "Label of the run shown in the right panel.",
+          "title": "Right",
+          "type": "string"
+        }
+      },
+      "required": ["left", "right"],
+      "title": "AnimationComparison",
+      "type": "object"
+    },
+    "AnimationsConfig": {
+      "description": "Configuration for animation generation.",
+      "properties": {
+        "enabled": {
           "default": true,
           "description": "Whether to generate forecast animations (GIFs per param and region).",
-          "title": "Animations",
+          "title": "Enabled",
           "type": "boolean"
         },
-        "params": {
-          "default": [
-            "T_2M",
-            "SP_10M"
-          ],
-          "description": "List of parameters to generate animations and meteograms for.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Params",
-          "type": "array"
-        },
-        "stations": {
-          "default": [
-            "GVE",
-            "KLO",
-            "LUG"
-          ],
-          "description": "List of PeakWeather station IDs to generate meteograms for.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Stations",
-          "type": "array"
-        },
         "domains": {
-          "default": [
-            "globe",
-            "europe",
-            "switzerland"
-          ],
+          "default": ["globe", "europe", "switzerland"],
           "description": "Domains to generate animations for. Each entry is either a named domain (e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, or a custom domain dict with 'name', optional 'extent' [lon_min, lon_max, lat_min, lat_max], and optional 'projection'.",
           "items": {
             "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "$ref": "#/$defs/RegionConfig"
-              }
+              {"type": "string"},
+              {"$ref": "#/$defs/RegionConfig"}
             ]
           },
           "title": "Domains",
           "type": "array"
         },
-        "animation_speed": {
+        "speed": {
           "default": 10.0,
           "description": "Animation playback speed in simulated hours per second.",
           "exclusiveMinimum": 0,
-          "title": "Animation Speed",
+          "title": "Speed",
           "type": "number"
+        },
+        "runs": {
+          "anyOf": [
+            {"items": {"type": "string"}, "type": "array"},
+            {"type": "null"}
+          ],
+          "default": null,
+          "description": "Labels of runs to generate individual animations for. Defaults to all candidate runs when omitted.",
+          "title": "Runs"
+        },
+        "comparisons": {
+          "default": [],
+          "description": "Side-by-side two-panel comparison animations.",
+          "items": {"$ref": "#/$defs/AnimationComparison"},
+          "title": "Comparisons",
+          "type": "array"
+        }
+      },
+      "title": "AnimationsConfig",
+      "type": "object"
+    },
+    "MeteogramConfig": {
+      "description": "Configuration for meteogram generation.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to generate meteograms (time series plots at stations).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "stations": {
+          "default": ["GVE", "KLO", "LUG"],
+          "description": "List of PeakWeather station IDs to generate meteograms for.",
+          "items": {"type": "string"},
+          "title": "Stations",
+          "type": "array"
+        }
+      },
+      "title": "MeteogramConfig",
+      "type": "object"
+    },
+    "ShowcaseConfig": {
+      "description": "Configuration for the showcase workflow.",
+      "properties": {
+        "params": {
+          "default": ["T_2M", "SP_10M"],
+          "description": "List of parameters to generate animations and meteograms for.",
+          "items": {"type": "string"},
+          "title": "Params",
+          "type": "array"
+        },
+        "meteograms": {
+          "$ref": "#/$defs/MeteogramConfig",
+          "default": {},
+          "description": "Configuration for meteogram generation."
+        },
+        "animations": {
+          "$ref": "#/$defs/AnimationsConfig",
+          "default": {},
+          "description": "Configuration for animation generation."
         }
       },
       "title": "ShowcaseConfig",

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import earthkit.data as ekd
@@ -74,6 +74,60 @@ def load_state_from_grib(
                     param, np.full(lats.size, np.nan, dtype=float)
                 )
                 state["fields"][param] = np.concatenate([base, add])
+    return state
+
+
+def load_state_from_zarr(
+    zarr_root: Path,
+    reftime: datetime,
+    lead_time_hours: int,
+    params: list[str],
+    source_type: str = "analysis",
+) -> dict:
+    """Load a single time step from a zarr source into the state dict used by StatePlotter.
+
+    Parameters
+    ----------
+    zarr_root:
+        Path to the zarr dataset.
+    reftime:
+        Forecast reference time (init time).
+    lead_time_hours:
+        Lead time in hours to load.
+    params:
+        List of parameter names (ICON convention, e.g. ``['U_10M', 'V_10M']``).
+    source_type:
+        ``'analysis'`` for truth zarrs (loads via ``load_analysis_data_from_zarr``),
+        ``'baseline'`` for baseline forecast zarrs.
+    """
+    from data_input import load_analysis_data_from_zarr, load_baseline_from_zarr
+
+    steps = [lead_time_hours]
+
+    if source_type == "analysis":
+        ds = load_analysis_data_from_zarr(zarr_root, reftime, steps, params)
+        ds_t = ds.isel(time=0) if "time" in ds.dims else ds.squeeze()
+    else:
+        ds = load_baseline_from_zarr(zarr_root, reftime, steps, params)
+        ds_t = ds.isel(lead_time=0) if "lead_time" in ds.dims else ds.squeeze()
+
+    lat = ds_t.lat.values.flatten()
+    lon = ds_t.lon.values.flatten()
+
+    hull = MultiPoint(list(zip(lon.tolist(), lat.tolist()))).convex_hull
+    state = {
+        "forecast_reference_time": reftime,
+        "valid_time": reftime + timedelta(hours=lead_time_hours),
+        "longitudes": lon,
+        "latitudes": lat,
+        "lam_envelope": gpd.GeoSeries([hull], crs="EPSG:4326"),
+        "fields": {},
+    }
+    for param in params:
+        if param in ds_t.data_vars:
+            state["fields"][param] = ds_t[param].values.flatten()
+        else:
+            state["fields"][param] = np.full(lat.size, np.nan, dtype=float)
     return state
 
 

@@ -61,7 +61,8 @@ def load_analysis_data_from_zarr(
         "PMSL": "msl",
         "TOT_PREC": "tp",
     }
-    tot_prec_string = "TOT_PREC_6H" if min(np.diff(steps)) == 6 else "TOT_PREC_1H"
+    _diffs = np.diff(steps)
+    tot_prec_string = "TOT_PREC_6H" if len(_diffs) > 0 and min(_diffs) == 6 else "TOT_PREC_1H"
     PARAMS_MAP_COSMO1 = {
         v: v.replace("TOT_PREC", tot_prec_string) for v in PARAMS_MAP_COSMO2.keys()
     }

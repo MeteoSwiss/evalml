@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet
+from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
 
 from pydantic import BaseModel, Field, RootModel, field_validator
 
@@ -224,24 +224,32 @@ class RegionConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
-class ShowcaseConfig(BaseModel):
-    """Configuration for the showcase workflow."""
+class AnimationComparison(BaseModel):
+    """A side-by-side comparison animation between two runs."""
 
-    meteograms: bool = Field(
+    left: str = Field(..., description="Label of the run shown in the left panel.")
+    right: str = Field(..., description="Label of the run shown in the right panel.")
+
+
+class MeteogramConfig(BaseModel):
+    """Configuration for meteogram generation."""
+
+    enabled: bool = Field(
         default=True,
         description="Whether to generate meteograms (time series plots at stations).",
-    )
-    animations: bool = Field(
-        default=True,
-        description="Whether to generate forecast animations (GIFs per param and region).",
-    )
-    params: List[str] = Field(
-        default=["T_2M", "SP_10M"],
-        description="List of parameters to generate animations and meteograms for.",
     )
     stations: List[str] = Field(
         default=["GVE", "KLO", "LUG"],
         description="List of PeakWeather station IDs to generate meteograms for.",
+    )
+
+
+class AnimationsConfig(BaseModel):
+    """Configuration for animation generation."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether to generate forecast animations (GIFs per param and region).",
     )
     domains: List[str | RegionConfig] = Field(
         default=["globe", "europe", "switzerland"],
@@ -252,10 +260,41 @@ class ShowcaseConfig(BaseModel):
             "[lon_min, lon_max, lat_min, lat_max], and optional 'projection'."
         ),
     )
-    animation_speed: float = Field(
+    speed: float = Field(
         default=10.0,
         gt=0,
         description="Animation playback speed in simulated hours per second.",
+    )
+    runs: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Labels of runs to generate individual animations for. "
+            "Defaults to all candidate runs when omitted."
+        ),
+    )
+    comparisons: List[AnimationComparison] = Field(
+        default=[],
+        description=(
+            "Side-by-side two-panel comparison animations. Each entry specifies "
+            "the labels of the left and right panel runs."
+        ),
+    )
+
+
+class ShowcaseConfig(BaseModel):
+    """Configuration for the showcase workflow."""
+
+    params: List[str] = Field(
+        default=["T_2M", "SP_10M"],
+        description="List of parameters to generate animations and meteograms for.",
+    )
+    meteograms: MeteogramConfig = Field(
+        default_factory=MeteogramConfig,
+        description="Configuration for meteogram generation.",
+    )
+    animations: AnimationsConfig = Field(
+        default_factory=AnimationsConfig,
+        description="Configuration for animation generation.",
     )
 
 
