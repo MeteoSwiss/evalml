@@ -236,7 +236,7 @@ def load_fct_data_from_grib(
         ds = ds.rename({"latitude": "lat", "longitude": "lon"})
     if "lat" in ds and "lon" in ds:
         ds = ds.set_coords(["lat", "lon"])
-        
+
     # make sure time coordinate is available, and valid_time is not
     if "valid_time" in ds.coords:
         ds = ds.rename({"valid_time": "time"})

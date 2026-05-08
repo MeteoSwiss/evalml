@@ -124,7 +124,6 @@ def get_leadtimes(wc):
 
 
 rule make_forecast_animation:
-    localrule: True
     input:
         expand(
             rules.plot_forecast_frame.output,
@@ -134,6 +133,7 @@ rule make_forecast_animation:
     output:
         OUT_ROOT
         / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
+    localrule: True
     params:
         delay=lambda wc: 10 * int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
     shell:
