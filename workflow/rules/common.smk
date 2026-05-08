@@ -64,10 +64,14 @@ def parse_reference_times():
     start = datetime.strptime(cfg["start"], DATETIME_FORMAT)
     end = datetime.strptime(cfg["end"], DATETIME_FORMAT)
     freq = parse_timedelta(cfg["frequency"])
+    blacklist = {
+        datetime.strptime(t, DATETIME_FORMAT) for t in cfg.get("blacklist", [])
+    }
     times = []
     t = start
     while t <= end:
-        times.append(t)
+        if t not in blacklist:
+            times.append(t)
         t += freq
     return times
 
