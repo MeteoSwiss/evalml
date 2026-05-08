@@ -229,6 +229,28 @@ async function updateChart() {
       console.warn("cell render error", metric, param, e);
     }
   }
+
+  attachZoomSync();
+}
+
+// ---------------------------------------------------------------------------
+// Zoom synchronization across all chart cells
+// ---------------------------------------------------------------------------
+let _zoomSyncing = false;
+
+function attachZoomSync() {
+  vegaViews.forEach((view, key) => {
+    view.addSignalListener("xZoom_tuple", (_name, value) => {
+      if (_zoomSyncing) return;
+      _zoomSyncing = true;
+      vegaViews.forEach((otherView, otherKey) => {
+        if (otherKey !== key) {
+          try { otherView.signal("xZoom_tuple", value).run(); } catch (e) {}
+        }
+      });
+      _zoomSyncing = false;
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
