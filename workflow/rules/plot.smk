@@ -145,7 +145,7 @@ rule make_forecast_animation:
 
 
 rule plot_metric_maps:
-    localrule: True
+    # localrule: True
     input:
         script="workflow/scripts/plot_metric_maps.mo.py",
         verif_file=OUT_ROOT / "data/runs/{run_id}/metric_maps/{param}_{leadtime}.nc",
