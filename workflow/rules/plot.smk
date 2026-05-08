@@ -144,10 +144,10 @@ rule make_forecast_animation:
         """
 
 
-rule plot_summary_stat_maps:
+rule plot_metric_maps:
     localrule: True
     input:
-        script="workflow/scripts/plot_summary_stat_maps.mo.py",
+        script="workflow/scripts/plot_metric_maps.mo.py",
         verif_file=OUT_ROOT / "data/runs/{run_id}/metric_maps/{param}_{leadtime}.nc",
     output:
         OUT_ROOT
@@ -156,7 +156,7 @@ rule plot_summary_stat_maps:
         leadtime=r"\d+",  # only digits
     log:
         OUT_ROOT
-        / "logs/plot_summary_stat_maps/{experiment}/{run_id}-{param}-{metric}-{region}-{season}-{leadtime}.log",
+        / "logs/plot_metric_maps/{experiment}/{run_id}-{param}-{metric}-{region}-{season}-{leadtime}.log",
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
@@ -176,9 +176,9 @@ rule plot_summary_stat_maps:
         """
 
 
-use rule plot_summary_stat_maps as plot_summary_stat_maps_baseline with:
+use rule plot_metric_maps as plot_metric_maps_baseline with:
     input:
-        script="workflow/scripts/plot_summary_stat_maps.mo.py",
+        script="workflow/scripts/plot_metric_maps.mo.py",
         verif_file=OUT_ROOT
         / "data/baselines/{baseline_id}/metric_maps/{param}_{leadtime}.nc",
     output:
@@ -186,4 +186,4 @@ use rule plot_summary_stat_maps as plot_summary_stat_maps_baseline with:
         / "results/{experiment}/metric_maps/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
     log:
         OUT_ROOT
-        / "logs/plot_summary_stat_maps/{experiment}/{baseline_id}-{param}-{metric}-{region}-{season}-{leadtime}.log",
+        / "logs/plot_metric_maps/{experiment}/{baseline_id}-{param}-{metric}-{region}-{season}-{leadtime}.log",
