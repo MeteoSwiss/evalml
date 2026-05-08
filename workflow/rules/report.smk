@@ -18,6 +18,7 @@ def make_header_text():
 rule report_experiment_dashboard:
     localrule: True
     input:
+        "src/verification/__init__.py",
         script="workflow/scripts/report_experiment_dashboard.py",
         verif=EXPERIMENT_PARTICIPANTS.values(),
         template="resources/report/dashboard/template.html.jinja2",
@@ -31,6 +32,7 @@ rule report_experiment_dashboard:
     params:
         sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
         header_text=make_header_text(),
+        stratification=" ".join(config["dashboard"]["stratification"]),
     log:
         OUT_ROOT / "logs/report_experiment_dashboard/{experiment}.log",
     shell:
@@ -41,5 +43,6 @@ rule report_experiment_dashboard:
             --script {input.js_script} \
             --header_text "{params.header_text}" \
             --configfile "{input.configfile}" \
+            --stratification {params.stratification} \
             --output {output} > {log} 2>&1
         """

@@ -21,11 +21,13 @@ dependencies = [
     "cartopy>=0.25.0",
     "pyproj>=3.7.2",
     "earthkit-plots",
-    "marimo>=0.19.0",
+    "marimo>=0.23.3",
     "geopandas>=0.14.0",
     "peakweather",
     "earthkit-data>=0.19.3",
     "eccodes-cosmo-resources-python>=2.38.3.1",
+    "pyzmq>=27.1.0",
+    "scores>=2.0.0",
 ]
 
 [project.optional-dependencies]
