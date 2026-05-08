@@ -1,3 +1,4 @@
+from meteodatalab.icon_grid import load_grid_from_balfrin
 from argparse import ArgumentParser, Namespace
 from datetime import datetime, timedelta, timezone
 import logging
@@ -5,6 +6,7 @@ import os
 from pathlib import Path
 import sys
 import tarfile
+from uuid import UUID
 
 definition_path = Path(sys.prefix) / "share/eccodes-cosmo-resources/definitions"
 os.environ["ECCODES_DEFINITION_PATH"] = str(definition_path)
@@ -111,7 +113,18 @@ def _extract_member(
             for field in fields:
                 if field.metadata("shortName") in params:
                     out.append(field)
-    return out.to_xarray(profile="grib")
+
+    uuid_of_hgrid = UUID(field.metadata("uuidOfHGrid"))
+    out = out.to_xarray(profile="grib")
+    # get horizonal grid information from file and add to dataset
+    hcoords = load_grid_from_balfrin()(uuid_of_hgrid)
+    lat_vals = hcoords["lat"].rename({"cell": "values"})
+    lon_vals = hcoords["lon"].rename({"cell": "values"})
+    out = out.assign_coords(
+        latitude=lat_vals,
+        longitude=lon_vals,
+    )
+    return out
 
 
 def extract(
