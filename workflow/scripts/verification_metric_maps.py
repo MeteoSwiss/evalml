@@ -147,23 +147,6 @@ def open_truth_zarr(root: Path, param: str) -> xr.DataArray:
 # GRIB step helpers
 # ---------------------------------------------------------------------------
 
-# Parameters whose GRIB values are cumulative totals and must be disaggregated
-# via diff before verification. For these, the preceding step must also be
-# loaded so that load_fct_data_from_grib's diff produces a valid result.
-_CUMULATIVE_PARAMS = {"TOT_PREC"}
-
-
-def _preceding_step(grib_dir: Path, step: int) -> int | None:
-    """Return the largest available step smaller than *step* in *grib_dir*."""
-    available = sorted(
-        int(f.stem.split("_")[-1])
-        for f in grib_dir.glob("*.grib")
-        if f.stem.split("_")[-1].isdigit()
-    )
-    smaller = [s for s in available if s < step]
-    return smaller[-1] if smaller else None
-
-
 # ---------------------------------------------------------------------------
 # Init-time discovery
 # ---------------------------------------------------------------------------
@@ -301,26 +284,13 @@ def main(args: Namespace) -> None:
                     params=fct_params,
                 )
             else:
-                # Cumulative params (e.g. TOT_PREC) are disaggregated via diff inside
-                # load_fct_data_from_grib, so we need to also load the preceding step.
-                if args.param in _CUMULATIVE_PARAMS:
-                    prev_step = _preceding_step(grib_dir, args.step)
-                    if prev_step is None:
-                        LOG.warning(
-                            "No preceding step for cumulative param %s at step %d, skipping %s",
-                            args.param,
-                            args.step,
-                            reftime,
-                        )
-                        n_skip += 1
-                        continue
-                    load_steps = [prev_step, args.step]
-                else:
-                    load_steps = [args.step]
+                # The loaders handle cumulative-from-start disaggregation
+                # internally (including fetching step 0 when needed for
+                # TOT_PREC), so a single-step request is sufficient here.
                 fcst = load_fct_data_from_grib(
                     root=grib_dir,
                     reftime=reftime,
-                    steps=load_steps,
+                    steps=[args.step],
                     params=fct_params,
                 )
         except Exception as exc:
