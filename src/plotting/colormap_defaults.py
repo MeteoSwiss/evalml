@@ -112,8 +112,8 @@ _CMAP_DEFAULTS = {
         ],
     },
     # hard-code this for the moment, can still make smarter later on:
-    # RMSE and MAE first (is all the same). Sequential colour map to reflect the nature of the data (error, all positive).
-    # Red is suggestive of 'bad' (high error).
+    # RMSE and MAE first (is all the same). Sequential colour map to reflect the nature of the data 
+    # (error, all positive). Red is suggestive of 'bad' (high error).
     # Use a limited number of levels so that absolute values of error can be read from the map.
     # always start at 0 so that the saturation of the colour corresponds to the error magnitude.
     # RMSE:
@@ -157,8 +157,6 @@ _CMAP_DEFAULTS = {
         "levels": [0, 1, 1.5, 2, 3, 4],
     }
     | {"units": "mm"},
-    # would ideally want a 6th colour on the high end of the colour scale, but somehow
-    # matplotlib does not do that -> ?
     # MAE:
     "U_10M.MAE.map": {
         "cmap": plt.get_cmap("Reds", 6),
