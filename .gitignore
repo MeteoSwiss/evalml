@@ -55,8 +55,3 @@ uv.lock
 
 # evalml
 .evalml_snakemake_cmd.txt
-config/forecasters-co2-mod-01.yaml
-config/forecasters-co2-mod-01.yaml
-config/forecasters-ich1_mod_01.yaml
-config/forecasters-ich1_mod_02_1yr.yaml
-config/forecasters-ich1-oper-small_adj_lfr_05_Stage_E_only_default_exp.yaml
