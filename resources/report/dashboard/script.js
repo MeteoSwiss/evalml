@@ -12,32 +12,24 @@ document.querySelectorAll(".tab-link").forEach(button => {
 // Initialize selection widgets
 const choicesInstances = {};
 
-choicesInstances["region-select"] = new Choices("#region-select", {
+const choicesConfig = {
   searchEnabled: false,
   removeItemButton: true,
   shouldSort: false,
   itemSelectText: "",
   placeholder: false
-});
-document.getElementById("region-select").addEventListener("change", updateChart);
+};
 
-choicesInstances["season-select"] = new Choices("#season-select", {
-  searchEnabled: false,
-  removeItemButton: true,
-  shouldSort: false,
-  itemSelectText: "",
-  placeholder: false
-});
-document.getElementById("season-select").addEventListener("change", updateChart);
+function initChoices(id) {
+  if (document.getElementById(id)) {
+    choicesInstances[id] = new Choices("#" + id, choicesConfig);
+    document.getElementById(id).addEventListener("change", updateChart);
+  }
+}
 
-choicesInstances["init-select"] = new Choices("#init-select", {
-  searchEnabled: false,
-  removeItemButton: true,
-  shouldSort: false,
-  itemSelectText: "",
-  placeholder: false
-});
-document.getElementById("init-select").addEventListener("change", updateChart);
+initChoices("region-select");
+initChoices("season-select");
+initChoices("init-select");
 
 choicesInstances["source-select"] = new Choices("#source-select", {
   searchEnabled: false,
@@ -146,9 +138,9 @@ function getSelectedValues(id) {
 }
 
 function updateChart() {
-  const selectedRegions = getSelectedValues("region-select");
-  const selectedSeasons = getSelectedValues("season-select");
-  const selectedInits = getSelectedValues("init-select");
+  const selectedRegions = choicesInstances["region-select"] ? getSelectedValues("region-select") : [];
+  const selectedSeasons = choicesInstances["season-select"] ? getSelectedValues("season-select") : [];
+  const selectedInits = choicesInstances["init-select"] ? getSelectedValues("init-select") : [];
   const selectedSources = getSelectedValues("source-select");
   const selectedparams = getSelectedValues("param-select");
   const selectedMetrics = getSelectedValues("metric-select");

@@ -40,6 +40,7 @@ def program_summary_log(args):
     LOG.info("Reference time: %s", args.reftime)
     LOG.info("Parameters to verify: %s", args.params)
     LOG.info("Lead time: %s", args.lead_time)
+    LOG.info("Thresholds to verify: %s", args.threshold_dict)
     LOG.info("Output file: %s", args.output)
     LOG.info("=" * 80)
 
@@ -80,8 +81,14 @@ def main(args: ScriptConfig):
             ds["SP_10M"].attrs = {"units": "m/s", "long_name": "10m Wind Speed"}
 
     # compute metrics and statistics
-    results = verify(fcst, truth, args.label, args.truth_label, args.regions)
-    LOG.info("Verification results:\n%s", results)
+    results = verify(
+        fcst,
+        truth,
+        args.label,
+        args.truth_label,
+        args.regions,
+        threshold_dict=args.threshold_dict,
+    )
 
     # save results to NetCDF
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -141,6 +148,12 @@ if __name__ == "__main__":
         type=lambda x: x.split(","),
         help="Comma-separated list of shapefile paths defining regions for stratification.",
         default="",
+    )
+    parser.add_argument(
+        "--threshold_dict",
+        type=lambda x: eval(x),
+        help="Dictionary of thresholds for each parameter in the format '{param: [threshold1, threshold2, ...]}' (default: None).",
+        default=None,
     )
     parser.add_argument(
         "--output",
