@@ -4,8 +4,17 @@ from argparse import ArgumentParser
 from argparse import Namespace
 from pathlib import Path
 
+import scores
 import numpy as np
 import xarray as xr
+
+CATEGORICAL_METRICS = {
+    "ETS": lambda m: m.equitable_threat_score(),
+    "FBI": lambda m: m.frequency_bias(),
+    "POD": lambda m: m.probability_of_detection(),
+    "FAR": lambda m: m.false_alarm_ratio(),
+}
+
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -54,10 +63,55 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
         ds_mean.append(ds_grouped)
     out = xr.merge(ds_mean, compat="no_conflicts", join="outer")
 
+    for var in out.data_vars:
+        if "contingency_table" in var:
+            # convert contingency table elements to counts
+            out[var] = out[var] * len(ds["ref_time"])
+            contingency_manager = scores.categorical.BasicContingencyManager(
+                {
+                    "tp_count": out[var].sel(contingency="tp_count"),
+                    "tn_count": out[var].sel(contingency="tn_count"),
+                    "fp_count": out[var].sel(contingency="fp_count"),
+                    "fn_count": out[var].sel(contingency="fn_count"),
+                    "total_count": out[var].sel(contingency="total_count"),
+                }
+            )
+            for metric, fn in CATEGORICAL_METRICS.items():
+                out[var.replace("contingency_table", metric)] = fn(contingency_manager)
+            # split by threshold dimension into data variables
+
+            out = out.drop_vars(var)
+
+    # second loop to split along thresholds dimension, could be moved to plotting/dashboards scripts
+    for var in out.data_vars:
+        dim = list(filter(lambda x: "threshold" in x, out[var].dims))
+        if dim:
+            rename_dict = {d: f"{var}_{d}" for d in out.coords[dim[0]].values}
+            out = xr.merge(
+                [
+                    out[var].to_dataset(dim=dim[0]).rename(rename_dict),
+                    out.drop_vars(var),
+                ]
+            )
+
+    # Derive STDE and R2 from aggregated component metrics
+    for var in list(out.data_vars):
+        if var.endswith(".MSE"):
+            prefix = var[: -len("MSE")]
+            bias_var = f"{prefix}BIAS"
+            if bias_var in out.data_vars:
+                out[f"{prefix}STDE"] = np.sqrt(
+                    np.maximum(out[var] - out[bias_var] ** 2, 0)
+                )
+        if var.endswith(".CORR"):
+            prefix = var[: -len("CORR")]
+            out[f"{prefix}R2"] = out[var] ** 2
+
+    # Square-root transform parameters: sqrt MSE -> RMSE; sqrt var -> std
     var_transform = {
-        d: d.replace("VAR", "STDE").replace("var", "std").replace("MSE", "RMSE")
+        d: d.replace("var", "std").replace("MSE", "RMSE")
         for d in out.data_vars
-        if "VAR" in d or "var" in d or "MSE" in d
+        if "MSE" in d or "var" in d
     }
     for var in var_transform:
         out[var] = np.sqrt(out[var])

@@ -11,7 +11,16 @@ input:
     use_original_paths: true
 
 
-# outputs
+post_processors:
+  - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
+      accumulations:
+        - tp
+  - forward_transform_filter:
+      rescale:
+        scale: 1000 # convert units from m to kg m-2
+        offset: 0
+        param: tp
+
 output:
   tee:
     - grib:
@@ -25,9 +34,6 @@ output:
           - extract_mask: # removes global points
               mask: "lam_0/cutout_mask"
               as_slice: true
-          - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
-              accumulations:
-                - tp
     - grib:
         path: grib/ifs-{date}{time:04}_{step:03}.grib
         encoding:
@@ -42,8 +48,5 @@ output:
             inverse: true
         - assign_mask: # fill local/global overlapping points with nan
             mask: "global/cutout_mask"
-        - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
-            accumulations:
-              - tp
 
 patch_metadata: resources/sgm-ich1-oper-patch_metadata.yaml
