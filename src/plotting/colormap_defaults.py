@@ -111,11 +111,9 @@ _CMAP_DEFAULTS = {
             120.0,
         ],
     },
-    # hard-code this for the moment, can still make smarter later on:
-    # RMSE and MAE first (is all the same). Sequential colour map to reflect the nature of the data 
-    # (error, all positive). Red is suggestive of 'bad' (high error).
-    # Use a limited number of levels so that absolute values of error can be read from the map.
-    # always start at 0 so that the saturation of the colour corresponds to the error magnitude.
+    # Sequential Reds for RMSE and MAE: error is non-negative, larger ⇒ darker.
+    # Levels start at 0 so saturation maps directly to error magnitude;
+    # discrete levels make absolute values readable from the colour bar.
     # RMSE:
     "U_10M.RMSE.map": {
         "cmap": plt.get_cmap("Reds", 6),
