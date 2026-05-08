@@ -26,6 +26,7 @@ rule verification_metrics_baseline:
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         truth_label=config["truth"]["label"],
         regions=REGIONS,
+        threshold_dict=config["thresholds"],
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
     log:
@@ -44,6 +45,7 @@ rule verification_metrics_baseline:
             --label "{params.baseline_label}" \
             --truth_label "{params.truth_label}" \
             --regions "{params.regions}" \
+            --threshold_dict "{params.threshold_dict}" \
             --output {output} > {log} 2>&1
         """
 
@@ -75,6 +77,7 @@ rule verification_metrics:
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
+        threshold_dict=config["thresholds"],
     log:
         OUT_ROOT / "logs/verification_metrics/{run_id}-{init_time}.log",
     resources:
@@ -91,6 +94,7 @@ rule verification_metrics:
             --label "{params.fcst_label}" \
             --truth_label "{params.truth_label}" \
             --regions "{params.regions}" \
+            --threshold_dict "{params.threshold_dict}" \
             --output {output} > {log} 2>&1
         """
 
@@ -140,6 +144,7 @@ use rule verification_metrics_aggregation as verification_metrics_aggregation_ba
 
 rule verification_metrics_plot:
     input:
+        "src/verification/__init__.py",
         script="workflow/scripts/verification_plot_metrics.py",
         verif=list(EXPERIMENT_PARTICIPANTS.values()),
     output:

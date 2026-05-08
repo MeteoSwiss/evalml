@@ -274,7 +274,8 @@ rule inference_execute:
     localrule: True
     input:
         okfile=_inference_routing_fn,
-        image=lambda wc: OUT_ROOT / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
+        image=lambda wc: OUT_ROOT
+        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
     output:
         okfile=OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok",
     log:

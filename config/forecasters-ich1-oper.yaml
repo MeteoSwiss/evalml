@@ -24,12 +24,12 @@ runs:
 
   - baseline:
       label: ICON-CH1-ctrl
-      root: /scratch/mch/cmerker/ICON-CH1-EPS
+      root: /store_new/mch/msopr/ml/ICON-CH1-EPS
       steps: 0/33/6
 
   - baseline:
       label: ICON-CH2-ctrl
-      root: /scratch/mch/cmerker/ICON-CH2-EPS
+      root: /store_new/mch/msopr/ml/ICON-CH2-EPS
       steps: 0/120/6
 
 truth:
@@ -45,6 +45,23 @@ stratification:
     - innerealpentaeler
     - alpensuedseite
   root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+
+thresholds:
+  TOT_PREC:
+    gt: [0.0, 0.001, 0.005]
+  U_10M:
+    gt: [2.5, 5.0, 10.0]
+  V_10M:
+    gt: [2.5, 5.0, 10.0]
+  T_2M:
+    lt: [273.15]
+    gt: [288.15, 298.15]
+
+dashboard:
+  stratification:
+    # - init_hour
+    # - region
+    - season
 
 locations:
   output_root: output/

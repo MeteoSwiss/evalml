@@ -61,8 +61,9 @@ def load_analysis_data_from_zarr(
         "PMSL": "msl",
         "TOT_PREC": "tp",
     }
+    tot_prec_string = "TOT_PREC_6H" if min(np.diff(steps)) == 6 else "TOT_PREC_1H"
     PARAMS_MAP_COSMO1 = {
-        v: v.replace("TOT_PREC", "TOT_PREC_6H") for v in PARAMS_MAP_COSMO2.keys()
+        v: v.replace("TOT_PREC", tot_prec_string) for v in PARAMS_MAP_COSMO2.keys()
     }
     PARAMS_MAP = PARAMS_MAP_COSMO2 if "co2" in root.name else PARAMS_MAP_COSMO1
 
@@ -95,6 +96,9 @@ def load_analysis_data_from_zarr(
         .rename({v: k for k, v in PARAMS_MAP.items() if v in ds["variable"].values})
     )
 
+    # change precipitation units from m to kg m-2
+    ds["TOT_PREC"] = ds["TOT_PREC"] * 1000  # convert precipitation units from m to mm
+
     # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
     if "cell" in ds.dims:
         ds = ds.rename({"cell": "values"})
@@ -116,16 +120,52 @@ def load_fct_data_from_grib(
         elif "z" in da.dims and da.sizes["z"] > 1:
             ds[var] = da.rename({"z": da.attrs["vcoord_type"]})
     ds = xr.merge([ds[p].rename(p) for p in ds], compat="no_conflicts")
+    lead_times = np.array(steps, dtype="timedelta64[h]")
+    # Restrict to the requested lead times so that the TOT_PREC disaggregation
+    # below operates on the correct step interval even if the GRIB contains
+    # extra (e.g. hourly) steps beyond those requested — e.g. when consuming
+    # output from an interpolator emulator or a baseline with sub-step output.
+    ds = ds.sel(lead_time=lead_times)
     if "TOT_PREC" in ds.data_vars:
-        LOG.info("Disaggregating precipitation")
+        ## Disaggregate TOT_PREC from cumulative-from-start (expected when the
+        ## accumulate_from_start_of_forecast post-processor is enabled in
+        ## anemoi-inference) to per-step accumulations.
+        ##
+        ## anemoi-inference sometimes omits step 0 from the GRIB even with
+        ## accumulate_from_start_of_forecast enabled. After the outer-join
+        ## merge above, lead_time=0 of TOT_PREC is then NaN, which would
+        ## propagate through .diff() and wipe out the first period
+        ## accumulation. Set it explicitly to 0 (cumulative-from-start has
+        ## nothing accumulated at the forecast initial time by definition).
+        ## Restricting to lead_time=0 leaves any other NaNs (e.g. from
+        ## boundary-trim masks) untouched.
         ds = ds.assign(
-            TOT_PREC=lambda x: (
-                x.TOT_PREC.fillna(0)
-                .diff("lead_time")
-                .pad(lead_time=(1, 0), constant_value=None)
-                .clip(min=0.0)
+            TOT_PREC=xr.where(
+                ds.lead_time == np.timedelta64(0, "h"),
+                0.0,
+                ds.TOT_PREC,
             )
         )
+        ## Sanity-check that the incoming data is actually cumulative: if
+        ## .diff() produces significantly negative values, TOT_PREC is already
+        ## period-accumulated and a second disaggregation would produce
+        ## garbage. In that case raise — we always expect cumulative-from-
+        ## start precipitation here.
+        diff = ds.TOT_PREC.diff("lead_time")
+        min_diff = float(diff.min().compute())
+        if min_diff < -0.1:  # TOT_PREC canonical units are mm
+            raise ValueError(
+                f"TOT_PREC in the GRIB appears to already be "
+                f"period-accumulated (min(.diff()) = {min_diff:.3e} m). "
+                f"Check that the accumulate_from_start_of_forecast "
+                f"post-processor is enabled in the anemoi-inference config "
+                f"for this source."
+            )
+        ## .diff() drops lead_time=0; .reindex() restores it as NaN (no
+        ## accumulation period exists at the forecast initial time). Clip
+        ## small float-noise negatives to zero (anything below -0.1 mm has
+        ## already been caught by the check above).
+        ds = ds.assign(TOT_PREC=diff.clip(min=0.0).reindex(lead_time=lead_times))
     # make sure time coordinate is available, and valid_time is not
     if "valid_time" in ds.coords:
         ds = ds.rename({"valid_time": "time"})
@@ -151,23 +191,37 @@ def load_baseline_from_zarr(
     baseline = baseline.rename(
         {"forecast_reference_time": "ref_time", "step": "lead_time"}
     ).sortby("lead_time")
+    lead_times = np.array(steps, dtype="timedelta64[h]")
+    # Restrict to the requested lead times up-front so that the TOT_PREC
+    # disaggregation below operates on the correct step interval, and so that
+    # all other variables avoid loading unused hourly steps from the zarr.
+    baseline = baseline[params].sel(ref_time=reftime, lead_time=lead_times)
     if "TOT_PREC" in baseline.data_vars:
-        if baseline.TOT_PREC.units == "kg m-2":
-            baseline = baseline.assign(TOT_PREC=lambda x: x.TOT_PREC / 1000)
-            baseline.TOT_PREC.attrs["units"] = "m"
-        ## disaggregate precipitation
-        baseline = baseline.assign(
-            TOT_PREC=lambda x: (
-                x.TOT_PREC.fillna(0)
-                .diff("lead_time")
-                .pad(lead_time=(1, 0), constant_value=None)
-                .clip(min=0.0)
+        if baseline.TOT_PREC.units == "m":
+            baseline = baseline.assign(TOT_PREC=lambda x: x.TOT_PREC * 1000)
+            baseline.TOT_PREC.attrs["units"] = "kg m-2"
+        ## Disaggregate TOT_PREC from cumulative-from-start (the expected zarr
+        ## convention for processed NWP output) to per-step accumulations.
+        ##
+        ## Sanity-check that the incoming data is actually cumulative: if
+        ## .diff() produces significantly negative values, TOT_PREC is already
+        ## period-accumulated and a second disaggregation would produce
+        ## garbage. In that case raise — we always expect cumulative-from-
+        ## start precipitation here.
+        diff = baseline.TOT_PREC.diff("lead_time")
+        min_diff = float(diff.min().compute())
+        if min_diff < -0.1:  # TOT_PREC canonical units are mm
+            raise ValueError(
+                f"TOT_PREC in the baseline zarr appears to already be "
+                f"period-accumulated (min(.diff()) = {min_diff:.3e} m)."
             )
+        ## .diff() drops lead_time=0; .reindex() restores it as NaN (no
+        ## accumulation period exists at the forecast initial time). Clip
+        ## small float-noise negatives to zero (anything below -0.1 mm has
+        ## already been caught by the check above).
+        baseline = baseline.assign(
+            TOT_PREC=diff.clip(min=0.0).reindex(lead_time=lead_times)
         )
-    baseline = baseline[params].sel(
-        ref_time=reftime,
-        lead_time=np.array(steps, dtype="timedelta64[h]"),
-    )
     baseline = baseline.assign_coords(time=baseline.ref_time + baseline.lead_time)
     if "latitude" in baseline.coords and "longitude" in baseline:
         baseline = baseline.rename({"latitude": "lat", "longitude": "lon"})
