@@ -16,7 +16,9 @@ def _():
     import matplotlib.pyplot as plt
     from matplotlib.transforms import ScaledTranslation
 
-    return ArgumentParser, Path, ScaledTranslation, np, pd, plt, xr
+    from verification import decode_metric
+
+    return ArgumentParser, Path, ScaledTranslation, decode_metric, np, pd, plt, xr
 
 
 @app.cell
@@ -111,12 +113,12 @@ def config(ArgumentParser, Path):
         vars_metrics = dict(_parse_var_metrics(s) for s in args.variable)
     else:
         vars_metrics = {
-            "U_10M": ["RMSE", "MAE", "STDE", "CORR", "R2"],
-            "V_10M": ["RMSE", "MAE", "STDE", "CORR", "R2"],
-            "T_2M": ["RMSE", "MAE", "STDE", "CORR", "R2"],
-            "PMSL": ["RMSE", "MAE", "STDE", "CORR", "R2"],
-            "TD_2M": ["RMSE", "MAE", "STDE", "CORR", "R2"],
-            "TOT_PREC": ["RMSE", "MAE", "STDE", "CORR", "R2"],
+            "U_10M": ["RMSE", "R2", "ETS"],
+            "V_10M": ["RMSE", "R2", "ETS"],
+            "T_2M": ["RMSE", "R2"],
+            "PMSL": ["RMSE", "R2"],
+            "TD_2M": ["RMSE", "R2"],
+            "TOT_PREC": ["RMSE", "R2", "ETS"],
         }
 
     outfn = Path(args.output)
@@ -134,10 +136,13 @@ def config(ArgumentParser, Path):
             "STDE",
             "CORR",
             "R2",
+            "ETS",
+            "POD",
+            "FAR",
         ],  # every entry must appear in metric_directions
         "metric_directions": {
-            "lower_is_better": ["RMSE", "MAE", "STDE"],
-            "higher_is_better": ["CORR", "R2"],
+            "lower_is_better": ["RMSE", "MAE", "STDE", "FAR"],
+            "higher_is_better": ["CORR", "R2", "ETS", "POD"],
         },
         "variables": vars_metrics,  # null entry → use all_metrics; list → restrict to that subset
         "plot": {
@@ -300,18 +305,38 @@ def filter_diff(all_metrics, cfg, diff, pd):
             )
         diff_filtered = diff_filtered.sel(lead_time=keep)
 
+    def _resolve_metric(var_name, m, data_vars):
+        """Resolve one metric name to matching data_var names.
+
+        Handles two cases:
+        - exact match:      "RMSE" → ["U_10M.RMSE"]
+        - prefix expansion: "ETS"  → all "VAR.ETS_*" in the dataset
+        """
+        exact = f"{var_name}.{m}"
+        if exact in data_vars:
+            return [exact]
+        return [v for v in data_vars if v.startswith(f"{var_name}.{m}_")]
+
     # Order follows cfg["variables"] for groups; within each group, follows all_metrics.
     if cfg.get("variables"):
         keep = [
-            f"{_var_name}.{_m}"
+            v
             for _var_name, _var_metrics in cfg["variables"].items()
             for _m in (_var_metrics or all_metrics)
-            if f"{_var_name}.{_m}" in diff_filtered.data_vars
+            for v in _resolve_metric(_var_name, _m, diff_filtered.data_vars)
         ]
         diff_filtered = diff_filtered[keep]
     else:
         diff_filtered = diff_filtered[
-            [v for v in diff_filtered.data_vars if v.split(".")[-1] in all_metrics]
+            [
+                v
+                for v in diff_filtered.data_vars
+                if any(
+                    s == m or s.startswith(f"{m}_")
+                    for m in all_metrics
+                    for s in [v.split(".")[-1]]
+                )
+            ]
         ]
 
     if not diff_filtered.data_vars:
@@ -323,6 +348,7 @@ def filter_diff(all_metrics, cfg, diff, pd):
 def plot_scorecard(
     ScaledTranslation,
     baseline_source,
+    decode_metric,
     cfg,
     diff_filtered,
     higher_is_better,
@@ -350,9 +376,9 @@ def plot_scorecard(
 
     def is_model_better(d, metric):
         """True if a positive `d` (signed diff %) means the model beats the baseline."""
-        if metric in higher_is_better:
+        if any(metric == m or metric.startswith(f"{m}_") for m in higher_is_better):
             return d > 0
-        if metric in lower_is_better:
+        if any(metric == m or metric.startswith(f"{m}_") for m in lower_is_better):
             return d < 0
         return None
 
@@ -479,7 +505,7 @@ def plot_scorecard(
         ax.text(
             layout["metric_x"],
             y,
-            metric,
+            decode_metric(metric),
             ha="right",
             va="center",
             fontsize=fonts["metric"],
