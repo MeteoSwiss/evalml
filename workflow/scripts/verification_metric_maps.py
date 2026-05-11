@@ -249,9 +249,15 @@ def main(args: Namespace) -> None:
     # dimension(s).
     bucket_keys = [(s, h) for s in SEASONS for h in INIT_HOURS]
     accum_n: dict[tuple[str, int], np.ndarray | None] = {k: None for k in bucket_keys}
-    accum_sum_e: dict[tuple[str, int], np.ndarray | None] = {k: None for k in bucket_keys}
-    accum_sum_se: dict[tuple[str, int], np.ndarray | None] = {k: None for k in bucket_keys}
-    accum_sum_ae: dict[tuple[str, int], np.ndarray | None] = {k: None for k in bucket_keys}
+    accum_sum_e: dict[tuple[str, int], np.ndarray | None] = {
+        k: None for k in bucket_keys
+    }
+    accum_sum_se: dict[tuple[str, int], np.ndarray | None] = {
+        k: None for k in bucket_keys
+    }
+    accum_sum_ae: dict[tuple[str, int], np.ndarray | None] = {
+        k: None for k in bucket_keys
+    }
     ref_truth_slice: xr.DataArray | None = None  # kept for output coordinates
 
     n_ok = 0
@@ -459,7 +465,9 @@ def main(args: Namespace) -> None:
                 lambda n, s, h: np.where(n > 0, accum_sum_e[(s, h)] / n, np.nan)
             ),
             f"{args.param}.RMSE": _strat_da(
-                lambda n, s, h: np.where(n > 0, np.sqrt(accum_sum_se[(s, h)] / n), np.nan)
+                lambda n, s, h: np.where(
+                    n > 0, np.sqrt(accum_sum_se[(s, h)] / n), np.nan
+                )
             ),
             f"{args.param}.MAE": _strat_da(
                 lambda n, s, h: np.where(n > 0, accum_sum_ae[(s, h)] / n, np.nan)

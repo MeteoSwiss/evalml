@@ -80,9 +80,7 @@ def _(ArgumentParser, Path, np):
             try:
                 init_hour = int(init_hour)
             except ValueError as exc:
-                raise ValueError(
-                    "init_hour must be 'all' or an integer hour"
-                ) from exc
+                raise ValueError("init_hour must be 'all' or an integer hour") from exc
 
     lead_time = np.timedelta64(lead_time, "h")
     return (
