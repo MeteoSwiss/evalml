@@ -111,9 +111,28 @@ def load_fct_data_from_grib(
     root: Path, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
     """Load forecast data from GRIB files for a specific valid time."""
+    # TODO: this function carries a large per-call setup cost that is
+    # independent of data volume (likely eccodes/FileDataSource init or GRIB
+    # index build, not decoding). It dominates runtime in any rule that calls
+    # it inside a per-init-time loop (e.g. verification_metrics_maps) and also
+    # adds noticeable overhead to verif_metrics and the plot rules.
     files = sorted(root.glob(f"{reftime:%Y%m%d%H%M}*.grib"))
     fds = data_source.FileDataSource(datafiles=files)
-    ds = grib_decoder.load(fds, {"param": params, "step": steps})
+    # For TOT_PREC (cumulative-from-start) we need step 0 to disaggregate to a
+    # 0->step period accumulation even when the caller asks for a single step.
+    # anemoi-inference may omit step 0 from the GRIB; tolerate that and
+    # synthesize lead_time=0, TOT_PREC=0 below (cumulative-from-start has
+    # nothing accumulated at the IC by definition).
+    needs_step_zero = "TOT_PREC" in params and 0 not in steps
+    fetch_steps = [0, *steps] if needs_step_zero else list(steps)
+    ds = grib_decoder.load(fds, {"param": params, "step": fetch_steps})
+    # grib_decoder.load may silently drop steps that aren't on disk
+    # (anemoi-inference often omits step 0 even with cumulative-from-start
+    # accumulation). Detect that here so the TOT_PREC block can synthesize
+    # lead_time=0, TOT_PREC=0 below.
+    zero_lt = np.timedelta64(0, "h")
+    loaded_lead_times = next(iter(ds.values())).lead_time.values
+    step_zero_synthetic = needs_step_zero and zero_lt not in loaded_lead_times
     for var, da in ds.items():
         if "z" in da.dims and da.sizes["z"] == 1:
             ds[var] = da.squeeze("z", drop=True)
@@ -121,11 +140,17 @@ def load_fct_data_from_grib(
             ds[var] = da.rename({"z": da.attrs["vcoord_type"]})
     ds = xr.merge([ds[p].rename(p) for p in ds], compat="no_conflicts")
     lead_times = np.array(steps, dtype="timedelta64[h]")
-    # Restrict to the requested lead times so that the TOT_PREC disaggregation
-    # below operates on the correct step interval even if the GRIB contains
-    # extra (e.g. hourly) steps beyond those requested — e.g. when consuming
-    # output from an interpolator emulator or a baseline with sub-step output.
-    ds = ds.sel(lead_time=lead_times)
+    fetch_lead_times = np.array(fetch_steps, dtype="timedelta64[h]")
+    # Restrict to the lead times we'll work with (fetch_lead_times = requested
+    # steps + step 0 if needed). This drops any extra (e.g. hourly) steps the
+    # GRIB may contain beyond what we asked for — e.g. when consuming output
+    # from an interpolator emulator or a baseline with sub-step output.
+    if step_zero_synthetic:
+        # Step 0 is missing from the GRIB; reindex inserts NaN at lead 0,
+        # which the xr.where below replaces with 0.
+        ds = ds.sel(lead_time=lead_times).reindex(lead_time=fetch_lead_times)
+    else:
+        ds = ds.sel(lead_time=fetch_lead_times)
     if "TOT_PREC" in ds.data_vars:
         ## Disaggregate TOT_PREC from cumulative-from-start (expected when the
         ## accumulate_from_start_of_forecast post-processor is enabled in
@@ -166,6 +191,8 @@ def load_fct_data_from_grib(
         ## small float-noise negatives to zero (anything below -0.1 mm has
         ## already been caught by the check above).
         ds = ds.assign(TOT_PREC=diff.clip(min=0.0).reindex(lead_time=lead_times))
+    # Drop the auxiliary step 0 from any non-TOT_PREC variables.
+    ds = ds.sel(lead_time=lead_times)
     # make sure time coordinate is available, and valid_time is not
     if "valid_time" in ds.coords:
         ds = ds.rename({"valid_time": "time"})
@@ -192,10 +219,18 @@ def load_baseline_from_zarr(
         {"forecast_reference_time": "ref_time", "step": "lead_time"}
     ).sortby("lead_time")
     lead_times = np.array(steps, dtype="timedelta64[h]")
+    # For TOT_PREC (cumulative-from-start) we need step 0 in the slice so that
+    # .diff() yields a 0->step period accumulation even when the caller
+    # requested a single step. The extra step is dropped at the final reindex.
+    zero_lt = np.timedelta64(0, "h")
+    if "TOT_PREC" in params and zero_lt not in lead_times:
+        fetch_lead_times = np.concatenate([[zero_lt], lead_times])
+    else:
+        fetch_lead_times = lead_times
     # Restrict to the requested lead times up-front so that the TOT_PREC
     # disaggregation below operates on the correct step interval, and so that
     # all other variables avoid loading unused hourly steps from the zarr.
-    baseline = baseline[params].sel(ref_time=reftime, lead_time=lead_times)
+    baseline = baseline[params].sel(ref_time=reftime, lead_time=fetch_lead_times)
     if "TOT_PREC" in baseline.data_vars:
         if baseline.TOT_PREC.units == "m":
             baseline = baseline.assign(TOT_PREC=lambda x: x.TOT_PREC * 1000)
@@ -222,6 +257,8 @@ def load_baseline_from_zarr(
         baseline = baseline.assign(
             TOT_PREC=diff.clip(min=0.0).reindex(lead_time=lead_times)
         )
+    # Drop the auxiliary step 0 from any non-TOT_PREC variables.
+    baseline = baseline.sel(lead_time=lead_times)
     baseline = baseline.assign_coords(time=baseline.ref_time + baseline.lead_time)
     if "latitude" in baseline.coords and "longitude" in baseline:
         baseline = baseline.rename({"latitude": "lat", "longitude": "lon"})

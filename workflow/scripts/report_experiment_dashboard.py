@@ -38,9 +38,7 @@ def main(args):
     ds = xr.concat(dfs, dim="source", join="outer")
     LOG.info("Loaded verification netcdf: \n%s", ds)
 
-    # extract only  non-spatial variables to pd.DataFrame
-    nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
-    df = ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
+    df = ds.to_array("stack").to_dataframe(name="value").reset_index()
     df[["param", "metric"]] = df["stack"].str.split(".", n=1, expand=True)
     df["metric"] = df.metric.apply(decode_metric)
     df.drop(columns=["stack"], inplace=True)

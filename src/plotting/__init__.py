@@ -30,11 +30,11 @@ DOMAINS = {
         "projection": _PROJECTIONS["orthographic"],
     },
     "centraleurope": {
-        "extent": [-2.6, 19.5, 40.2, 52.3],
+        "extent": [-1.5, 18, 41.5, 51],
         "projection": _PROJECTIONS["orthographic"],
     },
     "switzerland": {
-        "extent": [0, 17.5, 40.5, 53.0],
+        "extent": [5.5, 11.0, 45.5, 48.0],
         "projection": _PROJECTIONS["orthographic"],
     },
 }

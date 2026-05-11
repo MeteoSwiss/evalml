@@ -164,3 +164,76 @@ rule verification_metrics_plot:
         """
         uv run {input.script} {input.verif} --output_dir {output} > {log} 2>&1
         """
+
+
+rule verification_metrics_maps:
+    input:
+        "src/verification/__init__.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/verification_metric_maps.py",
+        inference_okfiles=lambda wc: expand(
+            rules.inference_execute.output.okfile,
+            init_time=_restrict_reftimes_to_hours(REFTIMES),
+            allow_missing=True,
+        ),
+        truth=config["truth"]["root"],
+    output:
+        OUT_ROOT / "data/runs/{run_id}/metric_maps/{param}_{leadtime}.nc",
+    # wildcard_constraints:
+    # run_id="^" # to avoid ambiguitiy with run_baseline_verif
+    # TODO: implement logic to use experiment name instead of run_id as wildcard
+    params:
+        fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
+        fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
+        truth_label=config["truth"]["label"],
+        reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
+    log:
+        OUT_ROOT / "logs/verification_metrics_maps/{run_id}-{param}-{leadtime}.log",
+    resources:
+        cpus_per_task=24,
+        mem_mb=50_000,
+        runtime="60m",
+    shell:
+        """
+        uv run {input.script} \
+            --run_root output/data/runs/{wildcards.run_id} \
+            --reftimes {params.reftimes} \
+            --truth {input.truth} \
+            --step {wildcards.leadtime} \
+            --param {wildcards.param} \
+            --output {output} > {log} 2>&1
+        """
+
+
+rule verification_metrics_maps_baseline:
+    input:
+        script="workflow/scripts/verification_metric_maps.py",
+        baseline_zarrs=lambda wc: expand(
+            "{root}/FCST{year}.zarr",
+            root=BASELINE_CONFIGS[wc.baseline_id].get("root"),
+            year=sorted({t.strftime("%y") for t in REFTIMES}),
+        ),
+        truth=config["truth"]["root"],
+    output:
+        OUT_ROOT / "data/baselines/{baseline_id}/metric_maps/{param}_{leadtime}.nc",
+    params:
+        baseline_root=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("root"),
+        reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
+    log:
+        OUT_ROOT
+        / "logs/verification_metrics_maps_baseline/{baseline_id}-{param}-{leadtime}.log",
+    resources:
+        cpus_per_task=24,
+        mem_mb=50_000,
+        runtime="60m",
+    shell:
+        """
+        uv run {input.script} \
+            --baseline_root {params.baseline_root} \
+            --baseline_zarrs {input.baseline_zarrs} \
+            --reftimes {params.reftimes} \
+            --truth {input.truth} \
+            --step {wildcards.leadtime} \
+            --param {wildcards.param} \
+            --output {output} > {log} 2>&1
+        """

@@ -208,6 +208,41 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
+class MetricMapsConfig(BaseModel):
+    """Parameters controlling which metric map plots are produced."""
+
+    params: List[str] = Field(
+        default=["T_2M", "TD_2M", "U_10M", "V_10M", "SP_10M", "PS", "PMSL", "TOT_PREC"],
+        description=(
+            "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
+            "PS, PMSL, TOT_PREC (native), and SP_10M (derived wind speed from U_10M/V_10M)."
+        ),
+    )
+    leadtimes: List[int] = Field(
+        default=list(range(6, 121, 6)),
+        description="List of lead times (hours) to plot.",
+    )
+    metrics: List[str] = Field(
+        default=["BIAS", "RMSE", "MAE"],
+        description="List of verification metrics to plot.",
+    )
+    regions: List[str] = Field(
+        default=["switzerland", "centraleurope"],
+        description="List of regions to plot.",
+    )
+    seasons: List[str] = Field(
+        default=["all", "DJF", "MAM", "JJA", "SON"],
+        description="List of seasons to plot.",
+    )
+    init_hours: List[str] = Field(
+        default=["all"],
+        description=(
+            "List of initialization hours to plot. Use 'all' for the unstratified "
+            "view, or zero-padded hour strings like '00', '06', '12', '18'."
+        ),
+    )
+
+
 class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
 
@@ -351,6 +386,10 @@ class ConfigModel(BaseModel):
     dashboard: Dashboard
     locations: Locations
     profile: Profile
+    metric_maps: MetricMapsConfig = Field(
+        default_factory=MetricMapsConfig,
+        description="Parameters for metric map plots (used with --maps flag).",
+    )
 
     model_config = {
         "extra": "forbid",  # fail on misspelled keys

@@ -91,3 +91,35 @@ profile:
   jobs: 50
   batch_rules:
     plot_forecast_frame: 32
+
+metric_maps:
+  params:
+    - T_2M
+    # - TD_2M
+    # - U_10M
+    # - V_10M
+    # - SP_10M
+    # - PS
+    # - PMSL
+    # - TOT_PREC
+  leadtimes:
+    - 24
+  metrics:
+    - BIAS
+    # - RMSE
+    # - MAE
+  regions:
+    - switzerland
+    # - centraleurope
+  seasons:
+    - all
+    # - DJF
+    # - MAM
+    # - JJA
+    # - SON
+  init_hours:
+    - all
+    # - "00"
+    # - "06"
+    # - "12"
+    # - "18"
