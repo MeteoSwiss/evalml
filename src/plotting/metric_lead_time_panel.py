@@ -2,13 +2,25 @@
 import pandas as pd
 from matplotlib.axes import Axes
 
+from verification import decode_metric
+
+from .units import metric_units
+
+
+def _default_ylabel(metric: str, param: str | None) -> str:
+    label = decode_metric(metric)
+    units = metric_units(metric, param) if param is not None else ""
+    return f"{label} [{units}]" if units else label
+
 
 def plot_panel(
     ax: Axes,
     sub_df: pd.DataFrame,
     *,
     metric: str,
+    param: str | None = None,
     title: str | None = None,
+    panel_label: str | None = None,
     xlabel: str | None = "Lead Time [h]",
     ylabel: str | None = None,
     show_legend: bool = True,
@@ -19,9 +31,15 @@ def plot_panel(
     init_hour) combo and contain at least the columns: source, lead_time, value.
     One line per source is drawn; sources whose name contains "analysis" are
     forced to black.
+
+    If `ylabel` is None and `param` is provided, the y-axis label is built as
+    "<decoded metric> [<units>]" via plotting.units.metric_units.
+
+    `panel_label` (e.g. "a)") is rendered left-aligned at the same height as
+    the centred title.
     """
     if ylabel is None:
-        ylabel = metric
+        ylabel = _default_ylabel(metric, param)
     for source, df in sub_df.groupby("source"):
         df.plot(
             x="lead_time",
@@ -36,3 +54,5 @@ def plot_panel(
             ax=ax,
             legend=show_legend,
         )
+    if panel_label:
+        ax.set_title(panel_label, loc="left", fontweight="bold")

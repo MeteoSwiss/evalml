@@ -7,7 +7,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 from plotting.metric_lead_time_panel import plot_panel
-from verification import decode_metric
 from verification.loading import load_long_df, subset_df
 
 LOG = logging.getLogger(__name__)
@@ -55,8 +54,8 @@ def main(args: Namespace) -> None:
             ax,
             sub_df,
             metric=metric,
+            param=param,
             title=title,
-            ylabel=decode_metric(metric),
         )
 
         args.output_dir.mkdir(parents=True, exist_ok=True)

@@ -7,6 +7,7 @@ either inline (``--spec_json '<json>'``) or as a path to a JSON file
 """
 import json
 import logging
+import string
 from argparse import ArgumentParser
 from argparse import Namespace
 from pathlib import Path
@@ -16,6 +17,16 @@ import matplotlib.pyplot as plt
 from plotting.metric_lead_time_panel import plot_panel
 from verification import decode_metric
 from verification.loading import load_long_df, subset_df
+from plotting.units import metric_units
+
+
+def _panel_label(idx: int) -> str:
+    """Return 'a)', 'b)', ..., 'z)', 'aa)', ... for the given 0-based index."""
+    letters = string.ascii_lowercase
+    if idx < len(letters):
+        return f"{letters[idx]})"
+    a, b = divmod(idx, len(letters))
+    return f"{letters[a - 1]}{letters[b]})"
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -72,13 +83,21 @@ def main(args: Namespace) -> None:
         is_bottom = r == rows - 1
         is_left = c == 0
         title = panel.get("title", f"{metric} - {param}")
+        units = metric_units(metric, param)
+        ylabel = (
+            (f"{decode_metric(metric)} [{units}]" if units else decode_metric(metric))
+            if is_left
+            else None
+        )
         plot_panel(
             ax,
             sub,
             metric=metric,
+            param=param,
             title=title,
+            panel_label=_panel_label(idx),
             xlabel="Lead Time [h]" if is_bottom else None,
-            ylabel=decode_metric(metric) if is_left else None,
+            ylabel=ylabel,
             show_legend=False,
         )
         if panel.get("ylim"):
@@ -100,8 +119,15 @@ def main(args: Namespace) -> None:
             bbox_to_anchor=(0.5, 0.0),
         )
 
-    top = 0.95 if spec.get("title") else 0.98
-    fig.tight_layout(rect=[0, 0.08, 1, top])
+    top = 0.92 if spec.get("title") else 0.96
+    fig.subplots_adjust(
+        left=0.09,
+        right=0.97,
+        top=top,
+        bottom=0.13,
+        hspace=0.45,
+        wspace=0.28,
+    )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.output, dpi=150)
