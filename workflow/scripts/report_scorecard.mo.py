@@ -187,17 +187,19 @@ def config(ArgumentParser, Path):
             "layout": {  # data-coordinate offsets controlling spacing
                 "region_gap": 1.5,  # empty columns between adjacent region blocks
                 "metric_x": -1.5,  # x position of metric labels (data coords)
-                "group_offset_pt": 75,  # physical gap (points) from metric label to group label
-                "region_y": 1.9,  # y position of region title labels
-                "region_y_pad": 0.8,  # extra y above region_y for the top ylim
+                "group_metric_gap_pt": 15,  # physical gap (points) between the longest metric label and the group label
+                "region_label_pad": 1.05,  # factor applied to the longest region label width when widening columns to fit it
+                "region_y": 1.9,  # y position of region title labels (text baseline)
+                "region_y_pad": 0.2,  # extra y above the measured region label height for the top ylim
                 "leads_y": 0.35,  # y position of the lead-time tick labels
             },
             "hline": {  # horizontal separators between variable groups
-                "gap_pt": -42,  # physical gap (points) from metric label to line start
+                "start_pad_pt": 0,  # physical nudge (points) right of the longest metric label, offsetting its glyph side-bearing
                 "x_end": 1.0,  # axes fraction where the line ends
                 "linewidth": 0.7,
             },
             "vline": {  # vertical separators between regions
+                "label_gap": 0.4,  # gap (metric rows) between the region label bottom and the top of the separator line
                 "linewidth": 0.8,
             },
             "legend": {
@@ -210,7 +212,7 @@ def config(ArgumentParser, Path):
                     5,
                 ],  # |diff|% values shown on each side of neutral
                 "label_fontsize_factor": 0.85,  # factor applied to fonts.legend for the small labels
-                "side_text_offset": 0.02,  # gap (axes fraction) between outer dot and side label
+                "side_text_offset": 0.03,  # gap (axes fraction) between outer dot and side label
                 "missing_dot_offset_pt": 50,  # extra vertical gap (points) below the main legend row for the "no data" example
             },
         },
@@ -394,8 +396,8 @@ def plot_scorecard(
     n_leads = diff_filtered.sizes["lead_time"]
     lead_hours = [to_h(lt) for lt in diff_filtered.lead_time.values]
 
-    # Measure the longest region label on a throwaway figure so col_width can grow
-    # to prevent adjacent region headers from overlapping.
+    # Measure the longest region label on a throwaway figure so col_width can grow to prevent adjacent region headers from overlapping;
+    # its height (in metric rows) also fixes the top ylim and the top of the vertical separators.
     _longest_region = max(regions_, key=len).capitalize()
     _fig_tmp, _ax_tmp = plt.subplots(dpi=plot["rcparams"]["dpi"])
     _t = _ax_tmp.text(
@@ -407,17 +409,39 @@ def plot_scorecard(
         fontfamily=plot["rcparams"]["font_sans"],
     )
     _fig_tmp.canvas.draw()
-    _text_w_in = (
-        _t.get_window_extent(_fig_tmp.canvas.get_renderer()).width / _fig_tmp.dpi
-    )
+    _region_bbox = _t.get_window_extent(_fig_tmp.canvas.get_renderer())
+    _text_w_in = _region_bbox.width / _fig_tmp.dpi
+    _region_h_rows = _region_bbox.height / _fig_tmp.dpi / figure["row_height"]
     plt.close(_fig_tmp)
 
-    col_width = max(figure["col_width"], _text_w_in / (n_leads + layout["region_gap"]))
+    # Measure the longest metric label on a throwaway figure so the group labels can sit just left of it without overlapping.
+    _longest_metric = max((decode_metric(m) for _, m in rows), key=len)
+    _fig_tmp2, _ax_tmp2 = plt.subplots(dpi=plot["rcparams"]["dpi"])
+    _t2 = _ax_tmp2.text(
+        0,
+        0,
+        _longest_metric,
+        fontsize=fonts["metric"],
+        fontfamily=plot["rcparams"]["font_sans"],
+    )
+    _fig_tmp2.canvas.draw()
+    _metric_w_pt = (
+        _t2.get_window_extent(_fig_tmp2.canvas.get_renderer()).width
+        * 72
+        / _fig_tmp2.dpi
+    )
+    plt.close(_fig_tmp2)
+    group_offset_pt = _metric_w_pt + layout["group_metric_gap_pt"]
+
+    col_width = max(
+        figure["col_width"],
+        _text_w_in * layout["region_label_pad"] / (n_leads + layout["region_gap"]),
+    )
     plot_width = len(regions_) * (n_leads + layout["region_gap"]) - layout["region_gap"]
     fig_width = max(figure["width_min"], plot_width * col_width + figure["width_pad"])
     # Last row is at y=-(len(rows)-1); add 0.5 units of clearance below it.
     y_bottom = -(len(rows) - 0.5)
-    y_top = layout["region_y"] + layout["region_y_pad"]
+    y_top = layout["region_y"] + _region_h_rows + layout["region_y_pad"]
     has_missing = any(
         np.isnan(diff_filtered[v].values).any() for v in diff_filtered.data_vars
     )
@@ -445,21 +469,13 @@ def plot_scorecard(
     ax.set_xlim(xlim_left, plot_width)
     ax.set_ylim(y_bottom, y_top)
 
-    # Group labels: same x as metric labels, shifted left by a fixed point offset
-    # so the gap stays constant regardless of figure width.
+    # Group labels: same x as metric labels, shifted left by the measured metric label width
+    # so the group label never overlaps with metric labels regardless of figure width.
     group_transform = ax.transData + ScaledTranslation(
-        -layout["group_offset_pt"] / 72,
+        -group_offset_pt / 72,
         0,
         fig.dpi_scale_trans,
     )
-
-    # Horizontal separators start just right of the metric labels. axhline expects
-    # axes-fraction, so convert metric_x from data coords and add the physical gap.
-    xlim_range = plot_width - xlim_left
-    metric_frac = (layout["metric_x"] - xlim_left) / xlim_range
-    ax_w_in = fig_width * ax.get_position().width
-    gap_frac = (hline["gap_pt"] / 72) / ax_w_in
-    hline_x_start = metric_frac + gap_frac
 
     # Title in figure coords so it is unaffected by axes margin changes.
     fig.text(
@@ -477,6 +493,7 @@ def plot_scorecard(
     # ── Dots and row labels ──────────────────────────────────────────────────────
     # y is negated so row 0 sits at the top.
     cur_group = None
+    group_separator_ys = []
     for row_idx, (group, metric) in enumerate(rows):
         y = -row_idx
         name = f"{group}.{metric}"
@@ -493,13 +510,7 @@ def plot_scorecard(
                 transform=group_transform,
             )
             if row_idx > 0:
-                ax.axhline(
-                    y=y + 0.5,
-                    xmin=hline_x_start,
-                    xmax=hline["x_end"],
-                    color=colors["hline"],
-                    lw=hline["linewidth"],
-                )
+                group_separator_ys.append(y + 0.5)
             cur_group = group
 
         ax.text(
@@ -554,7 +565,7 @@ def plot_scorecard(
             x_sep = x_off - (layout["region_gap"] + 1) / 2
             ax.plot(
                 [x_sep, x_sep],
-                [y_bottom, y_top],
+                [y_bottom, layout["region_y"] - vline["label_gap"]],
                 color=colors["vline"],
                 lw=vline["linewidth"],
             )
@@ -579,6 +590,22 @@ def plot_scorecard(
         bottom=_legend_h_in / fig_height,
     )
 
+    # Horizontal group separators start at the left edge of the longest metric label and run to the right edge of the axes.
+    # axhline's xmin is an axes fraction, so compute it here, after layout, when the axes width is final.
+    metric_frac = (layout["metric_x"] - xlim_left) / (plot_width - xlim_left)
+    ax_w_in = ax.get_position().width * fig.get_figwidth()
+    hline_x_start = (
+        metric_frac - ((_metric_w_pt - hline["start_pad_pt"]) / 72) / ax_w_in
+    )
+    for _sep_y in group_separator_ys:
+        ax.axhline(
+            y=_sep_y,
+            xmin=hline_x_start,
+            xmax=hline["x_end"],
+            color=colors["hline"],
+            lw=hline["linewidth"],
+        )
+
     # ── Legend ───────────────────────────────────────────────────────────────────
     sample_pcts = legend["sample_pcts"]
     neutral_pct = dots["neutral_threshold_pct"]
@@ -591,11 +618,10 @@ def plot_scorecard(
     dot_specs[0] = (sample_pcts[0], colors["baseline_better"], f"≤-{sample_pcts[0]}%")
     dot_specs[-1] = (sample_pcts[0], colors["model_better"], f"≥+{sample_pcts[0]}%")
 
-    # Legend uses axes-fraction so it stays stable across plot widths.
-    # Cap at 0.8 to leave room for the side labels.
-    ax_w_in = ax.get_position().width * fig.get_figwidth()
+    # Legend dot row uses axes-fraction (stable across plot widths), is centred on the dot grid,
+    # and is capped at 0.8 width to leave room for the side labels.
     x_span = min(legend["width_in"] / ax_w_in, 0.8)
-    _data_ctr = (plot_width / 2 - xlim_left) / (plot_width - xlim_left)
+    _data_ctr = ((plot_width - 1) / 2 - xlim_left) / (plot_width - xlim_left)
     x_dots = np.linspace(_data_ctr - x_span / 2, _data_ctr + x_span / 2, len(dot_specs))
 
     # Anchor at a fixed physical offset below the axes so spacing is independent
