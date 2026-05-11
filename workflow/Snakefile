@@ -133,6 +133,11 @@ rule experiment_all:
             rules.verification_metrics_plot.output,
             experiment=EXPERIMENT_NAME,
         ),
+        expand(
+            OUT_ROOT / "results/{experiment}/multipanel/{plot_name}.png",
+            experiment=[EXPERIMENT_NAME],
+            plot_name=list((config.get("multipanel_plots") or {}).keys()),
+        ),
 
 
 rule showcase_all:
