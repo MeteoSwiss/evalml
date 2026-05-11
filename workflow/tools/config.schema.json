@@ -535,6 +535,17 @@
           },
           "title": "Seasons",
           "type": "array"
+        },
+        "init_hours": {
+          "default": [
+            "all"
+          ],
+          "description": "List of initialization hours to plot. Use 'all' for the unstratified view, or zero-padded hour strings like '00', '06', '12', '18'.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Init Hours",
+          "type": "array"
         }
       },
       "title": "MetricMapsConfig",

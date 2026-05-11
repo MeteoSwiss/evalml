@@ -125,3 +125,9 @@ metric_maps:
     # - MAM
     # - JJA
     # - SON
+  init_hours:
+    - all
+    # - "00"
+    # - "06"
+    # - "12"
+    # - "18"

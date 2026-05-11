@@ -234,6 +234,13 @@ class MetricMapsConfig(BaseModel):
         default=["all", "DJF", "MAM", "JJA", "SON"],
         description="List of seasons to plot.",
     )
+    init_hours: List[str] = Field(
+        default=["all"],
+        description=(
+            "List of initialization hours to plot. Use 'all' for the unstratified "
+            "view, or zero-padded hour strings like '00', '06', '12', '18'."
+        ),
+    )
 
 
 class Locations(BaseModel):

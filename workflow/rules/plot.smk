@@ -151,12 +151,13 @@ rule plot_metric_maps:
         verif_file=OUT_ROOT / "data/runs/{run_id}/metric_maps/{param}_{leadtime}.nc",
     output:
         OUT_ROOT
-        / "results/{experiment}/metric_maps/runs/{run_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
+        / "results/{experiment}/metric_maps/runs/{run_id}/{param}_{metric}_{region}_{season}_{init_hour}_{leadtime}.png",
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
+        init_hour=r"all|\d{1,2}",
     log:
         OUT_ROOT
-        / "logs/plot_metric_maps/{experiment}/{run_id}-{param}-{metric}-{region}-{season}-{leadtime}.log",
+        / "logs/plot_metric_maps/{experiment}/{run_id}-{param}-{metric}-{region}-{season}-{init_hour}-{leadtime}.log",
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
@@ -167,12 +168,12 @@ rule plot_metric_maps:
         uv run python {input.script} \
             --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} --metric {wildcards.metric} \
-            --season {wildcards.season} > {log} 2>&1
+            --season {wildcards.season} --init_hour {wildcards.init_hour} > {log} 2>&1
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
         #     --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
         #     --param {wildcards.param} --leadtime {wildcards.leadtime} --metric {wildcards.metric} \
-        #     --season {wildcards.season}
+        #     --season {wildcards.season} --init_hour {wildcards.init_hour}
         """
 
 
@@ -183,7 +184,7 @@ use rule plot_metric_maps as plot_metric_maps_baseline with:
         / "data/baselines/{baseline_id}/metric_maps/{param}_{leadtime}.nc",
     output:
         OUT_ROOT
-        / "results/{experiment}/metric_maps/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{leadtime}.png",
+        / "results/{experiment}/metric_maps/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{init_hour}_{leadtime}.png",
     log:
         OUT_ROOT
-        / "logs/plot_metric_maps/{experiment}/{baseline_id}-{param}-{metric}-{region}-{season}-{leadtime}.log",
+        / "logs/plot_metric_maps/{experiment}/{baseline_id}-{param}-{metric}-{region}-{season}-{init_hour}-{leadtime}.log",

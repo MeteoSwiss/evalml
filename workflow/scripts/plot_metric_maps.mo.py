@@ -77,7 +77,12 @@ def _(ArgumentParser, Path, np):
         if init_hour == "all":
             init_hour = -999
         else:
-            raise ValueError("init_hour must be 'all' or an integer hour")
+            try:
+                init_hour = int(init_hour)
+            except ValueError as exc:
+                raise ValueError(
+                    "init_hour must be 'all' or an integer hour"
+                ) from exc
 
     lead_time = np.timedelta64(lead_time, "h")
     return (
@@ -93,12 +98,14 @@ def _(ArgumentParser, Path, np):
 
 
 @app.cell
-def _(LOG, metric, param, season, verif_file, xr):
+def _(LOG, init_hour, metric, param, season, verif_file, xr):
     ds = xr.open_dataset(verif_file)
     LOG.info("Opened dataset: %s", ds)
     var = f"{param}.{metric}"
-    LOG.info("Selecting variable '%s' for season '%s'", var, season)
-    ds = ds[var].sel(season=season)
+    LOG.info(
+        "Selecting variable '%s' for season '%s', init_hour=%s", var, season, init_hour
+    )
+    ds = ds[var].sel(season=season, init_hour=init_hour)
     LOG.info(
         "Selected DataArray: dims=%s, shape=%s, dtype=%s", ds.dims, ds.shape, ds.dtype
     )
@@ -150,6 +157,7 @@ def _(
     StatePlotter,
     ds,
     get_style,
+    init_hour,
     lead_time,
     metric,
     np,
@@ -201,7 +209,11 @@ def _(
     subplot.coastlines(edgecolor="black", linewidth=1.0, zorder=5)
     subplot.borders(edgecolor="black", linewidth=0.5, zorder=5)
 
-    fig.title(f"{metric} of {param}, Season: {season}, Lead Time: {lead_time}")
+    init_hour_lbl = "all" if init_hour == -999 else f"{init_hour:02d}"
+    fig.title(
+        f"{metric} of {param}, Season: {season}, "
+        f"Init hour: {init_hour_lbl}, Lead Time: {lead_time}"
+    )
 
     fig.save(outfn, bbox_inches="tight", dpi=200)
     LOG.info(f"saved: {outfn}")

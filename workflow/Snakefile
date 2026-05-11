@@ -146,6 +146,7 @@ rule metric_maps_all:
             param=config["metric_maps"]["params"],
             region=config["metric_maps"]["regions"],
             season=config["metric_maps"]["seasons"],
+            init_hour=config["metric_maps"]["init_hours"],
             experiment=EXPERIMENT_NAME,
         ),
         expand(
@@ -156,6 +157,7 @@ rule metric_maps_all:
             param=config["metric_maps"]["params"],
             region=config["metric_maps"]["regions"],
             season=config["metric_maps"]["seasons"],
+            init_hour=config["metric_maps"]["init_hours"],
             experiment=EXPERIMENT_NAME,
         ),
 

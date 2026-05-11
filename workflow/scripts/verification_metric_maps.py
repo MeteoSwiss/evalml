@@ -35,6 +35,8 @@ logging.basicConfig(
 DATETIME_FMT = "%Y%m%d%H%M"
 
 SEASONS = ["DJF", "MAM", "JJA", "SON", "all"]
+# Init hour buckets. -999 is the "all" sentinel (matches verification_aggregation.py).
+INIT_HOURS = [0, 6, 12, 18, -999]
 
 
 def _season_of(dt: datetime) -> str:
@@ -241,13 +243,15 @@ def main(args: Namespace) -> None:
 
     step_td = timedelta(hours=args.step)
 
-    # Running accumulators per season – initialised on the first successfully
-    # processed sample so that we can infer the spatial shape from the data.
-    # Each entry is a numpy array over the spatial dimension(s).
-    accum_n: dict[str, np.ndarray | None] = {s: None for s in SEASONS}
-    accum_sum_e: dict[str, np.ndarray | None] = {s: None for s in SEASONS}
-    accum_sum_se: dict[str, np.ndarray | None] = {s: None for s in SEASONS}
-    accum_sum_ae: dict[str, np.ndarray | None] = {s: None for s in SEASONS}
+    # Running accumulators keyed by (season, init_hour) – initialised on the
+    # first successfully processed sample so that we can infer the spatial
+    # shape from the data. Each entry is a numpy array over the spatial
+    # dimension(s).
+    bucket_keys = [(s, h) for s in SEASONS for h in INIT_HOURS]
+    accum_n: dict[tuple[str, int], np.ndarray | None] = {k: None for k in bucket_keys}
+    accum_sum_e: dict[tuple[str, int], np.ndarray | None] = {k: None for k in bucket_keys}
+    accum_sum_se: dict[tuple[str, int], np.ndarray | None] = {k: None for k in bucket_keys}
+    accum_sum_ae: dict[tuple[str, int], np.ndarray | None] = {k: None for k in bucket_keys}
     ref_truth_slice: xr.DataArray | None = None  # kept for output coordinates
 
     n_ok = 0
@@ -400,22 +404,25 @@ def main(args: Namespace) -> None:
             )
 
         # --- initialise accumulators on first valid sample ---
-        if accum_n["all"] is None:
-            for s in SEASONS:
-                accum_n[s] = np.zeros(error.shape, dtype=np.int64)
-                accum_sum_e[s] = np.zeros(error.shape, dtype=np.float64)
-                accum_sum_se[s] = np.zeros(error.shape, dtype=np.float64)
-                accum_sum_ae[s] = np.zeros(error.shape, dtype=np.float64)
+        if accum_n[("all", -999)] is None:
+            for k in bucket_keys:
+                accum_n[k] = np.zeros(error.shape, dtype=np.int64)
+                accum_sum_e[k] = np.zeros(error.shape, dtype=np.float64)
+                accum_sum_se[k] = np.zeros(error.shape, dtype=np.float64)
+                accum_sum_ae[k] = np.zeros(error.shape, dtype=np.float64)
             ref_truth_slice = truth_slice
 
-        # --- accumulate into the matching season bucket and "all" (NaN-safe) ---
+        # --- accumulate into matching (season, init_hour) buckets, plus the
+        # "all" rows/cols on each axis (NaN-safe) ---
         season = _season_of(reftime)
+        ih = reftime.hour
         valid = ~np.isnan(error)
-        for s in [season, "all"]:
-            accum_n[s][valid] += 1
-            accum_sum_e[s][valid] += error[valid]
-            accum_sum_se[s][valid] += error[valid] ** 2
-            accum_sum_ae[s][valid] += np.abs(error[valid])
+        for s in (season, "all"):
+            for h in (ih, -999):
+                accum_n[(s, h)][valid] += 1
+                accum_sum_e[(s, h)][valid] += error[valid]
+                accum_sum_se[(s, h)][valid] += error[valid] ** 2
+                accum_sum_ae[(s, h)][valid] += np.abs(error[valid])
         n_ok += 1
 
     LOG.info("Finished: %d init times processed, %d skipped", n_ok, n_skip)
@@ -424,7 +431,7 @@ def main(args: Namespace) -> None:
         LOG.error("No data could be processed – no output written.")
         return
 
-    # --- compute aggregate maps per season, then stack into a season dimension ---
+    # --- compute aggregate maps per (season, init_hour), then stack ---
     spatial_coords = {
         c: ref_truth_slice[c]
         for c in ref_truth_slice.coords
@@ -432,30 +439,32 @@ def main(args: Namespace) -> None:
         and c != "time"
     }
     spatial_dims = list(ref_truth_slice.dims)
-    out_dims = ["season"] + spatial_dims
-    out_coords = {"season": SEASONS, **spatial_coords}
+    out_dims = ["season", "init_hour"] + spatial_dims
+    out_coords = {"season": SEASONS, "init_hour": INIT_HOURS, **spatial_coords}
 
-    def _seasonal_da(compute_fn) -> xr.DataArray:
-        """Stack per-season arrays into a (season, *spatial) DataArray."""
-        slices = []
-        for s in SEASONS:
-            n = accum_n[s]
-            with np.errstate(invalid="ignore", divide="ignore"):
-                slices.append(compute_fn(n, s).astype(np.float32))
-        return xr.DataArray(np.stack(slices), dims=out_dims, coords=out_coords)
+    def _strat_da(compute_fn) -> xr.DataArray:
+        """Stack per-(season, init_hour) arrays into a (season, init_hour, *spatial) DataArray."""
+        out_shape = (len(SEASONS), len(INIT_HOURS)) + ref_truth_slice.shape
+        arr = np.empty(out_shape, dtype=np.float32)
+        for i, s in enumerate(SEASONS):
+            for j, h in enumerate(INIT_HOURS):
+                n = accum_n[(s, h)]
+                with np.errstate(invalid="ignore", divide="ignore"):
+                    arr[i, j] = compute_fn(n, s, h).astype(np.float32)
+        return xr.DataArray(arr, dims=out_dims, coords=out_coords)
 
     out = xr.Dataset(
         {
-            f"{args.param}.BIAS": _seasonal_da(
-                lambda n, s: np.where(n > 0, accum_sum_e[s] / n, np.nan)
+            f"{args.param}.BIAS": _strat_da(
+                lambda n, s, h: np.where(n > 0, accum_sum_e[(s, h)] / n, np.nan)
             ),
-            f"{args.param}.RMSE": _seasonal_da(
-                lambda n, s: np.where(n > 0, np.sqrt(accum_sum_se[s] / n), np.nan)
+            f"{args.param}.RMSE": _strat_da(
+                lambda n, s, h: np.where(n > 0, np.sqrt(accum_sum_se[(s, h)] / n), np.nan)
             ),
-            f"{args.param}.MAE": _seasonal_da(
-                lambda n, s: np.where(n > 0, accum_sum_ae[s] / n, np.nan)
+            f"{args.param}.MAE": _strat_da(
+                lambda n, s, h: np.where(n > 0, accum_sum_ae[(s, h)] / n, np.nan)
             ),
-            f"{args.param}.N": _seasonal_da(lambda n, s: np.where(n > 0, n, np.nan)),
+            f"{args.param}.N": _strat_da(lambda n, s, h: np.where(n > 0, n, np.nan)),
         },
         attrs={
             "param": args.param,
