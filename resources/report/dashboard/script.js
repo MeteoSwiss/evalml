@@ -62,6 +62,12 @@ document.getElementById("param-select").addEventListener("change", updateChart);
 data = JSON.parse(document.getElementById("verif-data").textContent)
 header = document.getElementById("header-text").textContent.trim()
 
+// Pin the source -> color mapping to the full, alphabetically-sorted source
+// list so it stays bijective even when sources are toggled in the UI. Must
+// match src/plotting/source_colors.py to keep the dashboard and the static
+// matplotlib figures consistent.
+const allSources = [...new Set(data.map(d => d.source))].sort();
+
 // Define base spec
 var spec = {
   "data": { "values": data },
@@ -106,6 +112,7 @@ var spec = {
       "color": {
         "field": "source",
         "type": "nominal",
+        "scale": { "scheme": "tableau10", "domain": allSources },
         "legend": { "orient": "top", "title": "Data Source", "offset": 0, "padding": 10 }
       },
       "shape": {

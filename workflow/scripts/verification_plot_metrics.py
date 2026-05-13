@@ -7,6 +7,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 from plotting.metric_lead_time_panel import plot_panel
+from plotting.source_colors import source_color_map
 from verification.loading import load_long_df, subset_df
 
 LOG = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ def main(args: Namespace) -> None:
     """Main function to verify results from KENDA-1 data."""
 
     all_df = load_long_df(args.verif_files)
+    color_map = source_color_map(all_df["source"].unique())
 
     metrics = all_df["metric"].unique()
     params = all_df["param"].unique()
@@ -56,6 +58,7 @@ def main(args: Namespace) -> None:
             metric=metric,
             param=param,
             title=title,
+            color_map=color_map,
         )
 
         args.output_dir.mkdir(parents=True, exist_ok=True)

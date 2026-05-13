@@ -24,19 +24,24 @@ def plot_panel(
     xlabel: str | None = "Lead Time [h]",
     ylabel: str | None = None,
     show_legend: bool = True,
+    color_map: dict[str, str] | None = None,
 ) -> None:
     """Plot one metric-vs-lead-time panel onto `ax`.
 
     `sub_df` must already be filtered to a single (metric, param, region, season,
     init_hour) combo and contain at least the columns: source, lead_time, value.
-    One line per source is drawn; sources whose name contains "analysis" are
-    forced to black.
+    One line per source is drawn.
 
     If `ylabel` is None and `param` is provided, the y-axis label is built as
     "<decoded metric> [<units>]" via plotting.units.metric_units.
 
     `panel_label` (e.g. "a)") is rendered left-aligned at the same height as
     the centred title.
+
+    If `color_map` is given, each source's line is drawn in
+    ``color_map[source]``; sources missing from the map fall back to
+    matplotlib's default color cycle. Use ``plotting.source_colors.source_color_map``
+    to build a map that matches the dashboard.
     """
     if ylabel is None:
         ylabel = _default_ylabel(metric, param)
@@ -50,7 +55,7 @@ def plot_panel(
             xlabel=xlabel or "",
             ylabel=ylabel or "",
             label=source,
-            color="black" if "analysis" in source else None,
+            color=(color_map or {}).get(source),
             ax=ax,
             legend=show_legend,
         )

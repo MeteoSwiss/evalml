@@ -15,9 +15,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 from plotting.metric_lead_time_panel import plot_panel
+from plotting.source_colors import source_color_map
+from plotting.units import metric_units
 from verification import decode_metric
 from verification.loading import load_long_df, subset_df
-from plotting.units import metric_units
 
 
 def _panel_label(idx: int) -> str:
@@ -51,6 +52,7 @@ def main(args: Namespace) -> None:
         )
 
     all_df = load_long_df(args.verif_files)
+    color_map = source_color_map(all_df["source"].unique())
 
     figsize = tuple(spec.get("figsize") or (4.5 * cols, 3.5 * rows))
     fig, axes = plt.subplots(
@@ -99,6 +101,7 @@ def main(args: Namespace) -> None:
             xlabel="Lead Time [h]" if is_bottom else None,
             ylabel=ylabel,
             show_legend=False,
+            color_map=color_map,
         )
         if panel.get("ylim"):
             ax.set_ylim(panel["ylim"])
