@@ -111,14 +111,17 @@ async function renderLegend(filteredData) {
   const spec = {
     data: { values: src },
     config: { view: { stroke: null } },
-    mark: { type: "point", opacity: 0, size: 0 },
+    mark: { type: "point", filled: true, opacity: 0, size: 0 },
     width: 1,
     height: 1,
     encoding: {
       color: {
         field: "source",
         type: "nominal",
-        legend: { orient: "left", title: "Source", offset: 8 },
+        legend: {
+          orient: "left", title: "Source", offset: 8,
+          symbolType: "circle", symbolSize: 120,
+        },
       },
       shape: {
         field: "region_season_init",
@@ -128,6 +131,7 @@ async function renderLegend(filteredData) {
           title: "Region / Season / Init",
           offset: 8,
           labelLimit: 400,
+          symbolType: "circle", symbolSize: 120,
         },
       },
     },
@@ -254,6 +258,53 @@ function attachZoomSync() {
 }
 
 // ---------------------------------------------------------------------------
+// Collapsible filter panel
+// ---------------------------------------------------------------------------
+function resizeChartScroll() {
+  const scroll = document.getElementById("chart-scroll");
+  const top = scroll.getBoundingClientRect().top + window.scrollY;
+  scroll.style.maxHeight = `calc(100vh - ${top + 16}px)`;
+}
+
+(function () {
+  const toggle  = document.getElementById("controls-toggle");
+  const panel   = document.querySelector(".controls");
+  const summary = document.getElementById("controls-summary");
+
+  function updateSummary() {
+    const parts = [
+      getSelected("region-select"),
+      getSelected("season-select"),
+      getSelected("init-select"),
+      getSelected("source-select"),
+      getSelected("metric-select"),
+      getSelected("param-select"),
+    ].flatMap(v => v);
+    summary.textContent = parts.join(", ");
+  }
+
+  toggle.addEventListener("click", () => {
+    const collapsed = panel.classList.toggle("collapsed");
+    toggle.textContent    = collapsed ? "▼ Show filters" : "▲ Hide filters";
+    summary.style.display = collapsed ? "inline" : "none";
+    if (collapsed) updateSummary();
+    // Let the DOM reflow before measuring
+    requestAnimationFrame(resizeChartScroll);
+  });
+
+  // Keep summary current when selections change
+  ["region-select", "season-select", "init-select",
+   "source-select", "metric-select", "param-select"].forEach(id => {
+    document.getElementById(id).addEventListener("change", () => {
+      if (panel.classList.contains("collapsed")) updateSummary();
+    });
+  });
+
+  window.addEventListener("resize", resizeChartScroll);
+})();
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 updateChart();
+resizeChartScroll();

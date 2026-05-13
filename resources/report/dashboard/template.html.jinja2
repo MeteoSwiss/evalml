@@ -23,7 +23,18 @@
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
+        .controls-header {
+            display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;
+        }
+        .controls-toggle {
+            background: none; border: 1px solid #ccc; border-radius: 4px;
+            padding: 2px 8px; font-size: 0.8rem; cursor: pointer; color: #555;
+            line-height: 1.4;
+        }
+        .controls-toggle:hover { border-color: #007acc; color: #007acc; }
+        .controls-summary { font-size: 0.8rem; color: #555; display: none; }
         .controls { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+        .controls.collapsed { display: none; }
         .control-group { flex: 1 1 220px; min-width: 180px; }
         .choices__inner { min-height: 80px; }
         label { font-weight: bold; display: block; }
@@ -34,7 +45,6 @@
         /* Scrollable table wrapper */
         #chart-scroll {
             overflow: auto;
-            max-height: calc(100vh - 350px);
             border: 1px solid #ddd;
         }
 
@@ -52,7 +62,7 @@
             background: white;
             z-index: 3;
             padding: 6px 10px;
-            border-bottom: 2px solid #007acc;
+            border-bottom: 1px solid #ddd;
             font-size: 12px;
             white-space: nowrap;
             text-align: center;
@@ -65,7 +75,7 @@
             background: white;
             z-index: 2;
             padding: 6px 10px;
-            border-right: 2px solid #007acc;
+            border-right: 1px solid #ddd;
             font-size: 11px;
             white-space: nowrap;
             max-width: 140px;
@@ -79,8 +89,8 @@
         #chart-table thead th.corner {
             left: 0;
             z-index: 4;
-            border-bottom: 2px solid #007acc;
-            border-right: 2px solid #007acc;
+            border-bottom: 1px solid #ddd;
+            border-right: 1px solid #ddd;
             min-width: 100px;
         }
 
@@ -103,6 +113,10 @@
 </div>
 
 <div id="tab_scores" class="tab-content active">
+    <div class="controls-header">
+        <button class="controls-toggle" id="controls-toggle">▲ Hide filters</button>
+        <span class="controls-summary" id="controls-summary"></span>
+    </div>
     <div class="controls">
         <div class="control-group">
             <label>Region</label>
