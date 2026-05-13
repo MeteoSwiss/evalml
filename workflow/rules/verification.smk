@@ -1,6 +1,8 @@
 # ----------------------------------------------------- #
 # VERIFICATION WORKFLOW                                 #
 # ----------------------------------------------------- #
+import json
+import shlex
 from datetime import datetime
 
 import pandas as pd
@@ -164,3 +166,48 @@ rule verification_metrics_plot:
         """
         uv run {input.script} {input.verif} --output_dir {output} > {log} 2>&1
         """
+
+
+def _multipanel_plots_cfg() -> dict:
+    return config.get("multipanel_plots") or {}
+
+
+rule verification_metrics_multipanel_plot:
+    input:
+        "src/verification/__init__.py",
+        script="workflow/scripts/verification_plot_metrics_multipanel.py",
+        verif=list(EXPERIMENT_PARTICIPANTS.values()),
+    output:
+        OUT_ROOT / "results/{experiment}/multipanel/{plot_name}.png",
+    params:
+        spec_json=lambda wc: shlex.quote(
+            json.dumps(_multipanel_plots_cfg()[wc.plot_name])
+        ),
+    log:
+        OUT_ROOT
+        / "logs/verification_metrics_multipanel_plot/{experiment}-{plot_name}.log",
+    resources:
+        cpus_per_task=4,
+        mem_mb=20_000,
+        runtime="20m",
+    shell:
+        """
+        uv run {input.script} {input.verif} \
+            --spec_json {params.spec_json} \
+            --output {output} > {log} 2>&1
+        """
+
+
+rule verification_metrics_multipanel_plot_all:
+    """Build every multipanel layout declared in `multipanel_plots` in the config.
+
+    Invoke by rule name (no wildcards). No-op when the config has no
+    `multipanel_plots` section.
+    """
+    localrule: True
+    input:
+        lambda wc: expand(
+            OUT_ROOT / "results/{experiment}/multipanel/{plot_name}.png",
+            experiment=[EXPERIMENT_NAME],
+            plot_name=list(_multipanel_plots_cfg().keys()),
+        ),

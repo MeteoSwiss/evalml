@@ -445,6 +445,141 @@
       "title": "Locations",
       "type": "object"
     },
+    "MultipanelPanelSpec": {
+      "additionalProperties": false,
+      "description": "One panel inside a multi-panel metric-vs-lead-time figure.",
+      "properties": {
+        "metric": {
+          "description": "Metric name (e.g. 'rmse').",
+          "title": "Metric",
+          "type": "string"
+        },
+        "param": {
+          "description": "Parameter name (e.g. 'T_2M').",
+          "title": "Param",
+          "type": "string"
+        },
+        "region": {
+          "default": "all",
+          "description": "Region to subset to. 'all' uses the unstratified aggregate.",
+          "title": "Region",
+          "type": "string"
+        },
+        "season": {
+          "default": "all",
+          "description": "Season to subset to. 'all' uses the unstratified aggregate.",
+          "title": "Season",
+          "type": "string"
+        },
+        "init_hour": {
+          "default": -999,
+          "description": "Init hour to subset to. -999 (sentinel) uses the unstratified aggregate.",
+          "title": "Init Hour",
+          "type": "integer"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Panel title. Defaults to '<metric> - <param>'.",
+          "title": "Title"
+        },
+        "ylim": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional [ymin, ymax] for this panel's y-axis.",
+          "title": "Ylim"
+        }
+      },
+      "required": [
+        "metric",
+        "param"
+      ],
+      "title": "MultipanelPanelSpec",
+      "type": "object"
+    },
+    "MultipanelPlotSpec": {
+      "additionalProperties": false,
+      "description": "Layout for a single multi-panel metric-vs-lead-time figure.",
+      "properties": {
+        "rows": {
+          "description": "Number of subplot rows.",
+          "minimum": 1,
+          "title": "Rows",
+          "type": "integer"
+        },
+        "cols": {
+          "description": "Number of subplot columns.",
+          "minimum": 1,
+          "title": "Cols",
+          "type": "integer"
+        },
+        "figsize": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional [width, height] in inches. Defaults to (4.5*cols, 3.5*rows).",
+          "title": "Figsize"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional figure-level title.",
+          "title": "Title"
+        },
+        "panels": {
+          "description": "Per-panel specs in row-major order. Length must equal rows*cols.",
+          "items": {
+            "$ref": "#/$defs/MultipanelPanelSpec"
+          },
+          "title": "Panels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rows",
+        "cols",
+        "panels"
+      ],
+      "title": "MultipanelPlotSpec",
+      "type": "object"
+    },
     "Profile": {
       "description": "Workflow execution profile.",
       "properties": {
@@ -624,6 +759,14 @@
     },
     "profile": {
       "$ref": "#/$defs/Profile"
+    },
+    "multipanel_plots": {
+      "additionalProperties": {
+        "$ref": "#/$defs/MultipanelPlotSpec"
+      },
+      "description": "Optional named multi-panel metric-vs-lead-time figures. Each entry produces one PNG under results/<experiment>/multipanel/<name>.png when the verification_metrics_multipanel_plot_all target is built.",
+      "title": "Multipanel Plots",
+      "type": "object"
     }
   },
   "required": [

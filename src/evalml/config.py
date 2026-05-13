@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List, Any, ClassVar, FrozenSet
 
-from pydantic import BaseModel, Field, RootModel, field_validator
+from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -227,6 +227,66 @@ class Stratification(BaseModel):
     )
 
 
+class MultipanelPanelSpec(BaseModel):
+    """One panel inside a multi-panel metric-vs-lead-time figure."""
+
+    metric: str = Field(..., description="Metric name (e.g. 'rmse').")
+    param: str = Field(..., description="Parameter name (e.g. 'T_2M').")
+    region: str = Field(
+        "all",
+        description="Region to subset to. 'all' uses the unstratified aggregate.",
+    )
+    season: str = Field(
+        "all",
+        description="Season to subset to. 'all' uses the unstratified aggregate.",
+    )
+    init_hour: int = Field(
+        -999,
+        description="Init hour to subset to. -999 (sentinel) uses the unstratified aggregate.",
+    )
+    title: str | None = Field(
+        None,
+        description="Panel title. Defaults to '<metric> - <param>'.",
+    )
+    ylim: List[float] | None = Field(
+        None,
+        description="Optional [ymin, ymax] for this panel's y-axis.",
+        min_length=2,
+        max_length=2,
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class MultipanelPlotSpec(BaseModel):
+    """Layout for a single multi-panel metric-vs-lead-time figure."""
+
+    rows: int = Field(..., ge=1, description="Number of subplot rows.")
+    cols: int = Field(..., ge=1, description="Number of subplot columns.")
+    figsize: List[float] | None = Field(
+        None,
+        description="Optional [width, height] in inches. Defaults to (4.5*cols, 3.5*rows).",
+        min_length=2,
+        max_length=2,
+    )
+    title: str | None = Field(None, description="Optional figure-level title.")
+    panels: List[MultipanelPanelSpec] = Field(
+        ...,
+        description="Per-panel specs in row-major order. Length must equal rows*cols.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _check_panel_count(self) -> "MultipanelPlotSpec":
+        expected = self.rows * self.cols
+        if len(self.panels) != expected:
+            raise ValueError(
+                f"panels has length {len(self.panels)}, expected rows*cols = {expected}"
+            )
+        return self
+
+
 class Dashboard(BaseModel):
     """Settings for the dashboard"""
 
@@ -351,6 +411,14 @@ class ConfigModel(BaseModel):
     dashboard: Dashboard
     locations: Locations
     profile: Profile
+    multipanel_plots: Dict[str, MultipanelPlotSpec] = Field(
+        default_factory=dict,
+        description=(
+            "Optional named multi-panel metric-vs-lead-time figures. "
+            "Each entry produces one PNG under results/<experiment>/multipanel/<name>.png "
+            "when the verification_metrics_multipanel_plot_all target is built."
+        ),
+    )
 
     model_config = {
         "extra": "forbid",  # fail on misspelled keys

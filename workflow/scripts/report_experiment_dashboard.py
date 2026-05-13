@@ -1,14 +1,12 @@
 import argparse
 import logging
-import sys as _sys
 from pathlib import Path
 
 import jinja2
 import xarray as xr
 
-_sys.path.append(str(Path(__file__).parent))
-from verification_plot_metrics import _ensure_unique_lead_time, _select_best_sources
 from verification import decode_metric
+from verification.loading import _ensure_unique_lead_time, _select_best_sources
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
