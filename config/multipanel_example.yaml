@@ -10,7 +10,7 @@ dates:
 runs:
 
   - forecaster:
-      inference_resources: 
+      inference_resources:
           slurm_partition: normal-shared
       checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/fd63e17043014af59170c7beca516b95
       label: stage_E_realch1
@@ -20,7 +20,7 @@ runs:
         - git+https://github.com/ecmwf/anemoi-inference.git@0.10.0
 
   - forecaster:
-      inference_resources: 
+      inference_resources:
           slurm_partition: normal-shared
       checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
       label: stage_E_icon_1km_cutoff_edges_subgrid_horography
@@ -30,7 +30,7 @@ runs:
         - git+https://github.com/ecmwf/anemoi-inference.git@b9aaee5df86614cad9d8d08b76876a4be4e980db
 
   # - forecaster:
-  #     inference_resources: 
+  #     inference_resources:
   #         slurm_partition: normal-shared
   #     checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/57684b20f64f414b937cce10e5ceeb68
   #     label: stage_E_realch1_new
@@ -40,7 +40,7 @@ runs:
   #       - git+https://github.com/ecmwf/anemoi-inference.git@b9aaee5df86614cad9d8d08b76876a4be4e980db
 
   # - forecaster:
-  #     inference_resources: 
+  #     inference_resources:
   #         slurm_partition: normal-shared
   #     checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/2265ae18b04e4470ab89314a85a822ae
   #     label: stage_E_icon_1km_cutoff_edges_KNN_5_dec
@@ -48,7 +48,7 @@ runs:
   #     config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
   #     extra_requirements:
   #       - git+https://github.com/ecmwf/anemoi-inference.git@b9aaee5df86614cad9d8d08b76876a4be4e980db
-  
+
 
 baselines:
   - baseline:
@@ -56,7 +56,7 @@ baselines:
       label: ICON-CH1-ctrl
       root: /scratch/mch/cmerker/ICON-CH1-EPS
       steps: 0/33/6
-  
+
   - baseline:
       baseline_id: ICON-CH2-EPS
       label: ICON-CH2-ctrl

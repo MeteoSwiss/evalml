@@ -5,6 +5,7 @@ either inline (``--spec_json '<json>'``) or as a path to a JSON file
 (``--spec_path /path/to/spec.json``). The spec schema mirrors
 ``MultipanelPlotSpec`` in ``src/evalml/config.py``.
 """
+
 import json
 import logging
 import string
@@ -28,6 +29,7 @@ def _panel_label(idx: int) -> str:
         return f"{letters[idx]})"
     a, b = divmod(idx, len(letters))
     return f"{letters[a - 1]}{letters[b]})"
+
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -55,9 +57,7 @@ def main(args: Namespace) -> None:
     color_map = source_color_map(all_df["source"].unique())
 
     figsize = tuple(spec.get("figsize") or (4.5 * cols, 3.5 * rows))
-    fig, axes = plt.subplots(
-        rows, cols, sharex=True, figsize=figsize, squeeze=False
-    )
+    fig, axes = plt.subplots(rows, cols, sharex=True, figsize=figsize, squeeze=False)
 
     legend_entries: dict[str, object] = {}
     for idx, panel in enumerate(panels):
@@ -76,7 +76,9 @@ def main(args: Namespace) -> None:
         if sub.empty:
             LOG.warning(
                 "No data for panel %d (metric=%s, param=%s, region=%s, season=%s, init_hour=%s)",
-                idx, metric, param,
+                idx,
+                metric,
+                param,
                 panel.get("region", "all"),
                 panel.get("season", "all"),
                 panel.get("init_hour", -999),

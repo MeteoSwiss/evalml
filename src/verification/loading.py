@@ -1,4 +1,5 @@
 """Helpers for loading aggregated verification netCDFs into long-form DataFrames."""
+
 from pathlib import Path
 
 import pandas as pd
@@ -58,9 +59,7 @@ def load_long_df(verif_files: list[Path]) -> pd.DataFrame:
     ds = xr.concat(dfs, dim="source", join="outer")
 
     nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
-    df = (
-        ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
-    )
+    df = ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
     df[["param", "metric"]] = df["stack"].str.split(".", n=1, expand=True)
     df.drop(columns=["stack"], inplace=True)
     df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
