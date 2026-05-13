@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from evalml.config import ConfigModel
+from evalml.config import ConfigModel, MultipanelPanelSpec, MultipanelPlotSpec
 
 
 def test_example_forecasters_config(example_forecasters_config):
@@ -91,3 +91,68 @@ def test_workflow_derives_baseline_id_from_root_stem(example_interpolators_confi
         "root": "/store_new/mch/msopr/ml/COSMO-E_hourly",
         "steps": "0/120/1",
     }
+
+
+def _spec(rows, cols, panel_count=None):
+    n = panel_count if panel_count is not None else rows * cols
+    return {
+        "rows": rows,
+        "cols": cols,
+        "panels": [{"metric": "BIAS", "param": "T_2M"} for _ in range(n)],
+    }
+
+
+def test_multipanel_panel_defaults():
+    panel = MultipanelPanelSpec.model_validate({"metric": "BIAS", "param": "T_2M"})
+    assert panel.region == "all"
+    assert panel.season == "all"
+    assert panel.init_hour == -999
+    assert panel.title is None
+    assert panel.ylim is None
+
+
+def test_multipanel_panel_forbids_extras():
+    with pytest.raises(ValueError, match="Extra"):
+        MultipanelPanelSpec.model_validate(
+            {"metric": "BIAS", "param": "T_2M", "unknown": True}
+        )
+
+
+def test_multipanel_plot_accepts_matching_panel_count():
+    spec = MultipanelPlotSpec.model_validate(_spec(2, 3))
+    assert spec.rows == 2
+    assert spec.cols == 3
+    assert len(spec.panels) == 6
+
+
+def test_multipanel_plot_rejects_mismatched_panel_count():
+    with pytest.raises(ValueError, match=r"rows\*cols"):
+        MultipanelPlotSpec.model_validate(_spec(2, 2, panel_count=3))
+
+
+def test_multipanel_plot_forbids_extras():
+    bad = _spec(1, 1)
+    bad["unexpected"] = True
+    with pytest.raises(ValueError, match="Extra"):
+        MultipanelPlotSpec.model_validate(bad)
+
+
+def test_multipanel_plot_rejects_zero_dim():
+    with pytest.raises(ValueError):
+        MultipanelPlotSpec.model_validate(_spec(0, 1, panel_count=0))
+
+
+def test_configmodel_multipanel_plots_default(example_forecasters_config):
+    """`multipanel_plots` is optional and defaults to an empty dict."""
+    cfg = ConfigModel.model_validate(example_forecasters_config)
+    assert cfg.multipanel_plots == {}
+
+
+def test_configmodel_multipanel_plots_roundtrip(example_forecasters_config):
+    example_forecasters_config["multipanel_plots"] = {
+        "bias_overview": _spec(1, 2),
+    }
+    cfg = ConfigModel.model_validate(example_forecasters_config)
+    assert "bias_overview" in cfg.multipanel_plots
+    assert cfg.multipanel_plots["bias_overview"].rows == 1
+    assert cfg.multipanel_plots["bias_overview"].cols == 2
