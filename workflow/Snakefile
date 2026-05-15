@@ -16,7 +16,7 @@ include: "rules/common.smk"
 include: "rules/summary.smk"
 include: "rules/data.smk"
 include: "rules/inference.smk"
-include: "rules/verif.smk"
+include: "rules/verification.smk"
 include: "rules/report.smk"
 include: "rules/plot.smk"
 include: "rules/verif_obs.smk"
@@ -26,7 +26,7 @@ include: "rules/verif_obs.smk"
 # -----------------------------------------------------
 
 RUN_CMD = Path(".evalml_snakemake_cmd.txt").read_text().strip()
-CONFIG_HASH = short_hash_config()
+CONFIG_HASH = master_hash()
 WHEN = datetime.now().strftime("%Y%m%d")
 CONFIG_FILE = workflow.config_settings.configfiles[0]
 CONFIG_LABEL = config["config_label"] or CONFIG_FILE.stem
@@ -38,8 +38,17 @@ LOGS_DIR = OUT_ROOT / "logs"
 RESULTS_DIR = OUT_ROOT / "results" / EXPERIMENT_NAME
 
 
+# Since run_id now contains "/" (format: "{env_id}/{r_hash}"), Snakemake wildcards
+# would greedily absorb part of run_id into {showcase} when matching paths of the
+# form results/{showcase}/{run_id}/... — constrain showcase to a single path component.
+wildcard_constraints:
+    showcase=r"[^/]+",
+    run_id=r"[^/]+/[^/]+",
+    init_time=r"\d{12}",
+
+
 # prefer one rule because snakemake complains about ambiguous rules (same output)
-ruleorder: prepare_inference_forecaster > prepare_inference_interpolator
+ruleorder: inference_prepare_forecaster > inference_prepare_interpolator
 
 
 # optional messages, log and error handling
@@ -128,7 +137,7 @@ rule experiment_all:
             experiment=EXPERIMENT_NAME,
         ),
         expand(
-            rules.verif_metrics_plot.output,
+            rules.verification_metrics_plot.output,
             experiment=EXPERIMENT_NAME,
         ),
         expand(
@@ -153,7 +162,7 @@ rule showcase_all:
             rules.make_forecast_animation.output,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=CANDIDATES,
-            param=["T_2M", "SP_10M"],
+            param=["T_2M", "SP_10M", "TOT_PREC"],
             region=["globe", "europe", "switzerland"],
             showcase=EXPERIMENT_NAME,
         ),
@@ -171,16 +180,16 @@ rule sandbox_all:
     """Target rule for creating a sandbox for inference."""
     input:
         expand(
-            rules.create_inference_sandbox.output.sandbox,
+            rules.inference_create_sandbox.output.sandbox,
             run_id=CANDIDATES,
         ),
 
 
-rule run_inference_all:
+rule inference_all:
     """Run inference for all reference times as defined in the configuration."""
     input:
         expand(
-            rules.execute_inference.output.okfile,
+            rules.inference_execute.output.okfile,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=CANDIDATES,
         ),
@@ -193,20 +202,20 @@ rule run_inference_all:
         """
 
 
-rule verif_metrics_all:
+rule verification_metrics_all:
     input:
         expand(
-            rules.verif_metrics.output,
+            rules.verification_metrics.output,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=CANDIDATES,
         ),
 
 
-rule verif_metrics_plot_all:
+rule verification_metrics_plot_all:
     """Run verification plot metrics for all studies."""
     input:
         expand(
-            rules.verif_metrics_plot.output,
+            rules.verification_metrics_plot.output,
             experiment=EXPERIMENT_NAME,
         ),
 

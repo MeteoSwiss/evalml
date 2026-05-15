@@ -4,12 +4,18 @@ from pathlib import Path
 include: "common.smk"
 
 
-rule download_obs_from_peakweather:
+if config["truth"]["root"].endswith("peakweather"):
+    output_peakweather_root = config["truth"]["root"]
+else:
+    output_peakweather_root = OUT_ROOT / "data/observations/peakweather"
+
+
+rule data_download_obs_from_peakweather:
     localrule: True
     output:
-        peakweather=directory(OUT_ROOT / "data/observations/peakweather"),
+        root=directory(output_peakweather_root),
     run:
         from peakweather.dataset import PeakWeatherDataset
 
         # Download the data from Huggingface
-        ds = PeakWeatherDataset(root=output.peakweather)
+        ds = PeakWeatherDataset(root=output.root)

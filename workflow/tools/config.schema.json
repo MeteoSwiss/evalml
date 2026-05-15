@@ -1,36 +1,21 @@
 {
   "$defs": {
-    "AnalysisConfig": {
-      "description": "Configuration for the analysis data used in the verification.",
-      "properties": {
-        "label": {
-          "description": "Label for the analysis that will be used in experiment results such as reports and figures.",
-          "minLength": 1,
-          "title": "Label",
-          "type": "string"
-        },
-        "analysis_zarr": {
-          "description": "Path to the zarr dataset containing the analysis data.",
-          "minLength": 1,
-          "title": "Analysis Zarr",
-          "type": "string"
-        }
-      },
-      "required": [
-        "label",
-        "analysis_zarr"
-      ],
-      "title": "AnalysisConfig",
-      "type": "object"
-    },
     "BaselineConfig": {
       "description": "Configuration for a single baseline to include in the verification.",
       "properties": {
         "baseline_id": {
-          "description": "Identifier for the baseline, e.g. 'COSMO-E'.",
-          "minLength": 1,
-          "title": "Baseline Id",
-          "type": "string"
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Deprecated compatibility field. Workflow baseline IDs are derived from the stem of `root`.",
+          "title": "Baseline Id"
         },
         "label": {
           "description": "Label for the baseline that will be used in experiment results such as reports and figures.",
@@ -39,7 +24,7 @@
           "type": "string"
         },
         "root": {
-          "description": "Root directory where the baseline data is stored.",
+          "description": "Root directory where the baseline data is stored. The workflow derives the baseline ID from the stem of this path.",
           "minLength": 1,
           "title": "Root",
           "type": "string"
@@ -52,7 +37,6 @@
         }
       },
       "required": [
-        "baseline_id",
         "label",
         "root",
         "steps"
@@ -70,6 +54,24 @@
         "baseline"
       ],
       "title": "BaselineItem",
+      "type": "object"
+    },
+    "Dashboard": {
+      "description": "Settings for the dashboard",
+      "properties": {
+        "stratification": {
+          "description": "Stratifications to include in the dashboard (any of season, region, init_hour)",
+          "items": {
+            "type": "string"
+          },
+          "title": "Stratification",
+          "type": "array"
+        }
+      },
+      "required": [
+        "stratification"
+      ],
+      "title": "Dashboard",
       "type": "object"
     },
     "Dates": {
@@ -144,13 +146,12 @@
       "type": "array"
     },
     "ForecasterConfig": {
+      "additionalProperties": false,
       "description": "Single training run stored in MLflow.",
       "properties": {
-        "mlflow_id": {
+        "checkpoint": {
           "description": "The mlflow run ID, as a 32-character hexadecimal string.",
-          "maxLength": 32,
-          "minLength": 32,
-          "title": "Mlflow Id",
+          "title": "Checkpoint",
           "type": "string"
         },
         "label": {
@@ -171,12 +172,12 @@
           "title": "Steps",
           "type": "string"
         },
-        "extra_dependencies": {
-          "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
+        "extra_requirements": {
+          "description": "List of extra dependencies to install for this model. These will be added to the requirements.txt file in the run directory.",
           "items": {
             "type": "string"
           },
-          "title": "Extra Dependencies",
+          "title": "Extra Requirements",
           "type": "array"
         },
         "inference_resources": {
@@ -212,7 +213,7 @@
         }
       },
       "required": [
-        "mlflow_id",
+        "checkpoint",
         "steps"
       ],
       "title": "ForecasterConfig",
@@ -331,13 +332,12 @@
       "type": "object"
     },
     "InterpolatorConfig": {
+      "additionalProperties": false,
       "description": "Single training run stored in MLflow.",
       "properties": {
-        "mlflow_id": {
+        "checkpoint": {
           "description": "The mlflow run ID, as a 32-character hexadecimal string.",
-          "maxLength": 32,
-          "minLength": 32,
-          "title": "Mlflow Id",
+          "title": "Checkpoint",
           "type": "string"
         },
         "label": {
@@ -358,12 +358,12 @@
           "title": "Steps",
           "type": "string"
         },
-        "extra_dependencies": {
-          "description": "List of extra dependencies to install for this model. These will be added to the pyproject.toml file in the run directory.",
+        "extra_requirements": {
+          "description": "List of extra dependencies to install for this model. These will be added to the requirements.txt file in the run directory.",
           "items": {
             "type": "string"
           },
-          "title": "Extra Dependencies",
+          "title": "Extra Requirements",
           "type": "array"
         },
         "inference_resources": {
@@ -411,7 +411,7 @@
         }
       },
       "required": [
-        "mlflow_id",
+        "checkpoint",
         "steps"
       ],
       "title": "InterpolatorConfig",
@@ -437,22 +437,10 @@
           "format": "path",
           "title": "Output Root",
           "type": "string"
-        },
-        "mlflow_uri": {
-          "description": "MLflow tracking URI(s) for the experiment. Can be a list of URIs if using multiple tracking servers.",
-          "items": {
-            "format": "uri",
-            "maxLength": 2083,
-            "minLength": 1,
-            "type": "string"
-          },
-          "title": "Mlflow Uri",
-          "type": "array"
         }
       },
       "required": [
-        "output_root",
-        "mlflow_uri"
+        "output_root"
       ],
       "title": "Locations",
       "type": "object"
@@ -518,6 +506,29 @@
       ],
       "title": "Stratification",
       "type": "object"
+    },
+    "TruthConfig": {
+      "description": "Configuration for the truth data used in the verification.",
+      "properties": {
+        "label": {
+          "description": "Label that will be used in experiment results such as reports and figures.",
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "root": {
+          "description": "Path to the root of the dataset.",
+          "minLength": 1,
+          "title": "Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "root"
+      ],
+      "title": "TruthConfig",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -553,7 +564,7 @@
       "title": "Dates"
     },
     "runs": {
-      "description": "Dictionary of runs to execute, with run IDs as keys and configurations as values.",
+      "description": "List of experiment participants, including forecaster/interpolator ML runs and baselines.",
       "items": {
         "anyOf": [
           {
@@ -561,6 +572,9 @@
           },
           {
             "$ref": "#/$defs/InterpolatorItem"
+          },
+          {
+            "$ref": "#/$defs/BaselineItem"
           }
         ]
       },
@@ -568,18 +582,42 @@
       "type": "array"
     },
     "baselines": {
-      "description": "Dictionary of baselines to include in the verification.",
+      "description": "Deprecated top-level baselines list. Prefer defining baseline entries directly in `runs`.",
       "items": {
         "$ref": "#/$defs/BaselineItem"
       },
       "title": "Baselines",
       "type": "array"
     },
-    "analysis": {
-      "$ref": "#/$defs/AnalysisConfig"
+    "truth": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TruthConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "stratification": {
       "$ref": "#/$defs/Stratification"
+    },
+    "thresholds": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "type": "object"
+      },
+      "description": "Dictionary mapping parameter names to threshold dicts. Each dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of threshold values.",
+      "title": "Thresholds",
+      "type": "object"
+    },
+    "dashboard": {
+      "$ref": "#/$defs/Dashboard"
     },
     "locations": {
       "$ref": "#/$defs/Locations"
@@ -592,9 +630,9 @@
     "description",
     "dates",
     "runs",
-    "baselines",
-    "analysis",
+    "truth",
     "stratification",
+    "dashboard",
     "locations",
     "profile"
   ],

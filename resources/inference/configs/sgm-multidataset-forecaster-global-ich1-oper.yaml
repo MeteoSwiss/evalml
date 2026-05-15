@@ -1,15 +1,12 @@
+lead_time: 120h
 write_initial_state: true
 allow_nans: true
 
-patch_metadata:
-  dataset:
-    constant_fields: [z, lsm]
+env:
+  ANEMOI_INFERENCE_NUM_CHUNKS: 8 # OOM error if not set
 
+# inputs
 input:
-  test:
-    use_original_paths: true
-
-constant_forcings:
   test:
     use_original_paths: true
 
@@ -26,22 +23,24 @@ post_processors:
 output:
   tee:
     - grib:
-        path: grib/{dateTime}_{step:03}.grib
+        path: grib/{date}{time:04}_{step:03}.grib
         encoding:
           typeOfGeneratingProcess: 2
+          centre: lssw
         templates:
-            samples: resources/templates_index_cosmo.yaml
+          samples: resources/templates_index_icon.yaml
         post_processors:
           - extract_mask: # removes global points
               mask: "lam_0/cutout_mask"
               as_slice: true
-          - assign_mask:  # fill boundary "trimmed" points with nan
-              mask: "source0/trimedge_mask"
-
+          - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
+              accumulations:
+                - tp
     - grib:
-        path: grib/ifs-{dateTime}_{step:03}.grib
+        path: grib/ifs-{date}{time:04}_{step:03}.grib
         encoding:
           typeOfGeneratingProcess: 2
+          centre: ecmf
         templates:
           samples: resources/templates_index_ifs.yaml
         post_processors:
@@ -51,3 +50,8 @@ output:
               inverse: true
           - assign_mask: # fill local/global overlapping points with nan
               mask: "global/cutout_mask"
+          - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
+              accumulations:
+                - tp
+
+patch_metadata: resources/sgm-multidataset-ich1-oper-patch.yaml

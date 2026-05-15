@@ -1,7 +1,16 @@
 from pathlib import Path
 from datetime import datetime, timedelta
 
-EXPERIMENT_HASH = short_hash_config()
+
+def _parse_timedelta(s: str) -> timedelta:
+    """Parse a frequency string like '12h' or '1d' into a timedelta."""
+    if s.endswith("h"):
+        return timedelta(hours=int(s[:-1]))
+    if s.endswith("d"):
+        return timedelta(days=int(s[:-1]))
+    raise ValueError(
+        f"Unsupported frequency format: {s!r} (expected e.g. '12h' or '1d')"
+    )
 
 
 # TODO: merge _parse_steps from generate_mec_namelist.py and verif_single_init.py?
@@ -65,17 +74,16 @@ def init_times_for_mec(wc):
 # prepare_mec_input: setup run dir, gather observations and model data in the run dir for the actual init time
 rule prepare_mec_input:
     input:
-        src_dir=OUT_ROOT / "data/runs/{run_id}/{init_time}/grib",
         inference_ok=lambda wc: expand(
-            rules.execute_inference.output.okfile,
+            rules.inference_execute.output.okfile,
             run_id=wc.run_id,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
         ),
     output:
-        run=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec"),
+        #run=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec"),
         obs=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs"),
         ekf_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs/ekfSYNOP.nc",
-        fc_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/fc_{init_time}",
+        #fc_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/fc_{init_time}",
     log:
         OUT_ROOT / "logs/prepare_mec_input/{run_id}-{init_time}.log",
     shell:
@@ -84,29 +92,18 @@ rule prepare_mec_input:
         set -euo pipefail
         shopt -s nullglob
 
-        mkdir -p {output.run} {output.obs}
-        src_dir="{input.src_dir}"
-        fc_file="{output.fc_file}"
+        mkdir -p {output.obs}
 
         # extract YYYYMM from init_time (which is YYYYMMDDHHMM)
         init="{wildcards.init_time}"
         ym="${{init:0:6}}"
-        ymdh="${{init:0:10}}"
         echo "init time: ${{init}}"
 
-        # concatenate all grib files in src_dir into a single file fc_file
-        echo "grib files processed:"
-        files=( "$src_dir"/20*.grib )
-        if (( ${{#files[@]}} )); then
-            printf '%s\n' "${{files[@]}}"
-            cat "${{files[@]}}" > "$fc_file"
-        else
-            echo "WARNING: no grib files found in $src_dir" >&2
-        fi
-
         # collect observations (ekfSYNOP) and/or (monSYNOP from DWD; includes precip) files
-        cp /store_new/mch/msopr/osm/KENDA-1/EKF/${{ym}}/ekfSYNOP_${{init}}00.nc {output.ekf_file}
-        cp /scratch/mch/paa/mec/MEC_ML_input/monFiles2020/hpc/uwork/swahl/temp/feedback/monSYNOP.${{init:0:10}} {output.obs}/monSYNOP.nc
+        cp /store_new/mch/msopr/osm/KENDA-CH1/EKF/${{ym}}/ekfSYNOP_${{init}}00.nc {output.ekf_file}
+        cp /scratch/mch/paa/mec/MEC_ML_input/monFiles2025/${{init:0:10}}/monSYNOP.nc {output.obs}/monSYNOP.nc
+        ######cp /scratch/mch/paa/mec/MEC_ML_input/monFiles2020/hpc/uwork/swahl/temp/feedback/monSYNOP.${{init:0:10}} {output.obs}/monSYNOP.nc
+        echo "Copied obs files to {output.obs}"
 
         ) > {log} 2>&1
         """
@@ -115,14 +112,26 @@ rule prepare_mec_input:
 # link_mec_input: create the input_mod dir with symlinks to all fc files from all source inits
 rule link_mec_input:
     input:
-        # list of source fc files produced by prepare_mec_input for each init in the window
-        fc_files=lambda wc: [
-            OUT_ROOT / f"data/runs/{wc.run_id}/{t}/mec/fc_{t}"
-            for t in init_times_for_mec(wc)
-        ],
+        # depend on ALL source grib dirs: for each lead l, source_init = init_time - l hours
+        obs_file=rules.prepare_mec_input.output.ekf_file,
+        src_dirs=lambda wc: expand(
+            str(OUT_ROOT / "data/runs/{run_id}/{src_init}/grib"),
+            run_id=wc.run_id,
+            src_init=[
+                (
+                    datetime.strptime(wc.init_time, "%Y%m%d%H%M") - timedelta(hours=l)
+                ).strftime("%Y%m%d%H%M")
+                for l in _parse_steps(RUN_CONFIGS[wc.run_id]["steps"])
+            ],
+        ),
     output:
         # own the final input_mod directory for this init (and its contents)
         mod=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_mod"),
+    params:
+        # generate a space-separated list of lead hours from the run config
+        leads=lambda wc: " ".join(
+            str(l) for l in _parse_steps(RUN_CONFIGS[wc.run_id]["steps"])
+        ),
     log:
         OUT_ROOT / "logs/link_mec_input/{run_id}-{init_time}.log",
     shell:
@@ -133,15 +142,36 @@ rule link_mec_input:
         mkdir -p {output.mod}
         cd {output.mod}/../../..
 
-        # create symlinks for each source init into this init's input_mod
-        for src in {input.fc_files}; do
-            src_basename=$(basename "$src")
-            echo "Processing source fc file: $src_basename"
-            one_init_time="${{src_basename: -12}}"
-            realpath_src=$(realpath -m "$PWD/$one_init_time/mec/")
+        init="{wildcards.init_time}"
+        echo "Creating input_mod links for init $init (leads: {params.leads})"
 
-            echo "Linking $realpath_src/$src_basename to {wildcards.init_time}/mec/input_mod/$src_basename"
-            ln -s "$realpath_src/$src_basename" {wildcards.init_time}/mec/input_mod/"$src_basename"
+        # for each configured lead copy (and optionally merge) source files into input_mod
+        for lead in {params.leads}; do
+            lead3=$(printf "%03d" "$lead")
+            # compute source init such that source_init + lead = ref(init)
+            src_epoch=$(date -u -d "${{init:0:4}}-${{init:4:2}}-${{init:6:2}}T${{init:8:2}}:${{init:10:2}}:00Z" +%s)
+            source_init=$(date -u -d "@$(( src_epoch - lead * 3600 ))" +"%Y%m%d%H%M")
+            src_rel="$source_init/grib/${{source_init}}_${{lead3}}.grib"
+
+            if [[ -e "$src_rel" ]]; then
+                dest="{wildcards.init_time}/mec/input_mod/${{source_init}}.grib"
+                if [[ "$lead" -eq 0 ]]; then
+                    echo "Copying $src_rel -> $dest"
+                    cp "$src_rel" "$dest"
+                else
+                    prev_lead3=$(printf "%03d" "$(( lead - 6 ))")
+                    prev_rel="$source_init/grib/${{source_init}}_${{prev_lead3}}.grib"
+                    if [[ -e "$prev_rel" ]]; then
+                        echo "Merging $prev_rel + $src_rel -> $dest"
+                        cat "$prev_rel" "$src_rel" > "$dest"
+                    else
+                        echo "WARNING: previous lead file $prev_rel not found, copying $src_rel only" >&2
+                        cp "$src_rel" "$dest"
+                    fi
+                fi
+            else
+                echo "WARNING: source file $src_rel not found" >&2
+            fi
         done
         ) > {log} 2>&1
         """
@@ -170,17 +200,12 @@ rule generate_mec_namelist:
 rule run_mec:
     input:
         namelist=rules.generate_mec_namelist.output.namelist,
-        run_dir=directory(rules.prepare_mec_input.output.run),
+        prepare_obs=rules.prepare_mec_input.output.ekf_file,
         mod_dir=directory(rules.link_mec_input.output.mod),
     output:
         fdbk_file=OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}00.nc",
     wildcard_constraints:
         init_time=r"\d{12}",
-    params:
-        final_fdbk_file_dir=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}/fdbk_files"),
-    resources:
-        cpus_per_task=1,
-        runtime="1h",
     log:
         OUT_ROOT / "logs/run_mec/{run_id}-{init_time}.log",
     shell:
@@ -191,29 +216,30 @@ rule run_mec:
         # Run MEC inside sarus container
         # Note: pull command currently needed only once to download the container
         sarus pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
-        abs_run_dir=$(realpath {input.run_dir})
-        abs_mod_root=$(realpath {input.run_dir}/../..)   # two levels up (so that all links are mounted to the container)
+        run_dir=$(dirname {input.namelist})
+        abs_run_dir=$(realpath "$run_dir")
+        abs_mod_root=$(realpath "$run_dir/../..")   # two levels up (so that all links are mounted to the container)
 
         # build mount options in a variable for readability
         MOUNTS="\
           --mount=type=bind,source=$abs_run_dir,destination=/src/bin2 \
           --mount=type=bind,source=$abs_mod_root,destination=$abs_mod_root,readonly \
-          --mount=type=bind,source=/oprusers/osm/opr.emme/data/,destination=/oprusers/osm/opr.emme/data/ \
+          --mount=type=bind,source=/oprusers/osm/opr.inn/data/,destination=/oprusers/osm/opr.inn/data/ \
         "
 
         # run container (split over multiple lines for readability)
         sarus run $MOUNTS container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
 
         # Run MEC using local executable (Alternative to sarus container)
-        #cd {input.run_dir}
+        #cd "$run_dir"
         #export LM_HOST=balfrin-ln003
-        #source /oprusers/osm/opr.emme/abs/mec.env
+        #source /oprusers/osm/opr.inn/abs/mec.env
         #./mec > ./mec_out.log 2>&1
 
         # copy the output file to the final location for the Feedback files
 		# and rename to match NWP conventions
-        mkdir -p {params.final_fdbk_file_dir}
-        cp {input.run_dir}/verSYNOP.nc {params.final_fdbk_file_dir}/verSYNOP_{wildcards.init_time}00.nc
+        mkdir -p "$run_dir/../../fdbk_files"
+        cp "$run_dir/verSYNOP.nc" "$run_dir/../../fdbk_files/verSYNOP_{wildcards.init_time}00.nc"
         echo "...time at end of run_mec: $(date)"
         ) > {log} 2>&1
         """

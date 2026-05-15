@@ -47,7 +47,13 @@ def prepare_workdir(workdir: Path, resources_root: Path):
     """
     workdir.mkdir(parents=True, exist_ok=True)
     (workdir / "grib").mkdir(parents=True, exist_ok=True)
-    shutil.copytree(resources_root / "templates", workdir / "resources")
+    (workdir / "resources").mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        resources_root / "templates", workdir / "resources", dirs_exist_ok=True
+    )
+    shutil.copytree(
+        resources_root / "metadata", workdir / "resources", dirs_exist_ok=True
+    )
 
 
 def prepare_interpolator(smk):
@@ -93,6 +99,9 @@ def prepare_interpolator(smk):
         config_content = f.read()
     LOG.info("Config: \n%s", config_content)
 
+    okfile = Path(smk.output.okfile)
+    okfile.parent.mkdir(parents=True, exist_ok=True)
+    okfile.touch()
     LOG.info("Interpolator preparation complete.")
 
 
@@ -118,13 +127,16 @@ def prepare_forecaster(smk):
         config_content = f.read()
     LOG.info("Config: \n%s", config_content)
 
+    okfile = Path(smk.output.okfile)
+    okfile.parent.mkdir(parents=True, exist_ok=True)
+    okfile.touch()
     LOG.info("Forecaster preparation complete.")
 
 
 # TODO: just pass a dictionary of config overrides to the rule's params
 def _overrides_from_params(smk) -> dict:
     return {
-        "checkpoint": f"{smk.params.checkpoints_path}/inference-last.ckpt",
+        "checkpoint": str(Path(smk.input.checkpoint).resolve()),
         "date": smk.params.reftime_to_iso,
         "lead_time": smk.params.lead_time,
     }
@@ -160,9 +172,9 @@ def _override_recursive(original: dict, updates: dict) -> dict:
 
 def main(smk):
     """Main function to run the Snakemake workflow."""
-    if smk.rule == "prepare_inference_forecaster":
+    if smk.rule == "inference_prepare_forecaster":
         prepare_forecaster(smk)
-    elif smk.rule == "prepare_inference_interpolator":
+    elif smk.rule == "inference_prepare_interpolator":
         prepare_interpolator(smk)
     else:
         raise ValueError(f"Unknown rule: {smk.rule}")

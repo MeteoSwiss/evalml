@@ -1,5 +1,5 @@
 from argparse import ArgumentParser, Namespace
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import os
 from pathlib import Path
@@ -13,6 +13,8 @@ import earthkit.data as ekd  # noqa: E402
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
 from earthkit.data.sources.stream import StreamFieldList  # noqa: E402
+
+from data_input import parse_steps  # noqa: E402
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -65,8 +67,59 @@ def check_reftime_consistency(input: list[Path], delta_h: int = 12):
     return first_reftime, expected_reftime - timedelta(hours=delta_h)
 
 
+def get_run_ids(file: Path, gribname: str) -> list[str]:
+    """Discover all ensemble member run_ids available for a given file."""
+    if ".tar" in file.suffixes:
+        with tarfile.open(file, mode="r:*") as tar:
+            prefix = f"{file.stem}/grib/{gribname}000_"
+            return sorted(
+                rid
+                for m in tar.getmembers()
+                if m.name.startswith(prefix)
+                and (rid := m.name.removeprefix(prefix)).isdigit()
+                and len(rid) == 3
+            )
+    else:
+        pattern = f"{gribname}00000000_???"
+        return sorted(p.name.rsplit("_", 1)[1] for p in (file / "grib").glob(pattern))
+
+
+def _extract_member(
+    file: Path, lead_times: list[int], run_id: str, params: list[str], gribname: str
+) -> xr.Dataset:
+    """Extract all lead times for a single ensemble member."""
+    out = ekd.SimpleFieldList()
+    if ".tar" in file.suffixes:
+        tar_archive = tarfile.open(file, mode="r:*")
+        for lt in lead_times:
+            filename = f"{file.stem}/grib/{gribname}{lt:03}_{run_id}"
+            LOG.info(f"Extracting {filename}.")
+            stream = tar_archive.extractfile(filename)
+            streamfieldlist: StreamFieldList = ekd.from_source("stream", stream)
+            for field in streamfieldlist:
+                if field.metadata("shortName") in params:
+                    out.append(field)
+            stream.close()
+        tar_archive.close()
+    else:
+        for lt in lead_times:
+            lh = lt % 24
+            ld = lt // 24
+            filepath = file / "grib" / f"{gribname}{ld:02}{lh:02}0000_{run_id}"
+            LOG.info(f"Extracting {filepath}.")
+            fields = ekd.from_source("file", filepath)
+            for field in fields:
+                if field.metadata("shortName") in params:
+                    out.append(field)
+    return out.to_xarray(profile="grib")
+
+
 def extract(
-    file: Path, lead_times: list[int], run_id: str, params: list[str]
+    file: Path,
+    lead_times: list[int],
+    params: list[str],
+    run_id: str | None = None,
+    ensemble_mean: bool = False,
 ) -> xr.Dataset:
     LOG.info(f"Extracting fields from {file}.")
     reftime = reftime_from_tarfile(file)
@@ -80,35 +133,33 @@ def extract(
         gribname = "i2eff"
     else:
         raise ValueError("Currently only COSMO-E/1E and ICON-CH1/2-EPS are supported.")
-    out = ekd.SimpleFieldList()
-    if ".tar" in file.suffixes:
-        tar_archive = tarfile.open(file, mode="r:*")
-        for lt in lead_times:
-            filename = f"{file.stem}/grib/{gribname}{lt:03}_{run_id}"
-            LOG.info(f"Extracting {filename}.")
-            stream = tar_archive.extractfile(filename)
 
-            # LOG.info(f"Reading fields...")
-            streamfieldlist: StreamFieldList = ekd.from_source("stream", stream)
-            for field in streamfieldlist:
-                shortname = field.metadata("shortName")
-                if shortname in params:
-                    out.append(field)
-            stream.close()
-        tar_archive.close()
+    if not ensemble_mean and run_id is None:
+        raise ValueError("run_id must be provided when ensemble_mean=False.")
+
+    if ensemble_mean:
+        run_ids = get_run_ids(file, gribname)
+        LOG.info(f"Computing ensemble mean over {len(run_ids)} members: {run_ids}")
+        acc = None
+        loaded = []
+        for rid in run_ids:
+            try:
+                member = _extract_member(file, lead_times, rid, params, gribname)
+                acc = member if acc is None else acc + member
+                loaded.append(rid)
+            except Exception as e:
+                LOG.warning(f"Skipping member {rid}: {e}")
+        if acc is None:
+            raise ValueError(f"No ensemble members could be loaded from {file}.")
+        out = acc / len(loaded)
+        LOG.info(f"Ensemble mean computed over {len(loaded)} members: {loaded}")
+        out.attrs["ensemble"] = f"mean over members {', '.join(loaded)}"
     else:
-        for lt in lead_times:
-            lh = lt % 24
-            ld = lt // 24
-            filepath = file / "grib" / f"{gribname}{ld:02}{lh:02}0000_{run_id}"
-            LOG.info(f"Extracting {filepath}.")
-            fields = ekd.from_source("file", filepath)
-            for field in fields:
-                shortname = field.metadata("shortName")
-                if shortname in params:
-                    out.append(field)
+        out = _extract_member(file, lead_times, run_id, params, gribname)
+        out.attrs["ensemble"] = f"member {run_id}"
 
-    out = out.to_xarray(profile="grib")
+    out.attrs["institution"] = "MeteoSwiss"
+    out.attrs["extracted"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     out = out.expand_dims(
         forecast_reference_time=[np.array(reftime, dtype="datetime64[ns]")], axis=0
     )
@@ -122,16 +173,7 @@ class ScriptConfig(Namespace):
     steps: list[int]
     run_id: str
     params: list[str]
-
-
-def _parse_steps(steps: str) -> int:
-    # check that steps is in the format "start/stop/step"
-    if "/" not in steps:
-        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
-    if len(steps.split("/")) != 3:
-        raise ValueError(f"Expected steps in format 'start/stop/step', got '{steps}'")
-    start, end, step = map(int, steps.split("/"))
-    return list(range(start, end + 1, step))
+    ensemble_mean: bool
 
 
 def main(cfg: ScriptConfig):
@@ -171,13 +213,19 @@ def main(cfg: ScriptConfig):
 
     for i in indices:
         file = input[i]
-        ds = extract(file, cfg.steps, cfg.run_id, cfg.params)
+        ds = extract(
+            file,
+            cfg.steps,
+            cfg.params,
+            run_id=cfg.run_id,
+            ensemble_mean=cfg.ensemble_mean,
+        )
 
         LOG.info(f"Extracted: {ds}")
 
         # remove GRIB message from attrs (not serializable)
         for v in ds.data_vars:
-            ds[v].attrs.pop("_earthkit")
+            ds[v].attrs.pop("_earthkit", None)
 
         # Write to zarr, appending if store exists
         ds = ds.chunk({"forecast_reference_time": 1})
@@ -206,9 +254,16 @@ if __name__ == "__main__":
         help="Path to the output zarr store.",
     )
 
-    parser.add_argument("--steps", type=_parse_steps, default="0/120/6")
+    parser.add_argument("--steps", type=parse_steps, default="0/120/6")
 
     parser.add_argument("--run_id", type=str, default="000")
+
+    parser.add_argument(
+        "--ensemble_mean",
+        action="store_true",
+        default=False,
+        help="Compute mean over all ensemble members. When set, --run_id is ignored.",
+    )
 
     parser.add_argument(
         "--params",
@@ -233,23 +288,19 @@ Example usage:
 To submit as a batch job on compute nodes
 sbatch --wrap "uv run python ..."
 
-python workflow/scripts/extract_baseline.py \
-    --archive_dir /archive/mch/msopr/osm/COSMO-E/FCST20 \
-    --output_store /store_new/mch/msopr/ml/COSMO-E/FCST20.zarr \
-    --steps 0/120/6
-
-python workflow/scripts/extract_baseline.py \
-    --archive_dir /archive/mch/s83/osm/from_GPFS/COSMO-1E/FCST20 \
-    --output_store /store_new/mch/msopr/ml/COSMO-1E/FCST20.zarr \
-    --steps 0/33/1
-
-python workflow/scripts/extract_baseline.py \
+python workflow/scripts/data_extract_baseline.py \
     --archive_dir /store_new/mch/msopr/osm/ICON-CH1-EPS/FCST24 \
-    --output_store /store_new/mch/msopr/ml/ICON-CH1-EPS/FCST24.zarr \
+    --output_store /store_new/mch/msopr/ml/ICON-CH1-CTRL/FCST24.zarr \
     --steps 0/33/1
 
-python workflow/scripts/extract_baseline.py \
+python workflow/scripts/data_extract_baseline.py \
+    --archive_dir /store_new/mch/msopr/osm/ICON-CH2-EPS/FCST25 \
+    --output_store /store_new/mch/msopr/ml/ICON-CH2-CTRL/FCST25.zarr \
+    --steps 0/121/1
+
+python workflow/scripts/data_extract_baseline.py \
     --archive_dir /store_new/mch/msopr/osm/ICON-CH1-EPS/FCST25 \
-    --output_store /store_new/mch/msopr/ml/ICON-CH1-EPS/FCST25.zarr \
-    --steps 0/33/1
+    --output_store /store_new/mch/msopr/ml/ICON-CH1-MEAN/FCST25.zarr \
+    --steps 0/33/1 \
+    --ensemble_mean
 """
