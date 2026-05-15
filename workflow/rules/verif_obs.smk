@@ -80,10 +80,8 @@ rule prepare_mec_input:
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
         ),
     output:
-        #run=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec"),
         obs=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs"),
         ekf_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs/ekfSYNOP.nc",
-        #fc_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/fc_{init_time}",
     log:
         OUT_ROOT / "logs/prepare_mec_input/{run_id}-{init_time}.log",
     shell:
@@ -204,8 +202,13 @@ rule run_mec:
         mod_dir=directory(rules.link_mec_input.output.mod),
     output:
         fdbk_file=OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}00.nc",
-    wildcard_constraints:
-        init_time=r"\d{12}",
+    #wildcard_constraints:
+    #    init_time=r"\d{12}",
+    #params:
+    #    final_fdbk_file_dir=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}/fdbk_files"),
+    #resources:
+    #    cpus_per_task=1,
+    #    runtime="1h",
     log:
         OUT_ROOT / "logs/run_mec/{run_id}-{init_time}.log",
     shell:
@@ -240,6 +243,8 @@ rule run_mec:
 		# and rename to match NWP conventions
         mkdir -p "$run_dir/../../fdbk_files"
         cp "$run_dir/verSYNOP.nc" "$run_dir/../../fdbk_files/verSYNOP_{wildcards.init_time}00.nc"
+        #mkdir -p {params.final_fdbk_file_dir}
+        #cp {input.run_dir}/verSYNOP.nc {params.final_fdbk_file_dir}/verSYNOP_{wildcards.init_time}00.nc
         echo "...time at end of run_mec: $(date)"
         ) > {log} 2>&1
         """
@@ -260,7 +265,8 @@ rule generate_ffv2_namelist:
         namelist=OUT_ROOT / "data/runs/{run_id}/SYNOP_DET.nl",
     params:
         # TODO: We may want more than one directory here, if we are comparing models.
-        feedback_directory=rules.run_mec.params.final_fdbk_file_dir,
+        #feedback_directory=rules.run_mec.params.final_fdbk_file_dir,
+        feedback_directory=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}/fdbk_files"),
         # TODO: consider including run_ids here?
         experiment_ids="SrucMLModel,",
         # Keeping this as a param. We will create it in run_ffv2 rule.
