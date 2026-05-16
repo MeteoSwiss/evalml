@@ -15,7 +15,7 @@ def make_header_text():
     text = f"Verification against {truth} with initializations from {dates.get('start')} to {dates.get('end')} by {dates.get('frequency')}"
     blacklist = dates.get("blacklist", [])
     if blacklist:
-        text += f" (excluding {len(blacklist)} blacklisted date{'s' if len(blacklist) != 1 else ''})"
+        text += f" (excluding {len(blacklist)} blacklisted date{'s' if len(blacklist)!=1 else ''})"
     return text
 
 
