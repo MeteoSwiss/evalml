@@ -2,6 +2,7 @@
 # VERIFICATION WORKFLOW                                 #
 # ----------------------------------------------------- #
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 
@@ -10,16 +11,21 @@ include: "common.smk"
 
 
 # TODO: make sure the boundaries aren't used
+def _get_baseline_forecast_path(wc):
+    """Return the forecast path for a baseline: zarr store if it exists,
+    otherwise the FCST<year> directory from the operational GRIB archive."""
+    root = BASELINE_CONFIGS[wc.baseline_id].get("root")
+    year = wc.init_time[2:4]
+    zarr_path = f"{root}/FCST{year}.zarr"
+    return zarr_path if Path(zarr_path).exists() else f"{root}/FCST{year}"
+
+
 rule verification_metrics_baseline:
     input:
         "src/verification/__init__.py",
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_metrics.py",
-        baseline_zarr=lambda wc: expand(
-            "{root}/FCST{year}.zarr",
-            root=BASELINE_CONFIGS[wc.baseline_id].get("root"),
-            year=wc.init_time[2:4],
-        ),
+        forecast=_get_baseline_forecast_path,
         truth=config["truth"]["root"],
     params:
         baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
@@ -38,7 +44,7 @@ rule verification_metrics_baseline:
     shell:
         """
         uv run {input.script} \
-            --forecast {input.baseline_zarr} \
+            --forecast {input.forecast} \
             --truth {input.truth} \
             --reftime {wildcards.init_time} \
             --steps "{params.baseline_steps}" \
