@@ -4,10 +4,9 @@
 candidate
     A run that participates in an experiment's verification, dashboard,
     and plots. Set internally by `register_run(... as_candidate=True)`.
-    Forecasters and interpolators added directly under `runs:` are
-    candidates by default; nested upstream forecasters registered as
-    dependencies of an interpolator are *not* candidates unless they
-    were also explicitly listed.
+    Forecasters and temporal downscalers ('interpolator') added directly
+    under `runs:` are candidates by default; nested upstream forecasters registered as dependencies of a temporal downscaler are *not* candidates
+    unless they were also explicitly listed.
 
 dependency run
     A run registered indirectly because another run depends on it (e.g.
@@ -17,9 +16,7 @@ dependency run
 
 env_id
     `{model_type}-{model_id}-{env_hash}` (with `-on-{forecaster_env}`
-    appended for interpolators). Identifies the inference environment
-    (venv, squashfs). Two runs that differ only in inference config or
-    `steps` share an `env_id`.
+    appended for temporal downscalers ('interpolator')). Identifies the inference environment (venv, squashfs). Two runs that differ only in inference config or `steps` share an `env_id`.
 
 run_id
     `{env_id}/{config_hash}`. Identifies a specific run configuration.

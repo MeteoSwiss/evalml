@@ -59,8 +59,7 @@ All four subcommands share the same option set, defined by the
 
 - **`experiment`** — full evaluation: data prep + inference + verification +
   dashboard + plots.
-- **`showcase`** — visualisation outputs (forecast animations, meteograms)
-  for specific case-study dates.
+- **`showcase`** — specific case-study visualisation: data prep + inference + visualisation (forecast animations, meteograms).
 - **`sandbox`** — only build per-checkpoint inference sandboxes (squashfs +
   zip), useful when handing models to collaborators.
 - **`make`** — drop down to a specific Snakemake target. Use this when

@@ -1,8 +1,7 @@
 # Workspace setup
 
 By default, every artefact produced by the workflow is written under `output/`
-in your working directory. On HPC environments this is rarely the right place,
-because `output/` quickly grows past the home-directory quota.
+in your working directory. If the working directory is in your home directory on an HPC cluster, this is probably not the optimal place because `output/` quickly grows past the home-directory quota.
 
 ## Recommended: symlink output to scratch
 

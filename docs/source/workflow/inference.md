@@ -1,7 +1,6 @@
 # Inference
 
-`workflow/rules/inference.smk` is the most involved module. It covers four
-distinct concerns, in this order:
+`workflow/rules/inference.smk` covers four distinct concerns, in this order:
 
 1. **Resolve** the checkpoint by URI type (MLflow / Hugging Face / local).
 2. **Build** a relocatable `uv` virtual environment from the checkpoint's
@@ -76,18 +75,18 @@ nodes.
 Bundles the checkpoint, requirements, inference config, and a rendered
 README (from `resources/inference/sandbox/readme.md.jinja2`) into a single
 zip. The result is suitable for handing a checkpoint plus reproducible
-runtime to an external collaborator.
+runtime to another collaborator.
 
 ### `inference_prepare_forecaster` / `inference_prepare_interpolator`
 
 Both rules call `scripts/inference_prepare.py`. They produce the per-init
 `config.yaml`, a `resources/` directory of GRIB templates, and a `grib/`
-output directory. The interpolator variant additionally:
+output directory. The temporal downscaler ('interpolator') variant additionally:
 
 - Depends on the upstream forecaster's `inference_execute` `.ok` file, when
   a `forecaster:` block is present.
 - Symlinks the forecaster's output directory into `forecaster/` so the
-  interpolator inference run can find it.
+  temporal downscaler inference run can find it.
 - Sets `params.forecaster_run_id`, used by the prepare script to wire the
   upstream input.
 
@@ -128,12 +127,12 @@ Key points:
 hash are not free-form — they are explicitly listed in `RunConfig.ENV_FIELDS`
 and consumed in `common.smk`:
 
-- `env_entry_hash` hashes only `ENV_FIELDS`. For interpolators, it also
+- `env_entry_hash` hashes only `ENV_FIELDS`. For temporal downscalers, it also
   appends the upstream forecaster's `env_id` so a different upstream model
   forces a new venv.
 - `run_specific_hash` hashes `steps` plus the contents of the inference
-  config YAML. For interpolators, it appends the forecaster's `run_id` so
-  the interpolator's outputs reflect *which* forecaster run it consumed.
+  config YAML. For temporal downscalers, it appends the forecaster's `run_id` so
+  the downscaler's outputs reflect *which* forecaster run it consumed.
 
 These hashes drive every output path under `data/runs/`, so a violation of
 the contract (e.g. forgetting to include a new field in `ENV_FIELDS`) shows

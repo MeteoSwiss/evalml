@@ -10,9 +10,9 @@ reason about why a particular file was (or was not) regenerated.
 The top of [workflow/Snakefile](../../../workflow/Snakefile) is small and
 ordered deliberately:
 
-1. **Validate** the merged config through `ConfigModel` and write the result
+1. Validate the merged config through `ConfigModel` and write the result
    back into Snakemake's `config` dict via `update_config(...)`.
-2. **Include** the rule modules in dependency order:
+2. Include the rule modules in dependency order:
    - `rules/common.smk` — utilities, hashing, run/env registration.
    - `rules/summary.smk` — human-readable run summary.
    - `rules/data.smk` — observation data acquisition.

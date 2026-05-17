@@ -49,10 +49,9 @@ The range form is parsed into a list internally by `parse_reference_times` in
 ## `runs`
 
 `runs` is a heterogeneous list. Each item is a single-key mapping whose key is
-one of `forecaster`, `interpolator`, or `baseline`, and whose value is the
-corresponding model.
+one of `forecaster`, `interpolator` (temporal downscaler), or `baseline`, and whose value is the corresponding model.
 
-### Forecaster / Interpolator
+### Forecaster / Temporal downscaler
 
 ```yaml
 - forecaster:
@@ -80,7 +79,7 @@ Field meanings:
 - **`config`** — either a Python dict to override the inference config inline
   or a path to a YAML template under `resources/inference/configs/`. If
   omitted, defaults to `resources/inference/configs/forecaster.yaml` for
-  forecasters and `interpolator.yaml` for interpolators.
+  forecasters and `interpolator.yaml` for temporal downscaling.
 - **`extra_requirements`** — additional pip-installable dependencies merged
   into the auto-generated `requirements.txt` for the inference venv.
 - **`inference_resources`** — overrides the SLURM defaults for this run only.
@@ -99,8 +98,7 @@ Field meanings:
       ...
 ```
 
-The interpolator pulls forecasts from `forecaster` instead of from analysis
-data. If `forecaster` is omitted, the interpolator runs on analysis input.
+The temporal downscaling pulls forecasts from `forecaster` instead of from analysis data. If `forecaster` is omitted, the temporal downscaling runs on analysis input.
 
 ### Baseline
 
@@ -191,7 +189,7 @@ two field sets exposed by `RunConfig`:
 From those:
 
 - **`env_id`** = `{model_type}-{model_id}-{env_hash}` (with `-on-{forecaster_env}`
-  appended for interpolators). Determines which venv / squashfs is built.
+  appended for temporal downscaling). Determines which venv / squashfs is built.
 - **`run_id`** = `{env_id}/{run_hash}`. Adds a hash of the inference config
   YAML and `steps`. Determines where outputs land.
 

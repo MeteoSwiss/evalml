@@ -1,7 +1,6 @@
 # Data
 
-`workflow/rules/data.smk` is currently the smallest rule module. It owns one
-rule and a tiny piece of conditional logic at parse time:
+The `workflow/rules/data.smk` rule module owns one rule and a tiny piece of conditional logic at parse time:
 
 ```python
 if config["truth"]["root"].endswith("peakweather"):
@@ -33,8 +32,7 @@ the same download.
 
 The rule has no `shell:` block; the entire download is implemented inside a
 Snakemake `run:` block, which means PeakWeather is imported in the Snakemake
-process itself. This is intentional — the package is a small dependency and
-running it locally avoids spinning up a SLURM job for a network-only task.
+process itself.
 
 ## How baseline data is consumed
 
@@ -45,8 +43,7 @@ the upstream archive and EvalML does not currently transform it before
 verification.
 
 A standalone helper script `workflow/scripts/data_extract_baseline.py` exists
-for ad-hoc baseline extraction, but is not invoked by any rule in the
-default pipeline.
+for ad-hoc baseline extraction, it is not invoked by any rule in the default pipeline and needs to be run manually.
 
 ## Ground-truth dispatch
 

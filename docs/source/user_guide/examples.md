@@ -12,8 +12,8 @@ example is loaded by `tests/conftest.py` and validated against the schema.
 | `forecasters-ich1.yaml` | ICON-CH1 single forecaster (stage_C, 1 km) |
 | `forecasters-ich1-oper.yaml` | Operational ICON-CH1 configuration |
 | `forecasters-ich1-oper-fixed.yaml` | Fixed operational ICON-CH1 variant |
-| `interpolators-co2.yaml` | M-2 spatial interpolator on COSMO-2 |
-| `interpolators-ich1.yaml` | ICON-CH1 interpolator with multi-dataset support |
+| `interpolators-co2.yaml` | M-2 temporal downscaler on COSMO-2 |
+| `interpolators-ich1.yaml` | ICON-CH1 temporal downscaler with multi-dataset support |
 
 ## Picking a starting point
 
@@ -22,9 +22,9 @@ If you are building a new evaluation:
 - **Comparing two forecasters** — copy `forecasters-co2.yaml` and replace the
   two `forecaster:` entries with your checkpoints. Adjust `dates` and
   `truth` as needed.
-- **Evaluating an interpolator** — copy `interpolators-co2.yaml`. Note the
+- **Evaluating a temporal downscaler** — copy `interpolators-co2.yaml`. Note the
   `forecaster:` block nested inside `interpolator:`; remove it to run the
-  interpolator on analysis input instead of forecaster output.
+  temporal downscaler on analysis input instead of forecaster output.
 - **Operational ICON-CH1** — start from `forecasters-ich1-oper.yaml`. It uses
   the operational inference config templates under `resources/inference/`.
 

@@ -12,7 +12,7 @@ The repository ships several end-to-end configurations under `config/`:
 | --- | --- |
 | `config/forecasters-co2.yaml` | COSMO-2 forecaster comparison on storm cases |
 | `config/forecasters-ich1.yaml` | ICON-CH1 single-forecaster evaluation |
-| `config/interpolators-co2.yaml` | M-2 spatial interpolator on COSMO-2 data |
+| `config/interpolators-co2.yaml` | M-2 temporal downscaler on COSMO-2 data |
 
 A walkthrough of each is in [Example configs](../user_guide/examples.md).
 

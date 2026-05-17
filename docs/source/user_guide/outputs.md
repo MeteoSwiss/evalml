@@ -36,7 +36,7 @@ across runs that only differ in inference config.
 
 | Wildcard | Format | Example |
 | --- | --- | --- |
-| `{env_id}` | `{type}-{model_id}-{env_hash}` (`-on-{forecaster_env}` for interpolators) | `forecaster-1a2b-c3d4` |
+| `{env_id}` | `{type}-{model_id}-{env_hash}` (`-on-{forecaster_env}` for temporal downscalers) | `forecaster-1a2b-c3d4` |
 | `{run_id}` | `{env_id}/{config_hash}` | `forecaster-1a2b-c3d4/e5f6` |
 | `{baseline_id}` | `Path(root).stem` | `COSMO-E` |
 | `{init_time}` | `%Y%m%d%H%M` | `202001011200` |
@@ -67,8 +67,7 @@ sits alongside the log:
 ```
 
 Multiple wildcards are joined with a hyphen: `{run_id}-{init_time}.log`. The
-forecast / interpolator preparation rules write a `.ok` so downstream rules
-can depend on the log, not on a directory whose timestamp is unstable.
+forecast / temporal downscaler preparation rules write a `.ok` so downstream rules can depend on the log, not on a directory whose timestamp is unstable.
 
 ## What `experiment_name` means
 

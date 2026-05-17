@@ -33,9 +33,9 @@ EvalML accepts checkpoints from three sources, classified by URL in
 [common.smk](../workflow/inference.md):
 
 - **MLflow** (`mlflow.ecmwf.int`, `service.meteoswiss.ch`,
-  `servicedepl.meteoswiss.ch`) — requires the token described above.
+  `servicedepl.meteoswiss.ch`).
 - **Hugging Face** (`huggingface.co/<repo>/blob/<rev>/<path>.ckpt`) — uses
   `uvx hf download` and follows the standard Hugging Face authentication
   (set `HF_TOKEN` if the repo is gated).
 - **Local paths** — a filesystem path that exists is treated as a local
-  checkpoint; no authentication needed.
+  checkpoint.

@@ -18,9 +18,7 @@ resources/inference/
 
 ### `configs/`
 
-Inference templates for forecasters and interpolators, parameterised by
-model family (COSMO-2 / ICON-CH1 / IFS) and grid (regional / global).
-Files include:
+Inference templates for forecasters and temporal downscaler ('interpolator'), parameterised by model family (COSMO-2 / ICON-CH1 / IFS) and grid (regional / global). Files include:
 
 - `forecaster.yaml` and `interpolator.yaml` — the defaults referenced by
   `ForecasterConfig` and `InterpolatorConfig` when no `config` is given.

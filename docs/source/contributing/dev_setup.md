@@ -67,19 +67,8 @@ sphinx-autobuild docs/source docs/build/html
 ```
 
 The published site is hosted on GitHub Pages and rebuilt automatically
-on every push to `main` by `.github/workflows/docs.yaml`. PR builds
-upload an `html-docs` artifact that you can download from the workflow
-run page to preview changes before merging.
-
-## Running the workflow on a developer laptop
-
-The workflow is designed for SLURM but will run locally with reduced
-parallelism. Pick a small config, force a single core, and disable
-SLURM-only resources by passing extra Snakemake args after `--`:
-
-```bash
-evalml experiment config/forecasters-co2.yaml --cores 1 -- --executor local
-```
-
-For most rule-level debugging, prefer `evalml make CONFIG TARGET --dry-run`
-first to confirm the DAG, then drop `--dry-run`.
+on every push to `main` by `.github/workflows/docs.yaml`. Open PRs get
+a live preview at
+`https://<owner>.github.io/<repo>/pr-preview/pr-<number>/`; the URL is
+posted as a comment on the PR by `rossjrw/pr-preview-action` and
+updates on every push.

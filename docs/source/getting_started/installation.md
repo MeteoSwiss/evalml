@@ -1,20 +1,16 @@
 # Installation
 
-EvalML is distributed as a `uv`-managed Python project. It targets Python 3.11
-and newer, and depends on heavy scientific packages (Cartopy, earthkit-plots,
-anemoi-datasets, MLflow) that are easiest to install through `uv`'s lockfile.
+EvalML is distributed as a `uv`-managed Python project.
 
 ## Prerequisites
 
-- A POSIX environment (Linux preferred; the workflow has been tested on CSCS
-  Balfrin and developer laptops).
+- A Linux environment; the workflow has been tested on CSCS Balfrin.
 - [`uv`](https://github.com/astral-sh/uv) — install with:
   ```bash
   curl -LsSf https://astral.sh/uv/install.sh | sh
   ```
 - A working `git`, `mksquashfs`, and `squashfs-mount` if you intend to run the
-  inference rules on a SLURM cluster (these are pre-installed in MeteoSwiss
-  HPC environments).
+  inference rules on a SLURM cluster.
 
 ## Installing the project
 
