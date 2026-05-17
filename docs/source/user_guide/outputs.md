@@ -32,6 +32,18 @@ identity contract documented in [Configuration](configuration.md): expensive
 artefacts (the venv and squashfs) live at the env level so they are reused
 across runs that only differ in inference config.
 
+## What's inside a `verif.nc`
+
+Each per-init `verif.nc` is an `xarray.Dataset` keyed by `region` and
+`parameter`. Continuous metrics (`BIAS`, `MSE`, `MAE`, `CORR`) and
+statistics (`mean`, `var`, `min`, `max`) appear as scalar data variables
+per region/parameter. When `thresholds:` is set in the config, an
+additional `contingency_table` variable appears on a `threshold`
+dimension; its values are encoded `{op}_{value}` (e.g. `gt_0p001` =
+"forecast/obs > 0.001"). Use
+[`verification.decode_metric`](../modules/verification.md) to render
+the encoded labels back to human-readable form.
+
 ## Wildcard reference
 
 | Wildcard | Format | Example |

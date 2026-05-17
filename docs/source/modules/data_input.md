@@ -37,9 +37,20 @@ dispatch (e.g. inside a notebook).
 - **Variable renaming**: `load_analysis_data_from_zarr` renames Anemoi
   variables to their COSMO equivalents (`t_2m → T_2M`, etc.). Add new
   mappings to the script-local rename table when you need them.
-- **TOT_PREC disaggregation**: GRIB and Zarr loaders both disaggregate
-  `TOT_PREC` into per-step accumulations. If you ingest a new precip
-  field, double-check whether it is accumulated upstream.
+- **TOT_PREC unit conversion**: the analysis Zarr stores precipitation in
+  metres; `load_analysis_data_from_zarr` multiplies by 1000 to convert to
+  mm, the canonical unit downstream.
+- **TOT_PREC disaggregation**: GRIB and Zarr loaders both expect
+  cumulative-from-start precipitation (the
+  `accumulate_from_start_of_forecast` post-processor must be enabled in
+  anemoi-inference) and disaggregate it with `.diff("lead_time")`. A
+  sanity check raises if `min(.diff())` is significantly negative —
+  that's the signature of data that's already per-step accumulated and
+  would be garbled by a second disaggregation.
+- **Lead-time selection up-front**: both forecast and baseline loaders
+  now restrict to the requested lead times *before* disaggregation, so
+  sub-step baselines (e.g. hourly baseline against 6-hourly forecast)
+  produce the correct accumulation window.
 - **Unit conversions**: `T_2M` from PeakWeather is converted to Kelvin in
   `load_obs_data_from_peakweather`, matching the ML model output. Other
   variables retain their source units.

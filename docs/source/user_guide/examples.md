@@ -63,6 +63,17 @@ stratification:
     - voralpen
   root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
 
+thresholds:
+  TOT_PREC:
+    gt: [0.0, 0.001, 0.005]
+  T_2M:
+    lt: [273.15]
+    gt: [288.15, 298.15]
+
+dashboard:
+  stratification:
+    - season
+
 locations:
   output_root: output/
 
@@ -90,6 +101,12 @@ Things worth highlighting:
   forecaster's `0/120/6`.
 - `batch_rules.plot_forecast_frame: 32` keeps SLURM happy when generating
   hundreds of frames.
+- `thresholds:` adds a 2×2 contingency table per parameter per threshold
+  to each `verif.nc`; the values land under the `contingency_table`
+  variable and feed the dashboard's categorical-skill panels. See
+  [Configuration → thresholds](configuration.md#thresholds-optional).
+- `dashboard.stratification: [season]` activates the season facet in the
+  dashboard. Add `region` and/or `init_hour` to expose the other axes.
 
 ## Schema validation in your editor
 

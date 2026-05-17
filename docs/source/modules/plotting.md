@@ -49,11 +49,14 @@ functions.
 
 `CMAP_DEFAULTS` is the lookup table consumed by the Marimo plotting
 notebooks. Keys are upper-case parameter names (`T_2M`, `V_10M`,
-`TOT_PREC`, `SP`, `FI_850`, …) and values bundle `cmap`, `norm`, `units`,
-and (where appropriate) `vmin`/`vmax`. Unknown keys fall back to a
-viridis colormap with a warning, so an experiment that tries to plot a
-brand-new parameter will produce something readable while you fix the
-mapping.
+`TOT_PREC_1H`, `TOT_PREC_6H`, `SP`, `FI_850`, …) and values bundle
+`cmap`, `norm`, `units`, and (where appropriate) `vmin`/`vmax`.
+Precipitation is keyed per accumulation window because the colour
+levels need to scale with the integration period — the `plot_forecast_frame`
+rule passes an `--accu` value (in hours) so the notebook can pick the
+matching entry. Unknown keys fall back to a viridis colormap with a
+warning, so an experiment that tries to plot a brand-new parameter will
+produce something readable while you fix the mapping.
 
 ## State helpers (`plotting.compat`)
 

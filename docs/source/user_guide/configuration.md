@@ -140,6 +140,52 @@ Each entry is interpreted as `<root>/<region>.shp`. Verification scripts read
 these shapefiles via `ShapefileSpatialAggregationMasks` and produce per-region
 metrics in addition to the always-on `all` aggregate.
 
+## `thresholds` (optional)
+
+Adds categorical verification on top of the continuous metrics. Each entry
+maps a parameter name to a dict of operator → list of threshold values:
+
+```yaml
+thresholds:
+  TOT_PREC:
+    gt: [0.0, 0.001, 0.005]
+  U_10M:
+    gt: [2.5, 5.0, 10.0]
+  T_2M:
+    lt: [273.15]
+    gt: [288.15, 298.15]
+```
+
+Operator keys must be one of `gt`, `ge`, `lt`, `le`, `eq`, `ne` (validated by
+a Pydantic `field_validator` on `ConfigModel.thresholds`). For each
+`(operator, value)` pair, the verification pipeline builds a 2×2 contingency
+table using
+[`scores.categorical.ThresholdEventOperator`](https://scores.readthedocs.io/),
+and stores it as a `contingency_table` variable on the per-init `verif.nc`,
+keyed by a `threshold` dimension whose values are encoded as
+`{op}_{value}` with the decimal point replaced by `p`
+(`gt_0p001`, `lt_273p15`, …). Use
+[`verification.decode_metric`](../modules/verification.md) to render those
+labels back to human-readable form.
+
+If you omit the `thresholds:` block entirely, only the continuous metrics
+are computed.
+
+## `dashboard`
+
+```yaml
+dashboard:
+  stratification:
+    - season            # group by JFM / AMJ / JAS / OND
+    # - region          # also stratify by Stratification.regions
+    # - init_hour       # also stratify by hour-of-day of init_time
+```
+
+`dashboard.stratification` is forwarded as the `--stratification` argument
+to `report_experiment_dashboard.py` and controls which faceting axes the
+dashboard exposes for browsing. Any of `season`, `region`, `init_hour` may
+be enabled — list at least one.
+
 ## `locations`
 
 ```yaml

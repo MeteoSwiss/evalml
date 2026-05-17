@@ -26,10 +26,16 @@ The Click commands themselves are thin; the interesting bits are the
 
 Every YAML config is validated through `ConfigModel`. The hierarchy:
 
-- `ConfigModel` — top-level container.
+- `ConfigModel` — top-level container. Holds an optional
+  `thresholds: dict[param, dict[op, list[float]]]` field for categorical
+  verification, validated to accept only the operator keys
+  `gt`, `ge`, `lt`, `le`, `eq`, `ne`.
 - `Dates` / `ExplicitDates` — date specification.
 - `RunConfig` (abstract base) → `ForecasterConfig`, `InterpolatorConfig`.
 - `BaselineConfig`, `TruthConfig`, `Stratification`, `Locations`.
+- `Dashboard` — settings for the report dashboard (currently the
+  `stratification` axes to expose: any of `season`, `region`,
+  `init_hour`).
 - `Profile` → `GlobalResources`, `DefaultResources`.
 - `InferenceResources` — optional per-run override.
 

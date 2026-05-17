@@ -29,8 +29,15 @@ python scripts/plot_forecast_frame.mo.py \
     --outfn {output} \
     --param {param} \
     --leadtime {leadtime} \
-    --region {region}
+    --region {region} \
+    --accu {accu}
 ```
+
+`--accu` is the forecast step in hours (derived from
+`RUN_CONFIGS[run_id]["steps"].split("/")[2]`). It selects the right
+accumulation-window colormap for `TOT_PREC` (`TOT_PREC_1H`,
+`TOT_PREC_6H`, …) — see [Style and colormap choices](#style-and-colormap-choices)
+below.
 
 Marimo notebooks accept the same CLI args, which means you can switch from a
 batch render to an interactive edit by toggling the rule to `localrule: True`
@@ -79,9 +86,16 @@ The plotting helpers used by both notebooks live in `src/plotting/`:
 - `colormap_loader.load_ncl_colormap` — parses NCL `.ct` files from
   `resources/report/plotting/`.
 - `colormap_defaults.CMAP_DEFAULTS` — a `defaultdict` keyed by parameter
-  name (`T_2M`, `V_10M`, `TOT_PREC`, …) that returns sensible
-  `cmap`/`norm`/`units` for plotting.
+  name (`T_2M`, `V_10M`, `TOT_PREC_1H`, `TOT_PREC_6H`, …) that returns
+  sensible `cmap`/`norm`/`units` for plotting. Note that precipitation is
+  keyed per accumulation window, so the rule passes `--accu` to let the
+  notebook pick the matching entry.
 
 If you add a new variable, prefer extending `CMAP_DEFAULTS` over hard-coding
 colours in the notebook — the fallback returns viridis with a warning,
 which is correct but ugly.
+
+The `showcase_all` target generates animations for `T_2M`, `SP_10M`, and
+`TOT_PREC` over `globe`, `europe`, and `switzerland`. Extend the
+`expand(...)` block in the Snakefile if you need additional parameters or
+regions.

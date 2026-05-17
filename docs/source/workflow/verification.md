@@ -37,11 +37,15 @@ uv run scripts/verification_metrics.py \
     --label {fcst_label} \
     --truth_label {truth_label} \
     --regions {regions} \
+    --threshold_dict "{threshold_dict}" \
     --output {output}
 ```
 
 `uv run` is used so the script picks up the project's environment without
 requiring a manual activation step.
+
+`--threshold_dict` is the literal repr of `config["thresholds"]` and may be
+the empty dict, in which case only continuous metrics are computed.
 
 ### `verification_metrics_baseline`
 
@@ -71,12 +75,24 @@ report can include the figures.
 
 ## Metric computation
 
-The heavy lifting is in `verification.spatial.verify(...)`:
+The heavy lifting is in `verification.verify(...)`:
 
-- Computes per-parameter scores (BIAS, MSE, MAE, CORR, R²).
+- Computes per-parameter continuous scores (BIAS, MSE, MAE, CORR) via the
+  [`scores`](https://scores.readthedocs.io/) library (≥ 2.0).
 - Computes per-parameter statistics (mean, var, min, max).
 - Aggregates per region, including a hardcoded `all` region.
+- When `threshold_dict` is provided, also computes 2×2 contingency tables
+  per `(parameter, operator, threshold)` triple via
+  `_binary_confusion_matrix` and `scores.categorical.ThresholdEventOperator`.
+  The result is stored as a `contingency_table` variable on a `threshold`
+  dimension whose values are encoded as `{op}_{value}` (e.g. `gt_0p001`).
 - Optionally runs in parallel via Dask, given a `num_workers`.
+
+The CORR metric still uses `xr.corr` under the hood for backwards
+compatibility, and `R²` / `VAR` are no longer emitted (they were derivable
+from CORR and the statistics dataset). To translate an encoded threshold
+label back into human-readable form, use
+[`verification.decode_metric`](../modules/verification.md).
 
 For coordinate alignment between forecast and truth on different grids,
 `map_forecast_to_truth(fcst, truth)` first does a spherical nearest-neighbour

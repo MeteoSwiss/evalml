@@ -30,8 +30,14 @@ python scripts/report_experiment_dashboard.py \
     --script {js_script} \
     --header_text "{header_text}" \
     --configfile "{configfile}" \
+    --stratification {stratification} \
     --output {output}
 ```
+
+`--stratification` is a space-separated list of dashboard facets drawn
+from `config["dashboard"]["stratification"]`. The Pydantic `Dashboard`
+model accepts any of `season`, `region`, `init_hour`; whatever's enabled
+appears as selectable axes in the dashboard UI.
 
 `header_text` is computed by `make_header_text()` at parse time:
 
