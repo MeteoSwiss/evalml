@@ -220,6 +220,14 @@ profile:
 to Snakemake, and is the simplest way to keep small plotting jobs from
 flooding the scheduler.
 
+Do not confuse `profile.default_resources` with `inference_resources`. `profile.default_resources` are the workflow-wide defaults; a run's
+`inference_resources` is a per-run override that only affects that run's
+`inference_execute` invocations. Every field of `inference_resources` is
+optional — anything you omit falls back to the hardcoded defaults in
+`inference.smk` (`short-shared`, 24 CPUs, 8 GB/CPU, 40 min, 1 GPU), not to
+`profile.default_resources`. The two are independent paths into Snakemake's
+resource system.
+
 ## Run identity: how `env_id` and `run_id` are derived
 
 EvalML is careful to *only* rebuild the inference environment when something
@@ -244,10 +252,43 @@ Practical consequences:
 - Changing only the `label` does not invalidate any cache.
 - Changing `steps` or the inference config creates a new run directory but
   reuses the existing venv/squashfs.
-- Changing `checkpoint` or `extra_requirements` triggers a full environment
-  rebuild.
-- Changing the checkpoint without changing the path does not yield a different `run_id`.
-- Runs with varying dependencies are contained in their own venv / squashfs (the evalml venv does not include run specific dependencies e.g. `anemoi-inference`).
+- Changing the `checkpoint` field (i.e. the path or URL itself), or
+  `extra_requirements`, triggers a full environment rebuild.
+
+### What is *not* hashed: checkpoint contents
+
+```{warning}
+Only the **string value** of the `checkpoint` field enters the hash —
+its *contents* do not. If you mutate a checkpoint in place while keeping
+the URL or local path the same, EvalML will reuse the cached
+`inference-last.ckpt`, the cached venv/squashfs, and every downstream
+output, because the hash hasn't changed. Force a rebuild with `-F`
+(or `-R <rule>` for a specific step) — see
+{ref}`Iterate without re-running everything <iterate-without-re-running-everything>`.
+```
+
+For MLflow URLs this is rarely an issue (the run ID is content-addressed
+upstream), but it bites with local checkpoint paths and pinned Hugging
+Face files.
+
+### Per-run isolation
+
+Each entry in `runs:` gets its **own** inference environment — a
+`uv`-built virtualenv snapshotted to `venv.squashfs` and mounted on the
+compute node at runtime. This has two important consequences:
+
+- **Runs can pin different dependency versions.** Two forecasters in
+  the same experiment can require different `anemoi-inference` versions
+  (or any other extra dependency) without conflict; each one's
+  `extra_requirements` is merged with the deps recorded in its
+  checkpoint's MLflow metadata into a private `requirements.txt`.
+- **The EvalML virtualenv (`.venv/`) does not contain
+  `anemoi-inference`.** EvalML drives the workflow; the inference
+  packages live exclusively inside each run's squashfs image and are
+  invoked there via `squashfs-mount … -- bash -c 'anemoi-inference run …'`.
+  This is why you don't need to install `anemoi-inference` to use the
+  CLI, and why an `anemoi-inference` upgrade is a per-run concern, not
+  a project-wide one.
 
 The full mechanism is documented in [Outputs and wildcards](outputs.md) and
 [Inference workflow](../workflow/inference.md).

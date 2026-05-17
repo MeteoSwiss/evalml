@@ -32,6 +32,17 @@ identity contract documented in [Configuration](configuration.md): expensive
 artefacts (the venv and squashfs) live at the env level so they are reused
 across runs that only differ in inference config.
 
+```{note}
+`{run_id}` in the wildcard table below is exactly
+`{env_id}/{config_hash}` — i.e. it spans **two** directory components,
+not one. In the tree above, anything rooted at `data/runs/{env_id}/{config_hash}/`
+is equivalent to `data/runs/{run_id}/`; the docs and the Snakemake rules
+use both forms interchangeably. The
+`wildcard_constraints: showcase=r"[^/]+"` block in the Snakefile exists
+specifically because `{run_id}` contains a `/`.
+```
+
+(whats-inside-a-verif-nc)=
 ## What's inside a `verif.nc`
 
 Each per-init `verif.nc` is an `xarray.Dataset` keyed by `region` and

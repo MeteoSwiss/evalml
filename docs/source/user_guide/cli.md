@@ -55,6 +55,33 @@ All four subcommands share the same option set, defined by the
 | `--rulegraph` | off | Render only the rule graph via kroki.io. |
 | `-- EXTRA_SMK_ARGS` | none | Anything after `--` is forwarded to Snakemake verbatim. |
 
+## Forcing re-runs
+
+EvalML decides what to rebuild based on file timestamps and the hash
+machinery in `common.smk`. When you need to override that — typically
+because a checkpoint mutated in place, or because you want to test a
+new metric on already-computed inputs — pass Snakemake's force flags
+after `--`:
+
+```bash
+# Force EVERY rule to re-run, even if outputs exist.
+evalml experiment config.yaml -- -F
+
+# Force one specific rule (and its downstream dependents) to re-run.
+evalml experiment config.yaml -- -R verification_metrics
+
+# Force a rule for a specific wildcard combination via --until.
+evalml experiment config.yaml -- --until verification_metrics
+```
+
+`-F` is `--forceall` (Snakemake), `-R` is `--forcerun`, and `--until`
+stops execution after a named rule completes. These compose with the
+other `-- …` forwards documented in the option table above.
+
+The most common use is `evalml experiment config.yaml -- -F` after a
+checkpoint or baseline archive has been mutated in place — see the
+warning in [Configuration → run identity](configuration.md#what-is-not-hashed-checkpoint-contents).
+
 ## When to use which subcommand
 
 - **`experiment`** — full evaluation: data prep + inference + verification +
