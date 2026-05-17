@@ -200,6 +200,8 @@ Practical consequences:
   reuses the existing venv/squashfs.
 - Changing `checkpoint` or `extra_requirements` triggers a full environment
   rebuild.
+- Changing the checkpoint without changing the path does not yield a different `run_id`.
+- Runs with varying dependencies are contained in their own venv / squashfs (the evalml venv does not include run specific dependencies e.g. `anemoi-inference`).
 
 The full mechanism is documented in [Outputs and wildcards](outputs.md) and
 [Inference workflow](../workflow/inference.md).

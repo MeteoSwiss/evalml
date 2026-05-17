@@ -69,3 +69,5 @@ config will only redo affected rules. If you change something that EvalML
 hashes into `run_id` (steps, inference config, dependencies), a new
 sub-directory is created and the existing one is left untouched. See
 [Outputs and wildcards](../user_guide/outputs.md) for the rules behind this.
+
+**Note:** Only the path to the checkpoint is part of the hash. If a checkpoint changes but remains under the same path the run is skipped. Force a re-run with `-F`.
