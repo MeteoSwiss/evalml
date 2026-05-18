@@ -55,6 +55,22 @@ stratification:
     - alpensuedseite
   root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
 
+showcase:
+  params:
+    - T_2M
+    - SP_10M
+    - TOT_PREC
+  meteograms:
+    enabled: false
+    stations: [JUN] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
+  animations:
+    enabled: true
+    domains:
+      - europe
+      - switzerland
+      - name: alpine_arc
+        extent: [3.0, 17.0, 43.5, 48.5]
+        projection: orthographic
 thresholds:
   TOT_PREC:
     gt: [0.0, 0.001, 0.005]

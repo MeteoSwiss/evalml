@@ -121,11 +121,14 @@ def load_fct_data_from_grib(
             ds[var] = da.rename({"z": da.attrs["vcoord_type"]})
     ds = xr.merge([ds[p].rename(p) for p in ds], compat="no_conflicts")
     lead_times = np.array(steps, dtype="timedelta64[h]")
-    # Restrict to the requested lead times so that the TOT_PREC disaggregation
+    # Reindex to the requested lead times so that the TOT_PREC disaggregation
     # below operates on the correct step interval even if the GRIB contains
     # extra (e.g. hourly) steps beyond those requested — e.g. when consuming
     # output from an interpolator emulator or a baseline with sub-step output.
-    ds = ds.sel(lead_time=lead_times)
+    # reindex (rather than sel) fills missing steps with NaN instead of raising
+    # KeyError — needed because accumulated fields like TOT_PREC are absent at
+    # step 0 in the GRIB, and the NaN-fill logic below handles that case.
+    ds = ds.reindex(lead_time=lead_times)
     if "TOT_PREC" in ds.data_vars:
         ## Disaggregate TOT_PREC from cumulative-from-start (expected when the
         ## accumulate_from_start_of_forecast post-processor is enabled in

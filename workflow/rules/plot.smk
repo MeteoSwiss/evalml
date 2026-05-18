@@ -38,7 +38,7 @@ rule plot_meteogram:
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
-        runtime="10m",
+        runtime="60m",
     params:
         ana_label=lambda wc: config["truth"]["label"],
         fcst_grib=lambda wc: (
@@ -92,6 +92,7 @@ rule plot_forecast_frame:
         / "data/runs/{run_id}/{init_time}/frames/frame_{leadtime}_{param}_{region}.png",
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
+        region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
@@ -100,6 +101,14 @@ rule plot_forecast_frame:
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
+        region_extra=lambda wc: (
+            "--extent {} --projection {}".format(
+                " ".join(map(str, SHOWCASE_REGIONS[wc.region]["extent"])),
+                SHOWCASE_REGIONS[wc.region]["projection"],
+            )
+            if SHOWCASE_REGIONS.get(wc.region, {}).get("extent") is not None
+            else ""
+        ),
         accu=lambda wc: int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
     shell:
         """
@@ -107,6 +116,7 @@ rule plot_forecast_frame:
         python {input.script} \
             --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region} \
+            {params.region_extra} \
             --accu {params.accu} \
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
@@ -127,11 +137,17 @@ def get_leadtimes(wc):
 
 rule make_forecast_animation:
     localrule: True
+    wildcard_constraints:
+        param="|".join(map(re.escape, SHOWCASE_PARAMS)),
+        region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
     input:
-        expand(
+        lambda wc: expand(
             rules.plot_forecast_frame.output,
-            leadtime=lambda wc: get_leadtimes(wc),
-            allow_missing=True,
+            run_id=wc.run_id,
+            init_time=wc.init_time,
+            param=wc.param,
+            region=wc.region,
+            leadtime=get_leadtimes(wc),
         ),
     output:
         OUT_ROOT
