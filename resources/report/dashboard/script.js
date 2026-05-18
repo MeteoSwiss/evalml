@@ -82,9 +82,10 @@ function makeCellSpec(cellData) {
     config: { scale: { continuousPadding: 1 } },
     params: [{
       name: "xZoom",
-      select: { type: "interval", encodings: ["x"], zoom: "wheel![!event.shiftKey]" },
+      select: { type: "interval", encodings: ["x"], zoom: "wheel[!event.shiftKey]" },
       bind: "scales",
     }],
+    transform: [{ filter: { param: "xZoom" } }],
     mark: { type: "line", point: { size: 40 } },
     width: 280,
     height: 160,
