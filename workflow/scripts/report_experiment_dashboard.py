@@ -80,12 +80,23 @@ def main(args):
             return None  # Infinity/NaN → null in JSON
         d = math.ceil(math.log10(abs(x)))
         power = sig - d
-        factor = 10 ** power
+        factor = 10**power
         return round(x * factor) / factor
 
-    export_cols = ["source", "param", "metric", "lead_time", "value", "region", "season", "init_hour"]
+    export_cols = [
+        "source",
+        "param",
+        "metric",
+        "lead_time",
+        "value",
+        "region",
+        "season",
+        "init_hour",
+    ]
     df_export = df[export_cols].copy()
-    df_export["value"] = df_export["value"].apply(lambda v: _round_sig(float(v), 6) if v is not None else v)
+    df_export["value"] = df_export["value"].apply(
+        lambda v: _round_sig(float(v), 6) if v is not None else v
+    )
 
     def _sanitize(v):
         """Replace non-finite floats (NaN/Inf) with None so JSON stays valid."""
@@ -93,10 +104,12 @@ def main(args):
             return None
         return v
 
-    df_json = _json.dumps({
-        "columns": export_cols,
-        "data": [[_sanitize(v) for v in row] for row in df_export.values.tolist()],
-    })
+    df_json = _json.dumps(
+        {
+            "columns": export_cols,
+            "data": [[_sanitize(v) for v in row] for row in df_export.values.tolist()],
+        }
+    )
 
     # compute number of bytes in the JSON string
     json_size = len(df_json.encode("utf-8"))
