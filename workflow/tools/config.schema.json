@@ -92,6 +92,14 @@
           "pattern": "^\\d+[hd]$",
           "title": "Frequency",
           "type": "string"
+        },
+        "blacklist": {
+          "description": "Optional list of initialisation dates (ISO-8601) to exclude from processing.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Blacklist",
+          "type": "array"
         }
       },
       "required": [
