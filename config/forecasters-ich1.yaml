@@ -66,6 +66,22 @@ showcase:
 #        extent: [3.0, 17.0, 43.5, 48.5]
 #        projection: orthographic
     speed: 10  # simulated hours per second
+thresholds:
+  TOT_PREC:
+    gt: [0.0, 0.001, 0.005]
+  U_10M:
+    gt: [2.5, 5.0, 10.0]
+  V_10M:
+    gt: [2.5, 5.0, 10.0]
+  T_2M:
+    lt: [273.15]
+    gt: [288.15, 298.15]
+
+dashboard:
+  stratification:
+    # - init_hour
+    # - region
+    - season
 
 locations:
   output_root: output/

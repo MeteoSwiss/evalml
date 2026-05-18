@@ -1,5 +1,38 @@
 {
   "$defs": {
+    "AnimationsConfig": {
+      "description": "Configuration for animation generation.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to generate forecast animations (GIFs per param and region).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "domains": {
+          "default": [
+            "globe",
+            "europe",
+            "switzerland"
+          ],
+          "description": "Domains to generate animations for. Each entry is either a named domain (e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, or a custom domain dict with 'name', optional 'extent' [lon_min, lon_max, lat_min, lat_max], and optional 'projection'.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/RegionConfig"
+              }
+            ]
+          },
+          "title": "Domains",
+          "type": "array"
+        }
+      },
+      "title": "AnimationsConfig",
+      "type": "object"
+    },
     "BaselineConfig": {
       "description": "Configuration for a single baseline to include in the verification.",
       "properties": {
@@ -54,6 +87,24 @@
         "baseline"
       ],
       "title": "BaselineItem",
+      "type": "object"
+    },
+    "Dashboard": {
+      "description": "Settings for the dashboard",
+      "properties": {
+        "stratification": {
+          "description": "Stratifications to include in the dashboard (any of season, region, init_hour)",
+          "items": {
+            "type": "string"
+          },
+          "title": "Stratification",
+          "type": "array"
+        }
+      },
+      "required": [
+        "stratification"
+      ],
+      "title": "Dashboard",
       "type": "object"
     },
     "Dates": {
@@ -427,6 +478,32 @@
       "title": "Locations",
       "type": "object"
     },
+    "MeteogramConfig": {
+      "description": "Configuration for meteogram generation.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to generate meteograms (time series plots at stations).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "stations": {
+          "default": [
+            "GVE",
+            "KLO",
+            "LUG"
+          ],
+          "description": "List of PeakWeather station IDs to generate meteograms for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Stations",
+          "type": "array"
+        }
+      },
+      "title": "MeteogramConfig",
+      "type": "object"
+    },
     "Profile": {
       "description": "Workflow execution profile.",
       "properties": {
@@ -731,6 +808,23 @@
     "stratification": {
       "$ref": "#/$defs/Stratification"
     },
+    "thresholds": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "type": "object"
+      },
+      "description": "Dictionary mapping parameter names to threshold dicts. Each dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of threshold values.",
+      "title": "Thresholds",
+      "type": "object"
+    },
+    "dashboard": {
+      "$ref": "#/$defs/Dashboard"
+    },
     "locations": {
       "$ref": "#/$defs/Locations"
     },
@@ -748,6 +842,7 @@
     "runs",
     "truth",
     "stratification",
+    "dashboard",
     "locations",
     "profile"
   ],

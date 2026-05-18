@@ -298,6 +298,23 @@ class ShowcaseConfig(BaseModel):
     )
 
 
+class ShowcaseConfig(BaseModel):
+    """Configuration for the showcase workflow."""
+
+    params: List[str] = Field(
+        default=["T_2M", "SP_10M"],
+        description="List of parameters to generate animations and meteograms for.",
+    )
+    meteograms: MeteogramConfig = Field(
+        default_factory=MeteogramConfig,
+        description="Configuration for meteogram generation.",
+    )
+    animations: AnimationsConfig = Field(
+        default_factory=AnimationsConfig,
+        description="Configuration for animation generation.",
+    )
+
+
 class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
 
@@ -314,6 +331,15 @@ class Stratification(BaseModel):
     root: str = Field(
         ...,
         description="Root directory where the region shapefiles are stored.",
+    )
+
+
+class Dashboard(BaseModel):
+    """Settings for the dashboard"""
+
+    stratification: List[str] = Field(
+        ...,
+        description="Stratifications to include in the dashboard (any of season, region, init_hour)",
     )
 
 
@@ -406,6 +432,30 @@ class ConfigModel(BaseModel):
     )
     truth: TruthConfig | None
     stratification: Stratification
+    thresholds: Dict[str, Dict[str, List[float]]] = Field(
+        default_factory=dict,
+        description=(
+            "Dictionary mapping parameter names to threshold dicts. "
+            "Each dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of threshold values."
+        ),
+    )
+
+    @field_validator("thresholds")
+    @classmethod
+    def validate_threshold_operators(
+        cls, v: Dict[str, Dict[str, List[float]]]
+    ) -> Dict[str, Dict[str, List[float]]]:
+        _VALID_OPS = {"gt", "ge", "lt", "le", "eq", "ne"}
+        for param, op_dict in v.items():
+            invalid = set(op_dict) - _VALID_OPS
+            if invalid:
+                raise ValueError(
+                    f"Invalid operator key(s) {invalid!r} for parameter '{param}'. "
+                    f"Must be one of {_VALID_OPS}."
+                )
+        return v
+
+    dashboard: Dashboard
     locations: Locations
     profile: Profile
     showcase: ShowcaseConfig = Field(

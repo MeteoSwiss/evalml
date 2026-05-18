@@ -97,6 +97,9 @@ def load_analysis_data_from_zarr(
         .rename({v: k for k, v in PARAMS_MAP.items() if v in ds["variable"].values})
     )
 
+    # change precipitation units from m to kg m-2
+    ds["TOT_PREC"] = ds["TOT_PREC"] * 1000  # convert precipitation units from m to mm
+
     # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
     if "cell" in ds.dims:
         ds = ds.rename({"cell": "values"})
@@ -154,7 +157,7 @@ def load_fct_data_from_grib(
         ## start precipitation here.
         diff = ds.TOT_PREC.diff("lead_time")
         min_diff = float(diff.min().compute())
-        if min_diff < -1e-4:  # -0.1 mm in precip-equivalent (units: m)
+        if min_diff < -0.1:  # TOT_PREC canonical units are mm
             raise ValueError(
                 f"TOT_PREC in the GRIB appears to already be "
                 f"period-accumulated (min(.diff()) = {min_diff:.3e} m). "
@@ -198,9 +201,9 @@ def load_baseline_from_zarr(
     # all other variables avoid loading unused hourly steps from the zarr.
     baseline = baseline[params].sel(ref_time=reftime, lead_time=lead_times)
     if "TOT_PREC" in baseline.data_vars:
-        if baseline.TOT_PREC.units == "kg m-2":
-            baseline = baseline.assign(TOT_PREC=lambda x: x.TOT_PREC / 1000)
-            baseline.TOT_PREC.attrs["units"] = "m"
+        if baseline.TOT_PREC.units == "m":
+            baseline = baseline.assign(TOT_PREC=lambda x: x.TOT_PREC * 1000)
+            baseline.TOT_PREC.attrs["units"] = "kg m-2"
         ## Disaggregate TOT_PREC from cumulative-from-start (the expected zarr
         ## convention for processed NWP output) to per-step accumulations.
         ##
@@ -211,7 +214,7 @@ def load_baseline_from_zarr(
         ## start precipitation here.
         diff = baseline.TOT_PREC.diff("lead_time")
         min_diff = float(diff.min().compute())
-        if min_diff < -1e-4:  # -0.1 mm in precip-equivalent (units: m)
+        if min_diff < -0.1:  # TOT_PREC canonical units are mm
             raise ValueError(
                 f"TOT_PREC in the baseline zarr appears to already be "
                 f"period-accumulated (min(.diff()) = {min_diff:.3e} m)."
