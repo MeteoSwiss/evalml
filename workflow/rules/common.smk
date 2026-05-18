@@ -89,8 +89,10 @@ def parse_showcase_regions():
     Custom domains carry their explicit extent and projection.
     """
     result = {}
-    for r in config.get("showcase", {}).get("animations", {}).get(
-        "domains", ["globe", "europe", "switzerland"]
+    for r in (
+        config.get("showcase", {})
+        .get("animations", {})
+        .get("domains", ["globe", "europe", "switzerland"])
     ):
         if isinstance(r, str):
             result[r] = {"extent": None, "projection": None}
