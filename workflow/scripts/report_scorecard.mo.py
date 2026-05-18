@@ -66,16 +66,9 @@ def config(ArgumentParser, Path):
     parser.add_argument(
         "--regions",
         type=str,
-        nargs="+",
-        default=[
-            "all",
-            "mittelland",
-            "berge",
-            "alpennordseite",
-            "alpensuedseite",
-            "jura",
-        ],
-        help="Space-separated list of regions to include.",
+        nargs="*",
+        default=[],
+        help="Regions to include. If omitted, all regions present in the data are used.",
     )
     parser.add_argument(
         "--variable",
@@ -84,7 +77,7 @@ def config(ArgumentParser, Path):
         help=(
             "Variable + optional metric subset, format 'VAR:M1,M2'. "
             "Repeat once per variable. Omit ':...' to use all metrics. "
-            "If not given at all, falls back to a default 6-variable set."
+            "If not given at all, falls back to a minimal RMSE-only set."
         ),
     )
     parser.add_argument(
@@ -108,17 +101,16 @@ def config(ArgumentParser, Path):
 
     args = parser.parse_args()
 
-    # Fall back to a default 6-variable set when --variable is not given.
     if args.variable:
         vars_metrics = dict(_parse_var_metrics(s) for s in args.variable)
     else:
         vars_metrics = {
-            "U_10M": ["RMSE", "R2", "ETS"],
-            "V_10M": ["RMSE", "R2", "ETS"],
-            "T_2M": ["RMSE", "R2"],
-            "PMSL": ["RMSE", "R2"],
-            "TD_2M": ["RMSE", "R2"],
-            "TOT_PREC": ["RMSE", "R2", "ETS"],
+            "U_10M": ["RMSE"],
+            "V_10M": ["RMSE"],
+            "T_2M": ["RMSE"],
+            "PMSL": ["RMSE"],
+            "TD_2M": ["RMSE"],
+            "TOT_PREC": ["RMSE"],
         }
 
     outfn = Path(args.output)
@@ -134,7 +126,6 @@ def config(ArgumentParser, Path):
             "RMSE",
             "MAE",
             "STDE",
-            "CORR",
             "R2",
             "ETS",
             "POD",
@@ -142,7 +133,7 @@ def config(ArgumentParser, Path):
         ],  # every entry must appear in metric_directions
         "metric_directions": {
             "lower_is_better": ["RMSE", "MAE", "STDE", "FAR"],
-            "higher_is_better": ["CORR", "R2", "ETS", "POD"],
+            "higher_is_better": ["R2", "ETS", "POD"],
         },
         "variables": vars_metrics,  # null entry → use all_metrics; list → restrict to that subset
         "plot": {
@@ -191,10 +182,10 @@ def config(ArgumentParser, Path):
                 "region_label_pad": 1.05,  # factor applied to the longest region label width when widening columns to fit it
                 "region_y": 1.9,  # y position of region title labels (text baseline)
                 "region_y_pad": 0.2,  # extra y above the measured region label height for the top ylim
-                "leads_y": 0.35,  # y position of the lead-time tick labels
+                "leads_y": 0.45,  # y position of the lead-time tick labels
             },
             "hline": {  # horizontal separators between variable groups
-                "start_pad_pt": 0,  # physical nudge (points) right of the longest metric label, offsetting its glyph side-bearing
+                "start_pad_pt": 0,  # offset (points) from the measured left edge of the metric label to the hline start
                 "x_end": 1.0,  # axes fraction where the line ends
                 "linewidth": 0.7,
             },
