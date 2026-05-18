@@ -1,110 +1,107 @@
-import marimo
+import json
+import logging
+from argparse import ArgumentParser
+from pathlib import Path
 
-__generated_with = "0.16.5"
-app = marimo.App(width="medium")
+import cartopy.crs as ccrs
+import earthkit.meteo.thermo as ekm_thermo
+import earthkit.meteo.wind as ekm_wind
+import earthkit.plots as ekp
+import numpy as np
 
+from plotting import DOMAINS
+from plotting import get_projection
+from plotting import StatePlotter
+from plotting.colormap_defaults import CMAP_DEFAULTS
+from plotting.compat import load_state_from_grib
 
-@app.cell
-def _():
-    import logging
-    from argparse import ArgumentParser
-    from pathlib import Path
-
-    import cartopy.crs as ccrs
-    import earthkit.plots as ekp
-    import numpy as np
-
-    from plotting import DOMAINS
-    from plotting import get_projection
-    from plotting import StatePlotter
-    from plotting.colormap_defaults import CMAP_DEFAULTS
-    from plotting.compat import load_state_from_grib
-
-    return (
-        ArgumentParser,
-        CMAP_DEFAULTS,
-        Path,
-        StatePlotter,
-        ekp,
-        load_state_from_grib,
-        logging,
-        np,
-        DOMAINS,
-        get_projection,
-        ccrs,
-    )
+LOG = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 
 
-@app.cell
-def _(logging):
-    LOG = logging.getLogger(__name__)
-    LOG_FMT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    logging.basicConfig(level=logging.INFO, format=LOG_FMT)
-    return (LOG,)
+def get_style(param, units_override=None, accu=1):
+    """Get style and colormap settings for the plot."""
+    lookup = f"{param}_{accu}H" if param == "TOT_PREC" else param
+    cfg = CMAP_DEFAULTS[lookup]
+    units = units_override if units_override is not None else cfg.get("units", "")
+    return {
+        "style": ekp.styles.Style(
+            levels=cfg.get("bounds", cfg.get("levels", None)),
+            extend="both",
+            units=units,
+            colors=cfg.get("colors", None),
+        ),
+        "norm": cfg.get("norm", None),
+        "cmap": cfg.get("cmap", None),
+        "levels": cfg.get("levels", None),
+        "vmin": cfg.get("vmin", None),
+        "vmax": cfg.get("vmax", None),
+        "colors": cfg.get("colors", None),
+    }
 
 
-@app.cell
-def _(ArgumentParser, Path):
+def _m_to_mm(arr):
+    return arr * 1000
+
+
+def preprocess_field(param: str, state: dict):
+    """
+    - Temperatures: K -> °C
+    - Wind speed: sqrt(u^2 + v^2)
+    - Precipitation: m -> mm
+    Returns: (field_array, units_override or None)
+    """
+    fields = state["fields"]
+    if param in ("T_2M", "TD_2M", "T", "TD"):
+        return ekm_thermo.kelvin_to_celsius(fields[param]), "°C"
+    if param == "SP_10M":
+        return ekm_wind.speed(fields["U_10M"], fields["V_10M"]), "m/s"
+    if param == "SP":
+        return ekm_wind.speed(fields["U"], fields["V"]), "m/s"
+    if param == "TOT_PREC":
+        return np.maximum(_m_to_mm(fields[param]), 0), "mm"
+    return fields[param], None
+
+
+def main():
     parser = ArgumentParser()
-
-    parser.add_argument(
-        "--input", type=str, default=None, help="Directory to grib data"
-    )
+    parser.add_argument("--input", type=str, default=None, help="Directory to grib data")
     parser.add_argument("--date", type=str, default=None, help="reference datetime")
-    parser.add_argument("--outfn", type=str, help="output filename")
     parser.add_argument("--leadtime", type=str, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
-    parser.add_argument("--region", type=str, help="name of region")
     parser.add_argument(
-        "--extent",
-        type=float,
-        nargs=4,
-        default=None,
-        metavar=("LON_MIN", "LON_MAX", "LAT_MIN", "LAT_MAX"),
-        help="custom geographic extent in PlateCarree coordinates; overrides DOMAINS lookup",
-    )
-    parser.add_argument(
-        "--projection",
+        "--regions_json",
         type=str,
-        default=None,
-        help="projection name (e.g. 'orthographic'); used only together with --extent",
+        help="JSON dict mapping region name -> {extent, projection}",
     )
-    parser.add_argument(
-        "--accu", type=int, default=1, help="accumulation period in hours"
-    )
+    parser.add_argument("--outdir", type=str, help="output directory")
+    parser.add_argument("--accu", type=int, default=1, help="accumulation period in hours")
 
     args = parser.parse_args()
     grib_dir = Path(args.input)
     init_time = args.date
-    outfn = Path(args.outfn)
     lead_time = args.leadtime
     param = args.param
-    region = args.region
+    regions = json.loads(args.regions_json)
+    outdir = Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
     accu = args.accu
-    return (
-        args,
-        accu,
-        grib_dir,
-        init_time,
-        lead_time,
-        outfn,
-        param,
-        region,
-    )
 
-
-@app.cell
-def _(accu, grib_dir, init_time, lead_time, load_state_from_grib, param):
-    # load grib file
-    grib_file = grib_dir / f"{init_time}_{lead_time}.grib"
     if param == "SP_10M":
         paramlist = ["U_10M", "V_10M"]
     elif param == "SP":
         paramlist = ["U", "V"]
     else:
         paramlist = [param]
+
+    # Load grib once — shared across all region plots
+    grib_file = grib_dir / f"{init_time}_{lead_time}.grib"
     state = load_state_from_grib(grib_file, paramlist=paramlist)
-    # tp is accumulated from start of forecast; de-accumulate to get the period [lt-accu, lt]
+
+    # tp is accumulated from start of forecast; de-accumulate to get period [lt-accu, lt]
     if param == "TOT_PREC":
         prev_lt = int(lead_time) - accu
         if prev_lt > 0:
@@ -114,168 +111,42 @@ def _(accu, grib_dir, init_time, lead_time, load_state_from_grib, param):
                 state["fields"]["TOT_PREC"]
                 - prev_state["fields"]["TOT_PREC"][: len(state["fields"]["TOT_PREC"])]
             )
-    return (state,)
 
-
-@app.cell
-def _(CMAP_DEFAULTS, ekp):
-    def get_style(param, units_override=None, accu=1):
-        """Get style and colormap settings for the plot.
-        Needed because cmap/norm does not work in Style(colors=cmap),
-        still needs to be passed as arguments to tripcolor()/tricontourf().
-        """
-        lookup = f"{param}_{accu}H" if param == "TOT_PREC" else param
-        cfg = CMAP_DEFAULTS[lookup]
-        units = units_override if units_override is not None else cfg.get("units", "")
-        return {
-            "style": ekp.styles.Style(
-                levels=cfg.get("bounds", cfg.get("levels", None)),
-                extend="both",
-                units=units,
-                colors=cfg.get("colors", None),
-            ),
-            "norm": cfg.get("norm", None),
-            "cmap": cfg.get("cmap", None),
-            "levels": cfg.get("levels", None),
-            "vmin": cfg.get("vmin", None),
-            "vmax": cfg.get("vmax", None),
-            "colors": cfg.get("colors", None),
-        }
-
-    return (get_style,)
-
-
-@app.cell
-def _(LOG, np):
-    """Preprocess fields with pint-based unit conversion and derived quantities."""
-    try:
-        import pint  # type: ignore
-
-        _ureg = pint.UnitRegistry()
-
-        def _k_to_c(arr):
-            # robust conversion with pint, fallback if dtype unsupported
-            try:
-                return (_ureg.Quantity(arr, _ureg.kelvin).to(_ureg.degC)).magnitude
-            except Exception:
-                return arr - 273.15
-
-        def _ms_to_knots(arr):
-            # robust conversion with pint, fallback if dtype unsupported
-            try:
-                return (
-                    _ureg.Quantity(arr, _ureg.meter / _ureg.second).to(_ureg.knot)
-                ).magnitude
-            except Exception:
-                return arr * 1.943844
-
-        def _m_to_mm(arr):
-            # robust conversion with pint, fallback if dtype unsupported
-            try:
-                return (_ureg.Quantity(arr, _ureg.meter).to(_ureg.millimeter)).magnitude
-            except Exception:
-                return arr * 1000
-
-    except Exception:
-        LOG.warning("pint not available; falling back hardcoded conversions")
-
-        def _k_to_c(arr):
-            return arr - 273.15
-
-        def _ms_to_knots(arr):
-            return arr * 1.943844
-
-        def _m_to_mm(arr):
-            return arr * 1000
-
-    def preprocess_field(param: str, state: dict):
-        """
-        - Temperatures: K -> °C
-        - Wind speed: sqrt(u^2 + v^2)
-        - Precipitation: m -> mm
-        Returns: (field_array, units_override or None)
-        """
-        fields = state["fields"]
-        # temperature variables
-        if param in ("T_2M", "TD_2M", "T", "TD"):
-            return _k_to_c(fields[param]), "°C"
-        # 10m wind speed (allow legacy 'uv' alias)
-        if param == "SP_10M":
-            u = fields["U_10M"]
-            v = fields["V_10M"]
-            return np.sqrt(u**2 + v**2), "m/s"
-        # wind speed from standard-level components
-        if param == "SP":
-            u = fields["U"]
-            v = fields["V"]
-            return np.sqrt(u**2 + v**2), "m/s"
-        if param == "TOT_PREC":
-            return np.maximum(_m_to_mm(fields[param]), 0), "mm"
-        # default: passthrough
-        return fields[param], None
-
-    return (preprocess_field,)
-
-
-@app.cell
-def _(
-    LOG,
-    StatePlotter,
-    accu,
-    args,
-    get_style,
-    get_projection,
-    outfn,
-    param,
-    preprocess_field,
-    region,
-    state,
-    DOMAINS,
-    ccrs,
-):
-    # plot individual fields
-    plotter = StatePlotter(
-        state["longitudes"],
-        state["latitudes"],
-        outfn.parent,
-    )
-    if args.extent is not None:
-        _projection = get_projection(args.projection or "orthographic")
-        _extent = args.extent
-    else:
-        _projection = DOMAINS[region]["projection"]
-        _extent = DOMAINS[region]["extent"]
-    fig = plotter.init_geoaxes(
-        nrows=1,
-        ncols=1,
-        projection=_projection,
-        bbox=_extent,
-        name=region,
-        size=(6, 6),
-    )
-    subplot = fig.add_map(row=0, column=0)
-
-    # preprocess field (unit conversion, derived quantities)
+    # Preprocess field once — shared across all region plots
     field, units_override = preprocess_field(param, state)
-
-    plotter.plot_field(
-        subplot, field, **get_style(args.param, units_override, accu=accu)
-    )
-    subplot.ax.add_geometries(
-        state["lam_envelope"],
-        edgecolor="black",
-        facecolor="none",
-        crs=ccrs.PlateCarree(),
-    )
     validtime = state["valid_time"].strftime("%Y%m%d%H%M")
-    # leadtime = int(state["lead_time"].total_seconds() // 3600)
 
-    fig.title(f"{param}, time: {validtime}")
+    for region_name, region_cfg in regions.items():
+        plotter = StatePlotter(state["longitudes"], state["latitudes"], outdir)
+        if region_cfg.get("extent") is not None:
+            projection = get_projection(region_cfg.get("projection") or "orthographic")
+            extent = region_cfg["extent"]
+        else:
+            projection = DOMAINS[region_name]["projection"]
+            extent = DOMAINS[region_name]["extent"]
+        fig = plotter.init_geoaxes(
+            nrows=1,
+            ncols=1,
+            projection=projection,
+            bbox=extent,
+            name=region_name,
+            size=(6, 6),
+        )
+        subplot = fig.add_map(row=0, column=0)
 
-    fig.save(outfn, bbox_inches="tight", dpi=200)
-    LOG.info(f"saved: {outfn}")
-    return
+        plotter.plot_field(subplot, field, **get_style(param, units_override, accu=accu))
+        subplot.ax.add_geometries(
+            state["lam_envelope"],
+            edgecolor="black",
+            facecolor="none",
+            crs=ccrs.PlateCarree(),
+        )
+        fig.title(f"{param}, time: {validtime}")
+
+        outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
+        fig.save(outfn, bbox_inches="tight", dpi=200)
+        LOG.info(f"saved: {outfn}")
 
 
 if __name__ == "__main__":
-    app.run()
+    main()
