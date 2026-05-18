@@ -1,0 +1,17 @@
+/* Widen the content column so wide rule tables and code samples don't wrap. */
+.wy-nav-content {
+    max-width: 1100px;
+}
+
+/* Slightly tighten table cell padding for the rule reference tables. */
+.rst-content table.docutils td,
+.rst-content table.docutils th {
+    padding: 6px 10px;
+}
+
+/* Highlight inline literal code (filenames, run_ids) more clearly. */
+.rst-content code.literal {
+    background: #f6f8fa;
+    border: 1px solid #e1e4e8;
+    color: #24292e;
+}

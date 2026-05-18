@@ -42,6 +42,8 @@ nosetests.xml
 
 # Sphinx documentation
 docs/_build/
+docs/build/
+docs/source/_autosummary/
 
 verification.ipynb
 

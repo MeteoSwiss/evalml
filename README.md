@@ -14,6 +14,9 @@ Run evaluation pipelines for data-driven weather models built with [Anemoi](http
 2. [Credentials setup](#credentials-setup)
 3. [Workspace setup](#workspace-setup)
 
+For the rendered developer documentation, see the Sphinx site under `docs/`.
+Build it locally with `uv sync --group docs && sphinx-build -b html docs/source docs/build/html`.
+
 ## Features:
 - [Experiments](#experiment): compare model performance via standard and diagnostic verification
 - [Showcasing](#showcase): produce visual material for specific events
