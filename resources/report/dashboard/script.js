@@ -60,6 +60,11 @@ function getSelected(id) {
 const DATA = window.DATA;
 
 // ---------------------------------------------------------------------------
+// Shared color scale — pin all sources to consistent colors across all cells
+// ---------------------------------------------------------------------------
+const ALL_SOURCES = [...new Set(DATA.map(d => d.source))];
+
+// ---------------------------------------------------------------------------
 // Vega view lifecycle
 // ---------------------------------------------------------------------------
 const vegaViews = new Map();   // key → Vega view
@@ -104,6 +109,7 @@ function makeCellSpec(cellData) {
       color: {
         field: "source",
         type: "nominal",
+        scale: { domain: ALL_SOURCES },
         legend: null,
       },
       shape: {
@@ -143,6 +149,7 @@ async function renderLegend(filteredData) {
       color: {
         field: "source",
         type: "nominal",
+        scale: { domain: ALL_SOURCES },
         legend: {
           orient: "left", title: "Source", offset: 8,
           symbolType: "circle", symbolSize: 120,
