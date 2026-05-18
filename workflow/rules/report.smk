@@ -20,7 +20,6 @@ def make_header_text():
 
 
 rule report_experiment_dashboard:
-    localrule: True
     input:
         "src/verification/__init__.py",
         script="workflow/scripts/report_experiment_dashboard.py",
@@ -33,12 +32,13 @@ rule report_experiment_dashboard:
             directory(OUT_ROOT / "results/{experiment}/dashboard"),
             htmlindex="dashboard.html",
         ),
+    log:
+        OUT_ROOT / "logs/report_experiment_dashboard/{experiment}.log",
+    localrule: True
     params:
         sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
         header_text=make_header_text(),
         stratification=" ".join(config["dashboard"]["stratification"]),
-    log:
-        OUT_ROOT / "logs/report_experiment_dashboard/{experiment}.log",
     shell:
         """
         python {input.script} \

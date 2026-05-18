@@ -20,8 +20,6 @@ def _get_available_baselines(wc) -> list[dict[str, str]]:
         baseline_zarr = f"{root}/FCST{year}.zarr"
         if Path(baseline_zarr).exists():
             baselines.append({"zarr": baseline_zarr, "steps": steps, "label": label})
-    if not baselines:
-        raise ValueError(f"No baseline zarr found for init time {wc.init_time}")
     return baselines
 
 
@@ -38,7 +36,7 @@ rule plot_meteogram:
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
-        runtime="10m",
+        runtime="20m",
     params:
         ana_label=lambda wc: config["truth"]["label"],
         fcst_grib=lambda wc: (
@@ -95,7 +93,7 @@ rule plot_forecast_frame:
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
-        runtime="10m",
+        runtime="20m",
     params:
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
@@ -120,13 +118,12 @@ def get_leadtimes(wc):
     """Get all lead times from the run config."""
     start, end, step = map(int, RUN_CONFIGS[wc.run_id]["steps"].split("/"))
     # skip lead time 0 for diagnostic variables
-    if wc.param in ["tp", "TOT_PREC"]:  # TODO: make this more general
+    if wc.param in ["TOT_PREC"]:  # TODO: make this more general
         start += step
     return [f"{i:03}" for i in range(start, end + 1, step)]
 
 
 rule make_forecast_animation:
-    localrule: True
     input:
         expand(
             rules.plot_forecast_frame.output,
@@ -136,6 +133,7 @@ rule make_forecast_animation:
     output:
         OUT_ROOT
         / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
+    localrule: True
     params:
         delay=lambda wc: 10 * int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
     shell:

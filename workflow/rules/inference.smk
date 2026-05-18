@@ -8,17 +8,17 @@ from datetime import datetime
 
 
 rule inference_get_checkpoint:
-    localrule: True
     output:
         checkpoint=OUT_ROOT / "data/runs/{env_id}/inference-last.ckpt",
         metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
+    log:
+        OUT_ROOT / "logs/inference_prepare_checkpoint/{env_id}.log",
+    localrule: True
     params:
         checkpoint=lambda wc: ENV_CONFIGS[wc.env_id]["checkpoint"],
         checkpoint_type=lambda wc: _checkpoint_uri_type(
             ENV_CONFIGS[wc.env_id]["checkpoint"]
         ),
-    log:
-        OUT_ROOT / "logs/inference_prepare_checkpoint/{env_id}.log",
     shell:
         r"""(
         mkdir -p $(dirname {output.checkpoint})
@@ -44,25 +44,25 @@ rule inference_get_checkpoint:
 
 
 rule inference_extract_requirements:
-    """
-    Generate a pyproject.toml that contains the information needed
-    to set up a virtual environment for inference of a specific checkpoint.
-    The list of dependencies is taken from the checkpoint's MLFlow run metadata,
-    and additional dependencies can be specified under a run entry in the main
-    config file.
-    """
-    localrule: True
     input:
         metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
         script="workflow/scripts/inference_extract_requirements.py",
     output:
         requirements=OUT_ROOT / "data/runs/{env_id}/requirements.txt",
+    log:
+        OUT_ROOT / "logs/inference_extract_checkpoint_requirements/{env_id}.log",
+    """
+Generate a pyproject.toml that contains the information needed
+to set up a virtual environment for inference of a specific checkpoint.
+The list of dependencies is taken from the checkpoint's MLFlow run metadata,
+and additional dependencies can be specified under a run entry in the main
+config file.
+"""
+    localrule: True
     params:
         extra_requirements=lambda wc: ",".join(
             ENV_CONFIGS[wc.env_id].get("extra_requirements", [])
         ),
-    log:
-        OUT_ROOT / "logs/inference_extract_checkpoint_requirements/{env_id}.log",
     shell:
         """(
         echo "[$(date)] Starting requirement extraction..."
@@ -75,12 +75,6 @@ rule inference_extract_requirements:
 
 
 rule inference_create_venv:
-    """
-    Create a virtual environment for inference, using the pyproject.toml created above.
-    The virtual environment is managed with uv. The created virtual environment is relocatable,
-    so it can be squashed later. Pre-compilation to bytecode is done to speed up imports.
-    """
-    localrule: True
     input:
         metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
         requirements=OUT_ROOT / "data/runs/{env_id}/requirements.txt",
@@ -88,6 +82,13 @@ rule inference_create_venv:
         venv=temp(directory(OUT_ROOT / "data/runs/{env_id}/.venv")),
     log:
         OUT_ROOT / "logs/inference_create_venv/{env_id}.log",
+    """
+Create a virtual environment for inference, using the pyproject.toml created above.
+The virtual environment is managed with uv. The created virtual environment is relocatable,
+so it can be squashed later. Pre-compilation to bytecode is done to speed up imports.
+
+"""
+    localrule: True
     shell:
         """(
 
@@ -113,18 +114,18 @@ rule inference_create_venv:
 
 
 rule inference_make_squashfs_image:
-    """
-    Create a squashfs image for the inference virtual environment of
-    a specific checkpoint. Find more about this at
-    https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
-    """
-    localrule: True
     input:
         venv=rules.inference_create_venv.output.venv,
     output:
         image=OUT_ROOT / "data/runs/{env_id}/venv.squashfs",
     log:
         OUT_ROOT / "logs/inference_make_squashfs_image/{env_id}.log",
+    """
+Create a squashfs image for the inference virtual environment of
+a specific checkpoint. Find more about this at
+https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
+"""
+    localrule: True
     shell:
         # we can safely ignore the many warnings "Unrecognised xattr prefix..."
         "mksquashfs $(realpath {input.venv}) {output.image}"
@@ -134,17 +135,17 @@ rule inference_make_squashfs_image:
 
 rule inference_create_sandbox:
     """
-    Create a zipped directory that, when extracted, can be used as a sandbox
-    for running inference jobs for a specific checkpoint. Its main purpose is
-    to serve as a development environment for anemoi-inference and to facilitate
-    sharing with external collaborators.
+Create a zipped directory that, when extracted, can be used as a sandbox
+for running inference jobs for a specific checkpoint. Its main purpose is
+to serve as a development environment for anemoi-inference and to facilitate
+sharing with external collaborators.
 
-    TO use this sandbox, unzip it to a target directory.
+TO use this sandbox, unzip it to a target directory.
 
-    ```bash
-    unzip sandbox.zip -d /path/to/target/directory
-    ```
-    """
+```bash
+unzip sandbox.zip -d /path/to/target/directory
+```
+"""
     input:
         script="workflow/scripts/inference_create_sandbox.py",
         checkpoint=lambda wc: OUT_ROOT
@@ -187,7 +188,6 @@ def get_leadtime(wc):
 
 
 rule inference_prepare_forecaster:
-    localrule: True
     input:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
@@ -199,6 +199,9 @@ rule inference_prepare_forecaster:
         okfile=touch(
             OUT_ROOT / "logs/inference_prepare_forecaster/{run_id}-{init_time}.ok"
         ),
+    log:
+        OUT_ROOT / "logs/inference_prepare_forecaster/{run_id}-{init_time}.log",
+    localrule: True
     params:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
@@ -206,8 +209,6 @@ rule inference_prepare_forecaster:
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
-    log:
-        OUT_ROOT / "logs/inference_prepare_forecaster/{run_id}-{init_time}.log",
     script:
         "../scripts/inference_prepare.py"
 
@@ -218,8 +219,6 @@ def _get_forecaster_run_id(run_id):
 
 
 rule inference_prepare_interpolator:
-    """Run the interpolator for a specific run ID."""
-    localrule: True
     input:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
@@ -240,6 +239,10 @@ rule inference_prepare_interpolator:
         okfile=touch(
             OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.ok"
         ),
+    log:
+        OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.log",
+    """Run the interpolator for a specific run ID."""
+    localrule: True
     params:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
@@ -252,8 +255,6 @@ rule inference_prepare_interpolator:
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None
             else _get_forecaster_run_id(wc.run_id)
         ),
-    log:
-        OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.log",
     script:
         "../scripts/inference_prepare.py"
 
@@ -275,7 +276,6 @@ def _inference_routing_fn(wc):
 
 
 rule inference_execute:
-    localrule: True
     input:
         okfile=_inference_routing_fn,
         image=lambda wc: OUT_ROOT
@@ -284,14 +284,7 @@ rule inference_execute:
         okfile=touch(OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok"),
     log:
         OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
-    params:
-        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
-        workdir=lambda wc: (
-            OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
-        ).resolve(),
-        disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
-            "disable_local_eccodes_definitions", False
-        ),
+    localrule: True
     resources:
         slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
         cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
@@ -300,6 +293,14 @@ rule inference_execute:
         gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
         ntasks=lambda wc: get_resource(wc, "tasks", 1),
         gpus=lambda wc: get_resource(wc, "gpu", 1),
+    params:
+        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
+        workdir=lambda wc: (
+            OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
+        ).resolve(),
+        disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
+            "disable_local_eccodes_definitions", False
+        ),
     shell:
         """
         (

@@ -222,8 +222,8 @@ class Stratification(BaseModel):
     """Stratification settings for the analysis."""
 
     regions: List[str] = Field(
-        ...,
-        description="List of region names for stratification.",
+        default_factory=list,
+        description="List of region names for stratification. Empty list means no spatial stratification.",
     )
     root: str = Field(
         ...,
