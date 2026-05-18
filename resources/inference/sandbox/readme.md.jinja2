@@ -28,6 +28,8 @@ pip install -r requirements.txt
 
 You can now run a model with `anemoi-inference run config/config.yaml` (don't forget to do it on a GPU compute node).
 
+> **Note:** `config/config.yaml` is a minimal smoke-test config — it uses `output: printer` (prints to stdout) and `input.test.use_original_paths: true` (reads from the original data paths). It is only meant to verify that the model loads and runs correctly. For real inference, use the full config{% if inference_config %} at `{{ inference_config }}`{% else %} from the evalml repository under `resources/inference/configs/`{% endif %}.
+
 ## Developing anemoi packages
 The dependencies in `requirements.txt` have pinned versions based on the provenance information in the checkpoint metadata. For conveniency, we already included some anemoi packages under `libs` (the main branch on the GitHub repository at the moment of the creation of this sandbox). You can install them in editable mode with e.g.
 

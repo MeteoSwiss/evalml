@@ -164,6 +164,7 @@ rule inference_create_sandbox:
             --checkpoint {input.checkpoint} \
             --requirements {input.requirements} \
             --readme-template {input.readme_template} \
+            --inference-config {input.config} \
             --output {output.sandbox} \
             > {log} 2>&1
         """
