@@ -14,26 +14,50 @@ document.querySelectorAll(".tab-link").forEach(btn => {
 // Filter widgets (Choices.js)
 // ---------------------------------------------------------------------------
 const choicesInstances = {};
-["region-select", "season-select", "init-select",
- "source-select", "metric-select", "param-select"].forEach(id => {
-  choicesInstances[id] = new Choices("#" + id, {
-    searchEnabled: false,
-    removeItemButton: true,
-    shouldSort: false,
-    itemSelectText: "",
-    placeholder: false,
-  });
-  document.getElementById(id).addEventListener("change", scheduleUpdate);
-});
+
+const choicesConfig = {
+  searchEnabled: false,
+  removeItemButton: true,
+  shouldSort: false,
+  itemSelectText: "",
+  placeholder: false,
+};
+
+// Guard: region/season/init may be absent when stratification doesn't include them
+function initChoices(id) {
+  if (document.getElementById(id)) {
+    choicesInstances[id] = new Choices("#" + id, choicesConfig);
+    document.getElementById(id).addEventListener("change", scheduleUpdate);
+  }
+}
+
+initChoices("region-select");
+initChoices("season-select");
+initChoices("init-select");
+initChoices("source-select");
+initChoices("metric-select");
+initChoices("param-select");
 
 function getSelected(id) {
-  return choicesInstances[id].getValue(true);
+  return choicesInstances[id] ? choicesInstances[id].getValue(true) : [];
 }
 
 // ---------------------------------------------------------------------------
 // Data
 // ---------------------------------------------------------------------------
-const DATA = JSON.parse(document.getElementById("verif-data").textContent);
+(function () {
+  const raw = JSON.parse(document.getElementById("verif-data").textContent);
+  // Convert columnar format {columns, data} → array of objects, and add derived column
+  const cols = raw.columns;
+  window.DATA = raw.data.map(row => {
+    const obj = {};
+    for (let i = 0; i < cols.length; i++) obj[cols[i]] = row[i];
+    obj.region_season_init =
+      "Region: " + obj.region + ", Season: " + obj.season + ", Init: " + obj.init_hour;
+    return obj;
+  });
+})();
+const DATA = window.DATA;
 
 // ---------------------------------------------------------------------------
 // Vega view lifecycle
@@ -162,6 +186,7 @@ let _epoch = 0;
 
 async function updateChart() {
   const epoch = ++_epoch;
+  console.log("[dashboard] updateChart epoch=" + epoch);
 
   const selRegions = getSelected("region-select");
   const selSeasons = getSelected("season-select");
@@ -231,6 +256,8 @@ async function updateChart() {
       }
     } catch (e) {
       console.warn("cell render error", metric, param, e);
+      var eb = document.getElementById("js-error-box");
+      if (eb) { eb.style.display=""; eb.innerHTML += "<p>cell error [" + metric + "/" + param + "]: " + e + "</p>"; }
     }
   }
 
@@ -292,10 +319,11 @@ function resizeChartScroll() {
     requestAnimationFrame(resizeChartScroll);
   });
 
-  // Keep summary current when selections change
+  // Keep summary current when selections change (guard: some selects may be absent)
   ["region-select", "season-select", "init-select",
    "source-select", "metric-select", "param-select"].forEach(id => {
-    document.getElementById(id).addEventListener("change", () => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("change", () => {
       if (panel.classList.contains("collapsed")) updateSummary();
     });
   });

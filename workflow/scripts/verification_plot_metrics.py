@@ -7,6 +7,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import xarray as xr
+from verification import decode_metric
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -118,8 +119,9 @@ def main(args: Namespace) -> None:
             )
 
         sub_df = _subset_df(all_df).dropna()
+        if sub_df.empty:
+            continue
 
-        # breakpoint()
         fig, ax = plt.subplots(figsize=(10, 6))
 
         title = f"{metric} - {param} - {region}"
@@ -132,7 +134,7 @@ def main(args: Namespace) -> None:
                 marker="o",
                 title=title,
                 xlabel="Lead Time [h]",
-                ylabel=metric,
+                ylabel=decode_metric(metric),
                 label=source,
                 color="black" if "analysis" in source else None,
                 ax=ax,
