@@ -1,0 +1,27 @@
+# Showcase config for interpolators-ich1.
+# Includes the base config and overrides only the showcase section.
+#
+#   .venv/bin/evalml showcase config/showcase-interpolators-ich1.yaml
+
+include: interpolators-ich1.yaml
+
+showcase:
+  params:
+    - T_2M
+    - SP_10M
+    - TOT_PREC
+  meteograms:
+    enabled: false
+    stations: [JUN]
+  animations:
+    enabled: true
+    domains:
+      - europe
+      - switzerland
+      - globe
+    speed: 10  # simulated hours per second
+    runs:
+      - Varda-Single
+    comparisons:
+      - left: Varda-Single
+        right: KENDA-CH1

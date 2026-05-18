@@ -5,10 +5,10 @@ description: |
   issue #482.
 
 dates:
-  start: 2025-03-01T00:00
-  end: 2025-03-03T00:00
-  frequency: 24h
-
+#  start: 2025-03-01T00:00
+#  end: 2025-03-03T00:00
+#  frequency: 24h
+  - 2025-03-27T06:00
 
 runs:
   - interpolator:
@@ -24,6 +24,7 @@ runs:
         checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/120/6
+        label: stage_E
         extra_requirements:
           - git+https://github.com/ecmwf/anemoi-inference.git@e369b1a90313e9701db13f63364a467aa281cf36
       extra_requirements:
@@ -55,22 +56,6 @@ stratification:
     - alpensuedseite
   root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
 
-showcase:
-  params:
-    - T_2M
-    - SP_10M
-    - TOT_PREC
-  meteograms:
-    enabled: false
-    stations: [JUN] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
-  animations:
-    enabled: true
-    domains:
-      - europe
-      - switzerland
-      - name: alpine_arc
-        extent: [3.0, 17.0, 43.5, 48.5]
-        projection: orthographic
 thresholds:
   TOT_PREC:
     gt: [0.0, 0.001, 0.005]

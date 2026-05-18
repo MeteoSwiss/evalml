@@ -69,9 +69,24 @@ def generate_graph(
     click.echo(f"Graph saved to {output_file}")
 
 
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Recursively merge override into base. Override wins on conflicts."""
+    result = dict(base)
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
 def load_yaml(path: Path) -> dict[str, Any]:
     with path.open("r") as f:
-        return yaml.safe_load(f)
+        data = yaml.safe_load(f)
+    if include := data.pop("include", None):
+        base = load_yaml(path.parent / include)
+        data = _deep_merge(base, data)
+    return data
 
 
 def workflow_options(func):

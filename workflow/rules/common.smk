@@ -325,3 +325,131 @@ RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
+
+
+# ============================================================================
+# Showcase animation helpers
+# ============================================================================
+
+
+def sanitize_label(label: str) -> str:
+    """Sanitize a run label for use as a path component."""
+    import re as _re
+    return _re.sub(r"[^a-zA-Z0-9_-]", "_", label)
+
+
+def collect_zarr_sources() -> dict:
+    """Collect zarr-based sources (truth + baselines) keyed by their label.
+
+    Returns a dict mapping label -> {root, step, total_hours, source_type}.
+    """
+    sources = {}
+
+    # Truth (analysis)
+    truth_cfg = config.get("truth", {})
+    if truth_cfg and "root" in truth_cfg:
+        label = truth_cfg.get("label", "truth")
+        sources[label] = {
+            "root": truth_cfg["root"],
+            "step": 1,
+            "total_hours": 120,
+            "source_type": "analysis",
+        }
+
+    # Baselines
+    for baseline_id, cfg in BASELINE_CONFIGS.items():
+        label = cfg.get("label", baseline_id)
+        _, total, step = map(int, cfg.get("steps", "0/120/1").split("/"))
+        sources[label] = {
+            "root": cfg["root"],
+            "step": step,
+            "total_hours": total,
+            "source_type": "baseline",
+        }
+
+    return sources
+
+
+def _resolve_label(label: str) -> dict:
+    """Resolve a label to a source descriptor used in comparison entries.
+
+    Returns a dict with:
+      type       — ``'run'`` or ``'zarr'``
+      run_id     — present when type == 'run'
+      label      — present when type == 'zarr'
+      step       — time step in hours
+    """
+    # ML runs (candidates and non-candidates such as nested forecasters)
+    for run_id, cfg in RUN_CONFIGS.items():
+        if cfg.get("label") == label:
+            return {
+                "type": "run",
+                "run_id": run_id,
+                "step": int(cfg["steps"].split("/")[2]),
+            }
+    # Zarr sources (truth / baselines)
+    if label in ZARR_SOURCES:
+        z = ZARR_SOURCES[label]
+        return {"type": "zarr", "label": label, "step": z["step"]}
+
+    available_runs = sorted({cfg.get("label") for cfg in RUN_CONFIGS.values() if cfg.get("label")})
+    available_zarr = sorted(ZARR_SOURCES.keys())
+    raise ValueError(
+        f"No source found with label {label!r}. "
+        f"ML run labels: {available_runs}. "
+        f"Zarr source labels: {available_zarr}."
+    )
+
+
+def label_to_run_id(label: str) -> str:
+    """Return the run_id for the given label (ML runs only).
+
+    Searches both candidate and non-candidate runs (e.g. nested forecasters).
+    Raises ValueError if not found.
+    """
+    for run_id, cfg in RUN_CONFIGS.items():
+        if cfg.get("label") == label:
+            return run_id
+    available = sorted({cfg.get("label") for cfg in RUN_CONFIGS.values() if cfg.get("label")})
+    raise ValueError(
+        f"No run found with label {label!r}. Available ML run labels: {available}"
+    )
+
+
+def parse_showcase_animation_runs() -> list:
+    """Return the run_ids to animate individually.
+
+    If ``animations.runs`` is set in the showcase config, filter by those labels
+    (ML runs only; zarr sources have their own animation pipeline).
+    Otherwise return all candidate run_ids.
+    """
+    labels = config.get("showcase", {}).get("animations", {}).get("runs")
+    if labels is None:
+        return list(collect_all_candidates().keys())
+    return [label_to_run_id(label) for label in labels]
+
+
+def parse_showcase_comparisons() -> list:
+    """Parse ``animations.comparisons`` from the showcase config.
+
+    Each returned entry has:
+      id     — sanitised ``{left_label}_vs_{right_label}`` path component
+      left   — source descriptor (type, run_id/label, step)
+      right  — source descriptor (type, run_id/label, step)
+    """
+    comparisons = config.get("showcase", {}).get("animations", {}).get("comparisons", [])
+    result = []
+    for c in comparisons:
+        left_label = c["left"]
+        right_label = c["right"]
+        result.append({
+            "id": f"{sanitize_label(left_label)}_vs_{sanitize_label(right_label)}",
+            "left": _resolve_label(left_label),
+            "right": _resolve_label(right_label),
+        })
+    return result
+
+
+ZARR_SOURCES = collect_zarr_sources()
+SHOWCASE_ANIMATION_RUN_IDS = parse_showcase_animation_runs()
+SHOWCASE_COMPARISONS = parse_showcase_comparisons()

@@ -142,12 +142,24 @@ rule showcase_all:
             expand(
                 rules.make_forecast_animation.output,
                 init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-                run_id=CANDIDATES,
+                run_id=SHOWCASE_ANIMATION_RUN_IDS,
                 param=SHOWCASE_PARAMS,
                 region=list(SHOWCASE_REGIONS.keys()),
                 showcase=EXPERIMENT_NAME,
             )
             if config["showcase"]["animations"]["enabled"]
+            else []
+        ),
+        (
+            expand(
+                rules.make_comparison_animation.output,
+                init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+                comparison_id=[c["id"] for c in SHOWCASE_COMPARISONS],
+                param=SHOWCASE_PARAMS,
+                region=list(SHOWCASE_REGIONS.keys()),
+                showcase=EXPERIMENT_NAME,
+            )
+            if config["showcase"]["animations"]["enabled"] and SHOWCASE_COMPARISONS
             else []
         ),
         (

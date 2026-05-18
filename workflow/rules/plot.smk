@@ -138,6 +138,7 @@ def get_leadtimes(wc):
 rule make_forecast_animation:
     localrule: True
     wildcard_constraints:
+        run_id="|".join(map(re.escape, RUN_CONFIGS.keys())),
         param="|".join(map(re.escape, SHOWCASE_PARAMS)),
         region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
     input:
@@ -153,8 +154,151 @@ rule make_forecast_animation:
         OUT_ROOT
         / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
     params:
-        delay=lambda wc: 10 * int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
+        delay=lambda wc: round(
+            int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2])
+            / config["showcase"]["animations"].get("speed", 10.0)
+            * 100
+        ),
     shell:
         """
         convert -delay {params.delay} -loop 0 {input} {output}
+        """
+
+
+def _comparison_by_id(comparison_id: str) -> dict:
+    """Look up a SHOWCASE_COMPARISONS entry by its id wildcard."""
+    for c in SHOWCASE_COMPARISONS:
+        if c["id"] == comparison_id:
+            return c
+    raise ValueError(f"No comparison with id {comparison_id!r}")
+
+
+def _side_gif_path(side: dict, wc) -> list:
+    """Return the GIF path list for one side of a comparison (run or zarr)."""
+    if side["type"] == "run":
+        return expand(
+            rules.make_forecast_animation.output,
+            run_id=side["run_id"],
+            init_time=wc.init_time,
+            param=wc.param,
+            region=wc.region,
+            showcase=wc.showcase,
+        )
+    else:
+        return expand(
+            rules.make_zarr_animation.output,
+            source_id=side["label"],
+            init_time=wc.init_time,
+            param=wc.param,
+            region=wc.region,
+            showcase=wc.showcase,
+        )
+
+
+def get_zarr_leadtimes(wc):
+    """Get lead times for a zarr source, skipping step 0 for TOT_PREC."""
+    cfg = ZARR_SOURCES[wc.source_id]
+    step = cfg["step"]
+    total = cfg["total_hours"]
+    start = step  # always skip lead time 0 (no meaningful accumulation at t=0)
+    return [f"{i:03}" for i in range(start, total + 1, step)]
+
+
+rule plot_zarr_frame:
+    input:
+        script="workflow/scripts/plot_zarr_frame.py",
+    output:
+        OUT_ROOT
+        / "data/zarr/{source_id}/{init_time}/frames/frame_{leadtime}_{param}_{region}.png",
+    wildcard_constraints:
+        source_id="|".join(map(re.escape, ZARR_SOURCES.keys())) or "NEVER",
+        leadtime=r"\d+",
+        region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=1,
+        runtime="10m",
+    params:
+        zarr_path=lambda wc: ZARR_SOURCES[wc.source_id]["root"],
+        source_type=lambda wc: ZARR_SOURCES[wc.source_id]["source_type"],
+        region_extra=lambda wc: (
+            "--extent {} --projection {}".format(
+                " ".join(map(str, SHOWCASE_REGIONS[wc.region]["extent"])),
+                SHOWCASE_REGIONS[wc.region]["projection"],
+            )
+            if SHOWCASE_REGIONS.get(wc.region, {}).get("extent") is not None
+            else ""
+        ),
+        accu=lambda wc: ZARR_SOURCES[wc.source_id]["step"],
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        python {input.script} \
+            --zarr {params.zarr_path} \
+            --source_type {params.source_type} \
+            --date {wildcards.init_time} \
+            --outfn {output} \
+            --param {wildcards.param} \
+            --leadtime {wildcards.leadtime} \
+            --region {wildcards.region} \
+            {params.region_extra} \
+            --accu {params.accu}
+        """
+
+
+rule make_zarr_animation:
+    localrule: True
+    wildcard_constraints:
+        source_id="|".join(map(re.escape, ZARR_SOURCES.keys())) or "NEVER",
+        param="|".join(map(re.escape, SHOWCASE_PARAMS)),
+        region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
+    input:
+        lambda wc: expand(
+            rules.plot_zarr_frame.output,
+            source_id=wc.source_id,
+            init_time=wc.init_time,
+            param=wc.param,
+            region=wc.region,
+            leadtime=get_zarr_leadtimes(wc),
+        ),
+    output:
+        OUT_ROOT
+        / "results/{showcase}/zarr/{source_id}/{init_time}/{init_time}_{param}_{region}.gif",
+    params:
+        delay=lambda wc: round(
+            ZARR_SOURCES[wc.source_id]["step"]
+            / config["showcase"]["animations"].get("speed", 10.0)
+            * 100
+        ),
+    shell:
+        """
+        convert -delay {params.delay} -loop 0 {input} {output}
+        """
+
+
+rule make_comparison_animation:
+    """Side-by-side two-panel animation comparing two sources, synced in simulated time."""
+    localrule: True
+    wildcard_constraints:
+        param="|".join(map(re.escape, SHOWCASE_PARAMS)),
+        region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
+        comparison_id="|".join(map(re.escape, [c["id"] for c in SHOWCASE_COMPARISONS])) or "NEVER",
+    input:
+        left=lambda wc: _side_gif_path(_comparison_by_id(wc.comparison_id)["left"], wc),
+        right=lambda wc: _side_gif_path(_comparison_by_id(wc.comparison_id)["right"], wc),
+        script="workflow/scripts/plot_combine_animations.py",
+    output:
+        OUT_ROOT
+        / "results/{showcase}/comparisons/{comparison_id}/{init_time}/{init_time}_{param}_{region}.gif",
+    params:
+        left_step=lambda wc: _comparison_by_id(wc.comparison_id)["left"]["step"],
+        right_step=lambda wc: _comparison_by_id(wc.comparison_id)["right"]["step"],
+        speed=config["showcase"]["animations"].get("speed", 10.0),
+    shell:
+        """
+        python {input.script} \
+            --left {input.left} --left_step {params.left_step} \
+            --right {input.right} --right_step {params.right_step} \
+            --output {output} \
+            --speed {params.speed}
         """
