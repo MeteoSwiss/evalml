@@ -1,5 +1,7 @@
 import argparse
+import json as _json
 import logging
+import math
 import sys as _sys
 from pathlib import Path
 
@@ -73,7 +75,6 @@ def main(args):
     # Columnar JSON: store columns + data array (no repeated keys per row).
     # region_season_init is a derived column — computed in JS at parse time.
     # Round float values to 6 significant digits to avoid unnecessary precision.
-    import math
     def _round_sig(x, sig=6):
         if not math.isfinite(x) or x == 0:
             return None  # Infinity/NaN → null in JSON
@@ -85,8 +86,6 @@ def main(args):
     export_cols = ["source", "param", "metric", "lead_time", "value", "region", "season", "init_hour"]
     df_export = df[export_cols].copy()
     df_export["value"] = df_export["value"].apply(lambda v: _round_sig(float(v), 6) if v is not None else v)
-
-    import json as _json
 
     def _sanitize(v):
         """Replace non-finite floats (NaN/Inf) with None so JSON stays valid."""
