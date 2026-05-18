@@ -152,7 +152,10 @@ rule showcase_all:
         ),
         (
             expand(
-                rules.plot_meteogram.output,
+                str(
+                    OUT_ROOT
+                    / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{sta}.png"
+                ),
                 init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
                 run_id=CANDIDATES,
                 param=SHOWCASE_PARAMS,
