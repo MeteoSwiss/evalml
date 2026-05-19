@@ -3,8 +3,8 @@ from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
 
+import earthkit.meteo.wind as ekm_wind
 import matplotlib.pyplot as plt
-import numpy as np
 from peakweather import PeakWeatherDataset
 
 from data_input import (
@@ -24,7 +24,7 @@ logging.basicConfig(
 def preprocess_ds(ds, param: str):
     ds = ds.copy()
     if param == "SP_10M":
-        ds[param] = np.sqrt(ds.U_10M**2 + ds.V_10M**2)
+        ds[param] = ekm_wind.speed(ds.U_10M, ds.V_10M)
         try:
             units = ds["U_10M"].attrs["parameter"]["units"]
         except KeyError:
@@ -36,7 +36,7 @@ def preprocess_ds(ds, param: str):
         }
         ds = ds.drop_vars(["U_10M", "V_10M"])
     if param == "SP":
-        ds[param] = np.sqrt(ds.U**2 + ds.V**2)
+        ds[param] = ekm_wind.speed(ds.U, ds.V)
         units = ds.U.attrs["parameter"]["units"]
         ds[param].attrs["parameter"] = {
             "shortName": "SP",
