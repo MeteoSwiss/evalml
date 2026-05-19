@@ -22,6 +22,10 @@ class Dates(BaseModel):
         description="Time between initialisations. Must be a combination of a number and a time unit (h or d).",
         pattern=r"^\d+[hd]$",
     )
+    blacklist: List[str] = Field(
+        default_factory=list,
+        description="Optional list of initialisation dates (ISO-8601) to exclude from processing.",
+    )
 
 
 class ExplicitDates(RootModel[List[str]]):
