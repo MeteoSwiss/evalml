@@ -107,25 +107,54 @@ def load_analysis_data_from_zarr(
     return _select_valid_times(ds, times)
 
 
-def load_fct_data_from_grib(
-    root: Path, reftime: datetime, steps: list[int], params: list[str]
-) -> xr.Dataset:
-    """Load forecast data from GRIB files for a specific valid time."""
-    files = sorted(root.glob(f"{reftime:%Y%m%d%H%M}*.grib"))
+def _collect_ml_grib_files(root: Path, reftime: datetime) -> list[Path]:
+    """Return GRIB files for an ML inference run (flat directory layout)."""
+    return sorted(root.glob(f"{reftime:%Y%m%d%H%M}*.grib"))
+
+
+def _collect_icon_archive_files(
+    root: Path, reftime: datetime, steps: list[int], run_id: str = "000"
+) -> list[Path]:
+    """Return surface GRIB files for one member of an ICON operational archive.
+
+    `root` is the FCST<year> directory, e.g.
+    ``/store_new/mch/msopr/osm/ICON-CH1-EPS/FCST25``.
+    """
+    reftime_dirs = sorted(root.glob(f"{reftime:%y%m%d%H}_*"))
+    if not reftime_dirs:
+        raise ValueError(
+            f"No archive subdirectory found for {reftime:%y%m%d%H} in {root}"
+        )
+    reftime_dir = reftime_dirs[-1]
+    LOG.info("Reading ICON archive from %s", reftime_dir)
+
+    if "ICON-CH1-EPS" in root.parts:
+        gribname = "i1eff"
+    elif "ICON-CH2-EPS" in root.parts:
+        gribname = "i2eff"
+    else:
+        raise ValueError(
+            f"Cannot determine model from path (expected ICON-CH1-EPS or "
+            f"ICON-CH2-EPS): {root}"
+        )
+
+    return [
+        reftime_dir / "grib" / f"{gribname}{lt // 24:02}{lt % 24:02}0000_{run_id}"
+        for lt in steps
+    ]
+
+
+def load_fct_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
+    """Load forecast data from a list of GRIB files."""
     fds = data_source.FileDataSource(datafiles=files)
-    ds = grib_decoder.load(fds, {"param": params, "step": steps})
+    ds = grib_decoder.load(fds, {"param": params})
     for var, da in ds.items():
         if "z" in da.dims and da.sizes["z"] == 1:
             ds[var] = da.squeeze("z", drop=True)
         elif "z" in da.dims and da.sizes["z"] > 1:
             ds[var] = da.rename({"z": da.attrs["vcoord_type"]})
     ds = xr.merge([ds[p].rename(p) for p in ds], compat="no_conflicts")
-    lead_times = np.array(steps, dtype="timedelta64[h]")
-    # Restrict to the requested lead times so that the TOT_PREC disaggregation
-    # below operates on the correct step interval even if the GRIB contains
-    # extra (e.g. hourly) steps beyond those requested — e.g. when consuming
-    # output from an interpolator emulator or a baseline with sub-step output.
-    ds = ds.sel(lead_time=lead_times)
+    lead_times = ds.lead_time.values
     if "TOT_PREC" in ds.data_vars:
         ## Disaggregate TOT_PREC from cumulative-from-start (expected when the
         ## accumulate_from_start_of_forecast post-processor is enabled in
@@ -171,7 +200,7 @@ def load_fct_data_from_grib(
         ds = ds.rename({"valid_time": "time"})
     if "time" not in ds.coords:
         ds = ds.assign_coords(time=ds.ref_time + ds.lead_time)
-    ds = ds.sel(ref_time=reftime)
+    ds = ds.squeeze("ref_time", drop=False)
 
     # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
     if "cell" in ds.dims:
@@ -226,107 +255,6 @@ def load_baseline_from_zarr(
     if "latitude" in baseline.coords and "longitude" in baseline:
         baseline = baseline.rename({"latitude": "lat", "longitude": "lon"})
     return baseline
-
-
-def load_baseline_from_grib(
-    root: Path, reftime: datetime, steps: list[int], params: list[str]
-) -> xr.Dataset:
-    """Load baseline forecast data directly from an ICON GRIB archive directory.
-
-    `root` should be the FCST<year> directory of the operational archive, e.g.
-    ``/store_new/mch/msopr/osm/ICON-CH1-EPS/FCST25``.  The function reads the
-    surface GRIB files for the control member (run_id ``000``) and returns a
-    Dataset with the same structure as :func:`load_baseline_from_zarr`.
-    """
-    import earthkit.data as ekd
-    from meteodatalab.icon_grid import load_grid_from_balfrin
-    from uuid import UUID
-
-    # Find the reftime subdirectory (format yymmddHH_<version>).
-    # Multiple versions may exist; take the last one (lexicographically highest).
-    reftime_dirs = sorted(root.glob(f"{reftime:%y%m%d%H}_*"))
-    if not reftime_dirs:
-        raise ValueError(
-            f"No archive subdirectory found for {reftime:%y%m%d%H} in {root}"
-        )
-    reftime_dir = reftime_dirs[-1]
-    LOG.info("Reading ICON archive from %s", reftime_dir)
-
-    # Derive the GRIB filename prefix from the model name in the path.
-    if "ICON-CH1-EPS" in root.parts:
-        gribname = "i1eff"
-    elif "ICON-CH2-EPS" in root.parts:
-        gribname = "i2eff"
-    else:
-        raise ValueError(
-            f"Cannot determine model from path (expected ICON-CH1-EPS or "
-            f"ICON-CH2-EPS): {root}"
-        )
-
-    # Accumulate GRIB fields across all requested lead times for the control
-    # member.  Surface files have no level-type suffix in the filename.
-    run_id = "000"
-    out = ekd.SimpleFieldList()
-    last_field = None
-    for lt in steps:
-        ld, lh = lt // 24, lt % 24
-        filepath = reftime_dir / "grib" / f"{gribname}{ld:02}{lh:02}0000_{run_id}"
-        for field in ekd.from_source("file", filepath):
-            if field.metadata("shortName") in params:
-                out.append(field)
-                last_field = field
-
-    if last_field is None:
-        raise ValueError(f"No fields matching params {params} found in {reftime_dir}")
-
-    # Convert to xarray using the native GRIB profile.
-    ds = out.to_xarray(profile="grib")
-
-    # Add lat/lon coordinates from the ICON horizontal grid file.
-    uuid_of_hgrid = UUID(last_field.metadata("uuidOfHGrid"))
-    hcoords = load_grid_from_balfrin()(uuid_of_hgrid)
-    ds = ds.assign_coords(
-        lat=hcoords["lat"].rename({"cell": "values"}),
-        lon=hcoords["lon"].rename({"cell": "values"}),
-    )
-
-    # earthkit profile="grib" uses "step" for the lead-time dimension.
-    if "step" in ds.dims:
-        ds = ds.rename({"step": "lead_time"})
-    lead_times = np.array(steps, dtype="timedelta64[h]")
-    ds = ds.sel(lead_time=lead_times)
-
-    if "TOT_PREC" in ds.data_vars:
-        ## ICON GRIB archives store TOT_PREC cumulative from the start of the
-        ## forecast in kg m-2 (no unit conversion required).  Disaggregate to
-        ## per-step accumulations using the same logic as load_baseline_from_zarr.
-        ##
-        ## Step 0 may be absent from some GRIB files; fill it with 0 so that
-        ## .diff() does not produce NaN for the first accumulation period.
-        ds = ds.assign(
-            TOT_PREC=xr.where(ds.lead_time == np.timedelta64(0, "h"), 0.0, ds.TOT_PREC)
-        )
-        diff = ds.TOT_PREC.diff("lead_time")
-        min_diff = float(diff.min().compute())
-        if min_diff < -0.1:
-            raise ValueError(
-                f"TOT_PREC in the GRIB archive appears to already be "
-                f"period-accumulated (min(.diff()) = {min_diff:.3e} mm). "
-                f"Check the archive at {reftime_dir}."
-            )
-        ds = ds.assign(TOT_PREC=diff.clip(min=0.0).reindex(lead_time=lead_times))
-
-    # Add ref_time and time coordinates; drop earthkit GRIB artefacts that do
-    # not match evalml conventions.
-    ds = ds.assign_coords(
-        ref_time=np.datetime64(reftime, "ns"),
-        time=("lead_time", np.datetime64(reftime, "ns") + lead_times),
-    )
-    for coord in ("valid_time", "forecast_reference_time"):
-        if coord in ds.coords:
-            ds = ds.drop_vars(coord)
-
-    return ds
 
 
 def load_obs_data_from_peakweather(
@@ -429,23 +357,16 @@ def load_forecast_data(
     if root.suffix == ".zarr":
         LOG.info("Loading baseline forecasts from zarr dataset...")
         return load_baseline_from_zarr(
-            root=root,
-            reftime=reftime,
-            steps=steps,
-            params=params,
+            root=root, reftime=reftime, steps=steps, params=params
         )
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
         return load_fct_data_from_grib(
-            root=root,
-            reftime=reftime,
-            steps=steps,
+            files=_collect_ml_grib_files(root, reftime),
             params=params,
         )
     LOG.info("Loading baseline forecasts from ICON GRIB archive...")
-    return load_baseline_from_grib(
-        root=root,
-        reftime=reftime,
-        steps=steps,
+    return load_fct_data_from_grib(
+        files=_collect_icon_archive_files(root, reftime, steps),
         params=params,
     )
