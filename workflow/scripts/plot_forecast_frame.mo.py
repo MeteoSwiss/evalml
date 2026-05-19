@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.16.5"
+__generated_with = "0.19.6"
 app = marimo.App(width="medium")
 
 
@@ -22,14 +22,14 @@ def _():
     return (
         ArgumentParser,
         CMAP_DEFAULTS,
+        DOMAINS,
         Path,
         StatePlotter,
+        ccrs,
         ekp,
         load_state_from_grib,
         logging,
         np,
-        DOMAINS,
-        ccrs,
     )
 
 
@@ -203,18 +203,18 @@ def _(LOG, np):
 
 @app.cell
 def _(
+    DOMAINS,
     LOG,
     StatePlotter,
     accu,
     args,
+    ccrs,
     get_style,
     outfn,
     param,
     preprocess_field,
     region,
     state,
-    DOMAINS,
-    ccrs,
 ):
     # plot individual fields
     plotter = StatePlotter(
@@ -238,12 +238,14 @@ def _(
     plotter.plot_field(
         subplot, field, **get_style(args.param, units_override, accu=accu)
     )
-    subplot.ax.add_geometries(
-        state["lam_envelope"],
-        edgecolor="black",
-        facecolor="none",
-        crs=ccrs.PlateCarree(),
-    )
+    if "lam_envelope" in state:
+        subplot.ax.add_geometries(
+            state["lam_envelope"],
+            edgecolor="black",
+            facecolor="none",
+            crs=ccrs.PlateCarree(),
+        )
+
     validtime = state["valid_time"].strftime("%Y%m%d%H%M")
     # leadtime = int(state["lead_time"].total_seconds() // 3600)
 

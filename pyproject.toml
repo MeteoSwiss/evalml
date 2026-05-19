@@ -12,7 +12,6 @@ dependencies = [
     "snakemake<9.10", # https://github.com/snakemake/snakemake/issues/3289
     "snakemake-executor-plugin-slurm",
     "click",
-    "meteodata-lab>=0.4.0",
     "anemoi-datasets>=0.5.31",
     "mlflow>=3.1.1",
     "pydantic>=2.11.7",
@@ -25,16 +24,11 @@ dependencies = [
     "marimo>=0.23.3",
     "geopandas>=0.14.0",
     "peakweather",
+    "earthkit-data==1.0.0rc11",
     "pyzmq>=27.1.0",
     "scores>=2.0.0",
-]
-
-[project.optional-dependencies]
-kerchunk = [
-    "kerchunk",
-    "zarr<3.0.0",
-    "fastparquet",
-    "ujson"
+    "eccodes<2.47",
+    "eccodes-cosmo-resources-python-internal",
 ]
 
 [project.scripts]
@@ -64,3 +58,5 @@ packages = [
 
 [tool.uv.sources]
 peakweather = { git = "https://github.com/MeteoSwiss/PeakWeather.git" }
+earthkit-data = { git = "https://github.com/ecmwf/earthkit-data" }
+eccodes-cosmo-resources-python-internal = { git = "https://github.com/MeteoSwiss/eccodes-cosmo-resources-python-internal" }

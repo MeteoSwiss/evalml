@@ -21,12 +21,6 @@ rule verification_metrics_baseline:
             year=wc.init_time[2:4],
         ),
         truth=config["truth"]["root"],
-    params:
-        baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
-        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
-        truth_label=config["truth"]["label"],
-        regions=REGIONS,
-        threshold_dict=config["thresholds"],
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
     log:
@@ -35,6 +29,13 @@ rule verification_metrics_baseline:
         cpus_per_task=24,
         mem_mb=50_000,
         runtime="60m",
+    params:
+        baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
+        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
+        truth_label=config["truth"]["label"],
+        regions=REGIONS,
+        stratification_type=STRATIFICATION_TYPE,
+        threshold_dict=config["thresholds"],
     shell:
         """
         uv run {input.script} \
@@ -45,6 +46,7 @@ rule verification_metrics_baseline:
             --label "{params.baseline_label}" \
             --truth_label "{params.truth_label}" \
             --regions "{params.regions}" \
+            --stratification_type "{params.stratification_type}" \
             --threshold_dict "{params.threshold_dict}" \
             --output {output} > {log} 2>&1
         """
@@ -66,6 +68,12 @@ rule verification_metrics:
         truth=config["truth"]["root"],
     output:
         OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.nc",
+    log:
+        OUT_ROOT / "logs/verification_metrics/{run_id}-{init_time}.log",
+    resources:
+        cpus_per_task=24,
+        mem_mb=50_000,
+        runtime="60m",
     # wildcard_constraints:
     # run_id="^" # to avoid ambiguitiy with run_baseline_verif
     # TODO: implement logic to use experiment name instead of run_id as wildcard
@@ -74,18 +82,14 @@ rule verification_metrics:
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         truth_label=config["truth"]["label"],
         regions=REGIONS,
+        stratification_type=STRATIFICATION_TYPE,
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
         threshold_dict=config["thresholds"],
-    log:
-        OUT_ROOT / "logs/verification_metrics/{run_id}-{init_time}.log",
-    resources:
-        cpus_per_task=24,
-        mem_mb=50_000,
-        runtime="60m",
     shell:
         """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {params.grib_out_dir} \
             --truth {input.truth} \
@@ -94,6 +98,7 @@ rule verification_metrics:
             --label "{params.fcst_label}" \
             --truth_label "{params.truth_label}" \
             --regions "{params.regions}" \
+            --stratification_type "{params.stratification_type}" \
             --threshold_dict "{params.threshold_dict}" \
             --output {output} > {log} 2>&1
         """
@@ -152,14 +157,14 @@ rule verification_metrics_plot:
             directory(OUT_ROOT / "results/{experiment}/plots"),
             patterns=["{name}.png"],
         ),
-    params:
-        labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
     log:
         OUT_ROOT / "logs/verification_metrics_plot/{experiment}.log",
     resources:
         cpus_per_task=16,
         mem_mb=50_000,
         runtime="20m",
+    params:
+        labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
     shell:
         """
         uv run {input.script} {input.verif} --output_dir {output} > {log} 2>&1

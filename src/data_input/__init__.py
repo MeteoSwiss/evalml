@@ -1,18 +1,37 @@
+import yaml
 import logging
-import os
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-
-eccodes_definition_path = Path(sys.prefix) / "share/eccodes-cosmo-resources/definitions"
-os.environ["ECCODES_DEFINITION_PATH"] = str(eccodes_definition_path)
-
-from meteodatalab import data_source, grib_decoder  # noqa: E402
+from functools import lru_cache
 
 import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
+import earthkit.data as ekd  # noqa: E402
 
 LOG = logging.getLogger(__name__)
+
+# IFS shortNames that COSMO eccodes definitions don't remap to COSMO names.
+# These need explicit aliasing so callers can use COSMO names consistently.
+_IFS_TO_COSMO = {
+    "tp": "TOT_PREC",
+    "msl": "PMSL",
+    "10u": "U_10M",
+    "10v": "V_10M",
+    "2t": "T_2M",
+    "2d": "TD_2M",
+    "sp": "PS",
+    "lsm": "FR_LAND",
+    "z": "FIS",
+}
+_COSMO_TO_IFS = {v: k for k, v in _IFS_TO_COSMO.items()}
+
+
+@lru_cache(maxsize=1)
+def earthkit_xarray_engine_profile() -> dict:
+    fn = Path(__file__).parent / "profile.yaml"
+    with open(fn) as f:
+        profile = yaml.safe_load(f)
+    return profile
 
 
 def _select_valid_times(ds, times: np.datetime64):
@@ -65,7 +84,12 @@ def load_analysis_data_from_zarr(
     PARAMS_MAP_COSMO1 = {
         v: v.replace("TOT_PREC", tot_prec_string) for v in PARAMS_MAP_COSMO2.keys()
     }
-    PARAMS_MAP = PARAMS_MAP_COSMO2 if "co2" in root.name else PARAMS_MAP_COSMO1
+    USE_IFS_NAMES = {"-co2-", "-ea-"}
+    PARAMS_MAP = (
+        PARAMS_MAP_COSMO2
+        if any(tag in root.name for tag in USE_IFS_NAMES)
+        else PARAMS_MAP_COSMO1
+    )
 
     ds = xr.open_zarr(root, consolidated=False)
 
@@ -79,7 +103,7 @@ def load_analysis_data_from_zarr(
     ds = ds.sel(variable=[PARAMS_MAP[p] for p in params]).squeeze("ensemble", drop=True)
 
     # recover original 2D shape
-    if len(ds.attrs["field_shape"]) == 2:
+    if "field_shape" in ds.attrs and len(ds.attrs["field_shape"]) == 2:
         ny, nx = ds.attrs["field_shape"]
         y_idx, x_idx = np.unravel_index(np.arange(ny * nx), shape=(ny, nx))
         ds = ds.assign_coords({"y": ("cell", y_idx), "x": ("cell", x_idx)})
@@ -89,7 +113,10 @@ def load_analysis_data_from_zarr(
     # set lat lon as coords (optional)
     if "latitudes" in ds and "longitudes" in ds:
         ds = ds.rename({"latitudes": "lat", "longitudes": "lon"})
-    ds = ds.set_coords(["lat", "lon"])
+    if "latitude" in ds and "longitude" in ds:
+        ds = ds.rename({"latitude": "lat", "longitude": "lon"})
+    if "lat" in ds and "lon" in ds:
+        ds = ds.set_coords(["lat", "lon"])
     ds = (
         ds["data"]
         .to_dataset("variable")
@@ -112,9 +139,43 @@ def load_fct_data_from_grib(
 ) -> xr.Dataset:
     """Load forecast data from GRIB files for a specific valid time."""
     files = sorted(root.glob(f"{reftime:%Y%m%d%H%M}*.grib"))
-    fds = data_source.FileDataSource(datafiles=files)
-    ds = grib_decoder.load(fds, {"param": params, "step": steps})
-    for var, da in ds.items():
+
+    profile = earthkit_xarray_engine_profile()
+    LOG.debug(f"loading GRIB for params {params} and steps {steps} from {root}")
+    # Extend param selection to include IFS aliases (e.g. "tp" for "TOT_PREC") so
+    # that both COSMO-named and IFS-named GRIB files (global models) are handled.
+    params_sel = list(
+        {p for p in params} | {_COSMO_TO_IFS[p] for p in params if p in _COSMO_TO_IFS}
+    )
+    # Precipitation params don't have a step=0 field (accumulation is zero at
+    # analysis time and is often not written), so loading them together with
+    # other variables causes an inconsistent-step error in earthkit-data.
+    # Load them separately with step>0, then merge.
+    _PREC_PARAMS = {"tp", "TOT_PREC"}
+    prec_params = [p for p in params_sel if p in _PREC_PARAMS]
+    other_params = [p for p in params_sel if p not in _PREC_PARAMS]
+    fieldlist = ekd.from_source("file", files)
+    datasets = []
+    if other_params:
+        datasets.append(
+            fieldlist.sel(param=other_params, step=steps).to_xarray(profile=profile)
+        )
+    if prec_params:
+        prec_steps = [s for s in steps if s > 0]
+        datasets.append(
+            fieldlist.sel(param=prec_params, step=prec_steps).to_xarray(profile=profile)
+        )
+    ds: xr.Dataset = (
+        xr.merge(datasets, join="outer") if len(datasets) > 1 else datasets[0]
+    )
+    # Rename any IFS names back to COSMO names
+    ifs_rename = {
+        ifs: cosmo for ifs, cosmo in _IFS_TO_COSMO.items() if ifs in ds.data_vars
+    }
+    if ifs_rename:
+        ds = ds.rename(ifs_rename)
+
+    for var, da in ds.data_vars.items():
         if "z" in da.dims and da.sizes["z"] == 1:
             ds[var] = da.squeeze("z", drop=True)
         elif "z" in da.dims and da.sizes["z"] > 1:
@@ -146,6 +207,7 @@ def load_fct_data_from_grib(
                 ds.TOT_PREC,
             )
         )
+
         ## Sanity-check that the incoming data is actually cumulative: if
         ## .diff() produces significantly negative values, TOT_PREC is already
         ## period-accumulated and a second disaggregation would produce
@@ -166,6 +228,15 @@ def load_fct_data_from_grib(
         ## small float-noise negatives to zero (anything below -0.1 mm has
         ## already been caught by the check above).
         ds = ds.assign(TOT_PREC=diff.clip(min=0.0).reindex(lead_time=lead_times))
+
+    # set lat lon as coords (optional)
+    if "latitudes" in ds and "longitudes" in ds:
+        ds = ds.rename({"latitudes": "lat", "longitudes": "lon"})
+    if "latitude" in ds and "longitude" in ds:
+        ds = ds.rename({"latitude": "lat", "longitude": "lon"})
+    if "lat" in ds and "lon" in ds:
+        ds = ds.set_coords(["lat", "lon"])
+
     # make sure time coordinate is available, and valid_time is not
     if "valid_time" in ds.coords:
         ds = ds.rename({"valid_time": "time"})
@@ -288,7 +359,7 @@ def load_truth_data(
 ) -> xr.Dataset:
     """Load truth data from analysis Zarr or PeakWeather observations."""
     if root.suffix == ".zarr":
-        LOG.info("Loading ground truth from an analysis zarr dataset...")
+        LOG.info(f"Loading ground truth from {root}")
         truth = load_analysis_data_from_zarr(
             root=root,
             reftime=reftime,
@@ -301,7 +372,7 @@ def load_truth_data(
             else {"values": -1}
         )
     elif "peakweather" in str(root):
-        LOG.info("Loading ground truth from PeakWeather observations...")
+        LOG.info(f"Loading ground truth from {root}")
         truth = load_obs_data_from_peakweather(
             root=root,
             reftime=reftime,
@@ -319,7 +390,7 @@ def load_forecast_data(
     """Load forecast data from GRIB files or a baseline Zarr dataset."""
 
     if any(root.glob("*.grib")):
-        LOG.info("Loading forecasts from GRIB files...")
+        LOG.info(f"Loading forecasts from GRIB files from {root}")
         fcst = load_fct_data_from_grib(
             root=root,
             reftime=reftime,
@@ -327,7 +398,7 @@ def load_forecast_data(
             params=params,
         )
     else:
-        LOG.info("Loading baseline forecasts from zarr dataset...")
+        LOG.info(f"Loading baseline forecasts from zarr dataset from {root}")
         fcst = load_baseline_from_zarr(
             root=root,
             reftime=reftime,

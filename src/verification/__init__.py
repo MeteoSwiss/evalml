@@ -35,20 +35,27 @@ class SpatialAggregationMasks(AggregationMasks):
 
 
 class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
-    regions: dict[str, list[Polygon]]
+    regions: dict[str, list[Polygon] | None]
 
     def __init__(
-        self, shp: str | list[str], src_crs=ccrs.epsg(2056), dst_crs=ccrs.PlateCarree()
+        self,
+        shp: str | list[str],
+        stratification_type: str = "regional",
+        src_crs=ccrs.epsg(2056),
+        dst_crs=ccrs.PlateCarree(),
     ):
         proj = pyproj.Transformer.from_crs(
             src_crs.proj4_init, dst_crs.proj4_init, always_xy=True
         ).transform
 
         regions = {}
-        # add inner region for ML evaluation
-        regions["all"] = [
-            Polygon(list(zip([1.5, 16, 16, 1.5, 1.5], [43, 43, 49.5, 49.5, 43])))
-        ]
+        # "all" covers the full domain: Swiss/Alpine box for regional, all points for global.
+        if stratification_type == "global":
+            regions["all"] = None  # None signals "no restriction" in get_masks
+        else:
+            regions["all"] = [
+                Polygon(list(zip([1.5, 16, 16, 1.5, 1.5], [43, 43, 49.5, 49.5, 43])))
+            ]
         if shp and shp != [""]:
             shp = [shp] if isinstance(shp, str) else shp
             for shapefile in shp:
@@ -62,7 +69,12 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
     def get_masks(self, lat: xr.DataArray, lon: xr.DataArray) -> xr.DataArray:
         masks = []
         for region_name, polygons in self.regions.items():
-            mask = self._mask_from_polygons(polygons, lat, lon)
+            if polygons is None:
+                mask = xr.DataArray(
+                    np.ones(lon.shape, dtype=bool), coords=lon.coords, dims=lon.dims
+                )
+            else:
+                mask = self._mask_from_polygons(polygons, lat, lon)
             masks.append(mask.assign_coords(region=region_name))
         return xr.concat(masks, dim="region")
 
@@ -218,6 +230,7 @@ def verify(
     fcst_label: str,
     obs_label: str,
     regions: list[str] | None = None,
+    stratification_type: str = "regional",
     dim: list[str] | None = None,
     threshold_dict: dict[str, dict[str, list[float]]] | None = None,
     num_workers: int | None = None,
@@ -277,7 +290,7 @@ def verify(
     # compute the metrics in parallel
     # return the results as a xarray Dataset
     fcst_aligned, obs_aligned = xr.align(fcst, obs, join="inner", copy=False)
-    region_polygons = ShapefileSpatialAggregationMasks(shp=regions)
+    region_polygons = ShapefileSpatialAggregationMasks(shp=regions, stratification_type=stratification_type)
     masks = region_polygons.get_masks(lon=obs_aligned["lon"], lat=obs_aligned["lat"])
 
     scores = []
