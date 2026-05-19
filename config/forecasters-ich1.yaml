@@ -58,7 +58,7 @@ stratification:
     - alpensuedseite
   root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
 
-thresholds: {}
+thresholds:
   TOT_PREC:
     gt: [0.0, 0.001, 0.005]
   U_10M:
