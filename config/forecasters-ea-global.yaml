@@ -37,6 +37,12 @@ stratification:
   regions: []
   root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
 
+dashboard:
+  stratification:
+    # - init_hour
+    # - region
+    - season
+
 locations:
   output_root: output/
 
