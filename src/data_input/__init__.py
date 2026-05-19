@@ -208,54 +208,6 @@ def load_fct_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
     return ds
 
 
-def load_baseline_from_zarr(
-    root: Path, reftime: datetime, steps: list[int], params: list[str]
-) -> xr.Dataset:
-    """Load forecast data from a Zarr dataset."""
-    try:
-        baseline = xr.open_zarr(root, consolidated=True, decode_timedelta=True)
-    except ValueError:
-        raise ValueError(f"Could not open baseline zarr at {root}")
-
-    baseline = baseline.rename(
-        {"forecast_reference_time": "ref_time", "step": "lead_time"}
-    ).sortby("lead_time")
-    lead_times = np.array(steps, dtype="timedelta64[h]")
-    # Restrict to the requested lead times up-front so that the TOT_PREC
-    # disaggregation below operates on the correct step interval, and so that
-    # all other variables avoid loading unused hourly steps from the zarr.
-    baseline = baseline[params].sel(ref_time=reftime, lead_time=lead_times)
-    if "TOT_PREC" in baseline.data_vars:
-        if baseline.TOT_PREC.units == "m":
-            baseline = baseline.assign(TOT_PREC=lambda x: x.TOT_PREC * 1000)
-            baseline.TOT_PREC.attrs["units"] = "kg m-2"
-        ## Disaggregate TOT_PREC from cumulative-from-start (the expected zarr
-        ## convention for processed NWP output) to per-step accumulations.
-        ##
-        ## Sanity-check that the incoming data is actually cumulative: if
-        ## .diff() produces significantly negative values, TOT_PREC is already
-        ## period-accumulated and a second disaggregation would produce
-        ## garbage. In that case raise — we always expect cumulative-from-
-        ## start precipitation here.
-        diff = baseline.TOT_PREC.diff("lead_time")
-        min_diff = float(diff.min().compute())
-        if min_diff < -0.1:  # TOT_PREC canonical units are mm
-            raise ValueError(
-                f"TOT_PREC in the baseline zarr appears to already be "
-                f"period-accumulated (min(.diff()) = {min_diff:.3e} m)."
-            )
-        ## .diff() drops lead_time=0; .reindex() restores it as NaN (no
-        ## accumulation period exists at the forecast initial time). Clip
-        ## small float-noise negatives to zero (anything below -0.1 mm has
-        ## already been caught by the check above).
-        baseline = baseline.assign(
-            TOT_PREC=diff.clip(min=0.0).reindex(lead_time=lead_times)
-        )
-    baseline = baseline.assign_coords(time=baseline.ref_time + baseline.lead_time)
-    if "latitude" in baseline.coords and "longitude" in baseline:
-        baseline = baseline.rename({"latitude": "lat", "longitude": "lon"})
-    return baseline
-
 
 def load_obs_data_from_peakweather(
     root, reftime: datetime, steps: list[int], params: list[str], freq: str = "1h"
@@ -345,20 +297,14 @@ def load_truth_data(
 def load_forecast_data(
     root, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
-    """Load forecast data from GRIB files, a Zarr dataset, or an ICON archive.
+    """Load forecast data from GRIB files or an ICON archive.
 
     Routing (in order):
-    1. Path ends in ``.zarr`` → :func:`load_baseline_from_zarr`
-    2. ``*.grib`` files present in *root* → :func:`load_fct_data_from_grib`
+    1. ``*.grib`` files present in *root* → :func:`load_fct_data_from_grib`
        (ML inference output)
-    3. Otherwise → :func:`load_baseline_from_grib` (ICON operational archive)
+    2. Otherwise → ICON operational archive
     """
     root = Path(root)
-    if root.suffix == ".zarr":
-        LOG.info("Loading baseline forecasts from zarr dataset...")
-        return load_baseline_from_zarr(
-            root=root, reftime=reftime, steps=steps, params=params
-        )
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
         return load_fct_data_from_grib(
