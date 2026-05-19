@@ -80,6 +80,9 @@ def parse_regions():
     return regions_txt
 
 
+STRATIFICATION_TYPE = config["stratification"].get("type", "regional")
+
+
 # ============================================================================
 # Run entries configuration management
 # ============================================================================

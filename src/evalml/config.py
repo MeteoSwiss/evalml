@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet
+from typing import Dict, List, Any, ClassVar, FrozenSet, Literal, Optional
 
 from pydantic import BaseModel, Field, RootModel, field_validator
 
@@ -217,13 +217,17 @@ class Locations(BaseModel):
 class Stratification(BaseModel):
     """Stratification settings for the analysis."""
 
+    type: Literal["regional", "global"] = Field(
+        default="regional",
+        description="Spatial type of the evaluation domain. 'regional' uses the Swiss/Alpine bounding box for the 'all' region; 'global' computes over all grid points.",
+    )
     regions: List[str] = Field(
         default_factory=list,
         description="List of region names for stratification. Empty list means no spatial stratification.",
     )
-    root: str = Field(
-        ...,
-        description="Root directory where the region shapefiles are stored.",
+    root: Optional[str] = Field(
+        default=None,
+        description="Root directory where the region shapefiles are stored. Required when regions is non-empty.",
     )
 
 

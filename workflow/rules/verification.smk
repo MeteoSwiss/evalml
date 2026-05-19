@@ -34,6 +34,7 @@ rule verification_metrics_baseline:
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         truth_label=config["truth"]["label"],
         regions=REGIONS,
+        stratification_type=STRATIFICATION_TYPE,
         threshold_dict=config["thresholds"],
     shell:
         """
@@ -45,6 +46,7 @@ rule verification_metrics_baseline:
             --label "{params.baseline_label}" \
             --truth_label "{params.truth_label}" \
             --regions "{params.regions}" \
+            --stratification_type "{params.stratification_type}" \
             --threshold_dict "{params.threshold_dict}" \
             --output {output} > {log} 2>&1
         """
@@ -80,6 +82,7 @@ rule verification_metrics:
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         truth_label=config["truth"]["label"],
         regions=REGIONS,
+        stratification_type=STRATIFICATION_TYPE,
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
@@ -95,6 +98,7 @@ rule verification_metrics:
             --label "{params.fcst_label}" \
             --truth_label "{params.truth_label}" \
             --regions "{params.regions}" \
+            --stratification_type "{params.stratification_type}" \
             --threshold_dict "{params.threshold_dict}" \
             --output {output} > {log} 2>&1
         """

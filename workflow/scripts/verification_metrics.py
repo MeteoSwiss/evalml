@@ -79,6 +79,7 @@ def main(args: ScriptConfig):
         args.label,
         args.truth_label,
         args.regions,
+        stratification_type=args.stratification_type,
         threshold_dict=args.threshold_dict,
     )
 
@@ -140,6 +141,13 @@ if __name__ == "__main__":
         type=lambda x: [r for r in x.split(",") if r],
         help="Comma-separated list of region names for stratification. Empty means no spatial stratification.",
         default="",
+    )
+    parser.add_argument(
+        "--stratification_type",
+        type=str,
+        choices=["regional", "global"],
+        default="regional",
+        help="Spatial type of the evaluation domain. 'regional' uses the Swiss/Alpine bounding box; 'global' computes over all grid points.",
     )
     parser.add_argument(
         "--threshold_dict",
