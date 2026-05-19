@@ -27,14 +27,16 @@ def _get_available_baselines(wc) -> list[dict[str, str]]:
 
 rule plot_meteogram:
     input:
-        script="workflow/scripts/plot_meteogram.mo.py",
+        script="workflow/scripts/plot_meteogram.py",
         inference_okfile=rules.inference_execute.output.okfile,
         truth=config["truth"]["root"],
         peakweather_dir=rules.data_download_obs_from_peakweather.output.root,
     output:
-        OUT_ROOT
-        / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{sta}.png",
-    # localrule: True
+        expand(
+            OUT_ROOT
+            / "results/{{showcase}}/{{run_id}}/{{init_time}}/{{init_time}}_{{param}}_{sta}.png",
+            sta=config["showcase"]["meteograms"]["stations"],
+        ),
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
@@ -49,6 +51,10 @@ rule plot_meteogram:
         baseline_zarrs=lambda wc: [x["zarr"] for x in _get_available_baselines(wc)],
         baseline_steps=lambda wc: [x["steps"] for x in _get_available_baselines(wc)],
         baseline_labels=lambda wc: [x["label"] for x in _get_available_baselines(wc)],
+        outdir=lambda wc: str(
+            (Path(OUT_ROOT) / f"results/{wc.showcase}/{wc.run_id}/{wc.init_time}").resolve()
+        ),
+        stations=config["showcase"]["meteograms"]["stations"],
     shell:
         """
         set -euo pipefail
@@ -66,9 +72,9 @@ rule plot_meteogram:
             --analysis_label {params.ana_label:q}
             --peakweather {input.peakweather_dir:q}
             --date {wildcards.init_time:q}
-            --outfn {output[0]:q}
+            --outdir {params.outdir:q}
             --param {wildcards.param:q}
-            --station {wildcards.sta:q}
+            --stations {params.stations:q}
         )
 
         for i in "${{!BASELINE_ZARRS[@]}}"; do
@@ -78,51 +84,43 @@ rule plot_meteogram:
         done
 
         python {input.script} "${{CMD_ARGS[@]}}"
-        # interactive editing (needs to set localrule: True and use only one core)
-        # marimo edit {input.script} -- "${{CMD_ARGS[@]}}"
         """
 
 
 rule plot_forecast_frame:
     input:
-        script="workflow/scripts/plot_forecast_frame.mo.py",
+        script="workflow/scripts/plot_forecast_frame.py",
         inference_okfile=rules.inference_execute.output.okfile,
     output:
-        OUT_ROOT
-        / "data/runs/{run_id}/{init_time}/frames/frame_{leadtime}_{param}_{region}.png",
+        expand(
+            OUT_ROOT
+            / "data/runs/{{run_id}}/{{init_time}}/frames/frame_{{leadtime}}_{{param}}_{region}.png",
+            region=list(SHOWCASE_REGIONS.keys()),
+        ),
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
-        region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
         runtime="10m",
     params:
-        grib_out_dir=lambda wc: (
-            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
-        ).resolve(),
-        region_extra=lambda wc: (
-            "--extent {} --projection {}".format(
-                " ".join(map(str, SHOWCASE_REGIONS[wc.region]["extent"])),
-                SHOWCASE_REGIONS[wc.region]["projection"],
-            )
-            if SHOWCASE_REGIONS.get(wc.region, {}).get("extent") is not None
-            else ""
+        grib_out_dir=lambda wc: str(
+            (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib").resolve()
+        ),
+        regions_json=json.dumps(SHOWCASE_REGIONS),
+        outdir=lambda wc: str(
+            (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/frames").resolve()
         ),
         accu=lambda wc: int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         python {input.script} \
-            --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]} \
-            --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region} \
-            {params.region_extra} \
-            --accu {params.accu} \
-        # interactive editing (needs to set localrule: True and use only one core)
-        # marimo edit {input.script} -- \
-        #     --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]}\
-        #     --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region}\
-        #     --accu {params.accu}\
+            --input {params.grib_out_dir:q} --date {wildcards.init_time:q} \
+            --param {wildcards.param:q} --leadtime {wildcards.leadtime:q} \
+            --regions_json {params.regions_json:q} \
+            --outdir {params.outdir:q} \
+            --accu {params.accu}
         """
 
 
@@ -142,7 +140,7 @@ rule make_forecast_animation:
         region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
     input:
         lambda wc: expand(
-            rules.plot_forecast_frame.output,
+            str(OUT_ROOT / "data/runs/{run_id}/{init_time}/frames/frame_{leadtime}_{param}_{region}.png"),
             run_id=wc.run_id,
             init_time=wc.init_time,
             param=wc.param,
