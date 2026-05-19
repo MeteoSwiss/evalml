@@ -107,9 +107,19 @@ def load_analysis_data_from_zarr(
     return _select_valid_times(ds, times)
 
 
-def _collect_ml_grib_files(root: Path, reftime: datetime) -> list[Path]:
-    """Return GRIB files for an ML inference run (flat directory layout)."""
-    return sorted(root.glob(f"{reftime:%Y%m%d%H%M}*.grib"))
+def _collect_ml_grib_files(
+    root: Path, reftime: datetime, steps: list[int] | None = None
+) -> list[Path]:
+    """Return GRIB files for an ML inference run (flat directory layout).
+
+    When `steps` is provided, the discovered files are filtered to those whose
+    name ends with ``_{step:03d}.grib``.
+    """
+    files = sorted(root.glob(f"{reftime:%Y%m%d%H%M}*.grib"))
+    if steps is None:
+        return files
+    suffixes = {f"_{step:03d}.grib" for step in steps}
+    return [f for f in files if any(f.name.endswith(s) for s in suffixes)]
 
 
 def _collect_icon_archive_files(
@@ -206,7 +216,6 @@ def load_fct_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
     if "cell" in ds.dims:
         ds = ds.rename({"cell": "values"})
     return ds
-
 
 
 def load_obs_data_from_peakweather(
@@ -308,7 +317,7 @@ def load_forecast_data(
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
         return load_fct_data_from_grib(
-            files=_collect_ml_grib_files(root, reftime),
+            files=_collect_ml_grib_files(root, reftime, steps),
             params=params,
         )
     LOG.info("Loading baseline forecasts from ICON GRIB archive...")
