@@ -223,7 +223,9 @@ def main() -> None:
                 else str(cfg_module.checkpoint)
             ),
             "strict": args.strict,
-            "inference_config": str(args.inference_config) if args.inference_config else None,
+            "inference_config": str(args.inference_config)
+            if args.inference_config
+            else None,
         }
         readme_module = ReadmeModule(args.readme_template, context, work_dir)
         files.update(readme_module.prepare())
