@@ -12,50 +12,62 @@ logging.basicConfig(
 
 
 def _check_args(args):
-    ids = args.experiment_ids.split(',')
-    fdbk_dirs = args.feedback_directories.split(',')
+    ids = args.experiment_ids.split(",")
+    fdbk_dirs = args.feedback_directories.split(",")
     # Allow list to end with comma
-    if ids[-1] == '':
+    if ids[-1] == "":
         ids.pop(-1)
-    if fdbk_dirs[-1] == '':
+    if fdbk_dirs[-1] == "":
         fdbk_dirs.pop(-1)
     if len(ids) != len(fdbk_dirs):
         raise ValueError(
-            'lengths of experiment IDs and feedback directories differ:'
-            f'{len(ids)} {args.experiment_ids} vs '
-            f'{len(fdbk_dirs)} {args.feedback_directories}'
+            "lengths of experiment IDs and feedback directories differ:"
+            f"{len(ids)} {args.experiment_ids} vs "
+            f"{len(fdbk_dirs)} {args.feedback_directories}"
         )
-    if not os.path.exists(args.output_directory) or not os.path.isdir(args.output_directory):
-        raise FileNotFoundError(f'output directory {args.output_directory} '
-                          'does not exist (or is not a directory)')
+    if not os.path.exists(args.output_directory) or not os.path.isdir(
+        args.output_directory
+    ):
+        raise FileNotFoundError(
+            f"output directory {args.output_directory} "
+            "does not exist (or is not a directory)"
+        )
     if not os.path.exists(args.domain_table):
-        raise FileNotFoundError(f'domain table location {args.domain_table} '
-                          'does not exist. Check that it is mounted correctly '
-                          ' in container.')
+        raise FileNotFoundError(
+            f"domain table location {args.domain_table} "
+            "does not exist. Check that it is mounted correctly "
+            " in container."
+        )
     if not os.path.exists(args.blacklists):
-        raise FileNotFoundError(f'blacklists location {args.blacklists} '
-                          'does not exist. Check that it is mounted correctly '
-                          ' in container.')
+        raise FileNotFoundError(
+            f"blacklists location {args.blacklists} "
+            "does not exist. Check that it is mounted correctly "
+            " in container."
+        )
     for fdbk_dir in fdbk_dirs:
         if not os.path.exists(fdbk_dir) or not os.path.isdir(fdbk_dir):
-            raise FileNotFoundError(f'feedback directory {fdbk_dir} '
-                        'does not exist. Check that MEC has run.')
+            raise FileNotFoundError(
+                f"feedback directory {fdbk_dir} does not exist. Check that MEC has run."
+            )
+
 
 def _make_veri_ens_member(experiment_ids: str) -> str:
-    num_ids = len(experiment_ids.split(','))
-    return ','.join(['-1'] * num_ids)
+    num_ids = len(experiment_ids.split(","))
+    return ",".join(["-1"] * num_ids)
+
 
 def main(args):
     # Render template with provided args
-    context = {"experiment_ids": args.experiment_ids,
-               "feedback_directories": args.feedback_directories,
-               "veri_ens_member": _make_veri_ens_member(args.experiment_ids),
-               "output_directory": args.output_directory,
-               "experiment_description": args.experiment_description,
-               "file_description": args.file_description,
-               "domain_table": args.domain_table,
-               "blacklists": args.blacklists
-               }
+    context = {
+        "experiment_ids": args.experiment_ids,
+        "feedback_directories": args.feedback_directories,
+        "veri_ens_member": _make_veri_ens_member(args.experiment_ids),
+        "output_directory": args.output_directory,
+        "experiment_description": args.experiment_description,
+        "file_description": args.file_description,
+        "domain_table": args.domain_table,
+        "blacklists": args.blacklists,
+    }
     template_path = Path(args.template)
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(template_path.parent)))
     template = env.get_template(template_path.name)
@@ -69,9 +81,10 @@ def main(args):
 
 
 if __name__ == "__main__":
+    parser = ArgumentParser(
+        description="Render a Jinja2 FFV2 namelist template from experiment metadata and path configuration."
+    )
 
-    parser = ArgumentParser()
-    
     parser.add_argument(
         "--template",
         type=str,
@@ -101,14 +114,14 @@ if __name__ == "__main__":
         type=str,
         help="namelist variable: location to output score files (must already exist)",
     )
-    
+
     parser.add_argument(
         "--experiment_description",
         type=str,
         help="namelist variable: string used to build the filenames of the "
-          "intermediate scorefiles",
+        "intermediate scorefiles",
     )
-     
+
     parser.add_argument(
         "--file_description",
         type=str,
@@ -119,14 +132,14 @@ if __name__ == "__main__":
         "--domain_table",
         type=str,
         help="namelist variable: path to domain table. This needs to be "
-          "available from container through mounting."
+        "available from container through mounting.",
     )
 
     parser.add_argument(
         "--blacklists",
         type=str,
         help="namelist variable: path to blacklists. This needs to be "
-          "available from container through mounting."
+        "available from container through mounting.",
     )
 
     args = parser.parse_args()

@@ -78,9 +78,7 @@ def _fmt_seconds(s: float) -> str:
 onstart:
     global _T0
     _T0 = time.time()
-
     when_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
     print()
     _hr()
     print(_c("🚀 EvalML workflow started", "1"))
@@ -99,7 +97,6 @@ onstart:
 
 onsuccess:
     dt = _fmt_seconds(time.time() - (_T0 or time.time()))
-
     print()
     _hr()
     print(_c("✅ Workflow finished successfully", "1"))
@@ -111,7 +108,6 @@ onsuccess:
 
 onerror:
     dt = _fmt_seconds(time.time() - (_T0 or time.time()))
-
     print()
     _hr()
     print(_c("❌ Workflow failed", "1"))
@@ -139,15 +135,6 @@ rule experiment_all:
         expand(
             rules.verification_metrics_plot.output,
             experiment=EXPERIMENT_NAME,
-        ),
-        expand(
-            OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}00.nc",
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
-            run_id=CANDIDATES,
-        ),
-        expand(
-            rules.reorganize_ffv2_files.output,
-            run_id=collect_all_candidates(),
         ),
         expand(
             OUT_ROOT / "data/runs/{run_id}/summary.md",
@@ -220,10 +207,20 @@ rule verification_metrics_plot_all:
         ),
 
 
-rule verif_obs_all:
+rule mec_all:
+    """Target rule for MEC observation verification (produces fdbk_files)."""
+    input:
+        expand(
+            OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}00.nc",
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
+            run_id=CANDIDATES,
+        ),
+
+
+rule ffv2_all:
+    """Target rule for FFV2 scoring pipeline (consumes fdbk_files, produces shiny scores)."""
     input:
         expand(
             rules.reorganize_ffv2_files.output,
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
-            run_id=CANDIDATES,
+            run_id=collect_all_candidates(),
         ),

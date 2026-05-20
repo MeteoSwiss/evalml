@@ -303,6 +303,52 @@ class Profile(BaseModel):
         return out
 
 
+class MecConfig(BaseModel):
+    """Paths to input observation files for the MEC verification step."""
+
+    ekf_root: str = Field(
+        ...,
+        description="Root directory for EKF SYNOP files. Files are expected at {ekf_root}/{YYYYMM}/ekfSYNOP_{init}00.nc.",
+    )
+    mon_synop_root: str = Field(
+        ...,
+        description="Root directory for monSYNOP files. Files are expected at {mon_synop_root}/{YYYYMMDDH}/monSYNOP.nc.",
+    )
+    ver_synop_root: str = Field(
+        ...,
+        description="Root directory for reference verSYNOP files. Files are expected at {ver_synop_root}/verSYNOP_{init}00.nc.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class Ffv2Config(BaseModel):
+    """Configuration for the FFV2 scoring pipeline."""
+
+    experiment_ids: str = Field(
+        ...,
+        description="Comma-separated experiment IDs passed to FFV2.",
+    )
+    experiment_description: str = Field(
+        ...,
+        description="Short description of the experiment for FFV2 output files.",
+    )
+    file_description: str = Field(
+        ...,
+        description="File description string used in FFV2 output file naming.",
+    )
+    domain_table: str = Field(
+        ...,
+        description="Path to the domain table file (polygon) used by FFV2.",
+    )
+    blacklists: str = Field(
+        ...,
+        description="Path to the blacklist directory used by FFV2.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class ConfigModel(BaseModel):
     """Top-level configuration."""
 
@@ -351,6 +397,14 @@ class ConfigModel(BaseModel):
     dashboard: Dashboard
     locations: Locations
     profile: Profile
+    mec: MecConfig | None = Field(
+        None,
+        description="Input observation paths for the MEC verification step. Required when running with --mec.",
+    )
+    ffv2: Ffv2Config | None = Field(
+        None,
+        description="Configuration for the FFV2 scoring pipeline. Required when running with --ffv2.",
+    )
 
     model_config = {
         "extra": "forbid",  # fail on misspelled keys

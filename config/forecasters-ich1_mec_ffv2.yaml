@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Evaluate skill of Stage E with/without cutoff edges trained with and without subgrid orography.
+
+dates:
+  start: 2025-07-19T00:00
+  end: 2025-07-20T00:00
+  frequency: 6h
+
+runs:
+  - forecaster:
+      inference_resources:
+          slurm_partition: normal-shared
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
+      label: stage_E_icon_1km_cutoff_edges_subgrid_horography
+      steps: 0/24/6
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+      extra_requirements:
+        - git+https://github.com/ecmwf/anemoi-inference.git@e369b1a90313e9701db13f63364a467aa281cf36
+
+baselines:
+  - baseline:
+      baseline_id: ICON-CH1-EPS
+      label: ICON-CH1-ctrl
+      root: /store_new/mch/msopr/ml/ICON-CH1-EPS
+      steps: 0/24/6
+
+  - baseline:
+      baseline_id: ICON-CH2-EPS
+      label: ICON-CH2-ctrl
+      root: /store_new/mch/msopr/ml/ICON-CH2-EPS
+      steps: 0/24/6
+
+
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
+stratification:
+  regions:
+    - jura
+  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+
+dashboard:
+  stratification:
+    - season
+
+locations:
+  output_root: output/
+
+mec:
+  ekf_root: /store_new/mch/msopr/osm/KENDA-CH1/EKF
+  mon_synop_root: /scratch/mch/paa/mec/MEC_ML_input/monFiles2025
+  ver_synop_root: /scratch/mch/paa/mec/MEC25_I-CH1
+
+ffv2:
+  experiment_ids: "SrucMLModel,"
+  experiment_description: emulator_onPL_ALL_obs_2020
+  file_description: exp_ACOSMO-2-models_C-2E-CTRL_2020
+  domain_table: /users/paa/01_store/02_FFV2/data/7_ML_inner_polygon
+  blacklists: /users/paa/01_store/02_FFV2/data/blacklist
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50
+  batch_rules:
+    plot_forecast_frame: 32

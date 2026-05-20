@@ -44,26 +44,34 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser()
+    parser = ArgumentParser(
+        description="Render a Jinja2 MEC namelist template for a given initialisation time and lead times."
+    )
 
-    parser.add_argument("--steps", type=_parse_steps, default="0/120/6")
+    parser.add_argument(
+        "--steps",
+        type=_parse_steps,
+        default="0/120/6",
+        help="Forecast lead times formatted as 'start/end/step' (hours), e.g. '0/120/6'.",
+    )
 
     parser.add_argument(
         "--init_time",
         type=lambda s: datetime.strptime(s, "%Y%m%d%H%M"),
         default="202010010000",
-        help="Valid time for the data in ISO format.",
+        help="Initialisation time in YYYYMMDDHHmm format, e.g. '202010010000'.",
     )
 
     parser.add_argument(
         "--template",
         type=str,
+        help="Path to the Jinja2 namelist template file.",
     )
 
     parser.add_argument(
         "--namelist",
         type=str,
-        help="Anything useful",
+        help="Full path to the output namelist file to be written.",
     )
 
     args = parser.parse_args()

@@ -1,16 +1,5 @@
 from pathlib import Path
-from datetime import datetime, timedelta
-
-
-def _parse_timedelta(s: str) -> timedelta:
-    """Parse a frequency string like '12h' or '1d' into a timedelta."""
-    if s.endswith("h"):
-        return timedelta(hours=int(s[:-1]))
-    if s.endswith("d"):
-        return timedelta(days=int(s[:-1]))
-    raise ValueError(
-        f"Unsupported frequency format: {s!r} (expected e.g. '12h' or '1d')"
-    )
+from datetime import timedelta
 
 
 # TODO: merge _parse_steps from generate_mec_namelist.py and verif_single_init.py?
@@ -24,55 +13,28 @@ def _parse_steps(steps: str) -> list[int]:
     return list(range(start, end + 1, step))
 
 
-# TODO: merge with _ref_times from common.smk?
 def _reftimes_mec():
     """
-    Construct ref times for MEC. Needs to be max of all
-    leadtimes shorter than ref times from the config.
+    Return the subset of REFTIMES that can serve as MEC init times.
+
+    A time t is eligible only if all source init times required by link_mec_input
+    (i.e. t - l for every configured lead l) are also present in REFTIMES.
+    Works for both range-based and explicit-list date configs.
     """
-    cfg = config["dates"]
-    if isinstance(cfg, list):
-        return [datetime.strptime(t, "%Y-%m-%dT%H:%M") for t in cfg]
-    start = datetime.strptime(cfg["start"], "%Y-%m-%dT%H:%M")
     leads = _parse_steps(config["runs"][0]["forecaster"]["steps"])
-    start_mec = start + timedelta(hours=max(leads))
-    end = datetime.strptime(cfg["end"], "%Y-%m-%dT%H:%M")
-    freq = _parse_timedelta(cfg["frequency"])
-    times = []
-    t = start_mec
-    while t <= end:
-        times.append(t)
-        t += freq
-    return times
+    reftimes_set = set(REFTIMES)
+    return [
+        t
+        for t in REFTIMES
+        if all(t - timedelta(hours=l) in reftimes_set for l in leads)
+    ]
 
 
 REFTIMES_MEC = _reftimes_mec()
 
 
-def init_times_for_mec(wc):
-    """
-    Return list of init times (YYYYMMDDHHMM) from init_time - lead ... init_time
-    stepping by configured frequency.
-    """
-    init = wc.init_time
-    base = datetime.strptime(init, "%Y%m%d%H%M")
-
-    lt = get_leadtime(wc)  # expects something like "48h"
-    lead_h = int(str(lt).rstrip("h"))
-    freq_td = _parse_timedelta(config["dates"]["frequency"])
-
-    # iterate from base - lead to base stepping by the parsed timedelta
-    t = base - timedelta(hours=lead_h)
-    times = []
-
-    while t <= base:
-        times.append(t.strftime("%Y%m%d%H%M"))
-        t += freq_td
-    return times
-
-
-# prepare_mec_input: setup run dir, gather observations and model data in the run dir for the actual init time
 rule prepare_mec_input:
+    """Collect EKF SYNOP, monSYNOP, and reference verSYNOP observation files into the MEC input_obs directory."""
     input:
         inference_ok=lambda wc: expand(
             rules.inference_execute.output.okfile,
@@ -83,9 +45,12 @@ rule prepare_mec_input:
         obs=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs"),
         ekf_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs/ekfSYNOP.nc",
         obs_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs/obsSYNOP.nc",
-
     log:
         OUT_ROOT / "logs/prepare_mec_input/{run_id}-{init_time}.log",
+    params:
+        ekf_root=config["mec"]["ekf_root"],
+        mon_synop_root=config["mec"]["mon_synop_root"],
+        ver_synop_root=config["mec"]["ver_synop_root"],
     shell:
         """
         (
@@ -100,10 +65,9 @@ rule prepare_mec_input:
         echo "init time: ${{init}}"
 
         # collect observations (ekfSYNOP) and/or (monSYNOP from DWD; includes precip) files
-        cp /store_new/mch/msopr/osm/KENDA-CH1/EKF/${{ym}}/ekfSYNOP_${{init}}00.nc {output.ekf_file}
-        cp /scratch/mch/paa/mec/MEC_ML_input/monFiles2025/${{init:0:10}}/monSYNOP.nc {output.obs}/monSYNOP.nc
-        cp /scratch/mch/paa/mec/MEC25_I-CH1/verSYNOP_${{init}}00.nc {output.obs_file}
-        ######cp /scratch/mch/paa/mec/MEC_ML_input/monFiles2020/hpc/uwork/swahl/temp/feedback/monSYNOP.${{init:0:10}} {output.obs}/monSYNOP.nc
+        cp {params.ekf_root}/${{ym}}/ekfSYNOP_${{init}}00.nc {output.ekf_file}
+        cp {params.mon_synop_root}/${{init:0:10}}/monSYNOP.nc {output.obs}/monSYNOP.nc
+        cp {params.ver_synop_root}/verSYNOP_${{init}}00.nc {output.obs_file}
         echo "Copied obs files to {output.obs}"
 
         ) > {log} 2>&1
@@ -128,13 +92,13 @@ rule link_mec_input:
     output:
         # own the final input_mod directory for this init (and its contents)
         mod=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_mod"),
+    log:
+        OUT_ROOT / "logs/link_mec_input/{run_id}-{init_time}.log",
     params:
         # generate a space-separated list of lead hours from the run config
         leads=lambda wc: " ".join(
             str(l) for l in _parse_steps(RUN_CONFIGS[wc.run_id]["steps"])
         ),
-    log:
-        OUT_ROOT / "logs/link_mec_input/{run_id}-{init_time}.log",
     shell:
         """
         (
@@ -179,13 +143,13 @@ rule link_mec_input:
 
 
 rule generate_mec_namelist:
-    localrule: True
     input:
         script="workflow/scripts/generate_mec_namelist.py",
         template="resources/mec/namelist.jinja2",
         mod_dir=directory(rules.link_mec_input.output.mod),
     output:
         namelist=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/namelist",
+    localrule: True
     params:
         steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
     shell:
@@ -199,6 +163,7 @@ rule generate_mec_namelist:
 
 
 rule run_mec:
+    """Run the MEC container for one initialisation time, producing a verSYNOP feedback file in fdbk_files/."""
     input:
         namelist=rules.generate_mec_namelist.output.namelist,
         prepare_obs=rules.prepare_mec_input.output.obs_file,
@@ -236,15 +201,15 @@ rule run_mec:
         #./mec > ./mec_out.log 2>&1
 
         # copy the output file to the final location for the Feedback files
-		# and rename to match NWP conventions
+        # and rename to match NWP conventions
         mkdir -p "$run_dir/../../fdbk_files"
         cp "$run_dir/verSYNOP.nc" "$run_dir/../../fdbk_files/verSYNOP_{wildcards.init_time}00.nc"
         echo "...time at end of run_mec: $(date)"
         ) > {log} 2>&1
         """
 
+
 rule generate_ffv2_namelist:
-    localrule: True
     input:
         script="workflow/scripts/generate_ffv2_namelist.py",
         template="resources/ffv2/template_SYNOP_DET.nl.jinja2",
@@ -257,20 +222,22 @@ rule generate_ffv2_namelist:
     output:
         # Question: Definitely want to aggregate over init time, but will we have 1 run_ffv2 per run_id, or 1 run of ffv2 for all run_ids?
         namelist=OUT_ROOT / "data/runs/{run_id}/SYNOP_DET.nl",
-    params:
-        # TODO: We may want more than one directory here, if we are comparing models.
-        feedback_directory=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}/fdbk_files"),
-        # TODO: consider including run_ids here?
-        experiment_ids="SrucMLModel,",
-        # Keeping this as a param. We will create it in run_ffv2 rule.
-        output_directory=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}/scores"),
-        # TODO: update descriptions to something more fitting
-        experiment_description="emulator_onPL_ALL_obs_2020",
-        file_description="exp_ACOSMO-2-models_C-2E-CTRL_2020",
-        domain_table="/users/paa/01_store/02_FFV2/data/7_ML_inner_polygon",
-        blacklists="/users/paa/01_store/02_FFV2/data/blacklist",
     log:
         OUT_ROOT / "logs/generate_ffv2_namelist/{run_id}.log",
+    localrule: True
+    params:
+        # TODO: We may want more than one directory here, if we are comparing models.
+        feedback_directory=lambda wc: str(
+            OUT_ROOT / f"data/runs/{wc.run_id}/fdbk_files"
+        ),
+        # Keeping this as a param. We will create it in run_ffv2 rule.
+        output_directory=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}/scores"),
+        # TODO: consider including run_ids here?
+        experiment_ids=config["ffv2"]["experiment_ids"],
+        experiment_description=config["ffv2"]["experiment_description"],
+        file_description=config["ffv2"]["file_description"],
+        domain_table=config["ffv2"]["domain_table"],
+        blacklists=config["ffv2"]["blacklists"],
     shell:
         """
         (
@@ -289,11 +256,14 @@ rule generate_ffv2_namelist:
         ) > {log} 2>&1
         """
 
+
 rule run_ffv2:
     input:
         namelist=rules.generate_ffv2_namelist.output.namelist,
     output:
-        scores=directory(OUT_ROOT / "data/runs/{run_id}/scores")
+        scores=directory(OUT_ROOT / "data/runs/{run_id}/scores"),
+    log:
+        OUT_ROOT / "logs/run_ffv2/{run_id}.log",
     params:
         # domain_table and blacklists are locations on Balfrin, that will be
         # mounted into container (with the same filepaths)
@@ -304,8 +274,6 @@ rule run_ffv2:
         # Because namelist is a blocking input, and namelist generation
         # blocks on the MEC run, this should be OK to just use as param.
         feedback_directory=rules.generate_ffv2_namelist.params.feedback_directory,
-    log:
-        OUT_ROOT / "logs/run_ffv2/{run_id}.log",
     shell:
         """
         (
@@ -331,19 +299,20 @@ rule run_ffv2:
         --mount=type=bind,source=$feedback_dir_abs,destination=/src/ffv2/input \
         --mount=type=bind,source=$output_dir_abs,destination=/src/ffv2/output \
         container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-main
-		
+
         echo "...time at end of run_ffv2: $(date)"
         ) > {log} 2>&1
-		"""
+        """
+
 
 rule reorganize_ffv2_files:
-    localrule: True
     input:
-        scores=rules.run_ffv2.output.scores
+        scores=rules.run_ffv2.output.scores,
     output:
-        shiny_dir=directory(OUT_ROOT / "data/runs/{run_id}/shiny/")
+        shiny_dir=directory(OUT_ROOT / "data/runs/{run_id}/shiny/"),
     log:
         OUT_ROOT / "logs/reorganize_ffv2_files/{run_id}.log",
+    localrule: True
     shell:
         """
         (
@@ -378,7 +347,7 @@ rule reorganize_ffv2_files:
         #cp $input_dir_abs/CATEG_TS_exp* $output_dir_abs/fdbk_synop_categ_ts/data
 
         # Categorical verification against SYNOP as time series
-        cp $input_dir_abs/CATEG_bs_exp* $output_dir_abs/fdbk_synop_categ_bystat/data		
+        cp $input_dir_abs/CATEG_bs_exp* $output_dir_abs/fdbk_synop_categ_bystat/data
 
         echo "...time at end of reorganize_ffv2_files: $(date)"
         ) > {log} 2>&1
