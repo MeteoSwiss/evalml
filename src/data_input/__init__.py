@@ -123,7 +123,7 @@ def _collect_ml_grib_files(
 
 
 def _collect_icon_archive_files(
-    root: Path, reftime: datetime, steps: list[int], run_id: str = "000"
+    root: Path, reftime: datetime, steps: list[int], member_id: str = "000"
 ) -> list[Path]:
     """Return surface GRIB files for one member of an ICON operational archive.
 
@@ -149,7 +149,7 @@ def _collect_icon_archive_files(
         )
 
     return [
-        reftime_dir / "grib" / f"{gribname}{lt // 24:02}{lt % 24:02}0000_{run_id}"
+        reftime_dir / "grib" / f"{gribname}{lt // 24:02}{lt % 24:02}0000_{member_id}"
         for lt in steps
     ]
 
