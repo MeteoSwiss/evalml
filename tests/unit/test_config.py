@@ -63,9 +63,9 @@ def test_workflow_parsing_excludes_baselines_from_run_configs(
         run_config["model_type"] != "baseline" for run_config in run_configs.values()
     )
     assert baseline_configs == {
-        "COSMO-E": {
-            "label": "COSMO-E",
-            "root": "/store_new/mch/msopr/ml/COSMO-E",
+        "ICON-CH2-EPS": {
+            "label": "ICON-CH2-EPS",
+            "root": "/store_new/mch/msopr/osm/ICON-CH2-EPS",
             "steps": "0/120/6",
         }
     }
@@ -84,10 +84,10 @@ def test_workflow_derives_baseline_id_from_root_stem(example_interpolators_confi
 
     baseline_configs = namespace["BASELINE_CONFIGS"]
 
-    assert "COSMO-E_hourly" in baseline_configs
-    assert "COSMO-E-1h" not in baseline_configs
-    assert baseline_configs["COSMO-E_hourly"] == {
-        "label": "COSMO-E",
-        "root": "/store_new/mch/msopr/ml/COSMO-E_hourly",
+    assert "ICON-CH2-EPS" in baseline_configs
+    assert "ICON-CH1-EPS" in baseline_configs
+    assert baseline_configs["ICON-CH2-EPS"] == {
+        "label": "ICON-CH2-ctrl",
+        "root": "/store_new/mch/msopr/osm/ICON-CH2-EPS",
         "steps": "0/120/1",
     }
