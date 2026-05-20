@@ -390,8 +390,11 @@ def load_INCA_baseline_from_netcdf(
                  non-hourly timestamps.
 
     Returns:
-        xr.Dataset with dimensions (time, chy, chx) in the Swiss CH1903
-        coordinate system. The time coordinate holds absolute timestamps.
+        xr.Dataset with dimensions (time, chy, chx) and coordinates:
+          chx, chy  – Swiss CH1903 (EPSG:21781) easting/northing [m]
+          lat, lon  – WGS84 latitude/longitude [°], shape (chy, chx),
+                      derived from CH1903 via pyproj
+          time      – absolute timestamps (datetime64[ns])
     """
     # Maps output variable name -> INCA file prefix, per freq.
     # File prefix == variable name inside the NetCDF file.
