@@ -357,31 +357,33 @@ def load_INCA_baseline_from_netcdf(
         reftime: Reference time (forecast initialisation time). Used to locate
                  the source files and to build the output time coordinate.
         steps:   List of step indices interpreted as multiples of freq.
-                 For freq='1h'  : integers 0–6  (hours from reftime).
-                 For freq='10min': integers 0–36 (× 10 min from reftime).
+                 freq='1h'  : integers 0–6  (hours from reftime).
+                 freq='10min': integers 0–36 (× 10 min from reftime).
+                 freq='5min' : integers 0–72 (× 5 min from reftime).
         params:  List of output variable names. Supported values:
-                   T_2M     – 2 m temperature            [K]   (source: TT °C → both freqs)
-                   TD_2M    – 2 m dewpoint temperature   [K]   (source: TD °C → both freqs)
+                   T_2M     – 2 m temperature            [K]   (source: TT, °C)
+                   TD_2M    – 2 m dewpoint temperature   [K]   (source: TD, °C)
                    TOT_PREC – total precipitation rate   [kg m-2]
-                                 freq='1h'   : RR  (mm/h, 10-min native)
-                                 freq='10min': RP  (mm/h,  5-min native)
+                                 freq='1h' or '10min': RR  (10-min native, avail. always)
+                                 freq='5min'         : RP  ( 5-min native, avail. since 2025-05)
                    FF_10M   – 10 m wind speed            [m/s]
-                                 freq='1h'   : FF        (hourly, avail. always)
-                                 freq='10min': FF_10min  (10-min, avail. since 2025-05)
+                                 freq='1h'   : FF       (hourly, avail. always)
+                                 freq='10min': FF_10min (10-min, avail. since 2025-05)
                    DD_10M   – 10 m wind direction        [°]
-                                 freq='1h'   : DD        (hourly, avail. always)
-                                 freq='10min': DD_10min  (10-min, avail. since 2025-10)
+                                 freq='1h'   : DD       (hourly, avail. always)
+                                 freq='10min': DD_10min (10-min, avail. since 2025-10)
                    VMAX_10M – 10 m wind gust             [m/s]
-                                 freq='1h'   : WG        (hourly, avail. always)
-                                 freq='10min': WG_10min  (10-min, avail. since 2025-10)
-                   CLCT     – total cloud cover          [%]   (source: CT → both freqs)
+                                 freq='1h'   : WG       (hourly, avail. always)
+                                 freq='10min': WG_10min (10-min, avail. since 2025-10)
+                   CLCT     – total cloud cover          [%]   (source: CT, 10-min)
                    U_10M    – 10 m zonal wind component  [m/s] (derived from DD_10M, FF_10M)
                    V_10M    – 10 m meridional wind comp. [m/s] (derived from DD_10M, FF_10M)
                  U_10M and V_10M follow the meteorological convention: DD is
                  the direction the wind blows FROM, clockwise from North.
-        freq:    Output time granularity: '1h' (default) or '10min'.
+        freq:    Output time granularity: '1h' (default), '10min', or '5min'.
                  steps are interpreted as multiples of this interval.
-                 Max step: 6 for freq='1h', 36 for freq='10min'.
+                 Max step: 6 for '1h', 36 for '10min', 72 for '5min'.
+                 freq='5min' only supports TOT_PREC (from RP, avail. since 2025-05).
                  At freq='10min', T_2M and TD_2M (hourly native) have NaN at
                  non-hourly timestamps.
 
@@ -404,19 +406,26 @@ def load_INCA_baseline_from_netcdf(
         "10min": {
             "T_2M":     "TT",
             "TD_2M":    "TD",
-            "TOT_PREC": "RP",
+            "TOT_PREC": "RR",
             "FF_10M":   "FF_10min",
             "DD_10M":   "DD_10min",
             "CLCT":     "CT",
             "VMAX_10M": "WG_10min",
         },
+        "5min": {
+            "TOT_PREC": "RP",
+        },
     }
     DERIVED_DEPS = {"U_10M": ["DD_10M", "FF_10M"], "V_10M": ["DD_10M", "FF_10M"]}
-    FREQ_TO_TD = {"1h": np.timedelta64(1, "h"), "10min": np.timedelta64(10, "m")}
+    FREQ_TO_TD = {
+        "1h":   np.timedelta64(1,  "h"),
+        "10min": np.timedelta64(10, "m"),
+        "5min":  np.timedelta64(5,  "m"),
+    }
 
     if freq not in FREQ_TO_TD:
-        raise ValueError(f"freq must be '1h' or '10min', got {freq!r}")
-    MAX_STEPS = {"1h": 6, "10min": 36}
+        raise ValueError(f"freq must be '1h', '10min', or '5min', got {freq!r}")
+    MAX_STEPS = {"1h": 6, "10min": 36, "5min": 72}
     if max(steps) > MAX_STEPS[freq]:
         raise ValueError(
             f"max step for freq={freq!r} is {MAX_STEPS[freq]}, got {max(steps)}"
@@ -434,7 +443,14 @@ def load_INCA_baseline_from_netcdf(
         if param in prefix_map:
             to_load.add(param)
         elif param in DERIVED_DEPS:
-            to_load.update(DERIVED_DEPS[param])
+            deps = DERIVED_DEPS[param]
+            missing = [d for d in deps if d not in prefix_map]
+            if missing:
+                raise ValueError(
+                    f"Parameter {param!r} requires {missing} which are not "
+                    f"available at freq={freq!r}"
+                )
+            to_load.update(deps)
         else:
             raise ValueError(f"INCA baseline does not support parameter: {param}")
 
