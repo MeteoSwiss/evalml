@@ -8,19 +8,24 @@ zarr, converts it to elevation [m], and renders:
   - Bottom: elevation profile along that longitude vs latitude.
 
 Uses the same earthkit-plots schema (Roboto font, soft grid, no axis spines)
-as the showcase workflow. The map is drawn in PlateCarree so the lat/lon
-extent maps to a tight rectangle around the data domain.
+as the showcase workflow. The map is drawn in the COSMO-CH rotated pole CRS
+because that is the data's native grid — the domain envelope is then a
+true rectangle, so the figure has no white slack around the data.
 """
 
 from pathlib import Path
 
 import cartopy.crs as ccrs
 import earthkit.plots as ekp  # noqa: F401 — import applies default schema (fonts, rcParams)
+import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
+from matplotlib.colors import BoundaryNorm
+from matplotlib.tri import Triangulation
 from shapely.geometry import MultiPoint
 
-from plotting import StatePlotter
+# COSMO-CH rotated pole — realch1 lives on this grid.
+ROTATED_POLE = ccrs.RotatedPole(pole_longitude=-170.0, pole_latitude=43.0)
 
 REALCH1_ZARR = Path(
     "/store_new/mch/msopr/ml/datasets/"
@@ -62,55 +67,66 @@ def extract_cross_section(
 
 def main(outfn: Path) -> None:
     lons, lats, elevation = load_topography(REALCH1_ZARR)
-
-    lon_min, lon_max = float(np.nanmin(lons)), float(np.nanmax(lons))
     lat_min, lat_max = float(np.nanmin(lats)), float(np.nanmax(lats))
-    bbox = [lon_min, lon_max, lat_min, lat_max]
 
-    projection = ccrs.PlateCarree()
-    plotter = StatePlotter(lons, lats, outfn.parent)
-    fig = plotter.init_geoaxes(
-        nrows=2,
-        ncols=1,
-        projection=projection,
-        bbox=bbox,
-        name="ICON-REA-L-CH1 topography",
+    # Transform to the data's native rotated pole — in this CRS the realch1
+    # domain is a perfect rectangle.
+    xyz = ROTATED_POLE.transform_points(ccrs.PlateCarree(), lons, lats)
+    x_rot, y_rot = xyz[:, 0], xyz[:, 1]
+    valid = np.isfinite(x_rot) & np.isfinite(y_rot) & np.isfinite(elevation)
+    triang = Triangulation(x_rot[valid], y_rot[valid])
+
+    # earthkit-plots Figure: 2 rows, map on top, profile on bottom.
+    fig = ekp.Figure(
+        rows=2,
+        columns=1,
         size=(8, 9),
+        crs=ROTATED_POLE,
+        height_ratios=[2.4, 1.0],
+        hspace=0.18,
     )
-    # Replace the default equal-height gridspec so the map gets ~2x the height
-    # of the cross-section panel. add_map() hasn't run yet, so this is safe.
-    fig.gridspec = fig.fig.add_gridspec(2, 1, height_ratios=[2.4, 1.0], hspace=0.18)
-
     subplot = fig.add_map(row=0, column=0)
-    style = ekp.styles.Style(
-        colors="terrain",
+    ax = subplot.ax  # GeoAxes in the rotated pole CRS
+
+    cmap = plt.get_cmap("terrain", len(ELEVATION_LEVELS)).copy()
+    norm = BoundaryNorm(ELEVATION_LEVELS, cmap.N, extend="max")
+    cf = ax.tricontourf(
+        triang,
+        elevation[valid],
         levels=ELEVATION_LEVELS,
+        cmap=cmap,
+        norm=norm,
         extend="max",
-        units="m",
+        transform=ROTATED_POLE,
     )
-    plotter.plot_field(subplot, elevation, style=style)
 
-    # PlateCarree map: extent in lat/lon makes the data domain a tight rectangle.
-    subplot.ax.set_extent(bbox, crs=ccrs.PlateCarree())
-
-    # standard_layers() (called inside plot_field) draws lat/lon gridlines via
-    # cartopy. Replace them with a label-only graticule: keep the tick labels
-    # so the lat/lon axis values stay readable, but drop the actual grid lines.
-    from cartopy.mpl.gridliner import Gridliner
-
-    for artist in list(subplot.ax.artists):
-        if isinstance(artist, Gridliner):
-            artist.remove()
-    subplot.ax._gridliners = []
-    gl = subplot.ax.gridlines(
-        draw_labels=True, linewidth=0, alpha=0, color="none"
+    # Tight extent in rotated coordinates — no projection slack at the corners.
+    ax.set_extent(
+        [x_rot[valid].min(), x_rot[valid].max(),
+         y_rot[valid].min(), y_rot[valid].max()],
+        crs=ROTATED_POLE,
     )
-    gl.top_labels = False
-    gl.right_labels = False
 
-    # LAM envelope outline, as in the showcase.
+    # Showcase-style background layers, but skip gridlines (handled separately).
+    subplot.land()
+    subplot.coastlines()
+    subplot.borders()
+
+    # Lat/lon labels without drawing the grid lines themselves. Constrain
+    # labels to the left/bottom edges so the diagonal rotated-pole meridians
+    # don't drop labels in the middle of the map.
+    gl = ax.gridlines(
+        draw_labels=["left", "bottom"],
+        linewidth=0,
+        alpha=0,
+        color="none",
+        x_inline=False,
+        y_inline=False,
+    )
+
+    # LAM envelope outline in lat/lon.
     lam_hull = MultiPoint(list(zip(lons.tolist(), lats.tolist()))).convex_hull
-    subplot.ax.add_geometries(
+    ax.add_geometries(
         [lam_hull],
         crs=ccrs.PlateCarree(),
         edgecolor="#333333",
@@ -119,7 +135,7 @@ def main(outfn: Path) -> None:
     )
 
     # Vertical line marking the cross-section longitude.
-    subplot.ax.plot(
+    ax.plot(
         [CROSS_LON, CROSS_LON],
         [lat_min, lat_max],
         color="#C0392B",
@@ -128,11 +144,15 @@ def main(outfn: Path) -> None:
         transform=ccrs.PlateCarree(),
         label=f"cross-section @ {CROSS_LON}°E",
     )
-    subplot.ax.legend(loc="lower left", fontsize=9, framealpha=0.9)
+    ax.legend(loc="lower left", fontsize=9, framealpha=0.9)
+    ax.set_title("ICON-REA-L-CH1 topography")
 
-    # Cross-section panel on row 1 of the same gridspec — inherits the
-    # earthkit-plots schema (Roboto font, light grid, hidden spines). The
-    # fill is drawn with a high zorder so it sits on top of the grid lines.
+    cbar = fig.fig.colorbar(
+        cf, ax=ax, orientation="horizontal", shrink=0.7, pad=0.08, extend="max"
+    )
+    cbar.set_label("elevation [m]")
+
+    # Cross-section panel on row 1: fill drawn above the schema y-grid (zorder).
     lat_cs, elev_cs = extract_cross_section(lons, lats, elevation, CROSS_LON, LON_TOL)
     ax_cs = fig.fig.add_subplot(fig.gridspec[1, 0])
     ax_cs.fill_between(lat_cs, 0, elev_cs, color="#7a7a7a", alpha=0.95, zorder=3)
@@ -143,7 +163,7 @@ def main(outfn: Path) -> None:
     ax_cs.set_ylabel("elevation [m]")
     ax_cs.set_title(f"Cross-section at {CROSS_LON}°E")
 
-    fig.title("ICON-REA-L-CH1 topography")
+    outfn.parent.mkdir(parents=True, exist_ok=True)
     fig.save(outfn, bbox_inches="tight", dpi=200)
     print(f"saved: {outfn}")
 
