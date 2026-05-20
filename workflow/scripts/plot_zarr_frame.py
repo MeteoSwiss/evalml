@@ -118,9 +118,13 @@ def main():
         choices=["analysis", "baseline"],
         help="Zarr source type",
     )
-    parser.add_argument("--date", type=str, required=True, help="Reference datetime (YYYYmmddHHMM)")
+    parser.add_argument(
+        "--date", type=str, required=True, help="Reference datetime (YYYYmmddHHMM)"
+    )
     parser.add_argument("--outfn", type=str, required=True, help="Output filename")
-    parser.add_argument("--leadtime", type=str, required=True, help="Lead time (hours, zero-padded)")
+    parser.add_argument(
+        "--leadtime", type=str, required=True, help="Lead time (hours, zero-padded)"
+    )
     parser.add_argument("--param", type=str, required=True, help="Parameter name")
     parser.add_argument("--region", type=str, required=True, help="Region name")
     parser.add_argument(
@@ -131,7 +135,9 @@ def main():
         metavar=("LON_MIN", "LON_MAX", "LAT_MIN", "LAT_MAX"),
     )
     parser.add_argument("--projection", type=str, default=None)
-    parser.add_argument("--accu", type=int, default=1, help="Accumulation period in hours")
+    parser.add_argument(
+        "--accu", type=int, default=1, help="Accumulation period in hours"
+    )
     args = parser.parse_args()
 
     reftime = datetime.strptime(args.date, "%Y%m%d%H%M")
@@ -164,12 +170,19 @@ def main():
         extent = DOMAINS[args.region]["extent"]
 
     fig = plotter.init_geoaxes(
-        nrows=1, ncols=1, projection=projection, bbox=extent, name=args.region, size=(6, 6)
+        nrows=1,
+        ncols=1,
+        projection=projection,
+        bbox=extent,
+        name=args.region,
+        size=(6, 6),
     )
     subplot = fig.add_map(row=0, column=0)
 
     field, units_override = preprocess_field(param, state)
-    plotter.plot_field(subplot, field, **get_style(param, units_override, accu=args.accu))
+    plotter.plot_field(
+        subplot, field, **get_style(param, units_override, accu=args.accu)
+    )
     subplot.ax.add_geometries(
         state["lam_envelope"],
         edgecolor="black",
