@@ -2,7 +2,6 @@ from pathlib import Path
 from datetime import timedelta
 
 
-# TODO: merge _parse_steps from generate_mec_namelist.py and verif_single_init.py?
 def _parse_steps(steps: str) -> list[int]:
     # check that steps is in the format "start/stop/step"
     if "/" not in steps:

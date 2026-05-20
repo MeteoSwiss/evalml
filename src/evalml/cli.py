@@ -167,10 +167,10 @@ def cli():
     "--mec",
     is_flag=True,
     default=False,
-    help="Run only the MEC observation verification.",
+    help="Run MEC for Feedback file production.",
 )
 @click.option(
-    "--ffv2", is_flag=True, default=False, help="Run only the FFV2 scoring pipeline."
+    "--ffv2", is_flag=True, default=False, help="Run the FFV2 scorefile production."
 )
 @workflow_options
 def experiment(

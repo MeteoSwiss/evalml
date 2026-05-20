@@ -21,7 +21,20 @@ def _parse_steps(steps: str) -> int:
     return list(range(start, end + 1, step))
 
 
+def program_summary_log(args):
+    """Log a welcome message with the script information."""
+    LOG.info("=" * 80)
+    LOG.info("Generating MEC namelist")
+    LOG.info("=" * 80)
+    LOG.info("Template:        %s", args.template)
+    LOG.info("Valid time:  %s", args.init_time.strftime("%Y%m%d%H%M"))
+    LOG.info("Lead times:           %s", args.steps)
+    LOG.info("Output namelist: %s", args.namelist)
+    LOG.info("=" * 80)
+
+
 def main(args):
+    program_summary_log(args)
     # Include stop_h (inclusive). Produce strings like 0000,0600,1200,...,12000
     lead_hours = args.steps
     leadtimes = ",".join(f"{h:02d}00" for h in lead_hours)
@@ -35,7 +48,6 @@ def main(args):
     # Ensure file ends with a newline (prevent editors/tools from removing final RETURN)
     if not namelist.endswith("\n"):
         namelist += "\n"
-    LOG.info("MEC namelist created:\n%s", namelist)
 
     out_path = Path(str(args.namelist))
     out_path.parent.mkdir(parents=True, exist_ok=True)

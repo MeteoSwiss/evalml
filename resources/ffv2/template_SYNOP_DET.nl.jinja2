@@ -68,22 +68,17 @@ timeSteps       '0'
 timeBreaks      '30,-30'
 
 # set forecast times for which scores should be calculated.
-# useful filter for lead times with very low LEN. Effect: summary plots slightly different and summary2 plots more readable
-# DONT USE 0H LEADTIMES BECAUSE OF IAU (see OneNote QRM notes from 31.1.2024). What to show: see Verification multilat of 12 March 2024
+# useful filter for lead times with very low LEN.
 #veri_forecast_time  '0000,1200,2400,3600,4800,6000,7200,8400,9600,10800,12000'
 
 # run class(es). See Table 27 in the Feedback File Definition (version of 29 Oct. 2019)
-#veri_run_class  '0,2'  should be 2 for assimilation cycle but is in FF: veri_run_class = _ ; => comment out
+#veri_run_class  '0,2'
 
 # run type(s). See Table 26 in the Feedback File Definition (version of 29 Oct. 2019)
-veri_run_type   '0,4'           # "0" filters model data originating from ekf verification. "4" to include analysis, i.e 0h lead time (present in FF because efk File was used for MEC input)
-
-
-#veri_model   "ML"       # this filters model data originating from ekf verification but also data from opr COSMO-2 FF  (if included in fdbkDirs)!
-
+veri_run_type   '0,4' 
 
 # state(s) of observation to be used. See Table 8 in the Feedback File Definition (version of 29 Oct. 2019)
-#state           '0,1,5,7,13'  # "7" should include all obs rejected by the DA system but actually it doesnt
+#state           '0,1,5,7,13'
 
 # state(s) of report to be used. See Table 8 in the Feedback File Definition (version of 29 Oct. 2019)
 #r_state         '0,1,5,7,13'
