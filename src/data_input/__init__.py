@@ -360,37 +360,57 @@ def load_INCA_baseline_from_netcdf(
                  For freq='1h'  : integers 0–6  (hours from reftime).
                  For freq='10min': integers 0–36 (× 10 min from reftime).
         params:  List of output variable names. Supported values:
-                   T_2M     – 2 m temperature            [K]   (source: TT, °C)
-                   TD_2M    – 2 m dewpoint temperature   [K]   (source: TD, °C)
-                   TOT_PREC – total precipitation rate   [kg m-2] (source: RR, mm/h)
-                   FF_10M   – 10 m wind speed            [m/s] (source: FF)
-                   DD_10M   – 10 m wind direction        [°]   (source: DD)
-                   U_10M    – 10 m zonal wind component  [m/s] (derived from DD, FF)
-                   V_10M    – 10 m meridional wind comp. [m/s] (derived from DD, FF)
-                   CLCT     – total cloud cover          [%]   (source: CT)
-                   VMAX_10M – 10 m wind gust             [m/s] (source: WG)
+                   T_2M     – 2 m temperature            [K]   (source: TT °C → both freqs)
+                   TD_2M    – 2 m dewpoint temperature   [K]   (source: TD °C → both freqs)
+                   TOT_PREC – total precipitation rate   [kg m-2]
+                                 freq='1h'   : RR  (mm/h, 10-min native)
+                                 freq='10min': RP  (mm/h,  5-min native)
+                   FF_10M   – 10 m wind speed            [m/s]
+                                 freq='1h'   : FF        (hourly, avail. always)
+                                 freq='10min': FF_10min  (10-min, avail. since 2025-05)
+                   DD_10M   – 10 m wind direction        [°]
+                                 freq='1h'   : DD        (hourly, avail. always)
+                                 freq='10min': DD_10min  (10-min, avail. since 2025-10)
+                   VMAX_10M – 10 m wind gust             [m/s]
+                                 freq='1h'   : WG        (hourly, avail. always)
+                                 freq='10min': WG_10min  (10-min, avail. since 2025-10)
+                   CLCT     – total cloud cover          [%]   (source: CT → both freqs)
+                   U_10M    – 10 m zonal wind component  [m/s] (derived from DD_10M, FF_10M)
+                   V_10M    – 10 m meridional wind comp. [m/s] (derived from DD_10M, FF_10M)
                  U_10M and V_10M follow the meteorological convention: DD is
                  the direction the wind blows FROM, clockwise from North.
         freq:    Output time granularity: '1h' (default) or '10min'.
-                 Native resolution of each source variable:
-                   hourly  (max step 6) : TT, TD, DD, FF, WG
-                   10-min  (max step 36): RR, CT
-                 At freq='10min', hourly variables have NaN at non-hourly steps.
+                 steps are interpreted as multiples of this interval.
+                 Max step: 6 for freq='1h', 36 for freq='10min'.
+                 At freq='10min', T_2M and TD_2M (hourly native) have NaN at
+                 non-hourly timestamps.
 
     Returns:
         xr.Dataset with dimensions (time, chy, chx) in the Swiss CH1903
         coordinate system. The time coordinate holds absolute timestamps.
     """
-    VAR_RENAME = {
-        "TT": "T_2M",
-        "TD": "TD_2M",
-        "RR": "TOT_PREC",
-        "DD": "DD_10M",
-        "FF": "FF_10M",
-        "CT": "CLCT",
-        "WG": "VMAX_10M",
+    # Maps output variable name -> INCA file prefix, per freq.
+    # File prefix == variable name inside the NetCDF file.
+    PARAM_TO_PREFIX: dict[str, dict[str, str]] = {
+        "1h": {
+            "T_2M":     "TT",
+            "TD_2M":    "TD",
+            "TOT_PREC": "RR",
+            "FF_10M":   "FF",
+            "DD_10M":   "DD",
+            "CLCT":     "CT",
+            "VMAX_10M": "WG",
+        },
+        "10min": {
+            "T_2M":     "TT",
+            "TD_2M":    "TD",
+            "TOT_PREC": "RP",
+            "FF_10M":   "FF_10min",
+            "DD_10M":   "DD_10min",
+            "CLCT":     "CT",
+            "VMAX_10M": "WG_10min",
+        },
     }
-    PARAM_TO_PREFIX = {v: k for k, v in VAR_RENAME.items()}
     DERIVED_DEPS = {"U_10M": ["DD_10M", "FF_10M"], "V_10M": ["DD_10M", "FF_10M"]}
     FREQ_TO_TD = {"1h": np.timedelta64(1, "h"), "10min": np.timedelta64(10, "m")}
 
@@ -406,10 +426,12 @@ def load_INCA_baseline_from_netcdf(
         "datetime64[ns]"
     )
 
+    prefix_map = PARAM_TO_PREFIX[freq]
+
     # Determine which native INCA variables to load
     to_load: set[str] = set()
     for param in params:
-        if param in PARAM_TO_PREFIX:
+        if param in prefix_map:
             to_load.add(param)
         elif param in DERIVED_DEPS:
             to_load.update(DERIVED_DEPS[param])
@@ -418,7 +440,7 @@ def load_INCA_baseline_from_netcdf(
 
     datasets = []
     for param in to_load:
-        prefix = PARAM_TO_PREFIX[param]
+        prefix = prefix_map[param]
         filepath = (
             root
             / f"{reftime.year:04d}"
