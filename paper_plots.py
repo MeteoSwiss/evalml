@@ -7,8 +7,9 @@ zarr, converts it to elevation [m], and renders:
     line marking the cross-section longitude.
   - Bottom: elevation profile along that longitude vs latitude.
 
-Uses the same earthkit-plots schema (Roboto font, soft grid, no axis spines,
-StatePlotter + standard_layers) as `workflow/scripts/plot_forecast_frame.mo.py`.
+Uses the same earthkit-plots schema (Roboto font, soft grid, no axis spines)
+as the showcase workflow. The map is drawn in PlateCarree so the lat/lon
+extent maps to a tight rectangle around the data domain.
 """
 
 from pathlib import Path
@@ -19,7 +20,7 @@ import numpy as np
 import xarray as xr
 from shapely.geometry import MultiPoint
 
-from plotting import _PROJECTIONS, StatePlotter
+from plotting import StatePlotter
 
 REALCH1_ZARR = Path(
     "/store_new/mch/msopr/ml/datasets/"
@@ -66,7 +67,7 @@ def main(outfn: Path) -> None:
     lat_min, lat_max = float(np.nanmin(lats)), float(np.nanmax(lats))
     bbox = [lon_min, lon_max, lat_min, lat_max]
 
-    projection = _PROJECTIONS["orthographic"]
+    projection = ccrs.PlateCarree()
     plotter = StatePlotter(lons, lats, outfn.parent)
     fig = plotter.init_geoaxes(
         nrows=2,
@@ -89,25 +90,23 @@ def main(outfn: Path) -> None:
     )
     plotter.plot_field(subplot, elevation, style=style)
 
-    # Tighten the map extent to the actual projected envelope of the data,
-    # so the figure focuses on the domain instead of the orthographic
-    # rectangle around it.
-    xyz = projection.transform_points(ccrs.PlateCarree(), lons, lats)
-    xs, ys = xyz[:, 0], xyz[:, 1]
-    finite = np.isfinite(xs) & np.isfinite(ys)
-    subplot.ax.set_extent(
-        [xs[finite].min(), xs[finite].max(), ys[finite].min(), ys[finite].max()],
-        crs=projection,
-    )
+    # PlateCarree map: extent in lat/lon makes the data domain a tight rectangle.
+    subplot.ax.set_extent(bbox, crs=ccrs.PlateCarree())
 
     # standard_layers() (called inside plot_field) draws lat/lon gridlines via
-    # cartopy. Remove them — the user wants a clean map without graticule.
+    # cartopy. Replace them with a label-only graticule: keep the tick labels
+    # so the lat/lon axis values stay readable, but drop the actual grid lines.
     from cartopy.mpl.gridliner import Gridliner
 
     for artist in list(subplot.ax.artists):
         if isinstance(artist, Gridliner):
             artist.remove()
     subplot.ax._gridliners = []
+    gl = subplot.ax.gridlines(
+        draw_labels=True, linewidth=0, alpha=0, color="none"
+    )
+    gl.top_labels = False
+    gl.right_labels = False
 
     # LAM envelope outline, as in the showcase.
     lam_hull = MultiPoint(list(zip(lons.tolist(), lats.tolist()))).convex_hull
