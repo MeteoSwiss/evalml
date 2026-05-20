@@ -66,11 +66,12 @@ def main(outfn: Path) -> None:
     lat_min, lat_max = float(np.nanmin(lats)), float(np.nanmax(lats))
     bbox = [lon_min, lon_max, lat_min, lat_max]
 
+    projection = _PROJECTIONS["orthographic"]
     plotter = StatePlotter(lons, lats, outfn.parent)
     fig = plotter.init_geoaxes(
         nrows=2,
         ncols=1,
-        projection=_PROJECTIONS["orthographic"],
+        projection=projection,
         bbox=bbox,
         name="ICON-REA-L-CH1 topography",
         size=(8, 9),
@@ -87,6 +88,26 @@ def main(outfn: Path) -> None:
         units="m",
     )
     plotter.plot_field(subplot, elevation, style=style)
+
+    # Tighten the map extent to the actual projected envelope of the data,
+    # so the figure focuses on the domain instead of the orthographic
+    # rectangle around it.
+    xyz = projection.transform_points(ccrs.PlateCarree(), lons, lats)
+    xs, ys = xyz[:, 0], xyz[:, 1]
+    finite = np.isfinite(xs) & np.isfinite(ys)
+    subplot.ax.set_extent(
+        [xs[finite].min(), xs[finite].max(), ys[finite].min(), ys[finite].max()],
+        crs=projection,
+    )
+
+    # standard_layers() (called inside plot_field) draws lat/lon gridlines via
+    # cartopy. Remove them — the user wants a clean map without graticule.
+    from cartopy.mpl.gridliner import Gridliner
+
+    for artist in list(subplot.ax.artists):
+        if isinstance(artist, Gridliner):
+            artist.remove()
+    subplot.ax._gridliners = []
 
     # LAM envelope outline, as in the showcase.
     lam_hull = MultiPoint(list(zip(lons.tolist(), lats.tolist()))).convex_hull
@@ -111,11 +132,12 @@ def main(outfn: Path) -> None:
     subplot.ax.legend(loc="lower left", fontsize=9, framealpha=0.9)
 
     # Cross-section panel on row 1 of the same gridspec — inherits the
-    # earthkit-plots schema (Roboto font, light grid, hidden spines).
+    # earthkit-plots schema (Roboto font, light grid, hidden spines). The
+    # fill is drawn with a high zorder so it sits on top of the grid lines.
     lat_cs, elev_cs = extract_cross_section(lons, lats, elevation, CROSS_LON, LON_TOL)
     ax_cs = fig.fig.add_subplot(fig.gridspec[1, 0])
-    ax_cs.fill_between(lat_cs, 0, elev_cs, color="#7a7a7a", alpha=0.85)
-    ax_cs.plot(lat_cs, elev_cs, color="#333333", linewidth=0.6)
+    ax_cs.fill_between(lat_cs, 0, elev_cs, color="#7a7a7a", alpha=0.95, zorder=3)
+    ax_cs.plot(lat_cs, elev_cs, color="#333333", linewidth=0.6, zorder=4)
     ax_cs.set_xlim(lat_min, lat_max)
     ax_cs.set_ylim(0, max(4500, float(np.nanmax(elev_cs)) * 1.05))
     ax_cs.set_xlabel("latitude [°N]")
