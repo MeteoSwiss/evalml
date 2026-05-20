@@ -404,21 +404,21 @@ def load_INCA_baseline_from_netcdf(
     # File prefix == variable name inside the NetCDF file.
     PARAM_TO_PREFIX: dict[str, dict[str, str]] = {
         "1h": {
-            "T_2M":     "TT",
-            "TD_2M":    "TD",
+            "T_2M": "TT",
+            "TD_2M": "TD",
             "TOT_PREC": "RR",
-            "FF_10M":   "FF",
-            "DD_10M":   "DD",
-            "CLCT":     "CT",
+            "FF_10M": "FF",
+            "DD_10M": "DD",
+            "CLCT": "CT",
             "VMAX_10M": "WG",
         },
         "10min": {
-            "T_2M":     "TT",
-            "TD_2M":    "TD",
+            "T_2M": "TT",
+            "TD_2M": "TD",
             "TOT_PREC": "RR",
-            "FF_10M":   "FF_10min",
-            "DD_10M":   "DD_10min",
-            "CLCT":     "CT",
+            "FF_10M": "FF_10min",
+            "DD_10M": "DD_10min",
+            "CLCT": "CT",
             "VMAX_10M": "WG_10min",
         },
         "5min": {
@@ -427,20 +427,20 @@ def load_INCA_baseline_from_netcdf(
     }
     DERIVED_DEPS = {"U_10M": ["DD_10M", "FF_10M"], "V_10M": ["DD_10M", "FF_10M"]}
     PARAM_UNITS = {
-        "T_2M":     "K",
-        "TD_2M":    "K",
+        "T_2M": "K",
+        "TD_2M": "K",
         "TOT_PREC": "kg m-2",
-        "FF_10M":   "m/s",
-        "DD_10M":   "degrees",
-        "CLCT":     "%",
+        "FF_10M": "m/s",
+        "DD_10M": "degrees",
+        "CLCT": "%",
         "VMAX_10M": "m/s",
-        "U_10M":    "m/s",
-        "V_10M":    "m/s",
+        "U_10M": "m/s",
+        "V_10M": "m/s",
     }
     FREQ_TO_TD = {
-        "1h":   np.timedelta64(1,  "h"),
+        "1h": np.timedelta64(1, "h"),
         "10min": np.timedelta64(10, "m"),
-        "5min":  np.timedelta64(5,  "m"),
+        "5min": np.timedelta64(5, "m"),
     }
 
     if freq not in FREQ_TO_TD:
@@ -479,11 +479,19 @@ def load_INCA_baseline_from_netcdf(
     _chx_2d, _chy_2d = np.meshgrid(_INCA_CHX, _INCA_CHY)
     _lon_2d, _lat_2d = transformer.transform(_chx_2d, _chy_2d)
     latlon_coords = {
-        "lat": (("chy", "chx"), _lat_2d, {"units": "degrees_north", "long_name": "latitude"}),
-        "lon": (("chy", "chx"), _lon_2d, {"units": "degrees_east",  "long_name": "longitude"}),
+        "lat": (
+            ("chy", "chx"),
+            _lat_2d,
+            {"units": "degrees_north", "long_name": "latitude"},
+        ),
+        "lon": (
+            ("chy", "chx"),
+            _lon_2d,
+            {"units": "degrees_east", "long_name": "longitude"},
+        ),
     }
 
-    #load parameter by parameter
+    # load parameter by parameter
     datasets: dict[str, xr.DataArray] = {}
     for param in to_load:
         prefix = prefix_map[param]
@@ -504,7 +512,12 @@ def load_INCA_baseline_from_netcdf(
                     dtype=np.float32,
                 ),
                 dims=["time", "chy", "chx"],
-                coords={"time": valid_times, "chy": _INCA_CHY, "chx": _INCA_CHX, **latlon_coords},
+                coords={
+                    "time": valid_times,
+                    "chy": _INCA_CHY,
+                    "chx": _INCA_CHX,
+                    **latlon_coords,
+                },
                 attrs={"units": PARAM_UNITS[param]},
                 name=param,
             )
