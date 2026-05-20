@@ -82,6 +82,8 @@ rule prepare_mec_input:
     output:
         obs=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs"),
         ekf_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs/ekfSYNOP.nc",
+        obs_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs/obsSYNOP.nc",
+
     log:
         OUT_ROOT / "logs/prepare_mec_input/{run_id}-{init_time}.log",
     shell:
@@ -100,6 +102,7 @@ rule prepare_mec_input:
         # collect observations (ekfSYNOP) and/or (monSYNOP from DWD; includes precip) files
         cp /store_new/mch/msopr/osm/KENDA-CH1/EKF/${{ym}}/ekfSYNOP_${{init}}00.nc {output.ekf_file}
         cp /scratch/mch/paa/mec/MEC_ML_input/monFiles2025/${{init:0:10}}/monSYNOP.nc {output.obs}/monSYNOP.nc
+        cp /scratch/mch/paa/mec/MEC25_I-CH1/verSYNOP_${{init}}00.nc {output.obs_file}
         ######cp /scratch/mch/paa/mec/MEC_ML_input/monFiles2020/hpc/uwork/swahl/temp/feedback/monSYNOP.${{init:0:10}} {output.obs}/monSYNOP.nc
         echo "Copied obs files to {output.obs}"
 
@@ -111,7 +114,7 @@ rule prepare_mec_input:
 rule link_mec_input:
     input:
         # depend on ALL source grib dirs: for each lead l, source_init = init_time - l hours
-        obs_file=rules.prepare_mec_input.output.ekf_file,
+        obs_file=rules.prepare_mec_input.output.obs_file,
         src_dirs=lambda wc: expand(
             str(OUT_ROOT / "data/runs/{run_id}/{src_init}/grib"),
             run_id=wc.run_id,
@@ -198,7 +201,7 @@ rule generate_mec_namelist:
 rule run_mec:
     input:
         namelist=rules.generate_mec_namelist.output.namelist,
-        prepare_obs=rules.prepare_mec_input.output.ekf_file,
+        prepare_obs=rules.prepare_mec_input.output.obs_file,
         mod_dir=directory(rules.link_mec_input.output.mod),
     output:
         fdbk_file=OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}00.nc",

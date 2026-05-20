@@ -53,7 +53,7 @@
  &veri_obs
   obstypes      = "SYNOP"         ! "SYNOP TEMP"
   fc_times      = {{ leadtimes }} ! forecast lead time at reference (hhmm) 0000,1200,2400,...
-  prefix_in     = 'mon'           ! prefix for input files. ekf or mon
+  prefix_in     = 'obs'           ! prefix for input files. ekf or mon (or obs if a verSYNOP.nc file is used)
   prefix_out    = 'ver'
   rm_old        = 2                  ! overwrite entries in verification file ?
   fc_file       = '_FCR_TIMEMM_.grib'  ! template for forecast file name
