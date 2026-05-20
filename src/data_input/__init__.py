@@ -399,7 +399,7 @@ def load_INCA_baseline_from_netcdf(
           lat, lon  – WGS84 latitude/longitude [°], shape (chy, chx),
                       derived from CH1903 via pyproj
           time      – absolute timestamps (datetime64[ns]).
-        in case one or more variables are missing return array(s) filled with NaNs  
+        in case one or more variables are missing return array(s) filled with NaNs
     """
     # Maps output variable name -> INCA file prefix, per freq.
     # File prefix == variable name inside the NetCDF file.
