@@ -363,19 +363,19 @@ def load_INCA_baseline_from_netcdf(
                  freq='5min' : integers 0–72 (× 5 min from reftime).
         params:  List of output variable names. Supported values:
 
-                   param     description               unit     freq       source    native   src unit  avail.
+                   param     description               unit     freq       source    native   src unit  avail.from
                    --------  ------------------------  -------  ---------  --------  -------  --------  -------
-                   T_2M      2 m temperature           K        1h/10min   TT        1h       °C        always
-                   TD_2M     2 m dewpoint temperature  K        1h/10min   TD        1h       °C        always
-                   TOT_PREC  total precipitation rate  kg m-2   1h/10min   RR        10min    mm/h      always
+                   T_2M      2 m temperature           K        1h/10min   TT        1h       °C        2022
+                   TD_2M     2 m dewpoint temperature  K        1h/10min   TD        1h       °C        2022
+                   TOT_PREC  total precipitation rate  kg m-2   1h/10min   RR        10min    mm/h      2022
                    TOT_PREC  total precipitation rate  kg m-2   5min       RP        5min     mm/h      2025-05
-                   FF_10M    10 m wind speed           m/s      1h         FF        1h       m/s       always
+                   FF_10M    10 m wind speed           m/s      1h         FF        1h       m/s       2022
                    FF_10M    10 m wind speed           m/s      10min      FF_10min  10min    m/s       2025-05
-                   DD_10M    10 m wind direction       °        1h         DD        1h       °         always
+                   DD_10M    10 m wind direction       °        1h         DD        1h       °         2022
                    DD_10M    10 m wind direction       °        10min      DD_10min  10min    °         2025-05
-                   VMAX_10M  10 m wind gust            m/s      1h         WG        1h       m/s       always
+                   VMAX_10M  10 m wind gust            m/s      1h         WG        1h       m/s       2022
                    VMAX_10M  10 m wind gust            m/s      10min      WG_10min  10min    m/s       2025-05
-                   CLCT      total cloud cover         %        1h/10min   CT        10min    %         always
+                   CLCT      total cloud cover         %        1h/10min   CT        10min    %         2022
                    U_10M     10 m zonal wind           m/s      1h/10min   derived from DD_10M, FF_10M
                    V_10M     10 m meridional wind      m/s      1h/10min   derived from DD_10M, FF_10M
 
