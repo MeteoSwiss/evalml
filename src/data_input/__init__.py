@@ -483,6 +483,7 @@ def load_INCA_baseline_from_netcdf(
         "lon": (("chy", "chx"), _lon_2d, {"units": "degrees_east",  "long_name": "longitude"}),
     }
 
+    #load parameter by parameter
     datasets: dict[str, xr.DataArray] = {}
     for param in to_load:
         prefix = prefix_map[param]
@@ -508,6 +509,7 @@ def load_INCA_baseline_from_netcdf(
                 name=param,
             )
             continue
+        # Convert units if necessary
         da = ds_var[prefix]
         units = da.attrs.get("units", "")
         if units == "degrees C":
