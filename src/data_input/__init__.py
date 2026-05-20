@@ -426,6 +426,17 @@ def load_INCA_baseline_from_netcdf(
         },
     }
     DERIVED_DEPS = {"U_10M": ["DD_10M", "FF_10M"], "V_10M": ["DD_10M", "FF_10M"]}
+    PARAM_UNITS = {
+        "T_2M":     "K",
+        "TD_2M":    "K",
+        "TOT_PREC": "kg m-2",
+        "FF_10M":   "m/s",
+        "DD_10M":   "degrees",
+        "CLCT":     "%",
+        "VMAX_10M": "m/s",
+        "U_10M":    "m/s",
+        "V_10M":    "m/s",
+    }
     FREQ_TO_TD = {
         "1h":   np.timedelta64(1,  "h"),
         "10min": np.timedelta64(10, "m"),
@@ -493,6 +504,7 @@ def load_INCA_baseline_from_netcdf(
                 ),
                 dims=["time", "chy", "chx"],
                 coords={"time": valid_times, "chy": _INCA_CHY, "chx": _INCA_CHX, **latlon_coords},
+                attrs={"units": PARAM_UNITS[param]},
                 name=param,
             )
             continue
