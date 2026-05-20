@@ -362,25 +362,26 @@ def load_INCA_baseline_from_netcdf(
                  freq='10min': integers 0–36 (× 10 min from reftime).
                  freq='5min' : integers 0–72 (× 5 min from reftime).
         params:  List of output variable names. Supported values:
-                   T_2M     – 2 m temperature            [K]   (source: TT, °C)
-                   TD_2M    – 2 m dewpoint temperature   [K]   (source: TD, °C)
-                   TOT_PREC – total precipitation rate   [kg m-2]
-                                 freq='1h' or '10min': RR  (10-min native, avail. always)
-                                 freq='5min'         : RP  ( 5-min native, avail. since 2025-05-14)
-                   FF_10M   – 10 m wind speed            [m/s]
-                                 freq='1h'   : FF       (hourly, avail. always)
-                                 freq='10min': FF_10min (10-min, avail. since 2025-05-14)
-                   DD_10M   – 10 m wind direction        [°]
-                                 freq='1h'   : DD       (hourly, avail. always)
-                                 freq='10min': DD_10min (10-min, avail. since 2025-05-14)
-                   VMAX_10M – 10 m wind gust             [m/s]
-                                 freq='1h'   : WG       (hourly, avail. always)
-                                 freq='10min': WG_10min (10-min, avail. since 2025-05-14)
-                   CLCT     – total cloud cover          [%]   (source: CT, 10-min)
-                   U_10M    – 10 m zonal wind component  [m/s] (derived from DD_10M, FF_10M)
-                   V_10M    – 10 m meridional wind comp. [m/s] (derived from DD_10M, FF_10M)
-                 U_10M and V_10M follow the meteorological convention: DD is
+
+                   param     description               unit     freq       source    native   src unit  avail.
+                   --------  ------------------------  -------  ---------  --------  -------  --------  -------
+                   T_2M      2 m temperature           K        1h/10min   TT        1h       °C        always
+                   TD_2M     2 m dewpoint temperature  K        1h/10min   TD        1h       °C        always
+                   TOT_PREC  total precipitation rate  kg m-2   1h/10min   RR        10min    mm/h      always
+                   TOT_PREC  total precipitation rate  kg m-2   5min       RP        5min     mm/h      2025-05
+                   FF_10M    10 m wind speed           m/s      1h         FF        1h       m/s       always
+                   FF_10M    10 m wind speed           m/s      10min      FF_10min  10min    m/s       2025-05
+                   DD_10M    10 m wind direction       °        1h         DD        1h       °         always
+                   DD_10M    10 m wind direction       °        10min      DD_10min  10min    °         2025-05
+                   VMAX_10M  10 m wind gust            m/s      1h         WG        1h       m/s       always
+                   VMAX_10M  10 m wind gust            m/s      10min      WG_10min  10min    m/s       2025-05
+                   CLCT      total cloud cover         %        1h/10min   CT        10min    %         always
+                   U_10M     10 m zonal wind           m/s      1h/10min   derived from DD_10M, FF_10M
+                   V_10M     10 m meridional wind      m/s      1h/10min   derived from DD_10M, FF_10M
+
+                 U_10M and V_10M use the meteorological convention: DD is
                  the direction the wind blows FROM, clockwise from North.
+                 freq='5min' only supports TOT_PREC.
         freq:    Output time granularity: '1h' (default), '10min', or '5min'.
                  steps are interpreted as multiples of this interval.
                  Max step: 6 for '1h', 36 for '10min', 72 for '5min'.
