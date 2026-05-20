@@ -15,6 +15,10 @@ import xarray as xr  # noqa: E402
 
 LOG = logging.getLogger(__name__)
 
+# INCA grid in CH1903/LV03 (EPSG:21781): 1 km spacing, 710 × 640 points
+_INCA_CHX = np.arange(255500, 965500, 1000, dtype=np.float64)
+_INCA_CHY = np.arange(-159500, 480500, 1000, dtype=np.float64)
+
 
 def _select_valid_times(ds, times: np.datetime64):
     # (handle special case where some valid times are not in the dataset, e.g. at the end)
@@ -459,7 +463,16 @@ def load_INCA_baseline_from_netcdf(
         else:
             raise ValueError(f"INCA baseline does not support parameter: {param}")
 
-    datasets = []
+    # Precompute lat/lon from the canonical INCA grid (no native file required)
+    transformer = pyproj.Transformer.from_crs("EPSG:21781", "EPSG:4326", always_xy=True)
+    _chx_2d, _chy_2d = np.meshgrid(_INCA_CHX, _INCA_CHY)
+    _lon_2d, _lat_2d = transformer.transform(_chx_2d, _chy_2d)
+    latlon_coords = {
+        "lat": (("chy", "chx"), _lat_2d, {"units": "degrees_north", "long_name": "latitude"}),
+        "lon": (("chy", "chx"), _lon_2d, {"units": "degrees_east",  "long_name": "longitude"}),
+    }
+
+    datasets: dict[str, xr.DataArray] = {}
     for param in to_load:
         prefix = prefix_map[param]
         filepath = (
@@ -468,7 +481,21 @@ def load_INCA_baseline_from_netcdf(
             / f"{reftime.month:02d}"
             / f"{prefix}_INCA_{reftime:%Y%m%d%H%M}.nc"
         )
-        ds_var = xr.open_dataset(filepath, drop_variables=["grid_mapping"])
+        try:
+            ds_var = xr.open_dataset(filepath, drop_variables=["grid_mapping"])
+        except FileNotFoundError:
+            LOG.warning("INCA file not found, filling %s with NaN: %s", param, filepath)
+            datasets[param] = xr.DataArray(
+                np.full(
+                    (len(valid_times), len(_INCA_CHY), len(_INCA_CHX)),
+                    np.nan,
+                    dtype=np.float32,
+                ),
+                dims=["time", "chy", "chx"],
+                coords={"time": valid_times, "chy": _INCA_CHY, "chx": _INCA_CHX, **latlon_coords},
+                name=param,
+            )
+            continue
         da = ds_var[prefix]
         units = da.attrs.get("units", "")
         if units == "degrees C":
@@ -477,18 +504,12 @@ def load_INCA_baseline_from_netcdf(
             da = da.assign_attrs({**da.attrs, "units": "kg m-2"})
         # Reindex to the target time grid; variables coarser than freq get NaN
         # at timestamps absent from their native resolution
-        datasets.append(da.rename(param).reindex(time=valid_times))
+        datasets[param] = da.rename(param).reindex(time=valid_times)
 
-    merged = xr.merge(datasets, join="exact")
+    merged = xr.merge(list(datasets.values()), join="override")
 
-    # Add lat/lon as 2D coordinates derived from CH1903 (EPSG:21781)
-    transformer = pyproj.Transformer.from_crs("EPSG:21781", "EPSG:4326", always_xy=True)
-    chx, chy = np.meshgrid(merged.chx.values, merged.chy.values)
-    lon, lat = transformer.transform(chx, chy)
-    merged = merged.assign_coords(
-        lat=(("chy", "chx"), lat, {"units": "degrees_north", "long_name": "latitude"}),
-        lon=(("chy", "chx"), lon, {"units": "degrees_east",  "long_name": "longitude"}),
-    )
+    # Add lat/lon derived from the canonical INCA grid
+    merged = merged.assign_coords(**latlon_coords)
 
     # Derive wind components (meteorological convention: direction wind blows FROM)
     if "U_10M" in params or "V_10M" in params:
