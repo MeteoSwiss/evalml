@@ -10,6 +10,7 @@ os.environ["ECCODES_DEFINITION_PATH"] = str(eccodes_definition_path)
 from meteodatalab import data_source, grib_decoder  # noqa: E402
 
 import numpy as np  # noqa: E402
+import pyproj  # noqa: E402
 import xarray as xr  # noqa: E402
 
 LOG = logging.getLogger(__name__)
@@ -475,6 +476,15 @@ def load_INCA_baseline_from_netcdf(
         datasets.append(da.rename(param).reindex(time=valid_times))
 
     merged = xr.merge(datasets, join="exact")
+
+    # Add lat/lon as 2D coordinates derived from CH1903 (EPSG:21781)
+    transformer = pyproj.Transformer.from_crs("EPSG:21781", "EPSG:4326", always_xy=True)
+    chx, chy = np.meshgrid(merged.chx.values, merged.chy.values)
+    lon, lat = transformer.transform(chx, chy)
+    merged = merged.assign_coords(
+        lat=(("chy", "chx"), lat, {"units": "degrees_north", "long_name": "latitude"}),
+        lon=(("chy", "chx"), lon, {"units": "degrees_east",  "long_name": "longitude"}),
+    )
 
     # Derive wind components (meteorological convention: direction wind blows FROM)
     if "U_10M" in params or "V_10M" in params:
