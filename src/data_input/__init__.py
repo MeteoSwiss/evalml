@@ -336,3 +336,115 @@ def load_forecast_data(
         )
 
     return fcst
+
+
+def load_INCA_baseline_from_netcdf(
+    root: Path,
+    reftime: datetime,
+    steps: list[int],
+    params: list[str],
+    freq: str = "1h",
+) -> xr.Dataset:
+    """Load INCA analysis/nowcast data from per-variable NetCDF files.
+
+    Files are read from {root}/{year}/{month}/{VAR}_INCA_{YYYYmmddHHMM}.nc.
+    Each INCA variable lives in a separate file and covers 6 hours from reftime.
+
+    Args:
+        root:    Base directory of the INCA archive, e.g.
+                 Path("/store_new/mch/msclim/INCA"). Year and month
+                 subdirectories are appended automatically.
+        reftime: Reference time (forecast initialisation time). Used to locate
+                 the source files and to build the output time coordinate.
+        steps:   List of step indices interpreted as multiples of freq.
+                 For freq='1h'  : integers 0–6  (hours from reftime).
+                 For freq='10min': integers 0–36 (× 10 min from reftime).
+        params:  List of output variable names. Supported values:
+                   T_2M     – 2 m temperature            [K]   (source: TT, °C)
+                   TD_2M    – 2 m dewpoint temperature   [K]   (source: TD, °C)
+                   TOT_PREC – total precipitation rate   [kg m-2] (source: RR, mm/h)
+                   FF_10M   – 10 m wind speed            [m/s] (source: FF)
+                   DD_10M   – 10 m wind direction        [°]   (source: DD)
+                   U_10M    – 10 m zonal wind component  [m/s] (derived from DD, FF)
+                   V_10M    – 10 m meridional wind comp. [m/s] (derived from DD, FF)
+                   CLCT     – total cloud cover          [%]   (source: CT)
+                   VMAX_10M – 10 m wind gust             [m/s] (source: WG)
+                 U_10M and V_10M follow the meteorological convention: DD is
+                 the direction the wind blows FROM, clockwise from North.
+        freq:    Output time granularity: '1h' (default) or '10min'.
+                 Native resolution of each source variable:
+                   hourly  (max step 6) : TT, TD, DD, FF, WG
+                   10-min  (max step 36): RR, CT
+                 At freq='10min', hourly variables have NaN at non-hourly steps.
+
+    Returns:
+        xr.Dataset with dimensions (time, chy, chx) in the Swiss CH1903
+        coordinate system. The time coordinate holds absolute timestamps.
+    """
+    VAR_RENAME = {
+        "TT": "T_2M",
+        "TD": "TD_2M",
+        "RR": "TOT_PREC",
+        "DD": "DD_10M",
+        "FF": "FF_10M",
+        "CT": "CLCT",
+        "WG": "VMAX_10M",
+    }
+    PARAM_TO_PREFIX = {v: k for k, v in VAR_RENAME.items()}
+    DERIVED_DEPS = {"U_10M": ["DD_10M", "FF_10M"], "V_10M": ["DD_10M", "FF_10M"]}
+    FREQ_TO_TD = {"1h": np.timedelta64(1, "h"), "10min": np.timedelta64(10, "m")}
+
+    if freq not in FREQ_TO_TD:
+        raise ValueError(f"freq must be '1h' or '10min', got {freq!r}")
+    MAX_STEPS = {"1h": 6, "10min": 36}
+    if max(steps) > MAX_STEPS[freq]:
+        raise ValueError(
+            f"max step for freq={freq!r} is {MAX_STEPS[freq]}, got {max(steps)}"
+        )
+    step_td = FREQ_TO_TD[freq]
+    valid_times = (np.datetime64(reftime) + np.array(steps) * step_td).astype(
+        "datetime64[ns]"
+    )
+
+    # Determine which native INCA variables to load
+    to_load: set[str] = set()
+    for param in params:
+        if param in PARAM_TO_PREFIX:
+            to_load.add(param)
+        elif param in DERIVED_DEPS:
+            to_load.update(DERIVED_DEPS[param])
+        else:
+            raise ValueError(f"INCA baseline does not support parameter: {param}")
+
+    datasets = []
+    for param in to_load:
+        prefix = PARAM_TO_PREFIX[param]
+        filepath = (
+            root
+            / f"{reftime.year:04d}"
+            / f"{reftime.month:02d}"
+            / f"{prefix}_INCA_{reftime:%Y%m%d%H%M}.nc"
+        )
+        ds_var = xr.open_dataset(filepath, drop_variables=["grid_mapping"])
+        da = ds_var[prefix]
+        units = da.attrs.get("units", "")
+        if units == "degrees C":
+            da = (da + 273.15).assign_attrs({**da.attrs, "units": "K"})
+        elif units == "mm/h":
+            da = da.assign_attrs({**da.attrs, "units": "kg m-2"})
+        # Reindex to the target time grid; variables coarser than freq get NaN
+        # at timestamps absent from their native resolution
+        datasets.append(da.rename(param).reindex(time=valid_times))
+
+    merged = xr.merge(datasets, join="exact")
+
+    # Derive wind components (meteorological convention: direction wind blows FROM)
+    if "U_10M" in params or "V_10M" in params:
+        dd_rad = np.deg2rad(merged["DD_10M"])
+        ff = merged["FF_10M"]
+        if "U_10M" in params:
+            merged["U_10M"] = (-ff * np.sin(dd_rad)).assign_attrs(units="m/s")
+        if "V_10M" in params:
+            merged["V_10M"] = (-ff * np.cos(dd_rad)).assign_attrs(units="m/s")
+
+    return merged[list(params)]
