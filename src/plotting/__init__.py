@@ -161,8 +161,10 @@ class StatePlotter:
         # removed for now to simplify the workflow
         if proj == _PROJECTIONS["orthographic"]:
             triang, mask = self._orthographic_tri
+            data_crs = proj  # x, y are already in the orthographic CRS
         else:
             triang, mask = self.tri, slice(None, None)
+            data_crs = ccrs.PlateCarree()  # x, y are raw lon/lat
         x, y = triang.x, triang.y
         # TODO: this is hardcoded for when the initial state has two timesteps
         # need to ditch this later
@@ -194,7 +196,7 @@ class StatePlotter:
                 y=y[finite],
                 z=field[finite],
                 style=style_to_use,
-                transform=proj,
+                transform=data_crs,
                 **plot_kwargs,
             )  # for earthkit.plots to work properly cmap and norm are needed here
         # TODO: gridlines etc would be nicer to have in the init, but I didn't get

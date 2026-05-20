@@ -8,21 +8,20 @@ zarr, converts it to elevation [m], and renders:
   - Bottom: elevation profile along that longitude vs latitude.
 
 Uses the same earthkit-plots schema (Roboto font, soft grid, no axis spines)
-as the showcase workflow. The map is drawn in the COSMO-CH rotated pole CRS
-because that is the data's native grid — the domain envelope is then a
-true rectangle, so the figure has no white slack around the data.
+and the project's `StatePlotter` as the showcase workflow. The map is drawn
+in the COSMO-CH rotated pole CRS — realch1's native grid — so the data
+domain is a true rectangle with no projection slack around it.
 """
 
 from pathlib import Path
 
 import cartopy.crs as ccrs
-import earthkit.plots as ekp  # noqa: F401 — import applies default schema (fonts, rcParams)
-import matplotlib.pyplot as plt
+import earthkit.plots as ekp
 import numpy as np
 import xarray as xr
-from matplotlib.colors import BoundaryNorm
-from matplotlib.tri import Triangulation
 from shapely.geometry import MultiPoint
+
+from plotting import StatePlotter
 
 # COSMO-CH rotated pole — realch1 lives on this grid.
 ROTATED_POLE = ccrs.RotatedPole(pole_longitude=-170.0, pole_latitude=43.0)
@@ -67,55 +66,52 @@ def extract_cross_section(
 
 def main(outfn: Path) -> None:
     lons, lats, elevation = load_topography(REALCH1_ZARR)
+    lon_min, lon_max = float(np.nanmin(lons)), float(np.nanmax(lons))
     lat_min, lat_max = float(np.nanmin(lats)), float(np.nanmax(lats))
 
-    # Transform to the data's native rotated pole — in this CRS the realch1
-    # domain is a perfect rectangle.
+    plotter = StatePlotter(lons, lats, outfn.parent)
+    fig = plotter.init_geoaxes(
+        nrows=2,
+        ncols=1,
+        projection=ROTATED_POLE,
+        bbox=[lon_min, lon_max, lat_min, lat_max],
+        name="ICON-REA-L-CH1 topography",
+        size=(8, 9),
+    )
+    # Override the equal-height gridspec so the map gets ~2x the height of the
+    # cross-section panel. add_map() hasn't run yet, so this is safe.
+    fig.gridspec = fig.fig.add_gridspec(2, 1, height_ratios=[2.4, 1.0], hspace=0.18)
+
+    subplot = fig.add_map(row=0, column=0)
+    style = ekp.styles.Style(
+        colors="terrain",
+        levels=ELEVATION_LEVELS,
+        extend="max",
+        units="m",
+    )
+    plotter.plot_field(subplot, elevation, style=style)
+
+    # In rotated-pole coordinates the data envelope is a perfect rectangle.
+    # Set the extent to the projected min/max so the map is a tight fit.
     xyz = ROTATED_POLE.transform_points(ccrs.PlateCarree(), lons, lats)
     x_rot, y_rot = xyz[:, 0], xyz[:, 1]
-    valid = np.isfinite(x_rot) & np.isfinite(y_rot) & np.isfinite(elevation)
-    triang = Triangulation(x_rot[valid], y_rot[valid])
-
-    # earthkit-plots Figure: 2 rows, map on top, profile on bottom.
-    fig = ekp.Figure(
-        rows=2,
-        columns=1,
-        size=(8, 9),
-        crs=ROTATED_POLE,
-        height_ratios=[2.4, 1.0],
-        hspace=0.18,
-    )
-    subplot = fig.add_map(row=0, column=0)
-    ax = subplot.ax  # GeoAxes in the rotated pole CRS
-
-    cmap = plt.get_cmap("terrain", len(ELEVATION_LEVELS)).copy()
-    norm = BoundaryNorm(ELEVATION_LEVELS, cmap.N, extend="max")
-    cf = ax.tricontourf(
-        triang,
-        elevation[valid],
-        levels=ELEVATION_LEVELS,
-        cmap=cmap,
-        norm=norm,
-        extend="max",
-        transform=ROTATED_POLE,
-    )
-
-    # Tight extent in rotated coordinates — no projection slack at the corners.
-    ax.set_extent(
-        [x_rot[valid].min(), x_rot[valid].max(),
-         y_rot[valid].min(), y_rot[valid].max()],
+    finite = np.isfinite(x_rot) & np.isfinite(y_rot)
+    subplot.ax.set_extent(
+        [x_rot[finite].min(), x_rot[finite].max(),
+         y_rot[finite].min(), y_rot[finite].max()],
         crs=ROTATED_POLE,
     )
 
-    # Showcase-style background layers, but skip gridlines (handled separately).
-    subplot.land()
-    subplot.coastlines()
-    subplot.borders()
+    # standard_layers() (called inside plot_field) draws a cartopy graticule.
+    # Replace it with a label-only one constrained to the left/bottom edges so
+    # the diagonal rotated-pole meridians do not drop labels in the map body.
+    from cartopy.mpl.gridliner import Gridliner
 
-    # Lat/lon labels without drawing the grid lines themselves. Constrain
-    # labels to the left/bottom edges so the diagonal rotated-pole meridians
-    # don't drop labels in the middle of the map.
-    gl = ax.gridlines(
+    for artist in list(subplot.ax.artists):
+        if isinstance(artist, Gridliner):
+            artist.remove()
+    subplot.ax._gridliners = []
+    subplot.ax.gridlines(
         draw_labels=["left", "bottom"],
         linewidth=0,
         alpha=0,
@@ -126,7 +122,7 @@ def main(outfn: Path) -> None:
 
     # LAM envelope outline in lat/lon.
     lam_hull = MultiPoint(list(zip(lons.tolist(), lats.tolist()))).convex_hull
-    ax.add_geometries(
+    subplot.ax.add_geometries(
         [lam_hull],
         crs=ccrs.PlateCarree(),
         edgecolor="#333333",
@@ -135,7 +131,7 @@ def main(outfn: Path) -> None:
     )
 
     # Vertical line marking the cross-section longitude.
-    ax.plot(
+    subplot.ax.plot(
         [CROSS_LON, CROSS_LON],
         [lat_min, lat_max],
         color="#C0392B",
@@ -144,13 +140,7 @@ def main(outfn: Path) -> None:
         transform=ccrs.PlateCarree(),
         label=f"cross-section @ {CROSS_LON}°E",
     )
-    ax.legend(loc="lower left", fontsize=9, framealpha=0.9)
-    ax.set_title("ICON-REA-L-CH1 topography")
-
-    cbar = fig.fig.colorbar(
-        cf, ax=ax, orientation="horizontal", shrink=0.7, pad=0.08, extend="max"
-    )
-    cbar.set_label("elevation [m]")
+    subplot.ax.legend(loc="lower left", fontsize=9, framealpha=0.9)
 
     # Cross-section panel on row 1: fill drawn above the schema y-grid (zorder).
     lat_cs, elev_cs = extract_cross_section(lons, lats, elevation, CROSS_LON, LON_TOL)
@@ -163,7 +153,7 @@ def main(outfn: Path) -> None:
     ax_cs.set_ylabel("elevation [m]")
     ax_cs.set_title(f"Cross-section at {CROSS_LON}°E")
 
-    outfn.parent.mkdir(parents=True, exist_ok=True)
+    fig.title("ICON-REA-L-CH1 topography")
     fig.save(outfn, bbox_inches="tight", dpi=200)
     print(f"saved: {outfn}")
 
