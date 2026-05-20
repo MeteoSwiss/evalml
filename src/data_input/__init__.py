@@ -365,16 +365,16 @@ def load_INCA_baseline_from_netcdf(
                    TD_2M    – 2 m dewpoint temperature   [K]   (source: TD, °C)
                    TOT_PREC – total precipitation rate   [kg m-2]
                                  freq='1h' or '10min': RR  (10-min native, avail. always)
-                                 freq='5min'         : RP  ( 5-min native, avail. since 2025-05)
+                                 freq='5min'         : RP  ( 5-min native, avail. since 2025-05-14)
                    FF_10M   – 10 m wind speed            [m/s]
                                  freq='1h'   : FF       (hourly, avail. always)
-                                 freq='10min': FF_10min (10-min, avail. since 2025-05)
+                                 freq='10min': FF_10min (10-min, avail. since 2025-05-14)
                    DD_10M   – 10 m wind direction        [°]
                                  freq='1h'   : DD       (hourly, avail. always)
-                                 freq='10min': DD_10min (10-min, avail. since 2025-10)
+                                 freq='10min': DD_10min (10-min, avail. since 2025-05-14)
                    VMAX_10M – 10 m wind gust             [m/s]
                                  freq='1h'   : WG       (hourly, avail. always)
-                                 freq='10min': WG_10min (10-min, avail. since 2025-10)
+                                 freq='10min': WG_10min (10-min, avail. since 2025-05-14)
                    CLCT     – total cloud cover          [%]   (source: CT, 10-min)
                    U_10M    – 10 m zonal wind component  [m/s] (derived from DD_10M, FF_10M)
                    V_10M    – 10 m meridional wind comp. [m/s] (derived from DD_10M, FF_10M)
@@ -383,7 +383,7 @@ def load_INCA_baseline_from_netcdf(
         freq:    Output time granularity: '1h' (default), '10min', or '5min'.
                  steps are interpreted as multiples of this interval.
                  Max step: 6 for '1h', 36 for '10min', 72 for '5min'.
-                 freq='5min' only supports TOT_PREC (from RP, avail. since 2025-05).
+                 freq='5min' only supports TOT_PREC (from RP, avail. since 2025-05-14).
                  At freq='10min', T_2M and TD_2M (hourly native) have NaN at
                  non-hourly timestamps.
 
