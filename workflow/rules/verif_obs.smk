@@ -41,9 +41,9 @@ rule prepare_mec_input:
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
         ),
     output:
-        obs=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs"),
-        ekf_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs/ekfSYNOP.nc",
-        obs_file=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_obs/obsSYNOP.nc",
+        obs=directory(OUT_ROOT / "data/runs/{run_id}/mec/{init_time}/input_obs"),
+        ekf_file=OUT_ROOT / "data/runs/{run_id}/mec/{init_time}/input_obs/ekfSYNOP.nc",
+        obs_file=OUT_ROOT / "data/runs/{run_id}/mec/{init_time}/input_obs/obsSYNOP.nc",
     log:
         OUT_ROOT / "logs/prepare_mec_input/{run_id}-{init_time}.log",
     params:
@@ -90,7 +90,7 @@ rule link_mec_input:
         ),
     output:
         # own the final input_mod directory for this init (and its contents)
-        mod=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/input_mod"),
+        mod=directory(OUT_ROOT / "data/runs/{run_id}/mec/{init_time}/input_mod"),
     log:
         OUT_ROOT / "logs/link_mec_input/{run_id}-{init_time}.log",
     params:
@@ -118,7 +118,7 @@ rule link_mec_input:
             src_rel="$source_init/grib/${{source_init}}_${{lead3}}.grib"
 
             if [[ -e "$src_rel" ]]; then
-                dest="{wildcards.init_time}/mec/input_mod/${{source_init}}.grib"
+                dest="mec/{wildcards.init_time}/input_mod/${{source_init}}.grib"
                 if [[ "$lead" -eq 0 ]]; then
                     echo "Copying $src_rel -> $dest"
                     cp "$src_rel" "$dest"
@@ -147,7 +147,7 @@ rule generate_mec_namelist:
         template="resources/mec/namelist.jinja2",
         mod_dir=directory(rules.link_mec_input.output.mod),
     output:
-        namelist=OUT_ROOT / "data/runs/{run_id}/{init_time}/mec/namelist",
+        namelist=OUT_ROOT / "data/runs/{run_id}/mec/{init_time}/namelist",
     localrule: True
     params:
         steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
