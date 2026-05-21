@@ -32,6 +32,7 @@ CONFIG_FILE = workflow.config_settings.configfiles[0]
 CONFIG_LABEL = config["config_label"] or CONFIG_FILE.stem
 EXPERIMENT_NAME = f"{WHEN}_{CONFIG_LABEL}_{CONFIG_HASH}"
 CANDIDATES = collect_all_candidates()
+BASELINES = collect_all_baselines()
 
 DATA_DIR = OUT_ROOT / "data"
 LOGS_DIR = OUT_ROOT / "logs"
@@ -88,6 +89,7 @@ onstart:
     print(_c(f"   Config:      {CONFIG_FILE.name}", "90"))
     print(_c(f"   Experiment:  {EXPERIMENT_NAME}", "90"))
     print(_c(f"   Candidates:  {", ".join(CANDIDATES)}", "90"))
+    print(_c(f"   Baselines:   {", ".join(BASELINES)}", "90"))
     print(_c(f"   Data dir:    {DATA_DIR}", "90"))
     print(_c(f"   Logs dir:    {LOGS_DIR}", "90"))
     print(_c(f"   Results dir: {RESULTS_DIR}", "90"))

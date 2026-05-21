@@ -107,25 +107,64 @@ def load_analysis_data_from_zarr(
     return _select_valid_times(ds, times)
 
 
-def load_fct_data_from_grib(
-    root: Path, reftime: datetime, steps: list[int], params: list[str]
-) -> xr.Dataset:
-    """Load forecast data from GRIB files for a specific valid time."""
+def _collect_ml_grib_files(
+    root: Path, reftime: datetime, steps: list[int] | None = None
+) -> list[Path]:
+    """Return GRIB files for an ML inference run (flat directory layout).
+
+    When `steps` is provided, the discovered files are filtered to those whose
+    name ends with ``_{step:03d}.grib``.
+    """
     files = sorted(root.glob(f"{reftime:%Y%m%d%H%M}*.grib"))
+    if steps is None:
+        return files
+    suffixes = {f"_{step:03d}.grib" for step in steps}
+    return [f for f in files if any(f.name.endswith(s) for s in suffixes)]
+
+
+def _collect_icon_archive_files(
+    root: Path, reftime: datetime, steps: list[int], member_id: str = "000"
+) -> list[Path]:
+    """Return surface GRIB files for one member of an ICON operational archive.
+
+    `root` is the FCST<year> directory, e.g.
+    ``/store_new/mch/msopr/osm/ICON-CH1-EPS/FCST25``.
+    """
+    reftime_dirs = sorted(root.glob(f"{reftime:%y%m%d%H}_*"))
+    if not reftime_dirs:
+        raise ValueError(
+            f"No archive subdirectory found for {reftime:%y%m%d%H} in {root}"
+        )
+    reftime_dir = reftime_dirs[-1]
+    LOG.info("Reading ICON archive from %s", reftime_dir)
+
+    if "ICON-CH1-EPS" in root.parts:
+        gribname = "i1eff"
+    elif "ICON-CH2-EPS" in root.parts:
+        gribname = "i2eff"
+    else:
+        raise ValueError(
+            f"Cannot determine model from path (expected ICON-CH1-EPS or "
+            f"ICON-CH2-EPS): {root}"
+        )
+
+    return [
+        reftime_dir / "grib" / f"{gribname}{lt // 24:02}{lt % 24:02}0000_{member_id}"
+        for lt in steps
+    ]
+
+
+def load_fct_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
+    """Load forecast data from a list of GRIB files."""
     fds = data_source.FileDataSource(datafiles=files)
-    ds = grib_decoder.load(fds, {"param": params, "step": steps})
+    ds = grib_decoder.load(fds, {"param": params})
     for var, da in ds.items():
         if "z" in da.dims and da.sizes["z"] == 1:
             ds[var] = da.squeeze("z", drop=True)
         elif "z" in da.dims and da.sizes["z"] > 1:
             ds[var] = da.rename({"z": da.attrs["vcoord_type"]})
     ds = xr.merge([ds[p].rename(p) for p in ds], compat="no_conflicts")
-    lead_times = np.array(steps, dtype="timedelta64[h]")
-    # Restrict to the requested lead times so that the TOT_PREC disaggregation
-    # below operates on the correct step interval even if the GRIB contains
-    # extra (e.g. hourly) steps beyond those requested — e.g. when consuming
-    # output from an interpolator emulator or a baseline with sub-step output.
-    ds = ds.sel(lead_time=lead_times)
+    lead_times = ds.lead_time.values
     if "TOT_PREC" in ds.data_vars:
         ## Disaggregate TOT_PREC from cumulative-from-start (expected when the
         ## accumulate_from_start_of_forecast post-processor is enabled in
@@ -171,61 +210,12 @@ def load_fct_data_from_grib(
         ds = ds.rename({"valid_time": "time"})
     if "time" not in ds.coords:
         ds = ds.assign_coords(time=ds.ref_time + ds.lead_time)
-    ds = ds.sel(ref_time=reftime)
+    ds = ds.squeeze("ref_time", drop=False)
 
     # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
     if "cell" in ds.dims:
         ds = ds.rename({"cell": "values"})
     return ds
-
-
-def load_baseline_from_zarr(
-    root: Path, reftime: datetime, steps: list[int], params: list[str]
-) -> xr.Dataset:
-    """Load forecast data from a Zarr dataset."""
-    try:
-        baseline = xr.open_zarr(root, consolidated=True, decode_timedelta=True)
-    except ValueError:
-        raise ValueError(f"Could not open baseline zarr at {root}")
-
-    baseline = baseline.rename(
-        {"forecast_reference_time": "ref_time", "step": "lead_time"}
-    ).sortby("lead_time")
-    lead_times = np.array(steps, dtype="timedelta64[h]")
-    # Restrict to the requested lead times up-front so that the TOT_PREC
-    # disaggregation below operates on the correct step interval, and so that
-    # all other variables avoid loading unused hourly steps from the zarr.
-    baseline = baseline[params].sel(ref_time=reftime, lead_time=lead_times)
-    if "TOT_PREC" in baseline.data_vars:
-        if baseline.TOT_PREC.units == "m":
-            baseline = baseline.assign(TOT_PREC=lambda x: x.TOT_PREC * 1000)
-            baseline.TOT_PREC.attrs["units"] = "kg m-2"
-        ## Disaggregate TOT_PREC from cumulative-from-start (the expected zarr
-        ## convention for processed NWP output) to per-step accumulations.
-        ##
-        ## Sanity-check that the incoming data is actually cumulative: if
-        ## .diff() produces significantly negative values, TOT_PREC is already
-        ## period-accumulated and a second disaggregation would produce
-        ## garbage. In that case raise — we always expect cumulative-from-
-        ## start precipitation here.
-        diff = baseline.TOT_PREC.diff("lead_time")
-        min_diff = float(diff.min().compute())
-        if min_diff < -0.1:  # TOT_PREC canonical units are mm
-            raise ValueError(
-                f"TOT_PREC in the baseline zarr appears to already be "
-                f"period-accumulated (min(.diff()) = {min_diff:.3e} m)."
-            )
-        ## .diff() drops lead_time=0; .reindex() restores it as NaN (no
-        ## accumulation period exists at the forecast initial time). Clip
-        ## small float-noise negatives to zero (anything below -0.1 mm has
-        ## already been caught by the check above).
-        baseline = baseline.assign(
-            TOT_PREC=diff.clip(min=0.0).reindex(lead_time=lead_times)
-        )
-    baseline = baseline.assign_coords(time=baseline.ref_time + baseline.lead_time)
-    if "latitude" in baseline.coords and "longitude" in baseline:
-        baseline = baseline.rename({"latitude": "lat", "longitude": "lon"})
-    return baseline
 
 
 def load_obs_data_from_peakweather(
@@ -316,23 +306,22 @@ def load_truth_data(
 def load_forecast_data(
     root, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
-    """Load forecast data from GRIB files or a baseline Zarr dataset."""
+    """Load forecast data from GRIB files or an ICON archive.
 
+    Routing (in order):
+    1. ``*.grib`` files present in *root* → :func:`load_fct_data_from_grib`
+       (ML inference output)
+    2. Otherwise → ICON operational archive
+    """
+    root = Path(root)
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
-        fcst = load_fct_data_from_grib(
-            root=root,
-            reftime=reftime,
-            steps=steps,
+        return load_fct_data_from_grib(
+            files=_collect_ml_grib_files(root, reftime, steps),
             params=params,
         )
-    else:
-        LOG.info("Loading baseline forecasts from zarr dataset...")
-        fcst = load_baseline_from_zarr(
-            root=root,
-            reftime=reftime,
-            steps=steps,
-            params=params,
-        )
-
-    return fcst
+    LOG.info("Loading baseline forecasts from ICON GRIB archive...")
+    return load_fct_data_from_grib(
+        files=_collect_icon_archive_files(root, reftime, steps),
+        params=params,
+    )
