@@ -54,7 +54,6 @@ rule prepare_mec_input:
         """
         (
         set -euo pipefail
-        shopt -s nullglob
 
         mkdir -p {output.obs}
 
@@ -73,8 +72,10 @@ rule prepare_mec_input:
         """
 
 
-# link_mec_input: create the input_mod dir with symlinks to all fc files from all source inits
 rule link_mec_input:
+    """For each valid time, merge the two inference GRIB files 0h and - 6h and copy it
+    from the source init time into input_mod/, named by source init time.
+    This assembles the model input directory that MEC expects for a single valid time."""
     input:
         # depend on ALL source grib dirs: for each lead l, source_init = init_time - l hours
         obs_file=rules.prepare_mec_input.output.obs_file,
@@ -107,7 +108,7 @@ rule link_mec_input:
         cd {output.mod}/../../..
 
         init="{wildcards.init_time}"
-        echo "Creating input_mod links for init $init (leads: {params.leads})"
+        echo "Creating input_mod files for init $init (leads: {params.leads})"
 
         # for each configured lead copy (and optionally merge) source files into input_mod
         for lead in {params.leads}; do
@@ -161,12 +162,22 @@ rule generate_mec_namelist:
         """
 
 
+rule sarus_pull_mec:
+    """Pull the MEC sarus container image once before parallel MEC jobs."""
+    localrule: True
+    output:
+        touch(OUT_ROOT / "logs/sarus_pull_mec.ok"),
+    shell:
+        "sarus pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main"
+
+
 rule run_mec:
     """Run the MEC container for one initialisation time, producing a verSYNOP feedback file in fdbk_files/."""
     input:
         namelist=rules.generate_mec_namelist.output.namelist,
         prepare_obs=rules.prepare_mec_input.output.obs_file,
         mod_dir=directory(rules.link_mec_input.output.mod),
+        pull_ok=rules.sarus_pull_mec.output,
     output:
         fdbk_file=OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}00.nc",
     log:
@@ -176,9 +187,6 @@ rule run_mec:
         (
         set -euo pipefail
 
-        # Run MEC inside sarus container
-        # Note: pull command currently needed only once to download the container
-        sarus pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
         run_dir=$(dirname {input.namelist})
         abs_run_dir=$(realpath "$run_dir")
         abs_mod_root=$(realpath "$run_dir/../..")   # two levels up (so that all links are mounted to the container)
@@ -256,9 +264,19 @@ rule generate_ffv2_namelist:
         """
 
 
+rule sarus_pull_ffv2:
+    """Pull the FFV2 sarus container image once before the FFV2 job."""
+    localrule: True
+    output:
+        touch(OUT_ROOT / "logs/sarus_pull_ffv2.ok"),
+    shell:
+        "sarus pull container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-main"
+
+
 rule run_ffv2:
     input:
         namelist=rules.generate_ffv2_namelist.output.namelist,
+        pull_ok=rules.sarus_pull_ffv2.output,
     output:
         scores=directory(OUT_ROOT / "data/runs/{run_id}/scores"),
     log:
@@ -282,9 +300,6 @@ rule run_ffv2:
         # Create the output directory to hold scores, if it does not exist
         mkdir -p {output.scores}
 
-        # Run FFV2 inside sarus container
-        # Note: pull command currently needed only once to download the container
-        sarus pull container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-main
         namelist=$(realpath {input.namelist})
         domain_table={params.domain_table}
         blacklists={params.blacklists}

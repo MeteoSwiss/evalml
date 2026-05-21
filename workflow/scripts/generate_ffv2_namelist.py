@@ -60,9 +60,7 @@ def main(args):
     # Render template with provided args
     context = {
         "experiment_ids": args.experiment_ids,
-        "feedback_directories": args.feedback_directories,
         "veri_ens_member": _make_veri_ens_member(args.experiment_ids),
-        "output_directory": args.output_directory,
         "experiment_description": args.experiment_description,
         "file_description": args.file_description,
         "domain_table": args.domain_table,
