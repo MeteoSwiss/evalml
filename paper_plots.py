@@ -1,11 +1,11 @@
 """Paper plot: topography (z) of ICON-REA-L-CH1 with a fixed-longitude cross-section.
 
 Loads the constant `z` field (geopotential at surface) from the realch1 anemoi
-zarr, converts it to elevation [m], and renders:
+zarr, converts it to elevation [m], and renders side-by-side:
 
-  - Top: map of the elevation over the full realch1 domain, with a vertical
-    line marking the cross-section longitude.
-  - Bottom: elevation profile along that longitude vs latitude.
+  - Left: map of the elevation over the full realch1 domain.
+  - Right: elevation profile along a fixed longitude, with latitude on the
+    y-axis so it lines up with the map.
 
 Uses the same earthkit-plots schema (Roboto font, soft grid, no axis spines)
 and the project's `StatePlotter` as the showcase workflow. The map is drawn
@@ -19,7 +19,6 @@ import cartopy.crs as ccrs
 import earthkit.plots as ekp
 import numpy as np
 import xarray as xr
-from shapely.geometry import MultiPoint
 
 from plotting import StatePlotter
 
@@ -31,9 +30,9 @@ REALCH1_ZARR = Path(
     "mch-realch1-fdb-1km-2005-2025-1h-pl13-ifsnames-v1.0.zarr"
 )
 G = 9.80665  # standard gravity, m/s^2
-CROSS_LON = 8.2  # fixed longitude (°E) for the cross-section through the Alps
+CROSS_LON = 9.0  # fixed longitude (°E) for the cross-section through the Alps
 LON_TOL = 0.005  # half-width [°] of the longitude band used for the profile
-ELEVATION_LEVELS = list(range(0, 4001, 250))
+ELEVATION_LEVELS = list(range(0, 3500, 250))
 
 
 def load_topography(zarr_root: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -41,7 +40,7 @@ def load_topography(zarr_root: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray
     ds = xr.open_zarr(zarr_root, consolidated=False)
     variables = list(ds.attrs["variables"])
     z_idx = variables.index("z")
-    geopotential = ds["data"][0, z_idx, 0, :].values  # constant_in_time -> use t=0
+    geopotential = ds["data"][0, z_idx, 0, :].values 
     elevation = geopotential / G
     lons = ds["longitudes"].values
     lats = ds["latitudes"].values
@@ -71,16 +70,16 @@ def main(outfn: Path) -> None:
 
     plotter = StatePlotter(lons, lats, outfn.parent)
     fig = plotter.init_geoaxes(
-        nrows=2,
-        ncols=1,
+        nrows=1,
+        ncols=2,
         projection=ROTATED_POLE,
         bbox=[lon_min, lon_max, lat_min, lat_max],
         name="ICON-REA-L-CH1 topography",
-        size=(8, 9),
+        size=(13, 6),
     )
-    # Override the equal-height gridspec so the map gets ~2x the height of the
+    # Override the equal-width gridspec so the map gets ~2.4x the width of the
     # cross-section panel. add_map() hasn't run yet, so this is safe.
-    fig.gridspec = fig.fig.add_gridspec(2, 1, height_ratios=[2.4, 1.0], hspace=0.18)
+    fig.gridspec = fig.fig.add_gridspec(1, 2, width_ratios=[2.4, 1.0], wspace=0.12)
 
     subplot = fig.add_map(row=0, column=0)
     style = ekp.styles.Style(
@@ -120,38 +119,16 @@ def main(outfn: Path) -> None:
         y_inline=False,
     )
 
-    # LAM envelope outline in lat/lon.
-    lam_hull = MultiPoint(list(zip(lons.tolist(), lats.tolist()))).convex_hull
-    subplot.ax.add_geometries(
-        [lam_hull],
-        crs=ccrs.PlateCarree(),
-        edgecolor="#333333",
-        facecolor="none",
-        linewidth=0.6,
-    )
-
-    # Vertical line marking the cross-section longitude.
-    subplot.ax.plot(
-        [CROSS_LON, CROSS_LON],
-        [lat_min, lat_max],
-        color="#C0392B",
-        linewidth=1.4,
-        linestyle="--",
-        transform=ccrs.PlateCarree(),
-        label=f"cross-section @ {CROSS_LON}°E",
-    )
-    subplot.ax.legend(loc="lower left", fontsize=9, framealpha=0.9)
-
-    # Cross-section panel on row 1: fill drawn above the schema y-grid (zorder).
+    # Cross-section panel on column 1: latitude on y-axis to align with the map.
     lat_cs, elev_cs = extract_cross_section(lons, lats, elevation, CROSS_LON, LON_TOL)
-    ax_cs = fig.fig.add_subplot(fig.gridspec[1, 0])
-    ax_cs.fill_between(lat_cs, 0, elev_cs, color="#7a7a7a", alpha=0.95, zorder=3)
-    ax_cs.plot(lat_cs, elev_cs, color="#333333", linewidth=0.6, zorder=4)
-    ax_cs.set_xlim(lat_min, lat_max)
-    ax_cs.set_ylim(0, max(4500, float(np.nanmax(elev_cs)) * 1.05))
-    ax_cs.set_xlabel("latitude [°N]")
-    ax_cs.set_ylabel("elevation [m]")
-    ax_cs.set_title(f"Cross-section at {CROSS_LON}°E")
+    ax_cs = fig.fig.add_subplot(fig.gridspec[0, 1])
+    ax_cs.fill_betweenx(lat_cs, 0, elev_cs, color="#7a7a7a", alpha=0.95, zorder=3)
+    ax_cs.plot(elev_cs, lat_cs, color="#333333", linewidth=0.6, zorder=4)
+    ax_cs.set_ylim(lat_min, lat_max)
+    ax_cs.set_xlim(0, max(3500, float(np.nanmax(elev_cs)) * 1.05))
+    ax_cs.set_ylabel("latitude [°N]")
+    ax_cs.set_xlabel("[m]")
+    ax_cs.set_title(f"Model elevation at {CROSS_LON}°E")
 
     fig.title("ICON-REA-L-CH1 topography")
     fig.save(outfn, bbox_inches="tight", dpi=200)
