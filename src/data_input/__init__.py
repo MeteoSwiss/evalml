@@ -10,14 +10,9 @@ os.environ["ECCODES_DEFINITION_PATH"] = str(eccodes_definition_path)
 from meteodatalab import data_source, grib_decoder  # noqa: E402
 
 import numpy as np  # noqa: E402
-import pyproj  # noqa: E402
 import xarray as xr  # noqa: E402
 
 LOG = logging.getLogger(__name__)
-
-# INCA grid in CH1903/LV03 (EPSG:21781): 1 km spacing, 710 × 640 points
-_INCA_CHX = np.arange(255500, 965500, 1000, dtype=np.float64)
-_INCA_CHY = np.arange(-159500, 480500, 1000, dtype=np.float64)
 
 
 def _select_valid_times(ds, times: np.datetime64):
@@ -308,33 +303,9 @@ def load_truth_data(
     return truth
 
 
-def load_forecast_data(
-    root, reftime: datetime, steps: list[int], params: list[str]
-) -> xr.Dataset:
-    """Load forecast data from GRIB files or an ICON archive.
-
-    Routing (in order):
-    1. ``*.grib`` files present in *root* → :func:`load_fct_data_from_grib`
-       (ML inference output)
-    2. Otherwise → ICON operational archive
-    """
-    root = Path(root)
-    if any(root.glob("*.grib")):
-        LOG.info("Loading forecasts from GRIB files...")
-        return load_fct_data_from_grib(
-            files=_collect_ml_grib_files(root, reftime, steps),
-            params=params,
-        )
-    LOG.info("Loading baseline forecasts from ICON GRIB archive...")
-    return load_fct_data_from_grib(
-        files=_collect_icon_archive_files(root, reftime, steps),
-        params=params,
-    )
-
-
 def load_INCA_baseline_from_netcdf(
     root: Path,
-    reftime: datetime,
+    ref_time: datetime,
     steps: list[int],
     params: list[str],
     freq: str = "1h",
@@ -342,18 +313,18 @@ def load_INCA_baseline_from_netcdf(
     """Load INCA analysis/nowcast data from per-variable NetCDF files.
 
     Files are read from {root}/{year}/{month}/{VAR}_INCA_{YYYYmmddHHMM}.nc.
-    Each INCA variable lives in a separate file and covers 6 hours from reftime.
+    Each INCA variable lives in a separate file and covers 6 hours from ref_time.
 
     Args:
         root:    Base directory of the INCA archive, e.g.
                  Path("/store_new/mch/msclim/INCA"). Year and month
                  subdirectories are appended automatically.
-        reftime: Reference time (forecast initialisation time). Used to locate
+        ref_time: Reference time (forecast initialisation time). Used to locate
                  the source files and to build the output time coordinate.
         steps:   List of step indices interpreted as multiples of freq.
-                 freq='1h'  : integers 0–6  (hours from reftime).
-                 freq='10min': integers 0–36 (× 10 min from reftime).
-                 freq='5min' : integers 0–72 (× 5 min from reftime).
+                 freq='1h'  : integers 0–6  (hours from ref_time).
+                 freq='10min': integers 0–36 (× 10 min from ref_time).
+                 freq='5min' : integers 0–72 (× 5 min from ref_time).
         params:  List of output variable names. Supported values:
 
                    param     description               unit     freq       source    native   src unit  avail.from
@@ -383,13 +354,19 @@ def load_INCA_baseline_from_netcdf(
                  non-hourly timestamps.
 
     Returns:
-        xr.Dataset with dimensions (time, chy, chx) and coordinates:
-          chx, chy  – Swiss CH1903 (EPSG:21781) easting/northing [m]
-          lat, lon  – WGS84 latitude/longitude [°], shape (chy, chx),
+        xr.Dataset with dimensions (time, y, x) and coordinates:
+          x, y  – Swiss CH1903 (EPSG:21781) easting/northing [m]
+          lat, lon  – WGS84 latitude/longitude [°], shape (y, x),
                       derived from CH1903 via pyproj
           time      – absolute timestamps (datetime64[ns]).
         in case one or more variables are missing return array(s) filled with NaNs
     """
+    from pyproj import Transformer
+
+    # INCA grid in CH1903/LV03 (EPSG:21781): 1 km spacing, 710 × 640 points
+    _INCA_CHX = np.arange(255500, 965500, 1000, dtype=np.float64)
+    _INCA_CHY = np.arange(-159500, 480500, 1000, dtype=np.float64)
+
     # Maps output variable name -> INCA file prefix, per freq.
     # File prefix == variable name inside the NetCDF file.
     PARAM_TO_PREFIX: dict[str, dict[str, str]] = {
@@ -441,11 +418,30 @@ def load_INCA_baseline_from_netcdf(
             f"max step for freq={freq!r} is {MAX_STEPS[freq]}, got {max(steps)}"
         )
     step_td = FREQ_TO_TD[freq]
-    valid_times = (np.datetime64(reftime) + np.array(steps) * step_td).astype(
+    valid_times = (np.datetime64(ref_time) + np.array(steps) * step_td).astype(
         "datetime64[ns]"
     )
 
     prefix_map = PARAM_TO_PREFIX[freq]
+
+    # Precompute lat/lon from the canonical INCA grid (no native file required)
+    transformer = Transformer.from_crs("EPSG:21781", "EPSG:4326", always_xy=True)
+    _chx_2d, _chy_2d = np.meshgrid(_INCA_CHX, _INCA_CHY)
+    _lon_2d, _lat_2d = transformer.transform(_chx_2d, _chy_2d)
+    latlon_coords = {
+        "lat": (
+            ("y", "x"),
+            _lat_2d,
+            {"units": "degrees_north", "long_name": "latitude"},
+        ),
+        "lon": (
+            ("y", "x"),
+            _lon_2d,
+            {"units": "degrees_east", "long_name": "longitude"},
+        ),
+    }
+
+    datasets: dict[str, xr.DataArray] = {}
 
     # Determine which native INCA variables to load
     to_load: set[str] = set()
@@ -462,37 +458,37 @@ def load_INCA_baseline_from_netcdf(
                 )
             to_load.update(deps)
         else:
-            raise ValueError(f"INCA baseline does not support parameter: {param}")
-
-    # Precompute lat/lon from the canonical INCA grid (no native file required)
-    transformer = pyproj.Transformer.from_crs("EPSG:21781", "EPSG:4326", always_xy=True)
-    _chx_2d, _chy_2d = np.meshgrid(_INCA_CHX, _INCA_CHY)
-    _lon_2d, _lat_2d = transformer.transform(_chx_2d, _chy_2d)
-    latlon_coords = {
-        "lat": (
-            ("chy", "chx"),
-            _lat_2d,
-            {"units": "degrees_north", "long_name": "latitude"},
-        ),
-        "lon": (
-            ("chy", "chx"),
-            _lon_2d,
-            {"units": "degrees_east", "long_name": "longitude"},
-        ),
-    }
+            LOG.warning("INCA does not support parameter %r, filling with NaN", param)
+            datasets[param] = xr.DataArray(
+                np.full(
+                    (len(valid_times), len(_INCA_CHY), len(_INCA_CHX)),
+                    np.nan,
+                    dtype=np.float32,
+                ),
+                dims=["time", "y", "x"],
+                coords={
+                    "time": valid_times,
+                    "y": _INCA_CHY,
+                    "x": _INCA_CHX,
+                    **latlon_coords,
+                },
+                attrs={"units": "unknown"},
+                name=param,
+            )
+            continue
 
     # load parameter by parameter
-    datasets: dict[str, xr.DataArray] = {}
     for param in to_load:
         prefix = prefix_map[param]
         filepath = (
             root
-            / f"{reftime.year:04d}"
-            / f"{reftime.month:02d}"
-            / f"{prefix}_INCA_{reftime:%Y%m%d%H%M}.nc"
+            / f"{ref_time.year:04d}"
+            / f"{ref_time.month:02d}"
+            / f"{prefix}_INCA_{ref_time:%Y%m%d%H%M}.nc"
         )
         try:
             ds_var = xr.open_dataset(filepath, drop_variables=["grid_mapping"])
+            ds_var = ds_var.rename({"chx": "x", "chy": "y"})
         except FileNotFoundError:
             LOG.warning("INCA file not found, filling %s with NaN: %s", param, filepath)
             datasets[param] = xr.DataArray(
@@ -501,11 +497,11 @@ def load_INCA_baseline_from_netcdf(
                     np.nan,
                     dtype=np.float32,
                 ),
-                dims=["time", "chy", "chx"],
+                dims=["time", "y", "x"],
                 coords={
                     "time": valid_times,
-                    "chy": _INCA_CHY,
-                    "chx": _INCA_CHX,
+                    "y": _INCA_CHY,
+                    "x": _INCA_CHX,
                     **latlon_coords,
                 },
                 attrs={"units": PARAM_UNITS[param]},
@@ -537,5 +533,40 @@ def load_INCA_baseline_from_netcdf(
         if "V_10M" in params:
             merged["V_10M"] = (-ff * np.cos(dd_rad)).assign_attrs(units="m/s")
 
+    # Restructure to match load_fct_data_from_grib: lead_time is the dimension,
+    # time (valid_time) and ref_time (scalar) are coordinates.
+    ref_time_np = np.datetime64(ref_time, "ns")
+    lead_times = (np.array(steps) * step_td).astype("timedelta64[ns]")
+    merged = merged.assign_coords(lead_time=("time", lead_times))
+    merged = merged.swap_dims({"time": "lead_time"})
+    merged = merged.assign_coords(ref_time=ref_time_np)
+
     return merged[list(params)]
 
+
+def load_forecast_data(
+    root, reftime: datetime, steps: list[int], params: list[str]
+) -> xr.Dataset:
+    """Load forecast data from GRIB files or an ICON archive.
+
+    Routing (in order):
+    1. ``*.grib`` files present in *root* → :func:`load_fct_data_from_grib`
+       (ML inference output)
+    2. ``INCA`` in path parts → :func:`load_INCA_baseline_from_netcdf`
+    3. Otherwise → ICON operational archive
+    """
+    root = Path(root)
+    if any(root.glob("*.grib")):
+        LOG.info("Loading forecasts from GRIB files...")
+        return load_fct_data_from_grib(
+            files=_collect_ml_grib_files(root, reftime, steps),
+            params=params,
+        )
+    if "INCA" in root.parts:
+        LOG.info("Loading INCA baseline from NetCDF files...")
+        return load_INCA_baseline_from_netcdf(root, reftime, steps, params)
+    LOG.info("Loading baseline forecasts from ICON GRIB archive...")
+    return load_fct_data_from_grib(
+        files=_collect_icon_archive_files(root, reftime, steps),
+        params=params,
+    )

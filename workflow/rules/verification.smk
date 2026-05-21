@@ -11,10 +11,12 @@ include: "common.smk"
 
 # TODO: make sure the boundaries aren't used
 def _get_baseline_forecast_path(wc):
-    """Return the FCST<year> directory for a baseline in the ICON GRIB archive."""
+    """Return the forecast data path for a baseline."""
     root = BASELINE_CONFIGS[wc.baseline_id].get("root")
+    if "INCA" in Path(root).parts:
+        return root  # INCA: files are under {root}/{year}/{month}/
     year = wc.init_time[2:4]
-    return f"{root}/FCST{year}"
+    return f"{root}/FCST{year}"  # ICON archive: year-specific subdir
 
 
 rule verification_metrics_baseline:
