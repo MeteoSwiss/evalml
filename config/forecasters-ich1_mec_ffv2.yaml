@@ -3,8 +3,8 @@ description: |
   Evaluate skill of Stage E with/without cutoff edges trained with and without subgrid orography.
 
 dates:
-  start: 2025-07-19T00:00
-  end: 2025-07-20T00:00
+  start: 2025-07-23T00:00
+  end: 2025-07-25T00:00
   frequency: 6h
 
 runs:
@@ -54,10 +54,10 @@ mec:
   ver_synop_root: /scratch/mch/paa/mec/MEC25_I-CH1
 
 ffv2:
-  experiment_ids: "SrucMLModel,"
-  experiment_description: emulator_onPL_ALL_obs_2020
-  file_description: exp_ACOSMO-2-models_C-2E-CTRL_2020
-  domain_table: /users/paa/01_store/02_FFV2/data/7_ML_inner_polygon
+  experiment_ids: Varda
+  experiment_description: Varda-Single_suboro
+  file_description: exp_Varda-Single_2025
+  domain_table: /users/paa/01_store/02_FFV2/data/8_CH_box
   blacklists: /users/paa/01_store/02_FFV2/data/blacklist
 
 profile:
