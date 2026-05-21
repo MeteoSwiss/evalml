@@ -144,33 +144,11 @@ def _(LOG, np):
             except Exception:
                 return arr - 273.15
 
-        def _ms_to_knots(arr):
-            # robust conversion with pint, fallback if dtype unsupported
-            try:
-                return (
-                    _ureg.Quantity(arr, _ureg.meter / _ureg.second).to(_ureg.knot)
-                ).magnitude
-            except Exception:
-                return arr * 1.943844
-
-        def _m_to_mm(arr):
-            # robust conversion with pint, fallback if dtype unsupported
-            try:
-                return (_ureg.Quantity(arr, _ureg.meter).to(_ureg.millimeter)).magnitude
-            except Exception:
-                return arr * 1000
-
     except Exception:
         LOG.warning("pint not available; falling back hardcoded conversions")
 
         def _k_to_c(arr):
             return arr - 273.15
-
-        def _ms_to_knots(arr):
-            return arr * 1.943844
-
-        def _m_to_mm(arr):
-            return arr * 1000
 
     def preprocess_field(param: str, state: dict):
         """
@@ -194,7 +172,7 @@ def _(LOG, np):
             v = fields["V"]
             return np.sqrt(u**2 + v**2), "m/s"
         if param == "TOT_PREC":
-            return np.maximum(_m_to_mm(fields[param]), 0), "mm"
+            return np.maximum(fields[param], 0), "mm"
         # default: passthrough
         return fields[param], None
 
