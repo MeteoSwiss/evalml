@@ -97,7 +97,11 @@ def load_analysis_data_from_zarr(
     )
 
     # change precipitation units from m to kg m-2
-    ds["TOT_PREC"] = ds["TOT_PREC"] * 1000  # convert precipitation units from m to mm
+    for prec_key in ("TOT_PREC_6H", "TOT_PREC_1H", "TOT_PREC"):
+        if prec_key in ds:
+            ds[prec_key] = (
+                ds[prec_key] * 1000
+            )  # convert precipitation units from m to mm
 
     # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
     if "cell" in ds.dims:
