@@ -236,6 +236,9 @@ def load_obs_data_from_peakweather(
         "temperature": "T_2M",
         "wind_u": "U_10M",
         "wind_v": "V_10M",
+        "precipitation": "TOT_PREC",
+        "pressure": "PS",
+        "wind_gust": "VMAX_10M",
     }
     param_names = {k: v for k, v in param_names.items() if v in params}
 
