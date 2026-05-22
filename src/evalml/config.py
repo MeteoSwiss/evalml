@@ -212,10 +212,10 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
-class RegionConfig(BaseModel):
-    """A custom map region defined by name, extent, and projection."""
+class DomainConfig(BaseModel):
+    """A custom map domain defined by name, extent, and projection."""
 
-    name: str = Field(..., description="Name for the custom region (used as wildcard).")
+    name: str = Field(..., description="Name for the custom domain (used as wildcard).")
     extent: List[float] | None = Field(
         None,
         description="Geographic extent as [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates. None means full globe.",
@@ -248,7 +248,7 @@ class AnimationsConfig(BaseModel):
         default=True,
         description="Whether to generate forecast animations (GIFs per param and region).",
     )
-    domains: List[str | RegionConfig] = Field(
+    domains: List[str | DomainConfig] = Field(
         default=["globe", "europe", "switzerland"],
         description=(
             "Domains to generate animations for. Each entry is either a named domain "
