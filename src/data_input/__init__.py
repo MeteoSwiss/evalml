@@ -15,26 +15,6 @@ import xarray as xr  # noqa: E402
 
 LOG = logging.getLogger(__name__)
 
-# INCA grid in CH1903/LV03 (EPSG:21781): 1 km spacing, 710 × 640 points
-_INCA_CHX = np.arange(255500, 965500, 1000, dtype=np.float64)
-_INCA_CHY = np.arange(-159500, 480500, 1000, dtype=np.float64)
-_inca_chx_2d, _inca_chy_2d = np.meshgrid(_INCA_CHX, _INCA_CHY)
-_inca_lon_2d, _inca_lat_2d = Transformer.from_crs(
-    "EPSG:21781", "EPSG:4326", always_xy=True
-).transform(_inca_chx_2d, _inca_chy_2d)
-_INCA_LATLON_COORDS = {
-    "lat": (
-        ("y", "x"),
-        _inca_lat_2d,
-        {"units": "degrees_north", "long_name": "latitude"},
-    ),
-    "lon": (
-        ("y", "x"),
-        _inca_lon_2d,
-        {"units": "degrees_east", "long_name": "longitude"},
-    ),
-}
-
 
 def _select_valid_times(ds, times: np.datetime64):
     # (handle special case where some valid times are not in the dataset, e.g. at the end)
@@ -384,6 +364,28 @@ def load_INCA_baseline_from_netcdf(
           time      – absolute timestamps (datetime64[ns]).
         in case one or more variables are missing return array(s) filled with NaNs
     """
+    # INCA grid in CH1903/LV03 (EPSG:21781): 1 km spacing, 710 × 640 points
+    # Used only as fallback dimensions for NaN-fill arrays when a file is missing.
+    _INCA_CHX = np.arange(255500, 965500, 1000, dtype=np.float64)
+    _INCA_CHY = np.arange(-159500, 480500, 1000, dtype=np.float64)
+
+    def _chxy_to_latlon(x_1d, y_1d) -> dict:
+        x_2d, y_2d = np.meshgrid(x_1d, y_1d)
+        lon_2d, lat_2d = Transformer.from_crs(
+            "EPSG:21781", "EPSG:4326", always_xy=True
+        ).transform(x_2d, y_2d)
+        return {
+            "lat": (
+                ("y", "x"),
+                lat_2d,
+                {"units": "degrees_north", "long_name": "latitude"},
+            ),
+            "lon": (
+                ("y", "x"),
+                lon_2d,
+                {"units": "degrees_east", "long_name": "longitude"},
+            ),
+        }
 
     def _nan_array(units: str) -> xr.DataArray:
         return xr.DataArray(
@@ -397,7 +399,7 @@ def load_INCA_baseline_from_netcdf(
                 "time": valid_times,
                 "y": _INCA_CHY,
                 "x": _INCA_CHX,
-                **_INCA_LATLON_COORDS,
+                **_chxy_to_latlon(_INCA_CHX, _INCA_CHY),
             },
             attrs={"units": units},
         )
@@ -509,8 +511,8 @@ def load_INCA_baseline_from_netcdf(
 
     merged = xr.merge(list(datasets.values()), join="override")
 
-    # Add lat/lon derived from the canonical INCA grid
-    merged = merged.assign_coords(**_INCA_LATLON_COORDS)
+    # Add lat/lon derived from the x/y coordinates in the loaded NetCDF files
+    merged = merged.assign_coords(**_chxy_to_latlon(merged.x.values, merged.y.values))
 
     # Derive wind components (meteorological convention: direction wind blows FROM)
     if "U_10M" in params or "V_10M" in params:
