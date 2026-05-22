@@ -84,6 +84,30 @@ def parse_regions():
     return regions_txt
 
 
+def parse_showcase_regions():
+    """Parse showcase domains from config.
+
+    Returns a dict mapping domain name -> {extent, projection}.
+    Named domains (strings) have extent=None and projection=None,
+    meaning the plot script will fall back to the DOMAINS lookup.
+    Custom domains carry their explicit extent and projection.
+    """
+    result = {}
+    for r in (
+        config.get("showcase", {})
+        .get("animations", {})
+        .get("domains", ["globe", "europe", "switzerland"])
+    ):
+        if isinstance(r, str):
+            result[r] = {"extent": None, "projection": None}
+        else:
+            result[r["name"]] = {
+                "extent": r.get("extent"),
+                "projection": r.get("projection", "orthographic"),
+            }
+    return result
+
+
 # ============================================================================
 # Run entries configuration management
 # ============================================================================
@@ -298,6 +322,8 @@ def master_hash() -> str:
 
 
 REGIONS = parse_regions()
+SHOWCASE_REGIONS = parse_showcase_regions()
+SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])
 REFTIMES = parse_reference_times()
 RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
