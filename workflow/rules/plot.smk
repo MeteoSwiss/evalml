@@ -144,7 +144,7 @@ rule make_forecast_animation:
         region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
     input:
         lambda wc: expand(
-            str(OUT_ROOT / "data/runs/{run_id}/{init_time}/frames/frame_{leadtime}_{param}_{region}.png"),
+            rules.plot_forecast_frame.output,
             run_id=wc.run_id,
             init_time=wc.init_time,
             param=wc.param,

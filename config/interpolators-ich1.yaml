@@ -31,14 +31,12 @@ runs:
         # pinned anemoi-datasets because of ecmwf/anemoi-utils#284, can be removed when fixed
         - anemoi-datasets==0.5.35
   - baseline:
-      baseline_id: ICON-CH2-EPS
       label: ICON-CH2-ctrl
-      root: /store_new/mch/msopr/ml/ICON-CH2-EPS
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
       steps: 0/120/1
   - baseline:
-      baseline_id: ICON-CH1-EPS
       label: ICON-CH1-ctrl
-      root: /store_new/mch/msopr/ml/ICON-CH1-EPS
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
       steps: 0/33/1
 
 truth:

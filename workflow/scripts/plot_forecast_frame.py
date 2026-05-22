@@ -43,10 +43,6 @@ def get_style(param, units_override=None, accu=1):
     }
 
 
-def _m_to_mm(arr):
-    return arr * 1000
-
-
 def preprocess_field(param: str, state: dict):
     """
     - Temperatures: K -> °C
@@ -62,13 +58,15 @@ def preprocess_field(param: str, state: dict):
     if param == "SP":
         return ekm_wind.speed(fields["U"], fields["V"]), "m/s"
     if param == "TOT_PREC":
-        return np.maximum(_m_to_mm(fields[param]), 0), "mm"
+        return np.maximum(fields[param], 0), "mm"
     return fields[param], None
 
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument("--input", type=str, default=None, help="Directory to grib data")
+    parser.add_argument(
+        "--input", type=str, default=None, help="Directory to grib data"
+    )
     parser.add_argument("--date", type=str, default=None, help="reference datetime")
     parser.add_argument("--leadtime", type=str, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
@@ -78,7 +76,9 @@ def main():
         help="JSON dict mapping region name -> {extent, projection}",
     )
     parser.add_argument("--outdir", type=str, help="output directory")
-    parser.add_argument("--accu", type=int, default=1, help="accumulation period in hours")
+    parser.add_argument(
+        "--accu", type=int, default=1, help="accumulation period in hours"
+    )
 
     args = parser.parse_args()
     grib_dir = Path(args.input)
@@ -134,7 +134,9 @@ def main():
         )
         subplot = fig.add_map(row=0, column=0)
 
-        plotter.plot_field(subplot, field, **get_style(param, units_override, accu=accu))
+        plotter.plot_field(
+            subplot, field, **get_style(param, units_override, accu=accu)
+        )
         subplot.ax.add_geometries(
             state["lam_envelope"],
             edgecolor="black",
