@@ -9,20 +9,12 @@ import pandas as pd
 include: "common.smk"
 
 
-# TODO: make sure the boundaries aren't used
-def _get_baseline_forecast_path(wc):
-    """Return the FCST<year> directory for a baseline in the ICON GRIB archive."""
-    root = BASELINE_CONFIGS[wc.baseline_id].get("root")
-    year = wc.init_time[2:4]
-    return f"{root}/FCST{year}"
-
-
 rule verification_metrics_baseline:
     input:
         "src/verification/__init__.py",
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_metrics.py",
-        forecast=_get_baseline_forecast_path,
+        forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth=config["truth"]["root"],
     params:
         baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
