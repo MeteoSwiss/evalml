@@ -17,6 +17,7 @@ LOG = logging.getLogger(__name__)
 
 ZERO_KELVIN = -273.15  # °C
 
+
 def _select_valid_times(ds, times: np.datetime64):
     # (handle special case where some valid times are not in the dataset, e.g. at the end)
     times_np = np.asarray(times, dtype="datetime64[ns]")
@@ -316,6 +317,7 @@ def load_INCA_baseline_from_netcdf(
     steps: list[int],
     params: list[str],
     freq: str = "1h",
+    fill_missing_files: bool = True,
 ) -> xr.Dataset:
     """Load INCA analysis/nowcast data from per-variable NetCDF files.
 
@@ -359,6 +361,8 @@ def load_INCA_baseline_from_netcdf(
                  freq='5min' only supports TOT_PREC (from RP, avail. since 2025-05-14).
                  At freq='10min', T_2M and TD_2M (hourly native) have NaN at
                  non-hourly timestamps.
+        fill_missing_files: If True, missing files are filled with NaN arrays instead
+                 of raising. Defaults to True.
 
     Returns:
         xr.Dataset with dimensions (time, y, x) and coordinates:
@@ -499,6 +503,10 @@ def load_INCA_baseline_from_netcdf(
             ds_var = xr.open_dataset(filepath, drop_variables=["grid_mapping"])
             ds_var = ds_var.rename({"chx": "x", "chy": "y"})
         except FileNotFoundError:
+            if not fill_missing_files:
+                raise FileNotFoundError(
+                    f"INCA file not found for parameter {param!r}: {filepath}"
+                )
             LOG.warning("INCA file not found, filling %s with NaN: %s", param, filepath)
             datasets[param] = _nan_array(PARAM_UNITS[param]).rename(param)
             continue
