@@ -15,6 +15,7 @@ import xarray as xr  # noqa: E402
 
 LOG = logging.getLogger(__name__)
 
+ZERO_KELVIN = -273.15  # °C
 
 def _select_valid_times(ds, times: np.datetime64):
     # (handle special case where some valid times are not in the dataset, e.g. at the end)
@@ -272,7 +273,7 @@ def load_obs_data_from_peakweather(
     ds = ds.assign_coords(lon=("values", pw.stations_table["longitude"]))
     ds = ds.assign_coords(lat=("values", pw.stations_table["latitude"]))
     if "T_2M" in ds:
-        ds["T_2M"] = ds["T_2M"] + 273.15  # convert to Kelvin
+        ds["T_2M"] = ds["T_2M"] - ZERO_KELVIN  # convert to Kelvin
     ds = ds.dropna("values", how="all")
 
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
@@ -505,7 +506,7 @@ def load_INCA_baseline_from_netcdf(
         da = ds_var[prefix]
         units = da.attrs.get("units", "")
         if units == "degrees C":
-            da = (da + 273.15).assign_attrs({**da.attrs, "units": "K"})
+            da = (da - ZERO_KELVIN).assign_attrs({**da.attrs, "units": "K"})
         elif units == "mm/h":
             da = da.assign_attrs({**da.attrs, "units": "kg m-2"})
         # Reindex to the target time grid; variables coarser than freq get NaN
