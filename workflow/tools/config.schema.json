@@ -1,5 +1,38 @@
 {
   "$defs": {
+    "AnimationsConfig": {
+      "description": "Configuration for animation generation.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to generate forecast animations (GIFs per param and region).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "domains": {
+          "default": [
+            "globe",
+            "europe",
+            "switzerland"
+          ],
+          "description": "Domains to generate animations for. Each entry is either a named domain (e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, or a custom domain dict with 'name', optional 'extent' [lon_min, lon_max, lat_min, lat_max], and optional 'projection'.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/RegionConfig"
+              }
+            ]
+          },
+          "title": "Domains",
+          "type": "array"
+        }
+      },
+      "title": "AnimationsConfig",
+      "type": "object"
+    },
     "BaselineConfig": {
       "description": "Configuration for a single baseline to include in the verification.",
       "properties": {
@@ -92,6 +125,14 @@
           "pattern": "^\\d+[hd]$",
           "title": "Frequency",
           "type": "string"
+        },
+        "blacklist": {
+          "description": "Optional list of initialisation dates (ISO-8601) to exclude from processing.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Blacklist",
+          "type": "array"
         }
       },
       "required": [
@@ -445,6 +486,32 @@
       "title": "Locations",
       "type": "object"
     },
+    "MeteogramConfig": {
+      "description": "Configuration for meteogram generation.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to generate meteograms (time series plots at stations).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "stations": {
+          "default": [
+            "GVE",
+            "KLO",
+            "LUG"
+          ],
+          "description": "List of PeakWeather station IDs to generate meteograms for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Stations",
+          "type": "array"
+        }
+      },
+      "title": "MeteogramConfig",
+      "type": "object"
+    },
     "Profile": {
       "description": "Workflow execution profile.",
       "properties": {
@@ -481,6 +548,69 @@
         "jobs"
       ],
       "title": "Profile",
+      "type": "object"
+    },
+    "RegionConfig": {
+      "additionalProperties": false,
+      "description": "A custom map region defined by name, extent, and projection.",
+      "properties": {
+        "name": {
+          "description": "Name for the custom region (used as wildcard).",
+          "title": "Name",
+          "type": "string"
+        },
+        "extent": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Geographic extent as [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates. None means full globe.",
+          "title": "Extent"
+        },
+        "projection": {
+          "default": "orthographic",
+          "description": "Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
+          "title": "Projection",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "RegionConfig",
+      "type": "object"
+    },
+    "ShowcaseConfig": {
+      "description": "Configuration for the showcase workflow.",
+      "properties": {
+        "params": {
+          "default": [
+            "T_2M",
+            "SP_10M"
+          ],
+          "description": "List of parameters to generate animations and meteograms for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "meteograms": {
+          "$ref": "#/$defs/MeteogramConfig"
+        },
+        "animations": {
+          "$ref": "#/$defs/AnimationsConfig"
+        }
+      },
+      "title": "ShowcaseConfig",
       "type": "object"
     },
     "Stratification": {
@@ -624,6 +754,10 @@
     },
     "profile": {
       "$ref": "#/$defs/Profile"
+    },
+    "showcase": {
+      "$ref": "#/$defs/ShowcaseConfig",
+      "description": "Settings for the showcase workflow."
     }
   },
   "required": [

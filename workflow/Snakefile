@@ -31,6 +31,7 @@ CONFIG_FILE = workflow.config_settings.configfiles[0]
 CONFIG_LABEL = config["config_label"] or CONFIG_FILE.stem
 EXPERIMENT_NAME = f"{WHEN}_{CONFIG_LABEL}_{CONFIG_HASH}"
 CANDIDATES = collect_all_candidates()
+BASELINES = collect_all_baselines()
 
 DATA_DIR = OUT_ROOT / "data"
 LOGS_DIR = OUT_ROOT / "logs"
@@ -83,6 +84,7 @@ onstart:
     print(_c(f"   Config:      {CONFIG_FILE.name}", "90"))
     print(_c(f"   Experiment:  {EXPERIMENT_NAME}", "90"))
     print(_c(f"   Candidates:  {", ".join(CANDIDATES)}", "90"))
+    print(_c(f"   Baselines:   {", ".join(BASELINES)}", "90"))
     print(_c(f"   Data dir:    {DATA_DIR}", "90"))
     print(_c(f"   Logs dir:    {LOGS_DIR}", "90"))
     print(_c(f"   Results dir: {RESULTS_DIR}", "90"))
@@ -144,21 +146,29 @@ rule experiment_all:
 rule showcase_all:
     """Target rule for showcase workflow."""
     input:
-        expand(
-            rules.make_forecast_animation.output,
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=CANDIDATES,
-            param=["T_2M", "SP_10M", "TOT_PREC"],
-            region=["globe", "europe", "switzerland"],
-            showcase=EXPERIMENT_NAME,
+        (
+            expand(
+                rules.make_forecast_animation.output,
+                init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+                run_id=CANDIDATES,
+                param=SHOWCASE_PARAMS,
+                region=list(SHOWCASE_REGIONS.keys()),
+                showcase=EXPERIMENT_NAME,
+            )
+            if config["showcase"]["animations"]["enabled"]
+            else []
         ),
-        expand(
-            rules.plot_meteogram.output,
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=CANDIDATES,
-            param=["T_2M", "SP_10M"],
-            sta=["GVE", "KLO", "LUG"],
-            showcase=EXPERIMENT_NAME,
+        (
+            expand(
+                rules.plot_meteogram.output,
+                init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+                run_id=CANDIDATES,
+                param=SHOWCASE_PARAMS,
+                sta=config["showcase"]["meteograms"]["stations"],
+                showcase=EXPERIMENT_NAME,
+            )
+            if config["showcase"]["meteograms"]["enabled"]
+            else []
         ),
 
 

@@ -34,7 +34,7 @@ runs:
 baselines:
   - baseline:
       label: ICON-CH1-EPS
-      root: /store_new/mch/msopr/ml/ICON-CH1-EPS
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
       steps: 0/33/6
 
 truth:
@@ -53,7 +53,7 @@ stratification:
 
 thresholds:
   TOT_PREC:
-    gt: [0.0, 0.001, 0.005]
+    gt: [0.0, 1, 5]
   U_10M:
     gt: [2.5, 5.0, 10.0]
   V_10M:

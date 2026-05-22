@@ -15,6 +15,7 @@ def _():
     import numpy as np
 
     from plotting import DOMAINS
+    from plotting import get_projection
     from plotting import StatePlotter
     from plotting.colormap_defaults import CMAP_DEFAULTS
     from plotting.compat import load_state_from_grib
@@ -29,6 +30,7 @@ def _():
         logging,
         np,
         DOMAINS,
+        get_projection,
         ccrs,
     )
 
@@ -53,6 +55,20 @@ def _(ArgumentParser, Path):
     parser.add_argument("--leadtime", type=str, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
     parser.add_argument("--region", type=str, help="name of region")
+    parser.add_argument(
+        "--extent",
+        type=float,
+        nargs=4,
+        default=None,
+        metavar=("LON_MIN", "LON_MAX", "LAT_MIN", "LAT_MAX"),
+        help="custom geographic extent in PlateCarree coordinates; overrides DOMAINS lookup",
+    )
+    parser.add_argument(
+        "--projection",
+        type=str,
+        default=None,
+        help="projection name (e.g. 'orthographic'); used only together with --extent",
+    )
     parser.add_argument(
         "--accu", type=int, default=1, help="accumulation period in hours"
     )
@@ -144,33 +160,11 @@ def _(LOG, np):
             except Exception:
                 return arr - 273.15
 
-        def _ms_to_knots(arr):
-            # robust conversion with pint, fallback if dtype unsupported
-            try:
-                return (
-                    _ureg.Quantity(arr, _ureg.meter / _ureg.second).to(_ureg.knot)
-                ).magnitude
-            except Exception:
-                return arr * 1.943844
-
-        def _m_to_mm(arr):
-            # robust conversion with pint, fallback if dtype unsupported
-            try:
-                return (_ureg.Quantity(arr, _ureg.meter).to(_ureg.millimeter)).magnitude
-            except Exception:
-                return arr * 1000
-
     except Exception:
         LOG.warning("pint not available; falling back hardcoded conversions")
 
         def _k_to_c(arr):
             return arr - 273.15
-
-        def _ms_to_knots(arr):
-            return arr * 1.943844
-
-        def _m_to_mm(arr):
-            return arr * 1000
 
     def preprocess_field(param: str, state: dict):
         """
@@ -194,7 +188,7 @@ def _(LOG, np):
             v = fields["V"]
             return np.sqrt(u**2 + v**2), "m/s"
         if param == "TOT_PREC":
-            return np.maximum(_m_to_mm(fields[param]), 0), "mm"
+            return np.maximum(fields[param], 0), "mm"
         # default: passthrough
         return fields[param], None
 
@@ -208,6 +202,7 @@ def _(
     accu,
     args,
     get_style,
+    get_projection,
     outfn,
     param,
     preprocess_field,
@@ -222,11 +217,17 @@ def _(
         state["latitudes"],
         outfn.parent,
     )
+    if args.extent is not None:
+        _projection = get_projection(args.projection or "orthographic")
+        _extent = args.extent
+    else:
+        _projection = DOMAINS[region]["projection"]
+        _extent = DOMAINS[region]["extent"]
     fig = plotter.init_geoaxes(
         nrows=1,
         ncols=1,
-        projection=DOMAINS[region]["projection"],
-        bbox=DOMAINS[region]["extent"],
+        projection=_projection,
+        bbox=_extent,
         name=region,
         size=(6, 6),
     )

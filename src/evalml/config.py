@@ -22,6 +22,10 @@ class Dates(BaseModel):
         description="Time between initialisations. Must be a combination of a number and a time unit (h or d).",
         pattern=r"^\d+[hd]$",
     )
+    blacklist: List[str] = Field(
+        default_factory=list,
+        description="Optional list of initialisation dates (ISO-8601) to exclude from processing.",
+    )
 
 
 class ExplicitDates(RootModel[List[str]]):
@@ -208,6 +212,70 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
+class RegionConfig(BaseModel):
+    """A custom map region defined by name, extent, and projection."""
+
+    name: str = Field(..., description="Name for the custom region (used as wildcard).")
+    extent: List[float] | None = Field(
+        None,
+        description="Geographic extent as [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates. None means full globe.",
+    )
+    projection: str = Field(
+        "orthographic",
+        description="Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class MeteogramConfig(BaseModel):
+    """Configuration for meteogram generation."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether to generate meteograms (time series plots at stations).",
+    )
+    stations: List[str] = Field(
+        default=["GVE", "KLO", "LUG"],
+        description="List of PeakWeather station IDs to generate meteograms for.",
+    )
+
+
+class AnimationsConfig(BaseModel):
+    """Configuration for animation generation."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether to generate forecast animations (GIFs per param and region).",
+    )
+    domains: List[str | RegionConfig] = Field(
+        default=["globe", "europe", "switzerland"],
+        description=(
+            "Domains to generate animations for. Each entry is either a named domain "
+            "(e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, "
+            "or a custom domain dict with 'name', optional 'extent' "
+            "[lon_min, lon_max, lat_min, lat_max], and optional 'projection'."
+        ),
+    )
+
+
+class ShowcaseConfig(BaseModel):
+    """Configuration for the showcase workflow."""
+
+    params: List[str] = Field(
+        default=["T_2M", "SP_10M"],
+        description="List of parameters to generate animations and meteograms for.",
+    )
+    meteograms: MeteogramConfig = Field(
+        default_factory=MeteogramConfig,
+        description="Configuration for meteogram generation.",
+    )
+    animations: AnimationsConfig = Field(
+        default_factory=AnimationsConfig,
+        description="Configuration for animation generation.",
+    )
+
+
 class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
 
@@ -351,6 +419,10 @@ class ConfigModel(BaseModel):
     dashboard: Dashboard
     locations: Locations
     profile: Profile
+    showcase: ShowcaseConfig = Field(
+        default_factory=ShowcaseConfig,
+        description="Settings for the showcase workflow.",
+    )
 
     model_config = {
         "extra": "forbid",  # fail on misspelled keys
