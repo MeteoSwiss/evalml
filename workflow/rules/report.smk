@@ -36,7 +36,7 @@ rule report_experiment_dashboard:
     params:
         sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
         header_text=make_header_text(),
-        stratification=" ".join(config["dashboard"]["stratification"]),
+        stratification=" ".join(config["experiment"]["dashboard"]["stratification"]),
     log:
         OUT_ROOT / "logs/report_experiment_dashboard/{experiment}.log",
     shell:
