@@ -138,8 +138,8 @@ rule experiment_all:
         expand(
             rules.report_scorecard.output,
             run_id=CANDIDATES,
-            baseline=BASELINE_CONFIGS.keys(),
-            experiment=EXPERIMENT_NAME,
+            experiment=[EXPERIMENT_NAME],
+            scorecard_name=SCORECARD_CONFIGS,
         ),
 
 

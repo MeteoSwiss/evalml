@@ -56,41 +56,27 @@ rule report_scorecard:
     localrule: True
     wildcard_constraints:
         run_id="[^/]+/[^/]+",  # env_id/r_hash — exactly one slash
-        baseline="[^/]+",
+        scorecard_name="[^/]+",  # no slashes
     input:
         script="workflow/scripts/report_scorecard.mo.py",
         verif_run=lambda wc: EXPERIMENT_PARTICIPANTS[wc.run_id],
-        verif_baseline=lambda wc: EXPERIMENT_PARTICIPANTS[wc.baseline],
+        verif_baseline=lambda wc: EXPERIMENT_PARTICIPANTS[
+            SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]
+        ],
     output:
         report(
-            OUT_ROOT
-            / "results/{experiment}/scorecard_plots/{run_id}/scorecard_{baseline}.png",
+            OUT_ROOT / "results/{experiment}/scorecards/{scorecard_name}/{run_id}.png",
         ),
     params:
-        lead_times="6/33/6",
-        regions=[
-            "all",
-            "jura",
-            "mittelland",
-            "alpennordhang",
-            "innerealpentaeler",
-            "alpensuedseite",
-        ],
-        variables=[
-            "U_10M:RMSE,R2,ETS_gt_2p5,ETS_gt_5p0",
-            "V_10M:RMSE,R2,ETS_gt_2p5,ETS_gt_5p0",
-            "T_2M:RMSE,R2",
-            "PMSL:RMSE,R2",
-            "TD_2M:RMSE,R2",
-            "TOT_PREC:RMSE,R2,ETS",
-        ],
+        lead_times=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["lead_times"],
+        regions=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["regions"],
+        variables=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["variables"],
         run_source=lambda wc: RUN_CONFIGS[wc.run_id].get("label", wc.run_id),
-        baseline_source=lambda wc: BASELINE_CONFIGS[wc.baseline].get(
-            "label", wc.baseline
-        ),
+        baseline_source=lambda wc: BASELINE_CONFIGS[
+            SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]
+        ].get("label", SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]),
     log:
-        OUT_ROOT
-        / "logs/report_scorecard/{experiment}/{run_id}/scorecard_{baseline}.log",
+        OUT_ROOT / "logs/report_scorecard/{experiment}/{scorecard_name}/{run_id}.log",
     shell:
         """
         VAR_ARGS=()

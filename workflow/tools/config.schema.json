@@ -240,6 +240,14 @@
         "dashboard": {
           "$ref": "#/$defs/Dashboard",
           "description": "Settings for the experiment dashboard."
+        },
+        "scorecard": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ScorecardConfig"
+          },
+          "description": "Named scorecard configurations. Each key becomes a scorecard variant.",
+          "title": "Scorecard",
+          "type": "object"
         }
       },
       "required": [
@@ -619,6 +627,46 @@
         "jobs"
       ],
       "title": "Profile",
+      "type": "object"
+    },
+    "ScorecardConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for a single named scorecard.",
+      "properties": {
+        "baseline": {
+          "description": "Baseline label to compare against (must match the `label` field of a baseline entry in `runs`).",
+          "title": "Baseline",
+          "type": "string"
+        },
+        "lead_times": {
+          "description": "Lead-time range as start/stop/step (hours).",
+          "title": "Lead Times",
+          "type": "string"
+        },
+        "regions": {
+          "description": "Regions to include as scorecard columns.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Regions",
+          "type": "array"
+        },
+        "variables": {
+          "description": "Variables and metrics as scorecard rows (VAR:M1,M2 format).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Variables",
+          "type": "array"
+        }
+      },
+      "required": [
+        "baseline",
+        "lead_times",
+        "regions",
+        "variables"
+      ],
+      "title": "ScorecardConfig",
       "type": "object"
     },
     "ShowcaseConfig": {

@@ -259,6 +259,29 @@ class AnimationsConfig(BaseModel):
     )
 
 
+class ScorecardConfig(BaseModel):
+    """Configuration for a single named scorecard."""
+
+    baseline: str = Field(
+        ...,
+        description="Baseline label to compare against (must match the `label` field of a baseline entry in `runs`).",
+    )
+    lead_times: str = Field(
+        ...,
+        description="Lead-time range as start/stop/step (hours).",
+    )
+    regions: List[str] = Field(
+        ...,
+        description="Regions to include as scorecard columns.",
+    )
+    variables: List[str] = Field(
+        ...,
+        description="Variables and metrics as scorecard rows (VAR:M1,M2 format).",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class ShowcaseConfig(BaseModel):
     """Configuration for the showcase workflow."""
 
@@ -321,6 +344,10 @@ class ExperimentConfig(BaseModel):
     dashboard: Dashboard = Field(
         ...,
         description="Settings for the experiment dashboard.",
+    )
+    scorecard: Dict[str, ScorecardConfig] = Field(
+        default_factory=dict,
+        description="Named scorecard configurations. Each key becomes a scorecard variant.",
     )
 
     @field_validator("thresholds")
