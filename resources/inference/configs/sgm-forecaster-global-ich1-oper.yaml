@@ -56,6 +56,10 @@ output:
                 msl: {"param": 151, "shortName": "msl"}
                 PS: {"param": 134, "shortName": "sp"}
                 sp: {"param": 134, "shortName": "sp"}
+                SSO_SIGMA: {"param": 163, "shortName": "slor"}
+                slor: {"param": 163, "shortName": "slor"}
+                SSO_STDH: {"param": 160, "shortName": "sdor"}
+                sdor: {"param": 160, "shortName": "sdor"}
                 TOT_PREC: {"param": 228, "shortName": "tp"}
                 tp: {"param": 228, "shortName": "tp"}
                 z: {"param": 129, "shortName": "z"}
