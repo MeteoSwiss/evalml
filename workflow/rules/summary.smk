@@ -9,12 +9,10 @@ include: "common.smk"
 from pprint import pprint
 
 
+# Produce a human-readable summary of the configuration.
 rule write_summary:
     output:
         OUT_ROOT / "data/runs/{run_id}/summary.md",
-    """
-Produce a human-readable summary of the configuration.
-"""
     localrule: True
     params:
         configfile=lambda wc: workflow.configfiles[0],

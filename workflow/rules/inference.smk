@@ -44,6 +44,11 @@ rule inference_get_checkpoint:
         """
 
 
+# Generate a requirements.txt that contains the information needed
+# to set up a virtual environment for inference of a specific checkpoint.
+# The list of dependencies is taken from the checkpoint's MLFlow run metadata,
+# and additional dependencies can be specified under a run entry in the main
+# config file.
 rule inference_extract_requirements:
     input:
         metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
@@ -52,13 +57,6 @@ rule inference_extract_requirements:
         requirements=OUT_ROOT / "data/runs/{env_id}/requirements.txt",
     log:
         OUT_ROOT / "logs/inference_extract_checkpoint_requirements/{env_id}.log",
-    """
-Generate a pyproject.toml that contains the information needed
-to set up a virtual environment for inference of a specific checkpoint.
-The list of dependencies is taken from the checkpoint's MLFlow run metadata,
-and additional dependencies can be specified under a run entry in the main
-config file.
-"""
     localrule: True
     params:
         extra_requirements=lambda wc: ",".join(
@@ -76,6 +74,9 @@ config file.
         """
 
 
+# Create a virtual environment for inference, using the pyproject.toml created above.
+# The virtual environment is managed with uv. The created virtual environment is relocatable,
+# so it can be squashed later. Pre-compilation to bytecode is done to speed up imports.
 rule inference_create_venv:
     input:
         metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
@@ -84,12 +85,6 @@ rule inference_create_venv:
         venv=temp(directory(OUT_ROOT / "data/runs/{env_id}/.venv")),
     log:
         OUT_ROOT / "logs/inference_create_venv/{env_id}.log",
-    """
-Create a virtual environment for inference, using the pyproject.toml created above.
-The virtual environment is managed with uv. The created virtual environment is relocatable,
-so it can be squashed later. Pre-compilation to bytecode is done to speed up imports.
-
-"""
     localrule: True
     shell:
         """
@@ -117,17 +112,17 @@ so it can be squashed later. Pre-compilation to bytecode is done to speed up imp
 
 
 rule inference_make_squashfs_image:
+    """
+Create a squashfs image for the inference virtual environment of
+a specific checkpoint. Find more about this at
+https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
+"""
     input:
         venv=rules.inference_create_venv.output.venv,
     output:
         image=OUT_ROOT / "data/runs/{env_id}/venv.squashfs",
     log:
         OUT_ROOT / "logs/inference_make_squashfs_image/{env_id}.log",
-    """
-Create a squashfs image for the inference virtual environment of
-a specific checkpoint. Find more about this at
-https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
-"""
     localrule: True
     shell:
         # we can safely ignore the many warnings "Unrecognised xattr prefix..."
@@ -222,6 +217,7 @@ def _get_forecaster_run_id(run_id):
 
 
 rule inference_prepare_interpolator:
+    """Run the interpolator for a specific run ID."""
     input:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
@@ -244,7 +240,6 @@ rule inference_prepare_interpolator:
         ),
     log:
         OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.log",
-    """Run the interpolator for a specific run ID."""
     localrule: True
     params:
         lead_time=lambda wc: get_leadtime(wc),
@@ -304,6 +299,7 @@ rule inference_execute:
         disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
             "disable_local_eccodes_definitions", False
         ),
+    # fmt: off
     shell:
         """
         (
@@ -337,3 +333,4 @@ rule inference_execute:
                 '
         ) >{log} 2>&1
         """
+    # fmt: on
