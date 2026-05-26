@@ -81,11 +81,11 @@ def nearest_grid_yx_indices(
         Arrays of `y` and `x` indices for each target location.
     """
 
-    if "lat" not in grid or "lon" not in grid:
+    if "latitude" not in grid or "longitude" not in grid:
         raise ValueError("Input must provide 'lat' and 'lon' coordinates")
 
-    lat2d = np.asarray(grid["lat"].values)
-    lon2d = np.asarray(grid["lon"].values)
+    lat2d = np.asarray(grid["latitude"].values)
+    lon2d = np.asarray(grid["longitude"].values)
     if lat2d.ndim != 2 or lon2d.ndim != 2:
         raise ValueError("'lat' and 'lon' must be 2D on (y, x) for y/x indexing")
 
@@ -131,16 +131,16 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
         truth = truth.stack(values=("y", "x"))
 
     nearest_idx = spherical_nearest_neighbor_indices(
-        source_lat=fcst["lat"].values,
-        source_lon=fcst["lon"].values,
-        target_lat=truth["lat"].values,
-        target_lon=truth["lon"].values,
+        source_lat=fcst["latitude"].values,
+        source_lon=fcst["longitude"].values,
+        target_lat=truth["latitude"].values,
+        target_lon=truth["longitude"].values,
     )
 
     fcst = fcst.isel(values=nearest_idx)
     fcst = fcst.drop_vars(["x", "y", "values"], errors="ignore")
-    fcst = fcst.assign_coords(lon=("values", truth.lon.data))
-    fcst = fcst.assign_coords(lat=("values", truth.lat.data))
+    fcst = fcst.assign_coords(lon=("values", truth["longitude"].data))
+    fcst = fcst.assign_coords(lat=("values", truth["latitude"].data))
     fcst = fcst.assign_coords(values=truth["values"])
 
     if truth_is_grid:

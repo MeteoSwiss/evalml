@@ -1,18 +1,19 @@
 import logging
-import os
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Literal, Any
 
-eccodes_definition_path = Path(sys.prefix) / "share/eccodes-cosmo-resources/definitions"
-os.environ["ECCODES_DEFINITION_PATH"] = str(eccodes_definition_path)
-
-from meteodatalab import data_source, grib_decoder  # noqa: E402
-
-import numpy as np  # noqa: E402
-import xarray as xr  # noqa: E402
+import earthkit.data as ekd
+import numpy as np
+import xarray as xr
 
 LOG = logging.getLogger(__name__)
+
+XARRAY_ENGINE_PROFILE = {
+    "ensure_dims": ["z", "number", "step", "forecast_reference_time"],
+    "add_valid_time_coord": True,
+    "global_attrs": [{"institution": "MeteoSwiss"}, {"Conventions": "CF-1.8"}],
+}
 
 
 def _select_valid_times(ds, times: np.datetime64):
@@ -88,8 +89,8 @@ def load_analysis_data_from_zarr(
 
     # set lat lon as coords (optional)
     if "latitudes" in ds and "longitudes" in ds:
-        ds = ds.rename({"latitudes": "lat", "longitudes": "lon"})
-    ds = ds.set_coords(["lat", "lon"])
+        ds = ds.rename({"latitudes": "latitude", "longitudes": "longitude"})
+    ds = ds.set_coords(["latitude", "longitude"])
     ds = (
         ds["data"]
         .to_dataset("variable")
@@ -107,18 +108,22 @@ def load_analysis_data_from_zarr(
     return _select_valid_times(ds, times)
 
 
-def _collect_ml_grib_files(
-    root: Path, reftime: datetime, steps: list[int] | None = None
-) -> list[Path]:
+def _collect_ml_grib_files(root: Path, steps: list[int] | None = None) -> list[Path]:
     """Return GRIB files for an ML inference run (flat directory layout).
 
     When `steps` is provided, the discovered files are filtered to those whose
     name ends with ``_{step:03d}.grib``.
     """
-    files = sorted(root.glob(f"{reftime:%Y%m%d%H%M}*.grib"))
+    # TODO: this glob pattern is a dirty fix for anemoi-inference writing outputs
+    # with wrong formatting. Eventually we will either have to have a fix upstream
+    # or write a single output file.
+    files = sorted(root.glob("20*.grib"))
     if steps is None:
         return files
+
+    # again, two different patterns might be used for step formatting
     suffixes = {f"_{step:03d}.grib" for step in steps}
+    suffixes |= {f"_{step}.grib" for step in steps}
     return [f for f in files if any(f.name.endswith(s) for s in suffixes)]
 
 
@@ -154,67 +159,86 @@ def _collect_icon_archive_files(
     ]
 
 
+def load_from_grib_file(file: str | list[str], sel_kwargs):
+    fieldlist = ekd.from_source("file", file, lazily=True).to_fieldlist()
+    return fieldlist_to_xarray(fieldlist.sel(**sel_kwargs))
+
+
+def variable_name_profile(
+    level_type: Literal["height_above_ground_level", "mean_sea", "surface", "pressure"],
+) -> dict[str, Any]:
+    """Resolve variable name profile based on the level type."""
+    if level_type in ["height_above_ground_level", "mean_sea", "surface"]:
+        return {}
+    elif level_type == "pressure":
+        return {
+            "variable_key": "p_l",
+            "remapping": {"p_l": "{parameter.variable}_{vertical.level}"},
+        }
+    else:
+        raise ValueError(f"Unsupported level type: {level_type}")
+
+
+def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
+    ds = xr.Dataset()
+    for level_type_group in fieldlist.group_by("vertical.level_type"):
+        # earthkit-data should return the group key...TODO: open issue?
+        level_type = level_type_group.get("vertical.level_type")[0]
+        profile = XARRAY_ENGINE_PROFILE | variable_name_profile(level_type)
+        _ds = level_type_group.to_xarray(**profile, allow_holes=True)
+        ds = ds.merge(_ds, compat="no_conflicts", combine_attrs="no_conflicts")
+    return ds
+
+
+def _tot_prec_handling(tp: xr.DataArray) -> xr.DataArray:
+    _full_step_coord = tp["step"]  # step coordinate before .diff()
+
+    # anemoi-inference sometimes omits step 0 from the GRIB even with
+    # accumulate_from_start_of_forecast enabled. If missing, earthkit-data
+    # will fill it with NaNs following the `allow_holes=True` flag.
+    if tp[{"step": 0}].isnull().all():
+        LOG.warning(
+            "Step 0 of TOT_PREC is missing, filling with zeroes "
+            "assuming accumulate_from_start_of_forecast is enabled."
+        )
+        tp[{"step": 0}] = 0.0
+
+    # Disaggregate TOT_PREC from cumulative-from-start (expected when the
+    # accumulate_from_start_of_forecast post-processor is enabled in
+    # anemoi-inference) to per-step accumulations.
+    LOG.info(
+        "Disaggregating TOT_PREC from cumulative-from-start to per-step accumulations."
+    )
+    tp = tp.diff("step")
+
+    # Sanity-check that the incoming data is actually cumulative. If
+    # some values are significantly negative, it indicates that the data
+    # is already period-accumulated.
+    min_diff = float(tp.min().compute())
+    if min_diff < -0.1:  # NOTE: TOT_PREC canonical units are mm
+        raise ValueError(
+            "TOT_PREC in the GRIB appears to already be "
+            f"period-accumulated (min(.diff()) = {min_diff:.3e} m). "
+            "Check that the accumulate_from_start_of_forecast post-processor "
+            "is enabled in the anemoi-inference config for this source."
+        )
+
+    # Clip remaining small negative values to zero
+    tp = tp.clip(min=0.0)
+
+    # Reindex to match the original lead_time coordinate
+    tp = tp.reindex(step=_full_step_coord)
+
+    return tp
+
+
 def load_fct_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
     """Load forecast data from a list of GRIB files."""
-    fds = data_source.FileDataSource(datafiles=files)
-    ds = grib_decoder.load(fds, {"param": params})
-    for var, da in ds.items():
-        if "z" in da.dims and da.sizes["z"] == 1:
-            ds[var] = da.squeeze("z", drop=True)
-        elif "z" in da.dims and da.sizes["z"] > 1:
-            ds[var] = da.rename({"z": da.attrs["vcoord_type"]})
-    ds = xr.merge([ds[p].rename(p) for p in ds], compat="no_conflicts")
-    lead_times = ds.lead_time.values
-    if "TOT_PREC" in ds.data_vars:
-        ## Disaggregate TOT_PREC from cumulative-from-start (expected when the
-        ## accumulate_from_start_of_forecast post-processor is enabled in
-        ## anemoi-inference) to per-step accumulations.
-        ##
-        ## anemoi-inference sometimes omits step 0 from the GRIB even with
-        ## accumulate_from_start_of_forecast enabled. After the outer-join
-        ## merge above, lead_time=0 of TOT_PREC is then NaN, which would
-        ## propagate through .diff() and wipe out the first period
-        ## accumulation. Set it explicitly to 0 (cumulative-from-start has
-        ## nothing accumulated at the forecast initial time by definition).
-        ## Restricting to lead_time=0 leaves any other NaNs (e.g. from
-        ## boundary-trim masks) untouched.
-        ds = ds.assign(
-            TOT_PREC=xr.where(
-                ds.lead_time == np.timedelta64(0, "h"),
-                0.0,
-                ds.TOT_PREC,
-            )
-        )
-        ## Sanity-check that the incoming data is actually cumulative: if
-        ## .diff() produces significantly negative values, TOT_PREC is already
-        ## period-accumulated and a second disaggregation would produce
-        ## garbage. In that case raise — we always expect cumulative-from-
-        ## start precipitation here.
-        diff = ds.TOT_PREC.diff("lead_time")
-        min_diff = float(diff.min().compute())
-        if min_diff < -0.1:  # TOT_PREC canonical units are mm
-            raise ValueError(
-                f"TOT_PREC in the GRIB appears to already be "
-                f"period-accumulated (min(.diff()) = {min_diff:.3e} m). "
-                f"Check that the accumulate_from_start_of_forecast "
-                f"post-processor is enabled in the anemoi-inference config "
-                f"for this source."
-            )
-        ## .diff() drops lead_time=0; .reindex() restores it as NaN (no
-        ## accumulation period exists at the forecast initial time). Clip
-        ## small float-noise negatives to zero (anything below -0.1 mm has
-        ## already been caught by the check above).
-        ds = ds.assign(TOT_PREC=diff.clip(min=0.0).reindex(lead_time=lead_times))
-    # make sure time coordinate is available, and valid_time is not
-    if "valid_time" in ds.coords:
-        ds = ds.rename({"valid_time": "time"})
-    if "time" not in ds.coords:
-        ds = ds.assign_coords(time=ds.ref_time + ds.lead_time)
-    ds = ds.squeeze("ref_time", drop=False)
+    ds = load_from_grib_file(files, {"parameter.variable": params})
 
-    # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
-    if "cell" in ds.dims:
-        ds = ds.rename({"cell": "values"})
+    if "TOT_PREC" in ds.data_vars:
+        ds["TOT_PREC"] = _tot_prec_handling(ds["TOT_PREC"])
+
     return ds
 
 
@@ -263,8 +287,8 @@ def load_obs_data_from_peakweather(
     ds = ds.rename(param_names)
     ds = ds.assign_coords(time=ds.indexes["time"].tz_convert("UTC").tz_localize(None))
     ds = ds.assign_coords(values=ds.indexes["values"])
-    ds = ds.assign_coords(lon=("values", pw.stations_table["longitude"]))
-    ds = ds.assign_coords(lat=("values", pw.stations_table["latitude"]))
+    ds = ds.assign_coords(longitude=("values", pw.stations_table["longitude"]))
+    ds = ds.assign_coords(latitude=("values", pw.stations_table["latitude"]))
     if "T_2M" in ds:
         ds["T_2M"] = ds["T_2M"] + 273.15  # convert to Kelvin
     ds = ds.dropna("values", how="all")
@@ -317,7 +341,8 @@ def load_forecast_data(
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
         return load_fct_data_from_grib(
-            files=_collect_ml_grib_files(root, reftime, steps),
+            # NOTE: root is already for a specific reftime
+            files=_collect_ml_grib_files(root, steps),
             params=params,
         )
     LOG.info("Loading baseline forecasts from ICON GRIB archive...")
