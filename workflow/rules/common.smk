@@ -78,7 +78,7 @@ def parse_reference_times():
 
 def parse_regions():
     """Parse regions from the configuration."""
-    cfg = config["stratification"]
+    cfg = config["experiment"]["stratification"]
     regions = [f"{cfg['root']}/{region}.shp" for region in cfg["regions"]]
     regions_txt = ",".join(regions)
     return regions_txt
@@ -324,6 +324,9 @@ def master_hash() -> str:
 REGIONS = parse_regions()
 SHOWCASE_REGIONS = parse_showcase_regions()
 SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])
+EXPERIMENT_PARAMS = config.get("experiment", {}).get(
+    "params", ["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"]
+)
 REFTIMES = parse_reference_times()
 RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()

@@ -41,32 +41,37 @@ truth:
   label: KENDA-CH1
   root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
 
-stratification:
-  regions:
-    - jura
-    - mittelland
-    - voralpen
-    - alpennordhang
-    - innerealpentaeler
-    - alpensuedseite
-  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
-
-thresholds:
-  TOT_PREC:
-    gt: [0.0, 1, 5]
-  U_10M:
-    gt: [2.5, 5.0, 10.0]
-  V_10M:
-    gt: [2.5, 5.0, 10.0]
-  T_2M:
-    lt: [273.15]
-    gt: [288.15, 298.15]
-
-dashboard:
+experiment:
+  params:
+    - T_2M
+    - TD_2M
+    - U_10M
+    - V_10M
+    - TOT_PREC
   stratification:
-    # - init_hour
-    # - region
-    - season
+    regions:
+      - jura
+      - mittelland
+      - voralpen
+      - alpennordhang
+      - innerealpentaeler
+      - alpensuedseite
+    root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    TOT_PREC:
+      gt: [0.0, 1, 5]
+    U_10M:
+      gt: [2.5, 5.0, 10.0]
+    V_10M:
+      gt: [2.5, 5.0, 10.0]
+    T_2M:
+      lt: [273.15]
+      gt: [288.15, 298.15]
+  dashboard:
+    stratification:
+      # - init_hour
+      # - region
+      - season
 
 locations:
   output_root: output/
