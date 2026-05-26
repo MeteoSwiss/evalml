@@ -236,3 +236,17 @@ All outputs are rooted at `OUT_ROOT` (from `locations.output_root` in the config
 | `{param}` | variable name | `T_2M`, `TOT_PREC` |
 | `{region}` | geographic region slug | `switzerland`, `globe` |
 | `{leadtime}` | zero-padded hours | `000`, `006`, `024` |
+
+
+## earthkit v1.0rc support
+
+The adoption of the first upcoming stable release of earthkit has started.
+Some issues may still be present. A known issue that is affecting us is that the automatic download and caching of files required
+by earthkit to support the ICON-CH grids is currently broken. This requires us to perform this step manually.
+
+```bash
+export ECKIT_GEO_CACHE=$HOME/.local/share/eckit/geo/grid/icon
+mkdir -p $ECKIT_GEO_CACHE
+curl https:/sites.ecmwf.int/repository/eckit/geo/grid/icon-ch/icon-ch1-c.ek > $ECKIT_GEO_CACHE/17643da2574959b644d254a3cd6e2bc0-b0699f374c63d05028c18c12f80a48f4.ek
+curl https:/sites.ecmwf.int/repository/eckit/geo/grid/icon-ch/icon-ch2-c.ek > $ECKIT_GEO_CACHE/bbbd5a09855499243c7a4aa4c8762920-67adabf5c0cff041ebaafa61a3bda267.ek
+```
