@@ -519,9 +519,13 @@ def load_INCA_baseline_from_netcdf(
             datasets[param] = _nan_array("unknown").rename(param)
             continue
 
+    # Due to a discovered INCA bug in T_2M and TD_2M for the reftimes at full hours (01,02,03,...,23)
+    # at the leadtimes 1-6 (steps 1-6), with use_last_run=True the steps 1-6 are taken from the last INCA run
+    # computed 10min before (at min 50)
     use_last_run = True
     # load parameter by parameter
     _LAST_RUN_PARAMS = {"T_2M", "TD_2M"}
+
     for param in to_load:
         prefix = prefix_map[param]
 
