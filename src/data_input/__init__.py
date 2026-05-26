@@ -395,7 +395,7 @@ def load_INCA_baseline_from_netcdf(
     Returns:
         xr.Dataset with dimensions (step, y, x) and coordinates:
           x, y                     – Swiss CH1903 (EPSG:21781) easting/northing [m]
-          lat, lon                 – WGS84 latitude/longitude [°], shape (y, x),
+          latitude, longitude      – WGS84 latitude/longitude [°], shape (y, x),
                                      derived from CH1903 via pyproj
           step                     – forecast lead time (timedelta64[ns])
           valid_time               – absolute timestamps (datetime64[ns])
@@ -413,12 +413,12 @@ def load_INCA_baseline_from_netcdf(
             "EPSG:21781", "EPSG:4326", always_xy=True
         ).transform(x_2d, y_2d)
         return {
-            "lat": (
+            "latitude": (
                 ("y", "x"),
                 lat_2d,
                 {"units": "degrees_north", "long_name": "latitude"},
             ),
-            "lon": (
+            "longitude": (
                 ("y", "x"),
                 lon_2d,
                 {"units": "degrees_east", "long_name": "longitude"},
