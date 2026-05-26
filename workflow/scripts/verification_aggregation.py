@@ -41,8 +41,8 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
 
     # for simplicity we group by season based on ref_time (as this is a dimension of the dataset)
     ds = ds.assign_coords(
-        season=lambda ds: ds.ref_time.dt.season,
-        init_hour=lambda ds: ds.ref_time.dt.hour,
+        season=lambda ds: ds["forecast_reference_time"].dt.season,
+        init_hour=lambda ds: ds["forecast_reference_time"].dt.hour,
     ).drop_vars(["time"], errors="ignore")
 
     # compute mean with grouping by all permutations of season and init_hour
@@ -52,7 +52,7 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
             ds_grouped = ds
         else:
             ds_grouped = ds.groupby(group)
-        ds_grouped = ds_grouped.mean(dim="ref_time").compute(
+        ds_grouped = ds_grouped.mean(dim="forecast_reference_time").compute(
             num_workers=4, scheduler="threads"
         )
         if "init_hour" not in group:
@@ -66,7 +66,7 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
     for var in out.data_vars:
         if "contingency_table" in var:
             # convert contingency table elements to counts
-            out[var] = out[var] * len(ds["ref_time"])
+            out[var] = out[var] * len(ds["forecast_reference_time"])
             contingency_manager = scores.categorical.BasicContingencyManager(
                 {
                     "tp_count": out[var].sel(contingency="tp_count"),
@@ -133,7 +133,7 @@ def main(args: Namespace) -> None:
     ds = xr.open_mfdataset(
         sorted(args.verif_files),
         combine="nested",
-        concat_dim="ref_time",
+        concat_dim="forecast_reference_time",
         data_vars="minimal",
         coords="minimal",
         compat="override",
