@@ -99,6 +99,27 @@ experiment:
     # Stratification dimensions to include in the experiment dashboard (any of season, region, init_hour).
     stratification:
       - season
+  # Optional: named scorecards comparing each forecaster against a chosen baseline.
+  # Each entry is keyed by a scorecard name and rendered as a PNG in results/{experiment}/scorecards/.
+  scorecard:
+    short_range:
+      # Baseline label — must match the `label` field of a baseline entry in `runs`.
+      baseline: COSMO-E
+      # Lead-time range as start/stop/step (hours).
+      lead_times: "0/120/6"
+      # Regions to include as scorecard columns.
+      regions:
+        - jura
+        - mittelland
+        - voralpen
+        - alpennordhang
+        - innerealpentaeler
+        - alpensuedseite
+      # Variables and metrics as scorecard rows. Format: VAR:METRIC1,METRIC2,...
+      # Supported metrics: RMSE, R2, ETS, POD, FAR (categorical metrics require thresholds).
+      variables:
+        - "T_2M:RMSE,R2"
+        - "TOT_PREC:RMSE,ETS"
 
 locations:
   # All workflow outputs are written under this root.
@@ -121,7 +142,7 @@ profile:
     plot_forecast_frame: 32
 ```
 
-The `runs` list accepts `forecaster`, `interpolator`, and `baseline` entries. For `dates`, you can either provide a `start` / `end` / `frequency` block as above or an explicit list of ISO timestamps for case-study style runs. Stratification, thresholds, and dashboard settings are all grouped under the `experiment` key.
+The `runs` list accepts `forecaster`, `interpolator`, and `baseline` entries. For `dates`, you can either provide a `start` / `end` / `frequency` block as above or an explicit list of ISO timestamps for case-study style runs. Stratification, thresholds, dashboard, and scorecard settings are all grouped under the `experiment` key.
 
 You can then run it with:
 
