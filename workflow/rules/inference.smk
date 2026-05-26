@@ -8,79 +8,75 @@ from datetime import datetime
 
 
 rule inference_get_checkpoint:
-    localrule: True
     output:
         checkpoint=OUT_ROOT / "data/runs/{env_id}/inference-last.ckpt",
         metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
+    log:
+        OUT_ROOT / "logs/inference_prepare_checkpoint/{env_id}.log",
+    localrule: True
     params:
         checkpoint=lambda wc: ENV_CONFIGS[wc.env_id]["checkpoint"],
         checkpoint_type=lambda wc: _checkpoint_uri_type(
             ENV_CONFIGS[wc.env_id]["checkpoint"]
         ),
-    log:
-        OUT_ROOT / "logs/inference_prepare_checkpoint/{env_id}.log",
     shell:
-        r"""(
-        mkdir -p $(dirname {output.checkpoint})
-        if [ "{params.checkpoint_type}" = "mlflow" ]; then
-            ln -s $(python workflow/scripts/inference_get_checkpoint_mlflow.py {params.checkpoint}) {output.checkpoint}
-            echo "Located checkpoint from MLFlow log."
-            echo "Created symlink: {output.checkpoint} -> $(readlink {output.checkpoint})"
-        elif [ "{params.checkpoint_type}" = "huggingface" ]; then
-            repo_id=$(python -c "import re; print(re.search(r'huggingface\.co/([^/]+/[^/]+)', '{params.checkpoint}').group(1))")
-            file_path=$(python -c "import re; print(re.search(r'huggingface\.co/[^/]+/[^/]+/blob/[^/]+/(.*)', '{params.checkpoint}').group(1))")
-            cp $(uvx hf download $repo_id $file_path) {output.checkpoint}
-            echo "Copied checkpoint from HuggingFace: {output.checkpoint}"
-        elif [ "{params.checkpoint_type}" = "local" ]; then
-            ln -s {params.checkpoint} {output.checkpoint}
-            echo "Created symlink: {output.checkpoint} -> $(readlink {output.checkpoint})"
-        else
-            echo "Unknown checkpoint type: {params.checkpoint_type}"
-        fi
-        anemoi-utils metadata --dump --json {output.checkpoint} > {output.metadata}
-        echo "Extracted metadata from checkpoint: {output.metadata}"
-        ) > {log} 2>&1
+        r"""
+        (
+            mkdir -p $(dirname {output.checkpoint})
+            if [ "{params.checkpoint_type}" = "mlflow" ]; then
+                ln -s $(python workflow/scripts/inference_get_checkpoint_mlflow.py {params.checkpoint}) {output.checkpoint}
+                echo "Located checkpoint from MLFlow log."
+                echo "Created symlink: {output.checkpoint} -> $(readlink {output.checkpoint})"
+            elif [ "{params.checkpoint_type}" = "huggingface" ]; then
+                repo_id=$(python -c "import re; print(re.search(r'huggingface\.co/([^/]+/[^/]+)', '{params.checkpoint}').group(1))")
+                file_path=$(python -c "import re; print(re.search(r'huggingface\.co/[^/]+/[^/]+/blob/[^/]+/(.*)', '{params.checkpoint}').group(1))")
+                cp $(uvx hf download $repo_id $file_path) {output.checkpoint}
+                echo "Copied checkpoint from HuggingFace: {output.checkpoint}"
+            elif [ "{params.checkpoint_type}" = "local" ]; then
+                ln -s {params.checkpoint} {output.checkpoint}
+                echo "Created symlink: {output.checkpoint} -> $(readlink {output.checkpoint})"
+            else
+                echo "Unknown checkpoint type: {params.checkpoint_type}"
+            fi
+            anemoi-utils metadata --dump --json {output.checkpoint} >{output.metadata}
+            echo "Extracted metadata from checkpoint: {output.metadata}"
+        ) >{log} 2>&1
         """
 
 
 rule inference_extract_requirements:
-    """
-    Generate a pyproject.toml that contains the information needed
-    to set up a virtual environment for inference of a specific checkpoint.
-    The list of dependencies is taken from the checkpoint's MLFlow run metadata,
-    and additional dependencies can be specified under a run entry in the main
-    config file.
-    """
-    localrule: True
     input:
         metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
         script="workflow/scripts/inference_extract_requirements.py",
     output:
         requirements=OUT_ROOT / "data/runs/{env_id}/requirements.txt",
+    log:
+        OUT_ROOT / "logs/inference_extract_checkpoint_requirements/{env_id}.log",
+    """
+Generate a pyproject.toml that contains the information needed
+to set up a virtual environment for inference of a specific checkpoint.
+The list of dependencies is taken from the checkpoint's MLFlow run metadata,
+and additional dependencies can be specified under a run entry in the main
+config file.
+"""
+    localrule: True
     params:
         extra_requirements=lambda wc: ",".join(
             ENV_CONFIGS[wc.env_id].get("extra_requirements", [])
         ),
-    log:
-        OUT_ROOT / "logs/inference_extract_checkpoint_requirements/{env_id}.log",
     shell:
-        """(
-        echo "[$(date)] Starting requirement extraction..."
-        python {input.script} {input.metadata} \
-            --overrides "{params.extra_requirements}" > {output.requirements}
-        echo "[$(date)] Extracted requirements from metadata: {output.requirements}"
-        echo $(cat {output.requirements})
-        ) > {log} 2>&1
+        """
+        (
+            echo "[$(date)] Starting requirement extraction..."
+            python {input.script} {input.metadata} \
+                --overrides "{params.extra_requirements}" >{output.requirements}
+            echo "[$(date)] Extracted requirements from metadata: {output.requirements}"
+            echo $(cat {output.requirements})
+        ) >{log} 2>&1
         """
 
 
 rule inference_create_venv:
-    """
-    Create a virtual environment for inference, using the pyproject.toml created above.
-    The virtual environment is managed with uv. The created virtual environment is relocatable,
-    so it can be squashed later. Pre-compilation to bytecode is done to speed up imports.
-    """
-    localrule: True
     input:
         metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
         requirements=OUT_ROOT / "data/runs/{env_id}/requirements.txt",
@@ -88,43 +84,51 @@ rule inference_create_venv:
         venv=temp(directory(OUT_ROOT / "data/runs/{env_id}/.venv")),
     log:
         OUT_ROOT / "logs/inference_create_venv/{env_id}.log",
+    """
+Create a virtual environment for inference, using the pyproject.toml created above.
+The virtual environment is managed with uv. The created virtual environment is relocatable,
+so it can be squashed later. Pre-compilation to bytecode is done to speed up imports.
+
+"""
+    localrule: True
     shell:
-        """(
+        """
+        (
 
-        PYTHON_VERSION=$(cat {input.metadata} | jq -r ".provenance_training.python")
-        echo "[$(date)] Creating virtual environment with Python $PYTHON_VERSION..."
-        uv venv --managed-python --python $PYTHON_VERSION --relocatable --link-mode=copy {output.venv}
-        source {output.venv}/bin/activate
+            PYTHON_VERSION=$(cat {input.metadata} | jq -r ".provenance_training.python")
+            echo "[$(date)] Creating virtual environment with Python $PYTHON_VERSION..."
+            uv venv --managed-python --python $PYTHON_VERSION --relocatable --link-mode=copy {output.venv}
+            source {output.venv}/bin/activate
 
-        echo "[$(date)] Installing requirements from {input.requirements}..."
-        uv pip install -r {input.requirements}
+            echo "[$(date)] Installing requirements from {input.requirements}..."
+            uv pip install -r {input.requirements}
 
-        echo "[$(date)] Compiling Python bytecode..."
-        python -m compileall -j 8 -o 0 -o 1 -o 2 .venv/lib/python*/site-packages
-        echo "[$(date)] Testing that eccodes is working..."
-        if ! python -c "import eccodes" &>/dev/null; then
-            echo "[$(date)] ERROR: eccodes is not installed correctly in the virtual environment."
-            echo "[$(date)] Please check the installation and try again."
-            exit 1
-        fi
-        echo "[$(date)] Inference virtual environment successfully created at {output.venv}"
-        ) > {log} 2>&1
+            echo "[$(date)] Compiling Python bytecode..."
+            python -m compileall -j 8 -o 0 -o 1 -o 2 .venv/lib/python*/site-packages
+            echo "[$(date)] Testing that eccodes is working..."
+            if ! python -c "import eccodes" &>/dev/null; then
+                echo "[$(date)] ERROR: eccodes is not installed correctly in the virtual environment."
+                echo "[$(date)] Please check the installation and try again."
+                exit 1
+            fi
+            echo "[$(date)] Inference virtual environment successfully created at {output.venv}"
+        ) >{log} 2>&1
         """
 
 
 rule inference_make_squashfs_image:
-    """
-    Create a squashfs image for the inference virtual environment of
-    a specific checkpoint. Find more about this at
-    https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
-    """
-    localrule: True
     input:
         venv=rules.inference_create_venv.output.venv,
     output:
         image=OUT_ROOT / "data/runs/{env_id}/venv.squashfs",
     log:
         OUT_ROOT / "logs/inference_make_squashfs_image/{env_id}.log",
+    """
+Create a squashfs image for the inference virtual environment of
+a specific checkpoint. Find more about this at
+https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
+"""
+    localrule: True
     shell:
         # we can safely ignore the many warnings "Unrecognised xattr prefix..."
         "mksquashfs $(realpath {input.venv}) {output.image}"
@@ -134,17 +138,17 @@ rule inference_make_squashfs_image:
 
 rule inference_create_sandbox:
     """
-    Create a zipped directory that, when extracted, can be used as a sandbox
-    for running inference jobs for a specific checkpoint. Its main purpose is
-    to serve as a development environment for anemoi-inference and to facilitate
-    sharing with external collaborators.
+Create a zipped directory that, when extracted, can be used as a sandbox
+for running inference jobs for a specific checkpoint. Its main purpose is
+to serve as a development environment for anemoi-inference and to facilitate
+sharing with external collaborators.
 
-    TO use this sandbox, unzip it to a target directory.
+TO use this sandbox, unzip it to a target directory.
 
-    ```bash
-    unzip sandbox.zip -d /path/to/target/directory
-    ```
-    """
+```bash
+unzip sandbox.zip -d /path/to/target/directory
+```
+"""
     input:
         script="workflow/scripts/inference_create_sandbox.py",
         checkpoint=lambda wc: OUT_ROOT
@@ -165,7 +169,7 @@ rule inference_create_sandbox:
             --requirements {input.requirements} \
             --readme-template {input.readme_template} \
             --output {output.sandbox} \
-            > {log} 2>&1
+            >{log} 2>&1
         """
 
 
@@ -187,7 +191,6 @@ def get_leadtime(wc):
 
 
 rule inference_prepare_forecaster:
-    localrule: True
     input:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
@@ -199,6 +202,9 @@ rule inference_prepare_forecaster:
         okfile=touch(
             OUT_ROOT / "logs/inference_prepare_forecaster/{run_id}-{init_time}.ok"
         ),
+    log:
+        OUT_ROOT / "logs/inference_prepare_forecaster/{run_id}-{init_time}.log",
+    localrule: True
     params:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
@@ -206,8 +212,6 @@ rule inference_prepare_forecaster:
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
-    log:
-        OUT_ROOT / "logs/inference_prepare_forecaster/{run_id}-{init_time}.log",
     script:
         "../scripts/inference_prepare.py"
 
@@ -218,8 +222,6 @@ def _get_forecaster_run_id(run_id):
 
 
 rule inference_prepare_interpolator:
-    """Run the interpolator for a specific run ID."""
-    localrule: True
     input:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
@@ -240,6 +242,10 @@ rule inference_prepare_interpolator:
         okfile=touch(
             OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.ok"
         ),
+    log:
+        OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.log",
+    """Run the interpolator for a specific run ID."""
+    localrule: True
     params:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
@@ -252,8 +258,6 @@ rule inference_prepare_interpolator:
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None
             else _get_forecaster_run_id(wc.run_id)
         ),
-    log:
-        OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.log",
     script:
         "../scripts/inference_prepare.py"
 
@@ -275,7 +279,6 @@ def _inference_routing_fn(wc):
 
 
 rule inference_execute:
-    localrule: True
     input:
         okfile=_inference_routing_fn,
         image=lambda wc: OUT_ROOT
@@ -284,14 +287,7 @@ rule inference_execute:
         okfile=touch(OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok"),
     log:
         OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
-    params:
-        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
-        workdir=lambda wc: (
-            OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
-        ).resolve(),
-        disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
-            "disable_local_eccodes_definitions", False
-        ),
+    localrule: True
     resources:
         slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
         cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
@@ -300,36 +296,44 @@ rule inference_execute:
         gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
         ntasks=lambda wc: get_resource(wc, "tasks", 1),
         gpus=lambda wc: get_resource(wc, "gpu", 1),
+    params:
+        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
+        workdir=lambda wc: (
+            OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
+        ).resolve(),
+        disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
+            "disable_local_eccodes_definitions", False
+        ),
     shell:
         """
         (
-        set -euo pipefail
+            set -euo pipefail
 
-        cd {params.workdir}
+            cd {params.workdir}
 
-        squashfs-mount {params.image_path}:/user-environment -- bash -c '
-        source /user-environment/bin/activate
+            squashfs-mount {params.image_path}:/user-environment -- bash -c '
+                source /user-environment/bin/activate
 
-        if [ "{params.disable_local_definitions}" = "False" ]; then
-            export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
-        fi
+                if [ "{params.disable_local_definitions}" = "False" ]; then
+                    export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
+                fi
 
-        CMD_ARGS=()
+                CMD_ARGS=()
 
-        # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
-        if [ {resources.gpus} -gt 1 ]; then
-            CMD_ARGS+=(runner.parallel.cluster=slurm)
-        fi
+                # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
+                if [ {resources.gpus} -gt 1 ]; then
+                    CMD_ARGS+=(runner.parallel.cluster=slurm)
+                fi
 
-        srun \
-            --unbuffered \
-            --partition={resources.slurm_partition} \
-            --cpus-per-task={resources.cpus_per_task} \
-            --mem-per-cpu={resources.mem_mb_per_cpu} \
-            --time={resources.runtime} \
-            --gres={resources.gres} \
-            --ntasks={resources.ntasks} \
-            anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
-        '
-        ) > {log} 2>&1
+                srun \
+                    --unbuffered \
+                    --partition={resources.slurm_partition} \
+                    --cpus-per-task={resources.cpus_per_task} \
+                    --mem-per-cpu={resources.mem_mb_per_cpu} \
+                    --time={resources.runtime} \
+                    --gres={resources.gres} \
+                    --ntasks={resources.ntasks} \
+                    anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+                '
+        ) >{log} 2>&1
         """

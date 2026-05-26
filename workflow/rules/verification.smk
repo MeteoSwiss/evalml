@@ -43,7 +43,7 @@ rule verification_metrics_baseline:
             --regions "{params.regions}" \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
-            --output {output} > {log} 2>&1
+            --output {output} >{log} 2>&1
         """
 
 
@@ -94,7 +94,7 @@ rule verification_metrics:
             --regions "{params.regions}" \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
-            --output {output} > {log} 2>&1
+            --output {output} >{log} 2>&1
         """
 
 
@@ -123,7 +123,7 @@ rule verification_metrics_aggregation:
         runtime="2h",
     shell:
         """
-        uv run {input.script} {input.verif_nc} --output {output} > {log} 2>&1
+        uv run {input.script} {input.verif_nc} --output {output} >{log} 2>&1
         """
 
 
@@ -161,5 +161,5 @@ rule verification_metrics_plot:
         labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
     shell:
         """
-        uv run {input.script} {input.verif} --output_dir {output} > {log} 2>&1
+        uv run {input.script} {input.verif} --output_dir {output} >{log} 2>&1
         """

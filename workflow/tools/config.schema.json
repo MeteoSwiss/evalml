@@ -223,6 +223,23 @@
           "$ref": "#/$defs/Stratification",
           "description": "Spatial stratification settings for the analysis."
         },
+        "params": {
+          "default": [
+            "T_2M",
+            "TD_2M",
+            "U_10M",
+            "V_10M",
+            "PS",
+            "PMSL",
+            "TOT_PREC"
+          ],
+          "description": "List of parameters to compute verification metrics for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
         "thresholds": {
           "additionalProperties": {
             "additionalProperties": {
