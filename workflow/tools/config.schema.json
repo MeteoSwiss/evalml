@@ -223,6 +223,23 @@
           "$ref": "#/$defs/Stratification",
           "description": "Spatial stratification settings for the analysis."
         },
+        "params": {
+          "default": [
+            "T_2M",
+            "TD_2M",
+            "U_10M",
+            "V_10M",
+            "PS",
+            "PMSL",
+            "TOT_PREC"
+          ],
+          "description": "List of parameters to compute verification metrics for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
         "thresholds": {
           "additionalProperties": {
             "additionalProperties": {
@@ -240,14 +257,6 @@
         "dashboard": {
           "$ref": "#/$defs/Dashboard",
           "description": "Settings for the experiment dashboard."
-        },
-        "scorecard": {
-          "additionalProperties": {
-            "$ref": "#/$defs/ScorecardConfig"
-          },
-          "description": "Named scorecard configurations. Each key becomes a scorecard variant.",
-          "title": "Scorecard",
-          "type": "object"
         }
       },
       "required": [
@@ -627,46 +636,6 @@
         "jobs"
       ],
       "title": "Profile",
-      "type": "object"
-    },
-    "ScorecardConfig": {
-      "additionalProperties": false,
-      "description": "Configuration for a single named scorecard.",
-      "properties": {
-        "baseline": {
-          "description": "Baseline label to compare against (must match the `label` field of a baseline entry in `runs`).",
-          "title": "Baseline",
-          "type": "string"
-        },
-        "lead_times": {
-          "description": "Lead-time range as start/stop/step (hours).",
-          "title": "Lead Times",
-          "type": "string"
-        },
-        "regions": {
-          "description": "Regions to include as scorecard columns.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Regions",
-          "type": "array"
-        },
-        "variables": {
-          "description": "Variables and metrics as scorecard rows (VAR:M1,M2 format).",
-          "items": {
-            "type": "string"
-          },
-          "title": "Variables",
-          "type": "array"
-        }
-      },
-      "required": [
-        "baseline",
-        "lead_times",
-        "regions",
-        "variables"
-      ],
-      "title": "ScorecardConfig",
       "type": "object"
     },
     "ShowcaseConfig": {

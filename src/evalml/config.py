@@ -334,6 +334,10 @@ class ExperimentConfig(BaseModel):
         ...,
         description="Spatial stratification settings for the analysis.",
     )
+    params: List[str] = Field(
+        default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"],
+        description="List of parameters to compute verification metrics for.",
+    )
     thresholds: Dict[str, Dict[str, List[float]]] = Field(
         default_factory=dict,
         description=(
@@ -344,10 +348,6 @@ class ExperimentConfig(BaseModel):
     dashboard: Dashboard = Field(
         ...,
         description="Settings for the experiment dashboard.",
-    )
-    scorecard: Dict[str, ScorecardConfig] = Field(
-        default_factory=dict,
-        description="Named scorecard configurations. Each key becomes a scorecard variant.",
     )
 
     @field_validator("thresholds")

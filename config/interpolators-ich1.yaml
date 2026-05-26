@@ -45,6 +45,12 @@ truth:
   root: output/data/observations/peakweather
 
 experiment:
+  params:
+    - T_2M
+    - TD_2M
+    - U_10M
+    - V_10M
+    - TOT_PREC
   stratification:
     regions:
       - mittelland

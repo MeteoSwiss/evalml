@@ -37,6 +37,12 @@ truth:
   root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
 
 experiment:
+  params:
+    - T_2M
+    - TD_2M
+    - U_10M
+    - V_10M
+    - TOT_PREC
   stratification:
     regions:
       - jura
