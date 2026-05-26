@@ -82,13 +82,6 @@ rule verification_metrics:
         ).resolve(),
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
-    log:
-        OUT_ROOT / "logs/verification_metrics/{run_id}-{init_time}.log",
-    resources:
-        cpus_per_task=24,
-        mem_mb=50_000,
-        runtime="60m",
-
     shell:
         """
         uv run {input.script} \

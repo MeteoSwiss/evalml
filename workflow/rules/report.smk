@@ -53,10 +53,6 @@ rule report_experiment_dashboard:
 
 
 rule report_scorecard:
-    localrule: True
-    wildcard_constraints:
-        run_id="[^/]+/[^/]+",  # env_id/r_hash — exactly one slash
-        scorecard_name="[^/]+",  # no slashes
     input:
         script="workflow/scripts/report_scorecard.mo.py",
         verif_run=lambda wc: EXPERIMENT_PARTICIPANTS[wc.run_id],
@@ -67,6 +63,12 @@ rule report_scorecard:
         report(
             OUT_ROOT / "results/{experiment}/scorecards/{scorecard_name}/{run_id}.png",
         ),
+    log:
+        OUT_ROOT / "logs/report_scorecard/{experiment}/{scorecard_name}/{run_id}.log",
+    wildcard_constraints:
+        run_id="[^/]+/[^/]+",  # env_id/r_hash — exactly one slash
+        scorecard_name="[^/]+",  # no slashes
+    localrule: True
     params:
         lead_times=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["lead_times"],
         regions=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["regions"],
@@ -75,8 +77,6 @@ rule report_scorecard:
         baseline_source=lambda wc: BASELINE_CONFIGS[
             SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]
         ].get("label", SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]),
-    log:
-        OUT_ROOT / "logs/report_scorecard/{experiment}/{scorecard_name}/{run_id}.log",
     shell:
         """
         VAR_ARGS=()
@@ -92,5 +92,5 @@ rule report_scorecard:
             --lead_times {params.lead_times:q} \
             --regions {params.regions:q} \
             "${{VAR_ARGS[@]}}" \
-            --output {output:q} > {log} 2>&1
+            --output {output:q} >{log} 2>&1
         """
