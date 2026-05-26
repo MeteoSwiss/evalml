@@ -538,7 +538,9 @@ def load_INCA_baseline_from_netcdf(
                         raise FileNotFoundError(
                             f"INCA file not found for parameter {param!r}: {fp}"
                         )
-                    LOG.warning("INCA file not found, filling %s with NaN: %s", param, fp)
+                    LOG.warning(
+                        "INCA file not found, filling %s with NaN: %s", param, fp
+                    )
                     parts.append(_nan_array(PARAM_UNITS[param]).isel(time=zero_idx))
                 else:
                     parts.append(
@@ -557,7 +559,9 @@ def load_INCA_baseline_from_netcdf(
                         raise FileNotFoundError(
                             f"INCA file not found for parameter {param!r}: {fp}"
                         )
-                    LOG.warning("INCA file not found, filling %s with NaN: %s", param, fp)
+                    LOG.warning(
+                        "INCA file not found, filling %s with NaN: %s", param, fp
+                    )
                     parts.append(_nan_array(PARAM_UNITS[param]).isel(time=nz_idx))
                 else:
                     parts.append(
