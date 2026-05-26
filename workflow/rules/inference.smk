@@ -44,7 +44,7 @@ rule inference_get_checkpoint:
         """
 
 
-# Generate a pyproject.toml that contains the information needed
+# Generate a requirements.txt that contains the information needed
 # to set up a virtual environment for inference of a specific checkpoint.
 # The list of dependencies is taken from the checkpoint's MLFlow run metadata,
 # and additional dependencies can be specified under a run entry in the main
@@ -297,28 +297,29 @@ rule inference_execute:
             cd {params.workdir}
 
             squashfs-mount {params.image_path}:/user-environment -- bash -c '
-                        source /user-environment/bin/activate
+                source /user-environment/bin/activate
 
-                        if [ "{params.disable_local_definitions}" = "False" ]; then
-                            export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
-                        fi
+                if [ "{params.disable_local_definitions}" = "False" ]; then
+                    export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
+                fi
 
-                        CMD_ARGS=()
+                CMD_ARGS=()
 
-                        # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
-                        if [ {resources.gpus} -gt 1 ]; then
-                            CMD_ARGS+=(runner.parallel.cluster=slurm)
-                        fi
+                # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
+                if [ {resources.gpus} -gt 1 ]; then
+                    CMD_ARGS+=(runner.parallel.cluster=slurm)
+                fi
 
-                        srun \
-                            --unbuffered \
-                            --partition={resources.slurm_partition} \
-                            --cpus-per-task={resources.cpus_per_task} \
-                            --mem-per-cpu={resources.mem_mb_per_cpu} \
-                            --time={resources.runtime} \
-                            --gres={resources.gres} \
-                            --ntasks={resources.ntasks} \
-                            anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
-                        '
+                srun \
+                    --unbuffered \
+                    --partition={resources.slurm_partition} \
+                    --cpus-per-task={resources.cpus_per_task} \
+                    --mem-per-cpu={resources.mem_mb_per_cpu} \
+                    --time={resources.runtime} \
+                    --gres={resources.gres} \
+                    --ntasks={resources.ntasks} \
+                    anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+                '
         ) >{log} 2>&1
         """
+    # fmt: on

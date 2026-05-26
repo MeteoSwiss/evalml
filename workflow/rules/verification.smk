@@ -9,20 +9,12 @@ import pandas as pd
 include: "common.smk"
 
 
-# TODO: make sure the boundaries aren't used
-def _get_baseline_forecast_path(wc):
-    """Return the FCST<year> directory for a baseline in the ICON GRIB archive."""
-    root = BASELINE_CONFIGS[wc.baseline_id].get("root")
-    year = wc.init_time[2:4]
-    return f"{root}/FCST{year}"
-
-
 rule verification_metrics_baseline:
     input:
         "src/verification/__init__.py",
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_metrics.py",
-        forecast=_get_baseline_forecast_path,
+        forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth=config["truth"]["root"],
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
@@ -37,7 +29,8 @@ rule verification_metrics_baseline:
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         truth_label=config["truth"]["label"],
         regions=REGIONS,
-        threshold_dict=config["thresholds"],
+        experiment_params=",".join(EXPERIMENT_PARAMS),
+        threshold_dict=config["experiment"]["thresholds"],
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
@@ -49,6 +42,7 @@ rule verification_metrics_baseline:
             --label "{params.baseline_label}" \
             --truth_label "{params.truth_label}" \
             --regions "{params.regions}" \
+            --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
             --output {output} >{log} 2>&1
         """
@@ -87,7 +81,8 @@ rule verification_metrics:
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
-        threshold_dict=config["thresholds"],
+        experiment_params=",".join(EXPERIMENT_PARAMS),
+        threshold_dict=config["experiment"]["thresholds"],
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
@@ -99,6 +94,7 @@ rule verification_metrics:
             --label "{params.fcst_label}" \
             --truth_label "{params.truth_label}" \
             --regions "{params.regions}" \
+            --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
             --output {output} >{log} 2>&1
         """

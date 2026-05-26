@@ -6,6 +6,7 @@ from typing import Literal, Any
 import earthkit.data as ekd
 import numpy as np
 import xarray as xr
+from pyproj import Transformer
 
 LOG = logging.getLogger(__name__)
 
@@ -14,6 +15,8 @@ XARRAY_ENGINE_PROFILE = {
     "add_valid_time_coord": True,
     "global_attrs": [{"institution": "MeteoSwiss"}, {"Conventions": "CF-1.8"}],
 }
+
+ZERO_KELVIN = -273.15  # °C
 
 
 def _select_valid_times(ds, times: np.datetime64):
@@ -98,7 +101,11 @@ def load_analysis_data_from_zarr(
     )
 
     # change precipitation units from m to kg m-2
-    ds["TOT_PREC"] = ds["TOT_PREC"] * 1000  # convert precipitation units from m to mm
+    for prec_key in ("TOT_PREC_6H", "TOT_PREC_1H", "TOT_PREC"):
+        if prec_key in ds:
+            ds[prec_key] = (
+                ds[prec_key] * 1000
+            )  # convert precipitation units from m to mm
 
     # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
     if "cell" in ds.dims:
@@ -132,13 +139,15 @@ def _collect_icon_archive_files(
 ) -> list[Path]:
     """Return surface GRIB files for one member of an ICON operational archive.
 
-    `root` is the FCST<year> directory, e.g.
-    ``/store_new/mch/msopr/osm/ICON-CH1-EPS/FCST25``.
+    `root` is the top-level ICON directory, e.g.
+    ``/store_new/mch/msopr/osm/ICON-CH1-EPS``. The FCST<year> subdirectory
+    is derived automatically from `reftime`.
     """
-    reftime_dirs = sorted(root.glob(f"{reftime:%y%m%d%H}_*"))
+    fcst_root = root / f"FCST{reftime:%y}"
+    reftime_dirs = sorted(fcst_root.glob(f"{reftime:%y%m%d%H}_*"))
     if not reftime_dirs:
         raise ValueError(
-            f"No archive subdirectory found for {reftime:%y%m%d%H} in {root}"
+            f"No archive subdirectory found for {reftime:%y%m%d%H} in {fcst_root}"
         )
     reftime_dir = reftime_dirs[-1]
     LOG.info("Reading ICON archive from %s", reftime_dir)
@@ -232,7 +241,7 @@ def _tot_prec_handling(tp: xr.DataArray) -> xr.DataArray:
     return tp
 
 
-def load_fct_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
+def load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
     """Load forecast data from a list of GRIB files."""
     ds = load_from_grib_file(files, {"parameter.variable": params})
 
@@ -257,6 +266,9 @@ def load_obs_data_from_peakweather(
         "temperature": "T_2M",
         "wind_u": "U_10M",
         "wind_v": "V_10M",
+        "precipitation": "TOT_PREC",
+        "pressure": "PS",
+        "wind_gust": "VMAX_10M",
     }
     param_names = {k: v for k, v in param_names.items() if v in params}
 
@@ -290,7 +302,7 @@ def load_obs_data_from_peakweather(
     ds = ds.assign_coords(longitude=("values", pw.stations_table["longitude"]))
     ds = ds.assign_coords(latitude=("values", pw.stations_table["latitude"]))
     if "T_2M" in ds:
-        ds["T_2M"] = ds["T_2M"] + 273.15  # convert to Kelvin
+        ds["T_2M"] = ds["T_2M"] - ZERO_KELVIN  # convert to Kelvin
     ds = ds.dropna("values", how="all")
 
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
@@ -327,26 +339,277 @@ def load_truth_data(
     return truth
 
 
+def load_INCA_baseline_from_netcdf(
+    root: Path,
+    reftime: datetime,
+    steps: list[int],
+    params: list[str],
+    freq: str = "1h",
+    fill_missing_files: bool = True,
+) -> xr.Dataset:
+    """Load INCA analysis/nowcast data from per-variable NetCDF files.
+
+    Files are read from {root}/{year}/{month}/{VAR}_INCA_{YYYYmmddHHMM}.nc.
+    Each INCA variable lives in a separate file and covers 6 hours from reftime.
+
+    Args:
+        root:    Base directory of the INCA archive, e.g.
+                 Path("/store_new/mch/msclim/INCA"). Year and month
+                 subdirectories are appended automatically.
+        reftime: Reference time (forecast initialisation time). Used to locate
+                 the source files and to build the output time coordinate.
+        steps:   List of step indices interpreted as multiples of freq.
+                 freq='1h'  : integers 0–6  (hours from reftime).
+                 freq='10min': integers 0–36 (× 10 min from reftime).
+                 freq='5min' : integers 0–72 (× 5 min from reftime).
+        params:  List of output variable names. Supported values:
+
+                   param     description               unit     freq       source    native   src unit  avail.from
+                   --------  ------------------------  -------  ---------  --------  -------  --------  -------
+                   T_2M      2 m temperature           K        1h/10min   TT        1h       °C        2022
+                   TD_2M     2 m dewpoint temperature  K        1h/10min   TD        1h       °C        2022
+                   TOT_PREC  total precipitation rate  kg m-2   1h/10min   RR        10min    mm/h      2022
+                   TOT_PREC  total precipitation rate  kg m-2   5min       RP        5min     mm/h      2025-05
+                   FF_10M    10 m wind speed           m/s      1h         FF        1h       m/s       2022
+                   FF_10M    10 m wind speed           m/s      10min      FF_10min  10min    m/s       2025-05
+                   DD_10M    10 m wind direction       °        1h         DD        1h       °         2022
+                   DD_10M    10 m wind direction       °        10min      DD_10min  10min    °         2025-05
+                   VMAX_10M  10 m wind gust            m/s      1h         WG        1h       m/s       2022
+                   VMAX_10M  10 m wind gust            m/s      10min      WG_10min  10min    m/s       2025-05
+                   CLCT      total cloud cover         %        1h/10min   CT        10min    %         2022
+                   U_10M     10 m zonal wind           m/s      1h/10min   derived from DD_10M, FF_10M
+                   V_10M     10 m meridional wind      m/s      1h/10min   derived from DD_10M, FF_10M
+
+                 U_10M and V_10M use the meteorological convention: DD is
+                 the direction the wind blows FROM, clockwise from North.
+                 freq='5min' only supports TOT_PREC.
+        freq:    Output time granularity: '1h' (default), '10min', or '5min'.
+                 steps are interpreted as multiples of this interval.
+                 Max step: 6 for '1h', 36 for '10min', 72 for '5min'.
+                 freq='5min' only supports TOT_PREC (from RP, avail. since 2025-05-14).
+                 At freq='10min', T_2M and TD_2M (hourly native) have NaN at
+                 non-hourly timestamps.
+        fill_missing_files: If True, missing files are filled with NaN arrays instead
+                 of raising. Defaults to True.
+
+    Returns:
+        xr.Dataset with dimensions (step, y, x) and coordinates:
+          x, y                     – Swiss CH1903 (EPSG:21781) easting/northing [m]
+          lat, lon                 – WGS84 latitude/longitude [°], shape (y, x),
+                                     derived from CH1903 via pyproj
+          step                     – forecast lead time (timedelta64[ns])
+          valid_time               – absolute timestamps (datetime64[ns])
+          forecast_reference_time  – scalar reference time (datetime64[ns])
+        in case one or more variables are missing return array(s) filled with NaNs
+    """
+    # INCA grid in CH1903/LV03 (EPSG:21781): 1 km spacing, 710 × 640 points
+    # Used only as fallback dimensions for NaN-fill arrays when a file is missing.
+    _INCA_CHX = np.arange(255500, 965500, 1000, dtype=np.float64)
+    _INCA_CHY = np.arange(-159500, 480500, 1000, dtype=np.float64)
+
+    def _chxy_to_latlon(x_1d, y_1d) -> dict:
+        x_2d, y_2d = np.meshgrid(x_1d, y_1d)
+        lon_2d, lat_2d = Transformer.from_crs(
+            "EPSG:21781", "EPSG:4326", always_xy=True
+        ).transform(x_2d, y_2d)
+        return {
+            "lat": (
+                ("y", "x"),
+                lat_2d,
+                {"units": "degrees_north", "long_name": "latitude"},
+            ),
+            "lon": (
+                ("y", "x"),
+                lon_2d,
+                {"units": "degrees_east", "long_name": "longitude"},
+            ),
+        }
+
+    def _nan_array(units: str) -> xr.DataArray:
+        return xr.DataArray(
+            np.full(
+                (len(valid_times), len(_INCA_CHY), len(_INCA_CHX)),
+                np.nan,
+                dtype=np.float32,
+            ),
+            dims=["valid_time", "y", "x"],
+            coords={
+                "valid_time": valid_times,
+                "y": _INCA_CHY,
+                "x": _INCA_CHX,
+                **_chxy_to_latlon(_INCA_CHX, _INCA_CHY),
+            },
+            attrs={"units": units},
+        )
+
+    # Maps output variable name -> INCA file prefix, per freq.
+    # File prefix == variable name inside the NetCDF file.
+    PARAM_TO_PREFIX: dict[str, dict[str, str]] = {
+        "1h": {
+            "T_2M": "TT",
+            "TD_2M": "TD",
+            "TOT_PREC": "RR",
+            "FF_10M": "FF",
+            "DD_10M": "DD",
+            "CLCT": "CT",
+            "VMAX_10M": "WG",
+        },
+        "10min": {
+            "T_2M": "TT",
+            "TD_2M": "TD",
+            "TOT_PREC": "RR",
+            "FF_10M": "FF_10min",
+            "DD_10M": "DD_10min",
+            "CLCT": "CT",
+            "VMAX_10M": "WG_10min",
+        },
+        "5min": {
+            "TOT_PREC": "RP",
+        },
+    }
+    DERIVED_DEPS = {"U_10M": ["DD_10M", "FF_10M"], "V_10M": ["DD_10M", "FF_10M"]}
+    PARAM_UNITS = {
+        "T_2M": "K",
+        "TD_2M": "K",
+        "TOT_PREC": "kg m-2",
+        "FF_10M": "m/s",
+        "DD_10M": "degrees",
+        "CLCT": "%",
+        "VMAX_10M": "m/s",
+        "U_10M": "m/s",
+        "V_10M": "m/s",
+    }
+    FREQ_TO_TD = {
+        "1h": np.timedelta64(1, "h"),
+        "10min": np.timedelta64(10, "m"),
+        "5min": np.timedelta64(5, "m"),
+    }
+
+    if freq not in FREQ_TO_TD:
+        raise ValueError(f"freq must be '1h', '10min', or '5min', got {freq!r}")
+    MAX_STEPS = {"1h": 6, "10min": 36, "5min": 72}
+    if max(steps) > MAX_STEPS[freq]:
+        raise ValueError(
+            f"max step for freq={freq!r} is {MAX_STEPS[freq]}, got {max(steps)}"
+        )
+    step_td = FREQ_TO_TD[freq]
+    valid_times = (np.datetime64(reftime) + np.array(steps) * step_td).astype(
+        "datetime64[ns]"
+    )
+
+    prefix_map = PARAM_TO_PREFIX[freq]
+
+    datasets: dict[str, xr.DataArray] = {}
+
+    # Determine which native INCA variables to load
+    to_load: set[str] = set()
+    for param in params:
+        if param in prefix_map:
+            to_load.add(param)
+        elif param in DERIVED_DEPS:
+            deps = DERIVED_DEPS[param]
+            missing = [d for d in deps if d not in prefix_map]
+            if missing:
+                raise ValueError(
+                    f"Parameter {param!r} requires {missing} which are not "
+                    f"available at freq={freq!r}"
+                )
+            to_load.update(deps)
+        else:
+            LOG.warning("INCA does not support parameter %r, filling with NaN", param)
+            datasets[param] = _nan_array("unknown").rename(param)
+            continue
+
+    # load parameter by parameter
+    for param in to_load:
+        prefix = prefix_map[param]
+        filepath = (
+            root
+            / f"{reftime.year:04d}"
+            / f"{reftime.month:02d}"
+            / f"{prefix}_INCA_{reftime:%Y%m%d%H%M}.nc"
+        )
+        try:
+            ds_var = xr.open_dataset(filepath, drop_variables=["grid_mapping"])
+            ds_var = ds_var.rename({"chx": "x", "chy": "y", "time": "valid_time"})
+        except FileNotFoundError:
+            if not fill_missing_files:
+                raise FileNotFoundError(
+                    f"INCA file not found for parameter {param!r}: {filepath}"
+                )
+            LOG.warning("INCA file not found, filling %s with NaN: %s", param, filepath)
+            datasets[param] = _nan_array(PARAM_UNITS[param]).rename(param)
+            continue
+        # Convert units if necessary
+        da = ds_var[prefix]
+        units = da.attrs.get("units", "")
+        if units == "degrees C":
+            da = (da - ZERO_KELVIN).assign_attrs({**da.attrs, "units": "K"})
+        elif units == "mm/h":
+            da = da.assign_attrs({**da.attrs, "units": "kg m-2"})
+        # Reindex to the target time grid; variables coarser than freq get NaN
+        # at timestamps absent from their native resolution
+        datasets[param] = da.rename(param).reindex(valid_time=valid_times)
+
+    merged = xr.merge(list(datasets.values()), join="override")
+
+    # Add lat/lon derived from the x/y coordinates in the loaded NetCDF files
+    merged = merged.assign_coords(**_chxy_to_latlon(merged.x.values, merged.y.values))
+
+    # Derive wind components (meteorological convention: direction wind blows FROM)
+    if "U_10M" in params or "V_10M" in params:
+        dd_rad = np.deg2rad(merged["DD_10M"])
+        ff = merged["FF_10M"]
+        if "U_10M" in params:
+            merged["U_10M"] = (-ff * np.sin(dd_rad)).assign_attrs(units="m/s")
+        if "V_10M" in params:
+            merged["V_10M"] = (-ff * np.cos(dd_rad)).assign_attrs(units="m/s")
+
+    # Restructure to match the earthkit GRIB engine profile: `step` is the
+    # lead-time dimension, `valid_time` and `forecast_reference_time` are coords.
+    ref_time_np = np.datetime64(reftime, "ns")
+    lead_times = (np.array(steps) * step_td).astype("timedelta64[ns]")
+    merged = merged.assign_coords(step=("valid_time", lead_times))
+    merged = merged.swap_dims({"valid_time": "step"})
+    merged = merged.assign_coords(forecast_reference_time=ref_time_np)
+
+    return merged[list(params)]
+
+
+def load_icon_baseline_from_grib(
+    root: Path,
+    reftime: datetime,
+    steps: list[int],
+    params: list[str],
+) -> xr.Dataset:
+    """Load an ICON-CH1-EPS or ICON-CH2-EPS baseline from the operational GRIB archive."""
+    return load_forecast_data_from_grib(
+        files=_collect_icon_archive_files(root, reftime, steps),
+        params=params,
+    )
+
+
 def load_forecast_data(
     root, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
     """Load forecast data from GRIB files or an ICON archive.
 
     Routing (in order):
-    1. ``*.grib`` files present in *root* → :func:`load_fct_data_from_grib`
+    1. ``*.grib`` files present in *root* → :func:`load_forecast_data_from_grib`
        (ML inference output)
-    2. Otherwise → ICON operational archive
+    2. ``INCA`` in path parts → :func:`load_INCA_baseline_from_netcdf`
+    3. Otherwise → ICON operational archive (via :func:`load_icon_baseline_from_grib`)
     """
     root = Path(root)
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
-        return load_fct_data_from_grib(
+        return load_forecast_data_from_grib(
             # NOTE: root is already for a specific reftime
             files=_collect_ml_grib_files(root, steps),
             params=params,
         )
+    if "INCA" in root.parts:
+        LOG.info("Loading INCA baseline from NetCDF files...")
+        return load_INCA_baseline_from_netcdf(root, reftime, steps, params)
     LOG.info("Loading baseline forecasts from ICON GRIB archive...")
-    return load_fct_data_from_grib(
-        files=_collect_icon_archive_files(root, reftime, steps),
-        params=params,
-    )
+    return load_icon_baseline_from_grib(root, reftime, steps, params)
