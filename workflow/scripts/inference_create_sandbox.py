@@ -168,6 +168,12 @@ def parse_args() -> argparse.Namespace:
         "--output", type=Path, required=True, help="Output ZIP archive path"
     )
     parser.add_argument(
+        "--inference-config",
+        type=Path,
+        required=False,
+        help="Path to the full inference config YAML used in the evalml workflow",
+    )
+    parser.add_argument(
         "--squashfs", type=Path, help="Optional SquashFS image to include"
     )
     parser.add_argument(
@@ -217,6 +223,9 @@ def main() -> None:
                 else str(cfg_module.checkpoint)
             ),
             "strict": args.strict,
+            "inference_config": str(args.inference_config)
+            if args.inference_config
+            else None,
         }
         readme_module = ReadmeModule(args.readme_template, context, work_dir)
         files.update(readme_module.prepare())
