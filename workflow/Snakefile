@@ -131,11 +131,15 @@ rule experiment_all:
             rules.verification_metrics_plot.output,
             experiment=EXPERIMENT_NAME,
         ),
-        expand(
-            rules.report_scorecard.output,
-            run_id=CANDIDATES,
-            experiment=[EXPERIMENT_NAME],
-            scorecard_name=SCORECARD_CONFIGS,
+        (
+            expand(
+                rules.report_scorecard.output,
+                run_id=CANDIDATES,
+                experiment=[EXPERIMENT_NAME],
+                scorecard_name=SCORECARD_CONFIGS,
+            )
+            if config.get("experiment", {}).get("scorecards", {}).get("enabled", True)
+            else []
         ),
 
 

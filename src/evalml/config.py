@@ -1,7 +1,7 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet
+from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
 
-from pydantic import BaseModel, Field, RootModel, field_validator
+from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -282,6 +282,30 @@ class ScorecardConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class ExperimentScorecardConfig(BaseModel):
+    """Top-level scorecard block: a single enabled flag plus named scorecard sections."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether to generate scorecards.",
+    )
+    sections: Dict[str, ScorecardConfig] = Field(
+        default_factory=dict,
+        description="Named scorecard configurations (e.g. nowcasting, short_range, medium_range).",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _extract_sections(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            enabled = data.get("enabled", True)
+            sections = {k: v for k, v in data.items() if k != "enabled"}
+            return {"enabled": enabled, "sections": sections}
+        return data
+
+    model_config = {"extra": "forbid"}
+
+
 class ShowcaseConfig(BaseModel):
     """Configuration for the showcase workflow."""
 
@@ -348,6 +372,10 @@ class ExperimentConfig(BaseModel):
     dashboard: Dashboard = Field(
         ...,
         description="Settings for the experiment dashboard.",
+    )
+    scorecards: Optional[ExperimentScorecardConfig] = Field(
+        default=None,
+        description="Scorecard generation configuration. Omit or set enabled: false to disable.",
     )
 
     @field_validator("thresholds")

@@ -74,7 +74,8 @@ experiment:
       # - region
       # - init_hour
       - season
-  scorecard:
+  scorecards:
+    enabled: true
     nowcasting:
       baseline: INCA
       lead_times: "0/6/1"
