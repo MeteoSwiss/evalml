@@ -72,9 +72,7 @@ def _fmt_seconds(s: float) -> str:
 onstart:
     global _T0
     _T0 = time.time()
-
     when_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
     print()
     _hr()
     print(_c("🚀 EvalML workflow started", "1"))
@@ -94,7 +92,6 @@ onstart:
 
 onsuccess:
     dt = _fmt_seconds(time.time() - (_T0 or time.time()))
-
     print()
     _hr()
     print(_c("✅ Workflow finished successfully", "1"))
@@ -106,7 +103,6 @@ onsuccess:
 
 onerror:
     dt = _fmt_seconds(time.time() - (_T0 or time.time()))
-
     print()
     _hr()
     print(_c("❌ Workflow failed", "1"))
