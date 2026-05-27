@@ -195,9 +195,7 @@ rule inference_prepare_forecaster:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
         grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
-        okfile=touch(
-            OUT_ROOT / "logs/inference_prepare_forecaster/{run_id}-{init_time}.ok"
-        ),
+        okfile=OUT_ROOT / "logs/inference_prepare_forecaster/{run_id}-{init_time}.ok",
     log:
         OUT_ROOT / "logs/inference_prepare_forecaster/{run_id}-{init_time}.log",
     localrule: True
@@ -236,9 +234,7 @@ rule inference_prepare_interpolator:
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
         grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
         forecaster=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/forecaster"),
-        okfile=touch(
-            OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.ok"
-        ),
+        okfile=OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.ok",
     log:
         OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.log",
     localrule: True
@@ -280,7 +276,7 @@ rule inference_execute:
         image=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
     output:
-        okfile=touch(OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok"),
+        okfile=OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok",
     log:
         OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
     localrule: True
@@ -333,5 +329,6 @@ rule inference_execute:
                     anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
                 '
         ) >{log} 2>&1
+        touch {output.okfile}
         """
     # fmt: on
