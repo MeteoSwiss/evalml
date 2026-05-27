@@ -614,32 +614,6 @@
       "title": "Locations",
       "type": "object"
     },
-    "MeteogramConfig": {
-      "description": "Configuration for meteogram generation.",
-      "properties": {
-        "enabled": {
-          "default": true,
-          "description": "Whether to generate meteograms (time series plots at stations).",
-          "title": "Enabled",
-          "type": "boolean"
-        },
-        "stations": {
-          "default": [
-            "GVE",
-            "KLO",
-            "LUG"
-          ],
-          "description": "List of PeakWeather station IDs to generate meteograms for.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Stations",
-          "type": "array"
-        }
-      },
-      "title": "MeteogramConfig",
-      "type": "object"
-    },
     "MecConfig": {
       "additionalProperties": false,
       "description": "Paths to input observation files for the MEC verification step.",
@@ -666,6 +640,32 @@
         "ver_synop_root"
       ],
       "title": "MecConfig",
+      "type": "object"
+    },
+    "MeteogramConfig": {
+      "description": "Configuration for meteogram generation.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to generate meteograms (time series plots at stations).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "stations": {
+          "default": [
+            "GVE",
+            "KLO",
+            "LUG"
+          ],
+          "description": "List of PeakWeather station IDs to generate meteograms for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Stations",
+          "type": "array"
+        }
+      },
+      "title": "MeteogramConfig",
       "type": "object"
     },
     "Profile": {

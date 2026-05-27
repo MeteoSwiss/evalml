@@ -53,29 +53,30 @@ rule prepare_mec_input:
     shell:
         """
         (
-        set -euo pipefail
+            set -euo pipefail
 
-        mkdir -p {output.obs}
+            mkdir -p {output.obs}
 
-        # extract YYYYMM from init_time (which is YYYYMMDDHHMM)
-        init="{wildcards.init_time}"
-        ym="${{init:0:6}}"
-        echo "init time: ${{init}}"
+            # extract YYYYMM from init_time (which is YYYYMMDDHHMM)
+            init="{wildcards.init_time}"
+            ym="${{init:0:6}}"
+            echo "init time: ${{init}}"
 
-        # collect observations (ekfSYNOP) and/or (monSYNOP from DWD; includes precip) files
-        cp {params.ekf_root}/${{ym}}/ekfSYNOP_${{init}}00.nc {output.ekf_file}
-        cp {params.mon_synop_root}/${{init:0:10}}/monSYNOP.nc {output.obs}/monSYNOP.nc
-        cp {params.ver_synop_root}/verSYNOP_${{init}}00.nc {output.obs_file}
-        echo "Copied obs files to {output.obs}"
+            # collect observations (ekfSYNOP) and/or (monSYNOP from DWD; includes precip) files
+            cp {params.ekf_root}/${{ym}}/ekfSYNOP_${{init}}00.nc {output.ekf_file}
+            cp {params.mon_synop_root}/${{init:0:10}}/monSYNOP.nc {output.obs}/monSYNOP.nc
+            cp {params.ver_synop_root}/verSYNOP_${{init}}00.nc {output.obs_file}
+            echo "Copied obs files to {output.obs}"
 
-        ) > {log} 2>&1
+        ) >{log} 2>&1
         """
 
 
 rule link_mec_input:
     """For each valid time, merge the two inference GRIB files 0h and - 6h and copy it
-    from the source init time into input_mod/, named by source init time.
-    This assembles the model input directory that MEC expects for a single valid time."""
+from the source init time into input_mod/, named by source init time.
+This assembles the model input directory that MEC expects for a single valid time.
+"""
     input:
         # depend on ALL source grib dirs: for each lead l, source_init = init_time - l hours
         obs_file=rules.prepare_mec_input.output.obs_file,
@@ -102,43 +103,43 @@ rule link_mec_input:
     shell:
         """
         (
-        set -euo pipefail
+            set -euo pipefail
 
-        mkdir -p {output.mod}
-        cd {output.mod}/../../..
+            mkdir -p {output.mod}
+            cd {output.mod}/../../..
 
-        init="{wildcards.init_time}"
-        echo "Creating input_mod files for init $init (leads: {params.leads})"
+            init="{wildcards.init_time}"
+            echo "Creating input_mod files for init $init (leads: {params.leads})"
 
-        # for each configured lead copy (and optionally merge) source files into input_mod
-        for lead in {params.leads}; do
-            lead3=$(printf "%03d" "$lead")
-            # compute source init such that source_init + lead = ref(init)
-            src_epoch=$(date -u -d "${{init:0:4}}-${{init:4:2}}-${{init:6:2}}T${{init:8:2}}:${{init:10:2}}:00Z" +%s)
-            source_init=$(date -u -d "@$(( src_epoch - lead * 3600 ))" +"%Y%m%d%H%M")
-            src_rel="$source_init/grib/${{source_init}}_${{lead3}}.grib"
+            # for each configured lead copy (and optionally merge) source files into input_mod
+            for lead in {params.leads}; do
+                lead3=$(printf "%03d" "$lead")
+                # compute source init such that source_init + lead = ref(init)
+                src_epoch=$(date -u -d "${{init:0:4}}-${{init:4:2}}-${{init:6:2}}T${{init:8:2}}:${{init:10:2}}:00Z" +%s)
+                source_init=$(date -u -d "@$((src_epoch - lead * 3600))" +"%Y%m%d%H%M")
+                src_rel="$source_init/grib/${{source_init}}_${{lead3}}.grib"
 
-            if [[ -e "$src_rel" ]]; then
-                dest="mec/{wildcards.init_time}/input_mod/${{source_init}}.grib"
-                if [[ "$lead" -eq 0 ]]; then
-                    echo "Copying $src_rel -> $dest"
-                    cp "$src_rel" "$dest"
-                else
-                    prev_lead3=$(printf "%03d" "$(( lead - 6 ))")
-                    prev_rel="$source_init/grib/${{source_init}}_${{prev_lead3}}.grib"
-                    if [[ -e "$prev_rel" ]]; then
-                        echo "Merging $prev_rel + $src_rel -> $dest"
-                        cat "$prev_rel" "$src_rel" > "$dest"
-                    else
-                        echo "WARNING: previous lead file $prev_rel not found, copying $src_rel only" >&2
+                if [[ -e "$src_rel" ]]; then
+                    dest="mec/{wildcards.init_time}/input_mod/${{source_init}}.grib"
+                    if [[ "$lead" -eq 0 ]]; then
+                        echo "Copying $src_rel -> $dest"
                         cp "$src_rel" "$dest"
+                    else
+                        prev_lead3=$(printf "%03d" "$((lead - 6))")
+                        prev_rel="$source_init/grib/${{source_init}}_${{prev_lead3}}.grib"
+                        if [[ -e "$prev_rel" ]]; then
+                            echo "Merging $prev_rel + $src_rel -> $dest"
+                            cat "$prev_rel" "$src_rel" >"$dest"
+                        else
+                            echo "WARNING: previous lead file $prev_rel not found, copying $src_rel only" >&2
+                            cp "$src_rel" "$dest"
+                        fi
                     fi
+                else
+                    echo "WARNING: source file $src_rel not found" >&2
                 fi
-            else
-                echo "WARNING: source file $src_rel not found" >&2
-            fi
-        done
-        ) > {log} 2>&1
+            done
+        ) >{log} 2>&1
         """
 
 
@@ -164,9 +165,9 @@ rule generate_mec_namelist:
 
 rule sarus_pull_mec:
     """Pull the MEC sarus container image once before parallel MEC jobs."""
-    localrule: True
     output:
         touch(OUT_ROOT / "logs/sarus_pull_mec.ok"),
+    localrule: True
     shell:
         "sarus pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main"
 
@@ -185,34 +186,31 @@ rule run_mec:
     shell:
         """
         (
-        set -euo pipefail
+            set -euo pipefail
 
-        run_dir=$(dirname {input.namelist})
-        abs_run_dir=$(realpath "$run_dir")
-        abs_mod_root=$(realpath "$run_dir/../..")   # two levels up (so that all links are mounted to the container)
+            run_dir=$(dirname {input.namelist})
+            abs_run_dir=$(realpath "$run_dir")
+            abs_mod_root=$(realpath "$run_dir/../..") # two levels up (so that all links are mounted to the container)
 
-        # build mount options in a variable for readability
-        MOUNTS="\
-          --mount=type=bind,source=$abs_run_dir,destination=/src/bin2 \
-          --mount=type=bind,source=$abs_mod_root,destination=$abs_mod_root,readonly \
-          --mount=type=bind,source=/oprusers/osm/opr.inn/data/,destination=/oprusers/osm/opr.inn/data/ \
-        "
+            # run container
+            sarus run \
+                --mount=type=bind,source=$abs_run_dir,destination=/src/bin2 \
+                --mount=type=bind,source=$abs_mod_root,destination=$abs_mod_root,readonly \
+                --mount=type=bind,source=/oprusers/osm/opr.inn/data/,destination=/oprusers/osm/opr.inn/data/ \
+                container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
 
-        # run container (split over multiple lines for readability)
-        sarus run $MOUNTS container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
+            # Run MEC using local executable (Alternative to sarus container)
+            #cd "$run_dir"
+            #export LM_HOST=balfrin-ln003
+            #source /oprusers/osm/opr.inn/abs/mec.env
+            #./mec > ./mec_out.log 2>&1
 
-        # Run MEC using local executable (Alternative to sarus container)
-        #cd "$run_dir"
-        #export LM_HOST=balfrin-ln003
-        #source /oprusers/osm/opr.inn/abs/mec.env
-        #./mec > ./mec_out.log 2>&1
-
-        # copy the output file to the final location for the Feedback files
-        # and rename to match NWP conventions
-        mkdir -p "$run_dir/../../fdbk_files"
-        cp "$run_dir/verSYNOP.nc" "$run_dir/../../fdbk_files/verSYNOP_{wildcards.init_time}00.nc"
-        echo "...time at end of run_mec: $(date)"
-        ) > {log} 2>&1
+            # copy the output file to the final location for the Feedback files
+            # and rename to match NWP conventions
+            mkdir -p "$run_dir/../../fdbk_files"
+            cp "$run_dir/verSYNOP.nc" "$run_dir/../../fdbk_files/verSYNOP_{wildcards.init_time}00.nc"
+            echo "...time at end of run_mec: $(date)"
+        ) >{log} 2>&1
         """
 
 
@@ -248,27 +246,27 @@ rule generate_ffv2_namelist:
     shell:
         """
         (
-        set -euo pipefail
-        mkdir -p {params.output_directory}
-        uv run {input.script} \
-            --template {input.template} \
-            --namelist {output.namelist} \
-            --experiment_ids {params.experiment_ids} \
-            --feedback_directories {params.feedback_directory} \
-            --output_directory {params.output_directory} \
-            --experiment_description {params.experiment_description} \
-            --file_description {params.file_description} \
-            --domain_table {params.domain_table} \
-            --blacklists {params.blacklists}
-        ) > {log} 2>&1
+            set -euo pipefail
+            mkdir -p {params.output_directory}
+            uv run {input.script} \
+                --template {input.template} \
+                --namelist {output.namelist} \
+                --experiment_ids {params.experiment_ids} \
+                --feedback_directories {params.feedback_directory} \
+                --output_directory {params.output_directory} \
+                --experiment_description {params.experiment_description} \
+                --file_description {params.file_description} \
+                --domain_table {params.domain_table} \
+                --blacklists {params.blacklists}
+        ) >{log} 2>&1
         """
 
 
 rule sarus_pull_ffv2:
     """Pull the FFV2 sarus container image once before the FFV2 job."""
-    localrule: True
     output:
         touch(OUT_ROOT / "logs/sarus_pull_ffv2.ok"),
+    localrule: True
     shell:
         "sarus pull container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-main"
 
@@ -294,28 +292,28 @@ rule run_ffv2:
     shell:
         """
         (
-        set -euo pipefail
-        echo "...time at start of run_ffv2: $(date)"
+            set -euo pipefail
+            echo "...time at start of run_ffv2: $(date)"
 
-        # Create the output directory to hold scores, if it does not exist
-        mkdir -p {output.scores}
+            # Create the output directory to hold scores, if it does not exist
+            mkdir -p {output.scores}
 
-        namelist=$(realpath {input.namelist})
-        domain_table={params.domain_table}
-        blacklists={params.blacklists}
-        # Mount needs to have source as absolute path
-        feedback_dir_abs=$(realpath {params.feedback_directory})
-        output_dir_abs=$(realpath {output.scores})
-        sarus run \
-        --mount=type=bind,source=$namelist,destination=/src/ffv2/SYNOP_DET.nl \
-        --mount=type=bind,source=$domain_table,destination=$domain_table \
-        --mount=type=bind,source=$blacklists,destination=$blacklists \
-        --mount=type=bind,source=$feedback_dir_abs,destination=/src/ffv2/input \
-        --mount=type=bind,source=$output_dir_abs,destination=/src/ffv2/output \
-        container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-main
+            namelist=$(realpath {input.namelist})
+            domain_table={params.domain_table}
+            blacklists={params.blacklists}
+            # Mount needs to have source as absolute path
+            feedback_dir_abs=$(realpath {params.feedback_directory})
+            output_dir_abs=$(realpath {output.scores})
+            sarus run \
+                --mount=type=bind,source=$namelist,destination=/src/ffv2/SYNOP_DET.nl \
+                --mount=type=bind,source=$domain_table,destination=$domain_table \
+                --mount=type=bind,source=$blacklists,destination=$blacklists \
+                --mount=type=bind,source=$feedback_dir_abs,destination=/src/ffv2/input \
+                --mount=type=bind,source=$output_dir_abs,destination=/src/ffv2/output \
+                container-registry.meteoswiss.ch/ffv2ctr/ffv2-container:0.1.0-main
 
-        echo "...time at end of run_ffv2: $(date)"
-        ) > {log} 2>&1
+            echo "...time at end of run_ffv2: $(date)"
+        ) >{log} 2>&1
         """
 
 
@@ -330,39 +328,39 @@ rule reorganize_ffv2_files:
     shell:
         """
         (
-        set -euo pipefail
-        echo "...time at start of reorganize_ffv2_files: $(date)"
+            set -euo pipefail
+            echo "...time at start of reorganize_ffv2_files: $(date)"
 
-        input_dir_abs=$(realpath {input.scores})
-        output_dir_abs=$(realpath {output.shiny_dir})
+            input_dir_abs=$(realpath {input.scores})
+            output_dir_abs=$(realpath {output.shiny_dir})
 
-        # move score files into app-specific subdirectories, for the Shiny app
-        # display.
-        mkdir -p $output_dir_abs/fdbk_cont/data
-        mkdir -p $output_dir_abs/fdbk_cont_bystat/data
-        mkdir -p $output_dir_abs/fdbk_cont_ts/data
-        mkdir -p $output_dir_abs/fdbk_synop_categ/data
-        mkdir -p $output_dir_abs/fdbk_synop_categ_bystat/data
-        mkdir -p $output_dir_abs/fdbk_synop_categ_ts/data
+            # move score files into app-specific subdirectories, for the Shiny app
+            # display.
+            mkdir -p $output_dir_abs/fdbk_cont/data
+            mkdir -p $output_dir_abs/fdbk_cont_bystat/data
+            mkdir -p $output_dir_abs/fdbk_cont_ts/data
+            mkdir -p $output_dir_abs/fdbk_synop_categ/data
+            mkdir -p $output_dir_abs/fdbk_synop_categ_bystat/data
+            mkdir -p $output_dir_abs/fdbk_synop_categ_ts/data
 
-        # DET surface continuous scores
-        cp $input_dir_abs/CONT_exp* $output_dir_abs/fdbk_cont/data/
-        # DET surface continuous scores as time series
-        cp $input_dir_abs/CONT_TS_exp* $output_dir_abs/fdbk_cont_ts/data/
-        # DET surface continuous by stations
-        cp $input_dir_abs/CONT_bs_exp* $output_dir_abs/fdbk_cont_bystat/data/
+            # DET surface continuous scores
+            cp $input_dir_abs/CONT_exp* $output_dir_abs/fdbk_cont/data/
+            # DET surface continuous scores as time series
+            cp $input_dir_abs/CONT_TS_exp* $output_dir_abs/fdbk_cont_ts/data/
+            # DET surface continuous by stations
+            cp $input_dir_abs/CONT_bs_exp* $output_dir_abs/fdbk_cont_bystat/data/
 
-        # Categorical verification against SYNOP
-        cp $input_dir_abs/CATEG_exp* $output_dir_abs/fdbk_synop_categ/data
-        cp $input_dir_abs/PEC_exp* $output_dir_abs/fdbk_synop_categ/data
+            # Categorical verification against SYNOP
+            cp $input_dir_abs/CATEG_exp* $output_dir_abs/fdbk_synop_categ/data
+            cp $input_dir_abs/PEC_exp* $output_dir_abs/fdbk_synop_categ/data
 
-        # Categorical verification against SYNOP by station
-        # This is not presently generated, so skip.
-        #cp $input_dir_abs/CATEG_TS_exp* $output_dir_abs/fdbk_synop_categ_ts/data
+            # Categorical verification against SYNOP by station
+            # This is not presently generated, so skip.
+            #cp $input_dir_abs/CATEG_TS_exp* $output_dir_abs/fdbk_synop_categ_ts/data
 
-        # Categorical verification against SYNOP as time series
-        cp $input_dir_abs/CATEG_bs_exp* $output_dir_abs/fdbk_synop_categ_bystat/data
+            # Categorical verification against SYNOP as time series
+            cp $input_dir_abs/CATEG_bs_exp* $output_dir_abs/fdbk_synop_categ_bystat/data
 
-        echo "...time at end of reorganize_ffv2_files: $(date)"
-        ) > {log} 2>&1
+            echo "...time at end of reorganize_ffv2_files: $(date)"
+        ) >{log} 2>&1
         """
