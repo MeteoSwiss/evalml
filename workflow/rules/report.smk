@@ -54,7 +54,7 @@ rule report_experiment_dashboard:
 
 rule report_scorecard:
     input:
-        script="workflow/scripts/report_scorecard.mo.py",
+        script="workflow/scripts/report_scorecard.py",
         verif_run=lambda wc: EXPERIMENT_PARTICIPANTS[wc.run_id],
         verif_baseline=lambda wc: EXPERIMENT_PARTICIPANTS[
             SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]
