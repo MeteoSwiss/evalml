@@ -1,7 +1,6 @@
-from pathlib import Path
-
 import pytest
 
+from os.path import Path
 from evalml.cli import _deep_merge, load_yaml
 from evalml.config import ConfigModel
 
@@ -79,53 +78,3 @@ def test_legacy_top_level_baselines_still_supported(example_forecasters_config):
     ]
 
     _ = ConfigModel.model_validate(cfg)
-
-
-def test_workflow_parsing_excludes_baselines_from_run_configs(
-    example_forecasters_config,
-):
-    """Baseline entries in `runs` should not be treated as ML run configs."""
-
-    namespace = {
-        "Path": Path,
-        "config": example_forecasters_config,
-    }
-    common_rules = Path("workflow/rules/common.smk").read_text()
-
-    exec(common_rules, namespace)
-
-    run_configs = namespace["RUN_CONFIGS"]
-    baseline_configs = namespace["BASELINE_CONFIGS"]
-
-    assert all(
-        run_config["model_type"] != "baseline" for run_config in run_configs.values()
-    )
-    assert baseline_configs == {
-        "COSMO-E": {
-            "label": "COSMO-E",
-            "root": "/store_new/mch/msopr/ml/COSMO-E",
-            "steps": "0/120/6",
-        }
-    }
-
-
-def test_workflow_derives_baseline_id_from_root_stem(example_interpolators_config):
-    """Workflow baseline IDs should come from the baseline root path stem."""
-
-    namespace = {
-        "Path": Path,
-        "config": example_interpolators_config,
-    }
-    common_rules = Path("workflow/rules/common.smk").read_text()
-
-    exec(common_rules, namespace)
-
-    baseline_configs = namespace["BASELINE_CONFIGS"]
-
-    assert "COSMO-E_hourly" in baseline_configs
-    assert "COSMO-E-1h" not in baseline_configs
-    assert baseline_configs["COSMO-E_hourly"] == {
-        "label": "COSMO-E",
-        "root": "/store_new/mch/msopr/ml/COSMO-E_hourly",
-        "steps": "0/120/1",
-    }

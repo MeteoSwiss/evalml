@@ -11,9 +11,9 @@ else:
 
 
 rule data_download_obs_from_peakweather:
-    localrule: True
     output:
         root=directory(output_peakweather_root),
+    localrule: True
     run:
         from peakweather.dataset import PeakWeatherDataset
 

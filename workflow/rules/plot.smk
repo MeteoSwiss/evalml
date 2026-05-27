@@ -114,15 +114,10 @@ rule plot_forecast_frame:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         python {input.script} \
-            --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]} \
+            --input {params.grib_out_dir} --date {wildcards.init_time} --outfn {output[0]} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region} \
             {params.region_extra} \
-            --accu {params.accu} \
-        # interactive editing (needs to set localrule: True and use only one core)
-        # marimo edit {input.script} -- \
-        #     --input {params.grib_out_dir}  --date {wildcards.init_time} --outfn {output[0]}\
-        #     --param {wildcards.param} --leadtime {wildcards.leadtime} --region {wildcards.region}\
-        #     --accu {params.accu}\
+            --accu {params.accu}
         """
 
 
@@ -153,6 +148,10 @@ rule make_forecast_animation:
     output:
         OUT_ROOT
         / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
+    wildcard_constraints:
+        param="|".join(map(re.escape, SHOWCASE_PARAMS)),
+        region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
+    localrule: True
     params:
         delay=lambda wc: round(
             int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2])
@@ -170,7 +169,7 @@ def _comparison_by_id(comparison_id: str) -> dict:
     for c in SHOWCASE_COMPARISONS:
         if c["id"] == comparison_id:
             return c
-    raise ValueError(f"No comparison with id {comparison_id!r}")
+    raise ValueError(f"No comparison with id {comparison_id! r}")
 
 
 def _side_gif_path(side: dict, wc) -> list:
@@ -282,10 +281,13 @@ rule make_comparison_animation:
     wildcard_constraints:
         param="|".join(map(re.escape, SHOWCASE_PARAMS)),
         region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
-        comparison_id="|".join(map(re.escape, [c["id"] for c in SHOWCASE_COMPARISONS])) or "NEVER",
+        comparison_id="|".join(map(re.escape, [c["id"] for c in SHOWCASE_COMPARISONS]))
+        or "NEVER",
     input:
         left=lambda wc: _side_gif_path(_comparison_by_id(wc.comparison_id)["left"], wc),
-        right=lambda wc: _side_gif_path(_comparison_by_id(wc.comparison_id)["right"], wc),
+        right=lambda wc: _side_gif_path(
+            _comparison_by_id(wc.comparison_id)["right"], wc
+        ),
         script="workflow/scripts/plot_combine_animations.py",
     output:
         OUT_ROOT

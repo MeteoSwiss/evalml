@@ -64,17 +64,21 @@ def parse_reference_times():
     start = datetime.strptime(cfg["start"], DATETIME_FORMAT)
     end = datetime.strptime(cfg["end"], DATETIME_FORMAT)
     freq = parse_timedelta(cfg["frequency"])
+    blacklist = {
+        datetime.strptime(t, DATETIME_FORMAT) for t in cfg.get("blacklist", [])
+    }
     times = []
     t = start
     while t <= end:
-        times.append(t)
+        if t not in blacklist:
+            times.append(t)
         t += freq
     return times
 
 
 def parse_regions():
     """Parse regions from the configuration."""
-    cfg = config["stratification"]
+    cfg = config["experiment"]["stratification"]
     regions = [f"{cfg['root']}/{region}.shp" for region in cfg["regions"]]
     regions_txt = ",".join(regions)
     return regions_txt
@@ -320,6 +324,9 @@ def master_hash() -> str:
 REGIONS = parse_regions()
 SHOWCASE_REGIONS = parse_showcase_regions()
 SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])
+EXPERIMENT_PARAMS = config.get("experiment", {}).get(
+    "params", ["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"]
+)
 REFTIMES = parse_reference_times()
 RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
@@ -335,6 +342,7 @@ EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
 def sanitize_label(label: str) -> str:
     """Sanitize a run label for use as a path component."""
     import re as _re
+
     return _re.sub(r"[^a-zA-Z0-9_-]", "_", label)
 
 
@@ -392,10 +400,12 @@ def _resolve_label(label: str) -> dict:
         z = ZARR_SOURCES[label]
         return {"type": "zarr", "label": label, "step": z["step"]}
 
-    available_runs = sorted({cfg.get("label") for cfg in RUN_CONFIGS.values() if cfg.get("label")})
+    available_runs = sorted(
+        {cfg.get("label") for cfg in RUN_CONFIGS.values() if cfg.get("label")}
+    )
     available_zarr = sorted(ZARR_SOURCES.keys())
     raise ValueError(
-        f"No source found with label {label!r}. "
+        f"No source found with label {label! r}. "
         f"ML run labels: {available_runs}. "
         f"Zarr source labels: {available_zarr}."
     )
@@ -410,9 +420,11 @@ def label_to_run_id(label: str) -> str:
     for run_id, cfg in RUN_CONFIGS.items():
         if cfg.get("label") == label:
             return run_id
-    available = sorted({cfg.get("label") for cfg in RUN_CONFIGS.values() if cfg.get("label")})
+    available = sorted(
+        {cfg.get("label") for cfg in RUN_CONFIGS.values() if cfg.get("label")}
+    )
     raise ValueError(
-        f"No run found with label {label!r}. Available ML run labels: {available}"
+        f"No run found with label {label! r}. Available ML run labels: {available}"
     )
 
 
@@ -437,16 +449,20 @@ def parse_showcase_comparisons() -> list:
       left   — source descriptor (type, run_id/label, step)
       right  — source descriptor (type, run_id/label, step)
     """
-    comparisons = config.get("showcase", {}).get("animations", {}).get("comparisons", [])
+    comparisons = (
+        config.get("showcase", {}).get("animations", {}).get("comparisons", [])
+    )
     result = []
     for c in comparisons:
         left_label = c["left"]
         right_label = c["right"]
-        result.append({
-            "id": f"{sanitize_label(left_label)}_vs_{sanitize_label(right_label)}",
-            "left": _resolve_label(left_label),
-            "right": _resolve_label(right_label),
-        })
+        result.append(
+            {
+                "id": f"{sanitize_label(left_label)}_vs_{sanitize_label(right_label)}",
+                "left": _resolve_label(left_label),
+                "right": _resolve_label(right_label),
+            }
+        )
     return result
 
 
