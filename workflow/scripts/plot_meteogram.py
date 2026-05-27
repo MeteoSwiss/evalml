@@ -140,7 +140,9 @@ def main():
         paramlist = [param]
 
     # Load gridded data once — shared across all station plots
-    forecast_ds = load_forecast_data(forecast_grib_dir, init_time, forecast_steps, paramlist)
+    forecast_ds = load_forecast_data(
+        forecast_grib_dir, init_time, forecast_steps, paramlist
+    )
     forecast_ds = preprocess_ds(forecast_ds, param)
 
     steps = [int(s) for s in forecast_ds.lead_time.dt.total_seconds().values / 3600]

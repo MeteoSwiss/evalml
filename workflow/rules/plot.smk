@@ -54,7 +54,9 @@ rule plot_meteogram:
         baseline_steps=lambda wc: [x["steps"] for x in _get_available_baselines(wc)],
         baseline_labels=lambda wc: [x["label"] for x in _get_available_baselines(wc)],
         outdir=lambda wc: str(
-            (Path(OUT_ROOT) / f"results/{wc.showcase}/{wc.run_id}/{wc.init_time}").resolve()
+            (
+                Path(OUT_ROOT) / f"results/{wc.showcase}/{wc.run_id}/{wc.init_time}"
+            ).resolve()
         ),
         stations=config["showcase"]["meteograms"]["stations"],
     shell:
@@ -85,7 +87,7 @@ rule plot_meteogram:
             CMD_ARGS+=(--baseline_label "${{BASELINE_LABELS[$i]}}")
         done
 
-        python {input.script} "${{CMD_ARGS[@]}}" > {log} 2>&1
+        python {input.script} "${{CMD_ARGS[@]}}"
         """
 
 
@@ -102,7 +104,8 @@ rule plot_forecast_frame:
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
     log:
-        OUT_ROOT / "logs/{run_id}/{init_time}/plot_forecast_frame_{leadtime}_{param}.log",
+        OUT_ROOT
+        / "logs/{run_id}/{init_time}/plot_forecast_frame_{leadtime}_{param}.log",
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
