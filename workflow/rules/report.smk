@@ -55,25 +55,30 @@ rule report_experiment_dashboard:
 rule report_scorecard:
     input:
         script="workflow/scripts/report_scorecard.py",
-        verif_run=lambda wc: EXPERIMENT_PARTICIPANTS[wc.run_id],
+        verif_run=lambda wc: EXPERIMENT_PARTICIPANTS[f"{wc.env_id}/{wc.config_hash}"],
         verif_baseline=lambda wc: EXPERIMENT_PARTICIPANTS[
             SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]
         ],
     output:
         report(
-            OUT_ROOT / "results/{experiment}/scorecards/{scorecard_name}/{run_id}.png",
+            OUT_ROOT
+            / "results/{experiment}/scorecards/{scorecard_name}/scorecard_{scorecard_name}_{env_id}_{config_hash}.png",
         ),
     log:
-        OUT_ROOT / "logs/report_scorecard/{experiment}/{scorecard_name}/{run_id}.log",
+        OUT_ROOT
+        / "logs/report_scorecard/{experiment}/{scorecard_name}/{env_id}/{config_hash}.log",
     wildcard_constraints:
-        run_id="[^/]+/[^/]+",  # env_id/r_hash — exactly one slash
-        scorecard_name="[^/]+",  # no slashes
+        env_id="[^/]+",  # no slashes
+        config_hash="[^/]+",
+        scorecard_name="[^/]+",
     localrule: True
     params:
         lead_times=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["lead_times"],
         stratification=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["stratification"],
         variables=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["variables"],
-        run_source=lambda wc: RUN_CONFIGS[wc.run_id].get("label", wc.run_id),
+        run_source=lambda wc: RUN_CONFIGS[f"{wc.env_id}/{wc.config_hash}"].get(
+            "label", f"{wc.env_id}/{wc.config_hash}"
+        ),
         baseline_source=lambda wc: BASELINE_CONFIGS[
             SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]
         ].get("label", SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]),

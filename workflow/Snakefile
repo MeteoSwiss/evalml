@@ -132,12 +132,17 @@ rule experiment_all:
             experiment=EXPERIMENT_NAME,
         ),
         (
-            expand(
-                rules.report_scorecard.output,
-                run_id=CANDIDATES,
-                experiment=[EXPERIMENT_NAME],
-                scorecard_name=SCORECARD_CONFIGS,
-            )
+            [
+                path
+                for c in CANDIDATES
+                for path in expand(
+                    rules.report_scorecard.output,
+                    env_id=c.split("/")[0],
+                    config_hash=c.split("/")[1],
+                    experiment=EXPERIMENT_NAME,
+                    scorecard_name=list(SCORECARD_CONFIGS),
+                )
+            ]
             if config.get("experiment", {}).get("scorecards", {}).get("enabled", True)
             else []
         ),
