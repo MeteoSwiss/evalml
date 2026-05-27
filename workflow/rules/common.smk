@@ -334,7 +334,5 @@ BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
 _scorecard = config.get("experiment", {}).get("scorecards", {})
 SCORECARD_CONFIGS = (
-    {k: v for k, v in _scorecard.items() if k != "enabled"}
-    if _scorecard.get("enabled", True)
-    else {}
+    _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
 )

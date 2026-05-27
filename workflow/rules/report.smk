@@ -71,7 +71,7 @@ rule report_scorecard:
     localrule: True
     params:
         lead_times=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["lead_times"],
-        regions=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["regions"],
+        stratification=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["stratification"],
         variables=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["variables"],
         run_source=lambda wc: RUN_CONFIGS[wc.run_id].get("label", wc.run_id),
         baseline_source=lambda wc: BASELINE_CONFIGS[
@@ -90,7 +90,7 @@ rule report_scorecard:
             --run_source {params.run_source:q} \
             --baseline_source {params.baseline_source:q} \
             --lead_times {params.lead_times:q} \
-            --regions {params.regions:q} \
+            --stratification {params.stratification:q} \
             "${{VAR_ARGS[@]}}" \
             --output {output:q} >{log} 2>&1
         """

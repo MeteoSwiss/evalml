@@ -64,11 +64,10 @@ def config(ArgumentParser, Path):
         help="Lead-time grid 'start/stop/step' in hours (default: 6/33/6).",
     )
     parser.add_argument(
-        "--regions",
+        "--stratification",
         type=str,
-        nargs="*",
-        default=[],
-        help="Regions to include. If omitted, all regions present in the data are used.",
+        default="region",
+        help="Dimension name to use as scorecard columns (default: region).",
     )
     parser.add_argument(
         "--variable",
@@ -79,18 +78,6 @@ def config(ArgumentParser, Path):
             "Repeat once per variable. Omit ':...' to use all metrics. "
             "If not given at all, falls back to a minimal RMSE-only set."
         ),
-    )
-    parser.add_argument(
-        "--season",
-        type=str,
-        default="all",
-        help="Value of the 'season' dim to select (default: all).",
-    )
-    parser.add_argument(
-        "--init_hour",
-        type=int,
-        default=-999,
-        help="Value of the 'init_hour' dim (default: -999 = aggregated).",
     )
     parser.add_argument(
         "--output",
@@ -118,9 +105,7 @@ def config(ArgumentParser, Path):
     cfg = {
         "model": {"path": args.verif_run, "source": args.run_source},
         "baseline": {"path": args.verif_baseline, "source": args.baseline_source},
-        "season": args.season,
-        "init_hour": args.init_hour,
-        "regions": args.regions,
+        "stratification": args.stratification,
         "lead_times": args.lead_times,
         "all_metrics": [
             "RMSE",
@@ -149,13 +134,13 @@ def config(ArgumentParser, Path):
                 "missing": "#999999",  # NaN / no data marker
                 "leads": "#666666",  # lead-time tick labels
                 "hline": "#cccccc",  # horizontal separators between variable groups
-                "vline": "black",  # vertical separators between regions
+                "vline": "black",  # vertical separators between slices
             },
             "fonts": {  # font sizes in points
                 "title": 24,
                 "group": 20,  # variable group labels (U_10M, T_2M, ...)
                 "metric": 18,  # metric labels         (RMSE, MAE, ...)
-                "region": 20,  # region header labels; increasing this auto-widens the columns
+                "slice": 20,  # slice header labels; increasing this auto-widens the columns
                 "leads": 16,
                 "legend": 18,
             },
@@ -168,7 +153,7 @@ def config(ArgumentParser, Path):
                 "missing_marker_lw": 1.5,  # line width of the "x" marker
             },
             "figure": {  # sizing rules (inches)
-                "col_width": 0.26,  # minimum width per lead-time column; actual width grows automatically if region labels need more space
+                "col_width": 0.26,  # minimum width per lead-time column; actual width grows automatically if slice labels need more space
                 "width_min": 5,  # minimum total figure width
                 "width_pad": 5,  # extra width for left-side labels (group + metric)
                 "row_height": 0.42,  # height per metric row
@@ -176,12 +161,12 @@ def config(ArgumentParser, Path):
                 "title_margin_in": 1.5,  # fixed space above axes for the title (independent of figure height)
             },
             "layout": {  # data-coordinate offsets controlling spacing
-                "region_gap": 1.5,  # empty columns between adjacent region blocks
+                "slice_gap": 1.5,  # empty columns between adjacent slice blocks
                 "metric_x": -1.5,  # x position of metric labels (data coords)
                 "group_metric_gap_pt": 15,  # physical gap (points) between the longest metric label and the group label
-                "region_label_pad": 1.05,  # factor applied to the longest region label width when widening columns to fit it
-                "region_y": 1.9,  # y position of region title labels (text baseline)
-                "region_y_pad": 0.2,  # extra y above the measured region label height for the top ylim
+                "slice_label_pad": 1.05,  # factor applied to the longest slice label width when widening columns to fit it
+                "slice_y": 1.9,  # y position of slice title labels (text baseline)
+                "slice_y_pad": 0.2,  # extra y above the measured slice label height for the top ylim
                 "leads_y": 0.45,  # y position of the lead-time tick labels
             },
             "hline": {  # horizontal separators between variable groups
@@ -189,8 +174,8 @@ def config(ArgumentParser, Path):
                 "x_end": 1.0,  # axes fraction where the line ends
                 "linewidth": 0.7,
             },
-            "vline": {  # vertical separators between regions
-                "label_gap": 0.4,  # gap (metric rows) between the region label bottom and the top of the separator line
+            "vline": {  # vertical separators between slices
+                "label_gap": 0.4,  # gap (metric rows) between the slice label bottom and the top of the separator line
                 "linewidth": 0.8,
             },
             "legend": {
@@ -222,24 +207,19 @@ def align_and_diff(cfg, np, xr):
     model_source = cfg["model"]["source"]
     baseline_source = cfg["baseline"]["source"]
 
-    # squeeze(drop=True) collapses singleton dims left over from .sel().
-    model = (
-        xr.open_dataset(cfg["model"]["path"])
-        .sel(
-            source=model_source,
-            season=cfg["season"],
-            init_hour=cfg["init_hour"],
-        )
-        .squeeze(drop=True)
-    )
+    # Build selection dict: collapse all non-stratification dims to their "all"/aggregated value.
+    _ALL = {"region": "all", "season": "all", "init_hour": -999}
+    _strat = cfg["stratification"]
+    _sel = {"source": model_source}
+    for dim, all_val in _ALL.items():
+        if dim != _strat:
+            _sel[dim] = all_val
 
+    # squeeze(drop=True) collapses singleton dims left over from .sel().
+    model = xr.open_dataset(cfg["model"]["path"]).sel(**_sel).squeeze(drop=True)
     baseline = (
         xr.open_dataset(cfg["baseline"]["path"])
-        .sel(
-            source=baseline_source,
-            season=cfg["season"],
-            init_hour=cfg["init_hour"],
-        )
+        .sel(**{**_sel, "source": baseline_source})
         .squeeze(drop=True)
     )
 
@@ -277,14 +257,12 @@ def align_and_diff(cfg, np, xr):
 
 @app.cell
 def filter_diff(all_metrics, cfg, diff, pd):
-    """Filter diff by regions, lead-time grid and variable/metric selection."""
+    """Filter diff by slices, lead-time grid and variable/metric selection."""
 
     def to_h(td):
         return int(pd.Timedelta(td).total_seconds() / 3600)
 
     diff_filtered = diff
-    if cfg.get("regions"):
-        diff_filtered = diff_filtered.sel(region=cfg["regions"])
 
     if cfg.get("lead_times"):
         start, stop, step = (int(x) for x in cfg["lead_times"].split("/"))
@@ -383,26 +361,32 @@ def plot_scorecard(
 
     # ── Figure size and layout precomputation ────────────────────────────────────
     rows = [tuple(v.rsplit(".", 1)) for v in diff_filtered.data_vars]
-    regions_ = list(diff_filtered.region.values)
+    strat_dim = cfg.get("stratification", "region")
+    _slices = list(diff_filtered[strat_dim].values)
     n_leads = diff_filtered.sizes["lead_time"]
     lead_hours = [to_h(lt) for lt in diff_filtered.lead_time.values]
 
-    # Measure the longest region label on a throwaway figure so col_width can grow to prevent adjacent region headers from overlapping;
+    def _fmt_slice(s):
+        if isinstance(s, str):
+            return s.upper() if strat_dim == "season" else s.capitalize()
+        return "All" if int(s) == -999 else f"{int(s):02d}Z"
+
+    # Measure the longest slice label on a throwaway figure so col_width can grow to prevent adjacent headers from overlapping;
     # its height (in metric rows) also fixes the top ylim and the top of the vertical separators.
-    _longest_region = max(regions_, key=len).capitalize()
+    _longest_slice = max((_fmt_slice(s) for s in _slices), key=len)
     _fig_tmp, _ax_tmp = plt.subplots(dpi=plot["rcparams"]["dpi"])
     _t = _ax_tmp.text(
         0,
         0,
-        _longest_region,
-        fontsize=fonts["region"],
+        _longest_slice,
+        fontsize=fonts["slice"],
         fontweight="bold",
         fontfamily=plot["rcparams"]["font_sans"],
     )
     _fig_tmp.canvas.draw()
-    _region_bbox = _t.get_window_extent(_fig_tmp.canvas.get_renderer())
-    _text_w_in = _region_bbox.width / _fig_tmp.dpi
-    _region_h_rows = _region_bbox.height / _fig_tmp.dpi / figure["row_height"]
+    _slice_bbox = _t.get_window_extent(_fig_tmp.canvas.get_renderer())
+    _text_w_in = _slice_bbox.width / _fig_tmp.dpi
+    _slice_h_rows = _slice_bbox.height / _fig_tmp.dpi / figure["row_height"]
     plt.close(_fig_tmp)
 
     # Measure the longest metric label on a throwaway figure so the group labels can sit just left of it without overlapping.
@@ -426,13 +410,13 @@ def plot_scorecard(
 
     col_width = max(
         figure["col_width"],
-        _text_w_in * layout["region_label_pad"] / (n_leads + layout["region_gap"]),
+        _text_w_in * layout["slice_label_pad"] / (n_leads + layout["slice_gap"]),
     )
-    plot_width = len(regions_) * (n_leads + layout["region_gap"]) - layout["region_gap"]
+    plot_width = len(_slices) * (n_leads + layout["slice_gap"]) - layout["slice_gap"]
     fig_width = max(figure["width_min"], plot_width * col_width + figure["width_pad"])
     # Last row is at y=-(len(rows)-1); add 0.5 units of clearance below it.
     y_bottom = -(len(rows) - 0.5)
-    y_top = layout["region_y"] + _region_h_rows + layout["region_y_pad"]
+    y_top = layout["slice_y"] + _slice_h_rows + layout["slice_y_pad"]
     has_missing = any(
         np.isnan(diff_filtered[v].values).any() for v in diff_filtered.data_vars
     )
@@ -449,7 +433,17 @@ def plot_scorecard(
     _left_margin_col = figure.get("left_margin_in", 2.5) / col_width
     xlim_left = layout["metric_x"] - _left_margin_col
 
-    init_label = "all" if cfg["init_hour"] == -999 else f"{cfg['init_hour']:02d}Z"
+    _ALL = {"region": "all", "season": "all", "init_hour": -999}
+    _strat = cfg["stratification"]
+    _fixed = {dim: val for dim, val in _ALL.items() if dim != _strat}
+    _init_raw = _fixed.get("init_hour")
+    _title_parts = []
+    if "season" in _fixed:
+        _title_parts.append(f"season={_fixed['season']}")
+    if _init_raw is not None:
+        _title_parts.append(
+            f"init={'all' if _init_raw == -999 else f'{_init_raw:02d}Z'}"
+        )
     neutral_size = dot_size(dots["neutral_threshold_pct"])
 
     # ── Figure ───────────────────────────────────────────────────────────────────
@@ -472,8 +466,8 @@ def plot_scorecard(
     fig.text(
         0.01,
         0.99,
-        f"{model_source} vs {baseline_source}\n"
-        f"season={cfg['season']}   init={init_label}",
+        f"{model_source} vs {baseline_source}"
+        + (f"\n{'   '.join(_title_parts)}" if _title_parts else ""),
         fontsize=fonts["title"],
         fontweight="bold",
         ha="left",
@@ -513,9 +507,11 @@ def plot_scorecard(
             fontsize=fonts["metric"],
         )
 
-        for sec_idx, region in enumerate(regions_):
-            x_off = sec_idx * (n_leads + layout["region_gap"])
-            for lt_idx, d in enumerate(diff_filtered[name].sel(region=region).values):
+        for sec_idx, _slice in enumerate(_slices):
+            x_off = sec_idx * (n_leads + layout["slice_gap"])
+            for lt_idx, d in enumerate(
+                diff_filtered[name].sel({strat_dim: _slice}).values
+            ):
                 x = x_off + lt_idx
                 if np.isnan(d):
                     ax.plot(
@@ -538,25 +534,25 @@ def plot_scorecard(
                     size = dot_size(d)
                 ax.scatter(x, y, s=size, c=color, alpha=dots["alpha"], linewidths=0)
 
-    # ── Region headers, lead-time ticks, vertical separators ─────────────────────
-    for sec_idx, region in enumerate(regions_):
-        x_off = sec_idx * (n_leads + layout["region_gap"])
+    # ── Slice headers, lead-time ticks, vertical separators ─────────────────────
+    for sec_idx, _slice in enumerate(_slices):
+        x_off = sec_idx * (n_leads + layout["slice_gap"])
 
         ax.text(
             x_off + (n_leads - 1) / 2,
-            layout["region_y"],
-            region.capitalize(),
+            layout["slice_y"],
+            _fmt_slice(_slice),
             ha="center",
             va="bottom",
-            fontsize=fonts["region"],
+            fontsize=fonts["slice"],
             fontweight="bold",
         )
 
         if sec_idx > 0:
-            x_sep = x_off - (layout["region_gap"] + 1) / 2
+            x_sep = x_off - (layout["slice_gap"] + 1) / 2
             ax.plot(
                 [x_sep, x_sep],
-                [y_bottom, layout["region_y"] - vline["label_gap"]],
+                [y_bottom, layout["slice_y"] - vline["label_gap"]],
                 color=colors["vline"],
                 lw=vline["linewidth"],
             )

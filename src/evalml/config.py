@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
 
-from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
+from pydantic import BaseModel, Field, RootModel, field_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -270,9 +270,9 @@ class ScorecardConfig(BaseModel):
         ...,
         description="Lead-time range as start/stop/step (hours).",
     )
-    regions: List[str] = Field(
+    stratification: str = Field(
         ...,
-        description="Regions to include as scorecard columns.",
+        description="Dimension to use as scorecard columns (e.g. 'region').",
     )
     variables: List[str] = Field(
         ...,
@@ -293,15 +293,6 @@ class ExperimentScorecardConfig(BaseModel):
         default_factory=dict,
         description="Named scorecard configurations (e.g. nowcasting, short_range, medium_range).",
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _extract_sections(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            enabled = data.get("enabled", True)
-            sections = {k: v for k, v in data.items() if k != "enabled"}
-            return {"enabled": enabled, "sections": sections}
-        return data
 
     model_config = {"extra": "forbid"}
 
