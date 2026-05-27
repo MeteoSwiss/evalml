@@ -124,7 +124,7 @@ rule plot_forecast_frame:
             --param {wildcards.param:q} --leadtime {wildcards.leadtime:q} \
             --regions_json {params.regions_json:q} \
             --outdir {params.outdir:q} \
-            --accu {params.accu} > {log} 2>&1
+            --accu {params.accu}
         """
 
 
@@ -138,10 +138,6 @@ def get_leadtimes(wc):
 
 
 rule make_forecast_animation:
-    localrule: True
-    wildcard_constraints:
-        param="|".join(map(re.escape, SHOWCASE_PARAMS)),
-        region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
     input:
         lambda wc: expand(
             rules.plot_forecast_frame.output,
@@ -154,6 +150,10 @@ rule make_forecast_animation:
     output:
         OUT_ROOT
         / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
+    wildcard_constraints:
+        param="|".join(map(re.escape, SHOWCASE_PARAMS)),
+        region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
+    localrule: True
     params:
         delay=lambda wc: 10 * int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
     shell:
