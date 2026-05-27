@@ -212,6 +212,70 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
+class DomainConfig(BaseModel):
+    """A custom map domain defined by name, extent, and projection."""
+
+    name: str = Field(..., description="Name for the custom domain (used as wildcard).")
+    extent: List[float] | None = Field(
+        None,
+        description="Geographic extent as [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates. None means full globe.",
+    )
+    projection: str = Field(
+        "orthographic",
+        description="Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class MeteogramConfig(BaseModel):
+    """Configuration for meteogram generation."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether to generate meteograms (time series plots at stations).",
+    )
+    stations: List[str] = Field(
+        default=["GVE", "KLO", "LUG"],
+        description="List of PeakWeather station IDs to generate meteograms for.",
+    )
+
+
+class AnimationsConfig(BaseModel):
+    """Configuration for animation generation."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether to generate forecast animations (GIFs per param and region).",
+    )
+    domains: List[str | DomainConfig] = Field(
+        default=["globe", "europe", "switzerland"],
+        description=(
+            "Domains to generate animations for. Each entry is either a named domain "
+            "(e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, "
+            "or a custom domain dict with 'name', optional 'extent' "
+            "[lon_min, lon_max, lat_min, lat_max], and optional 'projection'."
+        ),
+    )
+
+
+class ShowcaseConfig(BaseModel):
+    """Configuration for the showcase workflow."""
+
+    params: List[str] = Field(
+        default=["T_2M", "SP_10M"],
+        description="List of parameters to generate animations and meteograms for.",
+    )
+    meteograms: MeteogramConfig = Field(
+        default_factory=MeteogramConfig,
+        description="Configuration for meteogram generation.",
+    )
+    animations: AnimationsConfig = Field(
+        default_factory=AnimationsConfig,
+        description="Configuration for animation generation.",
+    )
+
+
 class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
 
@@ -238,6 +302,45 @@ class Dashboard(BaseModel):
         ...,
         description="Stratifications to include in the dashboard (any of season, region, init_hour)",
     )
+
+
+class ExperimentConfig(BaseModel):
+    """Configuration for the experiment workflow outputs."""
+
+    stratification: Stratification = Field(
+        ...,
+        description="Spatial stratification settings for the analysis.",
+    )
+    params: List[str] = Field(
+        default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"],
+        description="List of parameters to compute verification metrics for.",
+    )
+    thresholds: Dict[str, Dict[str, List[float]]] = Field(
+        default_factory=dict,
+        description=(
+            "Dictionary mapping parameter names to threshold dicts. "
+            "Each dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of threshold values."
+        ),
+    )
+    dashboard: Dashboard = Field(
+        ...,
+        description="Settings for the experiment dashboard.",
+    )
+
+    @field_validator("thresholds")
+    @classmethod
+    def validate_threshold_operators(
+        cls, v: Dict[str, Dict[str, List[float]]]
+    ) -> Dict[str, Dict[str, List[float]]]:
+        _VALID_OPS = {"gt", "ge", "lt", "le", "eq", "ne"}
+        for param, op_dict in v.items():
+            invalid = set(op_dict) - _VALID_OPS
+            if invalid:
+                raise ValueError(
+                    f"Invalid operator key(s) {invalid!r} for parameter '{param}'. "
+                    f"Must be one of {_VALID_OPS}."
+                )
+        return v
 
 
 class DefaultResources(BaseModel):
@@ -374,33 +477,16 @@ class ConfigModel(BaseModel):
         description="Deprecated top-level baselines list. Prefer defining baseline entries directly in `runs`.",
     )
     truth: TruthConfig | None
-    stratification: Stratification
-    thresholds: Dict[str, Dict[str, List[float]]] = Field(
-        default_factory=dict,
-        description=(
-            "Dictionary mapping parameter names to threshold dicts. "
-            "Each dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of threshold values."
-        ),
+    experiment: ExperimentConfig = Field(
+        ...,
+        description="Settings for the experiment workflow outputs.",
     )
-
-    @field_validator("thresholds")
-    @classmethod
-    def validate_threshold_operators(
-        cls, v: Dict[str, Dict[str, List[float]]]
-    ) -> Dict[str, Dict[str, List[float]]]:
-        _VALID_OPS = {"gt", "ge", "lt", "le", "eq", "ne"}
-        for param, op_dict in v.items():
-            invalid = set(op_dict) - _VALID_OPS
-            if invalid:
-                raise ValueError(
-                    f"Invalid operator key(s) {invalid!r} for parameter '{param}'. "
-                    f"Must be one of {_VALID_OPS}."
-                )
-        return v
-
-    dashboard: Dashboard
     locations: Locations
     profile: Profile
+    showcase: ShowcaseConfig = Field(
+        default_factory=ShowcaseConfig,
+        description="Settings for the showcase workflow.",
+    )
     mec: MecConfig | None = Field(
         None,
         description="Input observation paths for the MEC verification step. Required when running with --mec.",

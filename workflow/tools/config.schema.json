@@ -1,5 +1,38 @@
 {
   "$defs": {
+    "AnimationsConfig": {
+      "description": "Configuration for animation generation.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to generate forecast animations (GIFs per param and region).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "domains": {
+          "default": [
+            "globe",
+            "europe",
+            "switzerland"
+          ],
+          "description": "Domains to generate animations for. Each entry is either a named domain (e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, or a custom domain dict with 'name', optional 'extent' [lon_min, lon_max, lat_min, lat_max], and optional 'projection'.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/DomainConfig"
+              }
+            ]
+          },
+          "title": "Domains",
+          "type": "array"
+        }
+      },
+      "title": "AnimationsConfig",
+      "type": "object"
+    },
     "BaselineConfig": {
       "description": "Configuration for a single baseline to include in the verification.",
       "properties": {
@@ -143,6 +176,94 @@
         "runtime"
       ],
       "title": "DefaultResources",
+      "type": "object"
+    },
+    "DomainConfig": {
+      "additionalProperties": false,
+      "description": "A custom map domain defined by name, extent, and projection.",
+      "properties": {
+        "name": {
+          "description": "Name for the custom domain (used as wildcard).",
+          "title": "Name",
+          "type": "string"
+        },
+        "extent": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Geographic extent as [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates. None means full globe.",
+          "title": "Extent"
+        },
+        "projection": {
+          "default": "orthographic",
+          "description": "Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
+          "title": "Projection",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "DomainConfig",
+      "type": "object"
+    },
+    "ExperimentConfig": {
+      "description": "Configuration for the experiment workflow outputs.",
+      "properties": {
+        "stratification": {
+          "$ref": "#/$defs/Stratification",
+          "description": "Spatial stratification settings for the analysis."
+        },
+        "params": {
+          "default": [
+            "T_2M",
+            "TD_2M",
+            "U_10M",
+            "V_10M",
+            "PS",
+            "PMSL",
+            "TOT_PREC"
+          ],
+          "description": "List of parameters to compute verification metrics for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "thresholds": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
+          "description": "Dictionary mapping parameter names to threshold dicts. Each dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of threshold values.",
+          "title": "Thresholds",
+          "type": "object"
+        },
+        "dashboard": {
+          "$ref": "#/$defs/Dashboard",
+          "description": "Settings for the experiment dashboard."
+        }
+      },
+      "required": [
+        "stratification",
+        "dashboard"
+      ],
+      "title": "ExperimentConfig",
       "type": "object"
     },
     "ExplicitDates": {
@@ -493,6 +614,32 @@
       "title": "Locations",
       "type": "object"
     },
+    "MeteogramConfig": {
+      "description": "Configuration for meteogram generation.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to generate meteograms (time series plots at stations).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "stations": {
+          "default": [
+            "GVE",
+            "KLO",
+            "LUG"
+          ],
+          "description": "List of PeakWeather station IDs to generate meteograms for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Stations",
+          "type": "array"
+        }
+      },
+      "title": "MeteogramConfig",
+      "type": "object"
+    },
     "MecConfig": {
       "additionalProperties": false,
       "description": "Paths to input observation files for the MEC verification step.",
@@ -557,6 +704,31 @@
         "jobs"
       ],
       "title": "Profile",
+      "type": "object"
+    },
+    "ShowcaseConfig": {
+      "description": "Configuration for the showcase workflow.",
+      "properties": {
+        "params": {
+          "default": [
+            "T_2M",
+            "SP_10M"
+          ],
+          "description": "List of parameters to generate animations and meteograms for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "meteograms": {
+          "$ref": "#/$defs/MeteogramConfig"
+        },
+        "animations": {
+          "$ref": "#/$defs/AnimationsConfig"
+        }
+      },
+      "title": "ShowcaseConfig",
       "type": "object"
     },
     "Stratification": {
@@ -675,31 +847,19 @@
         }
       ]
     },
-    "stratification": {
-      "$ref": "#/$defs/Stratification"
-    },
-    "thresholds": {
-      "additionalProperties": {
-        "additionalProperties": {
-          "items": {
-            "type": "number"
-          },
-          "type": "array"
-        },
-        "type": "object"
-      },
-      "description": "Dictionary mapping parameter names to threshold dicts. Each dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of threshold values.",
-      "title": "Thresholds",
-      "type": "object"
-    },
-    "dashboard": {
-      "$ref": "#/$defs/Dashboard"
+    "experiment": {
+      "$ref": "#/$defs/ExperimentConfig",
+      "description": "Settings for the experiment workflow outputs."
     },
     "locations": {
       "$ref": "#/$defs/Locations"
     },
     "profile": {
       "$ref": "#/$defs/Profile"
+    },
+    "showcase": {
+      "$ref": "#/$defs/ShowcaseConfig",
+      "description": "Settings for the showcase workflow."
     },
     "mec": {
       "anyOf": [
@@ -731,8 +891,7 @@
     "dates",
     "runs",
     "truth",
-    "stratification",
-    "dashboard",
+    "experiment",
     "locations",
     "profile"
   ],

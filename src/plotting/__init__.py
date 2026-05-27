@@ -20,6 +20,15 @@ _PROJECTIONS: dict[str, ccrs.Projection] = {
 
 # Mapping of region names to their geographic extent and projection
 # extent [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates
+def get_projection(name: str) -> "ccrs.Projection":
+    """Look up a projection by name."""
+    if name not in _PROJECTIONS:
+        raise ValueError(
+            f"Unknown projection {name!r}. Available: {list(_PROJECTIONS)}"
+        )
+    return _PROJECTIONS[name]
+
+
 DOMAINS = {
     "globe": {
         "extent": None,  # full globe view
