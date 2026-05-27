@@ -10,18 +10,16 @@ import pandas as pd
 
 
 def _get_available_baselines(wc) -> list[dict[str, str]]:
-    """Get all available baseline zarr datasets for the given init time."""
+    """Get all available baseline datasets for the given init time."""
     baselines = []
     for baseline_id in BASELINE_CONFIGS:
         root = BASELINE_CONFIGS[baseline_id].get("root")
         steps = BASELINE_CONFIGS[baseline_id].get("steps")
         label = BASELINE_CONFIGS[baseline_id].get("label", baseline_id)
-        year = wc.init_time[2:4]
-        baseline_zarr = f"{root}/FCST{year}.zarr"
-        if Path(baseline_zarr).exists():
-            baselines.append({"zarr": baseline_zarr, "steps": steps, "label": label})
+        if root and Path(root).exists():
+            baselines.append({"root": root, "steps": steps, "label": label})
     if not baselines:
-        raise ValueError(f"No baseline zarr found for init time {wc.init_time}")
+        raise ValueError(f"No baseline data found for init time {wc.init_time}")
     return baselines
 
 
@@ -50,7 +48,7 @@ rule plot_meteogram:
         ).resolve(),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id]["label"],
-        baseline_zarrs=lambda wc: [x["zarr"] for x in _get_available_baselines(wc)],
+        baseline_roots=lambda wc: [x["root"] for x in _get_available_baselines(wc)],
         baseline_steps=lambda wc: [x["steps"] for x in _get_available_baselines(wc)],
         baseline_labels=lambda wc: [x["label"] for x in _get_available_baselines(wc)],
         outdir=lambda wc: str(
@@ -64,7 +62,7 @@ rule plot_meteogram:
         set -euo pipefail
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
 
-        BASELINE_ZARRS=({params.baseline_zarrs:q})
+        BASELINE_ROOTS=({params.baseline_roots:q})
         BASELINE_STEPS=({params.baseline_steps:q})
         BASELINE_LABELS=({params.baseline_labels:q})
 
@@ -81,8 +79,8 @@ rule plot_meteogram:
             --stations {params.stations:q}
         )
 
-        for i in "${{!BASELINE_ZARRS[@]}}"; do
-            CMD_ARGS+=(--baseline "${{BASELINE_ZARRS[$i]}}")
+        for i in "${{!BASELINE_ROOTS[@]}}"; do
+            CMD_ARGS+=(--baseline "${{BASELINE_ROOTS[$i]}}")
             CMD_ARGS+=(--baseline_steps "${{BASELINE_STEPS[$i]}}")
             CMD_ARGS+=(--baseline_label "${{BASELINE_LABELS[$i]}}")
         done
