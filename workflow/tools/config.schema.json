@@ -1,5 +1,26 @@
 {
   "$defs": {
+    "AnimationComparison": {
+      "description": "A side-by-side comparison animation between two runs.",
+      "properties": {
+        "left": {
+          "description": "Label of the run shown in the left panel.",
+          "title": "Left",
+          "type": "string"
+        },
+        "right": {
+          "description": "Label of the run shown in the right panel.",
+          "title": "Right",
+          "type": "string"
+        }
+      },
+      "required": [
+        "left",
+        "right"
+      ],
+      "title": "AnimationComparison",
+      "type": "object"
+    },
     "AnimationsConfig": {
       "description": "Configuration for animation generation.",
       "properties": {
@@ -22,11 +43,43 @@
                 "type": "string"
               },
               {
-                "$ref": "#/$defs/DomainConfig"
+                "$ref": "#/$defs/RegionConfig"
               }
             ]
           },
           "title": "Domains",
+          "type": "array"
+        },
+        "speed": {
+          "default": 10.0,
+          "description": "Animation playback speed in simulated hours per second.",
+          "exclusiveMinimum": 0,
+          "title": "Speed",
+          "type": "number"
+        },
+        "runs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Labels of runs to generate individual animations for. Defaults to all candidate runs when omitted.",
+          "title": "Runs"
+        },
+        "comparisons": {
+          "default": [],
+          "description": "Side-by-side two-panel comparison animations. Each entry specifies the labels of the left and right panel runs.",
+          "items": {
+            "$ref": "#/$defs/AnimationComparison"
+          },
+          "title": "Comparisons",
           "type": "array"
         }
       },
@@ -176,44 +229,6 @@
         "runtime"
       ],
       "title": "DefaultResources",
-      "type": "object"
-    },
-    "DomainConfig": {
-      "additionalProperties": false,
-      "description": "A custom map domain defined by name, extent, and projection.",
-      "properties": {
-        "name": {
-          "description": "Name for the custom domain (used as wildcard).",
-          "title": "Name",
-          "type": "string"
-        },
-        "extent": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "number"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Geographic extent as [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates. None means full globe.",
-          "title": "Extent"
-        },
-        "projection": {
-          "default": "orthographic",
-          "description": "Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
-          "title": "Projection",
-          "type": "string"
-        }
-      },
-      "required": [
-        "name"
-      ],
-      "title": "DomainConfig",
       "type": "object"
     },
     "ExperimentConfig": {
@@ -636,6 +651,21 @@
         "jobs"
       ],
       "title": "Profile",
+      "type": "object"
+    },
+    "RegionConfig": {
+      "description": "A custom map region defined by name, extent, and projection.",
+      "properties": {
+        "name": {
+          "description": "Name for the custom region (used as wildcard).",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "RegionConfig",
       "type": "object"
     },
     "ShowcaseConfig": {

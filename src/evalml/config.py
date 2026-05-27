@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet
+from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
 
 from pydantic import BaseModel, Field, RootModel, field_validator
 
@@ -212,6 +212,12 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
+class RegionConfig(BaseModel):
+    """A custom map region defined by name, extent, and projection."""
+
+    name: str = Field(..., description="Name for the custom region (used as wildcard).")
+
+
 class DomainConfig(BaseModel):
     """A custom map domain defined by name, extent, and projection."""
 
@@ -226,6 +232,13 @@ class DomainConfig(BaseModel):
     )
 
     model_config = {"extra": "forbid"}
+
+
+class AnimationComparison(BaseModel):
+    """A side-by-side comparison animation between two runs."""
+
+    left: str = Field(..., description="Label of the run shown in the left panel.")
+    right: str = Field(..., description="Label of the run shown in the right panel.")
 
 
 class MeteogramConfig(BaseModel):
@@ -248,13 +261,32 @@ class AnimationsConfig(BaseModel):
         default=True,
         description="Whether to generate forecast animations (GIFs per param and region).",
     )
-    domains: List[str | DomainConfig] = Field(
+    domains: List[str | RegionConfig] = Field(
         default=["globe", "europe", "switzerland"],
         description=(
             "Domains to generate animations for. Each entry is either a named domain "
             "(e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, "
             "or a custom domain dict with 'name', optional 'extent' "
             "[lon_min, lon_max, lat_min, lat_max], and optional 'projection'."
+        ),
+    )
+    speed: float = Field(
+        default=10.0,
+        gt=0,
+        description="Animation playback speed in simulated hours per second.",
+    )
+    runs: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Labels of runs to generate individual animations for. "
+            "Defaults to all candidate runs when omitted."
+        ),
+    )
+    comparisons: List[AnimationComparison] = Field(
+        default=[],
+        description=(
+            "Side-by-side two-panel comparison animations. Each entry specifies "
+            "the labels of the left and right panel runs."
         ),
     )
 
