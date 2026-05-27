@@ -100,26 +100,21 @@ experiment:
     stratification:
       - season
   # Optional: named scorecards comparing each forecaster against a chosen baseline.
-  # Each entry is keyed by a scorecard name and rendered as a PNG in results/{experiment}/scorecards/.
-  scorecard:
-    short_range:
-      # Baseline label — must match the `label` field of a baseline entry in `runs`.
-      baseline: COSMO-E
-      # Lead-time range as start/stop/step (hours).
-      lead_times: "0/120/6"
-      # Regions to include as scorecard columns.
-      regions:
-        - jura
-        - mittelland
-        - voralpen
-        - alpennordhang
-        - innerealpentaeler
-        - alpensuedseite
-      # Variables and metrics as scorecard rows. Format: VAR:METRIC1,METRIC2,...
-      # Supported metrics: RMSE, R2, ETS, POD, FAR (categorical metrics require thresholds).
-      variables:
-        - "T_2M:RMSE,R2"
-        - "TOT_PREC:RMSE,ETS"
+  scorecards:
+    enabled: true
+    sections:
+      short_range:
+        # Baseline label — must match the `label` field of a baseline entry in `runs`.
+        baseline: COSMO-E
+        # Lead-time range as start/stop/step (hours).
+        lead_times: "0/120/6"
+        # Stratification dimension to use as scorecard columns (e.g. region, season).
+        stratification: region
+        # Variables and metrics as scorecard rows. Format: VAR:METRIC1,METRIC2,...
+        # Supported metrics: RMSE, R2, ETS, POD, FAR (categorical metrics require thresholds).
+        variables:
+          - "T_2M:RMSE,R2"
+          - "TOT_PREC:RMSE,ETS"
 
 locations:
   # All workflow outputs are written under this root.
@@ -265,7 +260,8 @@ All outputs are rooted at `OUT_ROOT` (from `locations.output_root` in the config
 ├── logs/                                      # one sub-directory per rule
 └── results/{experiment_name}/               # final products
     ├── dashboard/
-    └── plots/
+    ├── plots/
+    └── scorecards/
 ```
 
 ### Wildcard conventions
