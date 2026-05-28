@@ -255,8 +255,7 @@ def _filter_diff(diff: xr.Dataset, cfg: dict) -> xr.Dataset:
     """Subset *diff* to the requested lead times and variable/metric combinations.
 
     Lead times are selected by the ``'start/stop/step'`` grid in ``cfg['lead_times']``.
-    Variables and metrics are selected according to ``cfg['variables']``; if that
-    entry is absent, all recognised metrics are kept.
+    Variables and metrics are selected according to ``cfg['variables']``.
     """
     all_metrics = cfg["all_metrics"]
     result = diff
@@ -273,27 +272,13 @@ def _filter_diff(diff: xr.Dataset, cfg: dict) -> xr.Dataset:
             )
         result = result.sel(lead_time=keep)
 
-    if cfg.get("variables"):
-        keep = [
-            var
-            for var_name, var_metrics in cfg["variables"].items()
-            for metric in (var_metrics or all_metrics)
-            for var in _resolve_metric(var_name, metric, result.data_vars)
-        ]
-        result = result[keep]
-    else:
-        # No variable filter specified — keep anything that matches a known metric name.
-        result = result[
-            [
-                v
-                for v in result.data_vars
-                if any(
-                    suffix == m or suffix.startswith(f"{m}_")
-                    for m in all_metrics
-                    for suffix in [v.split(".")[-1]]
-                )
-            ]
-        ]
+    keep = [
+        var
+        for var_name, var_metrics in cfg["variables"].items()
+        for metric in (var_metrics or all_metrics)
+        for var in _resolve_metric(var_name, metric, result.data_vars)
+    ]
+    result = result[keep]
 
     if not result.data_vars:
         raise ValueError("No variables left after filtering.")
