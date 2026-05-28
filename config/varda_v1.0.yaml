@@ -1,0 +1,110 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Evaluation of Varda version 1.0.
+
+dates:
+  start: 2025-01-01T00:00
+  end: 2025-12-31T18:00
+  frequency: 54h
+
+runs:
+  - interpolator:
+      inference_resources:
+        slurm_partition: normal-shared
+      # for checkpoints trained on a different HPC, using mlflow doesn't work due to difference in
+      # paths, so we directly specify the checkpoint path here
+      checkpoint: /scratch/mch/miccatta/ICON_interpolator_checkpoints/checkpoint_stage-C-interpolator-n320-6hto1h-reduced-variables/f9279244ed6f4c458597bdcf335ab36f/inference-last.ckpt
+      label: Varda-Single
+      steps: 0/120/1
+      config: resources/inference/configs/sgm-interpolator-global_trimedge_multi.yaml
+      forecaster:
+        checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
+        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+        steps: 0/120/6
+        extra_requirements:
+          - git+https://github.com/ecmwf/anemoi-inference.git@e369b1a90313e9701db13f63364a467aa281cf36
+      extra_requirements:
+        - git+https://github.com/ecmwf/anemoi-inference.git@e369b1a90313e9701db13f63364a467aa281cf36
+        # pinned anemoi-datasets because of ecmwf/anemoi-utils#284, can be removed when fixed
+        - anemoi-datasets==0.5.35
+  - baseline:
+      label: ICON-CH2-ctrl
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/1
+  - baseline:
+      label: ICON-CH1-ctrl
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/33/1
+  - baseline:
+      label: INCA
+      root: /store_new/mch/msclim/INCA
+      steps: 0/6/1
+
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
+experiment:
+  params:
+    - T_2M
+    - TD_2M
+    - U_10M
+    - V_10M
+    - TOT_PREC
+  stratification:
+    regions:
+      - jura
+      - mittelland
+      - alpennordhang
+      - innerealpentaeler
+      - alpensuedseite
+    root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    TOT_PREC:
+      gt: [0.0, 1, 5]
+    U_10M:
+      gt: [2.5, 5.0, 10.0]
+    V_10M:
+      gt: [2.5, 5.0, 10.0]
+    T_2M:
+      lt: [273.15]
+      gt: [288.15, 298.15]
+  dashboard:
+    stratification:
+      # - region
+      # - init_hour
+      - season
+
+showcase:
+  params:
+    - T_2M
+    - SP_10M
+    - TOT_PREC
+  meteograms:
+    enabled: false
+    stations: [JUN] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
+  animations:
+    enabled: true
+    domains:
+      - europe
+      - switzerland
+      - name: alpine_arc
+        extent: [3.0, 17.0, 43.5, 48.5]
+        projection: orthographic
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50
+  batch_rules:
+    plot_forecast_frame: 32
