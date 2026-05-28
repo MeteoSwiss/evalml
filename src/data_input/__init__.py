@@ -271,13 +271,16 @@ def load_obs_data_from_peakweather(
         "wind_gust": "VMAX_10M",
     }
     param_names = {k: v for k, v in param_names.items() if v in params}
-
     start = reftime
     end = start + timedelta(hours=max(steps))
     if len(steps) > 1:
         end += timedelta(hours=steps[-1] - steps[-2])  # extend by 1 extra step
     years = list(set([start.year, end.year]))
-    pw = PeakWeatherDataset(root=root, years=years, freq=freq)
+    if "wind_u" in param_names or "wind_v" in param_names:
+        compute_uv = True
+    else:
+        compute_uv = False
+    pw = PeakWeatherDataset(root=root, years=years, freq=freq, compute_uv=compute_uv)
     ds, mask = pw.get_observations(
         parameters=[k for k in param_names.keys()],
         first_date=f"{start:%Y-%m-%d %H:%M}",
