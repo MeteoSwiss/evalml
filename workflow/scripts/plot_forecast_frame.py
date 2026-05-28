@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import cartopy.crs as ccrs
-import earthkit.meteo.thermo as ekm_thermo
+from earthkit.meteo.utils.convert import kelvin_to_celsius
 import earthkit.meteo.wind as ekm_wind
 import earthkit.plots as ekp
 import numpy as np
@@ -52,7 +52,7 @@ def preprocess_field(param: str, state: dict):
     """
     fields = state["fields"]
     if param in ("T_2M", "TD_2M", "T", "TD"):
-        return ekm_thermo.kelvin_to_celsius(fields[param]), "°C"
+        return kelvin_to_celsius(fields[param]), "°C"
     if param == "SP_10M":
         return ekm_wind.speed(fields["U_10M"], fields["V_10M"]), "m/s"
     if param == "SP":
