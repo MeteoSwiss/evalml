@@ -35,10 +35,6 @@ runs:
       label: ICON-CH1-ctrl
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
       steps: 0/33/1
-  - baseline:
-      label: INCA
-      root: /store_new/mch/msclim/INCA
-      steps: 0/6/1
 
 truth:
   label: KENDA-CH1
