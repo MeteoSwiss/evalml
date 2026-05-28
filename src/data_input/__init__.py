@@ -441,6 +441,58 @@ def load_INCA_baseline_from_netcdf(
             da = da.assign_attrs({**da.attrs, "units": "kg m-2"})
         return fp, da
 
+    def _load_shifted(param: str, prefix: str) -> xr.DataArray:
+        """Load T_2M / TD_2M working around the INCA full-hour bug.
+
+        For reftimes at full hours (HH:00), steps 1-N in the current run file are
+        affected by a known INCA bug.  Step 0 is taken from the current reftime;
+        steps 1+ are taken from the run 10 min earlier (HH-1:50), which is unaffected.
+        """
+        prev_rf = reftime - timedelta(minutes=10)
+        LOG.info(
+            "Applying INCA shifted-run workaround for %s: step 0 from %s, steps 1+ from %s",
+            param,
+            reftime,
+            prev_rf,
+        )
+        parts: list[xr.DataArray] = []
+
+        # Step 0 from current reftime file
+        zero_idx = [i for i, s in enumerate(steps) if s == 0]
+        if zero_idx:
+            fp, da_raw = _open_convert(reftime, prefix)
+            if da_raw is None:
+                if not fill_missing_files:
+                    raise FileNotFoundError(
+                        f"INCA file not found for parameter {param!r}: {fp}"
+                    )
+                LOG.warning("INCA file not found, filling %s with NaN: %s", param, fp)
+                parts.append(_nan_array(PARAM_UNITS[param]).isel(time=zero_idx))
+            else:
+                parts.append(
+                    da_raw.isel(time=zero_idx).assign_coords(time=valid_times[zero_idx])
+                )
+
+        # Steps 1+ from previous reftime file (positional index = step value)
+        nz_idx = [i for i, s in enumerate(steps) if s != 0]
+        if nz_idx:
+            nz_steps = [steps[i] for i in nz_idx]
+            fp, da_raw = _open_convert(prev_rf, prefix)
+            if da_raw is None:
+                if not fill_missing_files:
+                    raise FileNotFoundError(
+                        f"INCA file not found for parameter {param!r}: {fp}"
+                    )
+                LOG.warning("INCA file not found, filling %s with NaN: %s", param, fp)
+                parts.append(_nan_array(PARAM_UNITS[param]).isel(time=nz_idx))
+            else:
+                parts.append(
+                    da_raw.isel(time=nz_steps).assign_coords(time=valid_times[nz_idx])
+                )
+
+        da = xr.concat(parts, dim="time") if len(parts) > 1 else parts[0]
+        return da.rename(param)
+
     # Maps output variable name -> INCA file prefix, per freq.
     # File prefix == variable name inside the NetCDF file.
     PARAM_TO_PREFIX: dict[str, dict[str, str]] = {
@@ -519,63 +571,15 @@ def load_INCA_baseline_from_netcdf(
             datasets[param] = _nan_array("unknown").rename(param)
             continue
 
-    # Due to a discovered INCA bug in T_2M and TD_2M for the reftimes at full hours (01,02,03,...,23)
-    # at the leadtimes 1-6 (steps 1-6), with use_last_run=True the steps 1-6 are taken from the last INCA run
-    # computed 10min before (at min 50)
-    use_last_run = True
-    # load parameter by parameter
-    _LAST_RUN_PARAMS = {"T_2M", "TD_2M"}
+    # T_2M and TD_2M are affected by a known INCA bug at full-hour reftimes (steps 1-6).
+    # Use the run from 10 min earlier for those steps; see _load_shifted().
+    _SHIFTED_PARAMS = {"T_2M", "TD_2M"}
 
     for param in to_load:
         prefix = prefix_map[param]
 
-        if use_last_run and param in _LAST_RUN_PARAMS and freq == "1h":
-            prev_rf = reftime - timedelta(minutes=10)
-            parts: list[xr.DataArray] = []
-
-            # Step 0 from current reftime file
-            zero_idx = [i for i, s in enumerate(steps) if s == 0]
-            if zero_idx:
-                fp, da_raw = _open_convert(reftime, prefix)
-                if da_raw is None:
-                    if not fill_missing_files:
-                        raise FileNotFoundError(
-                            f"INCA file not found for parameter {param!r}: {fp}"
-                        )
-                    LOG.warning(
-                        "INCA file not found, filling %s with NaN: %s", param, fp
-                    )
-                    parts.append(_nan_array(PARAM_UNITS[param]).isel(time=zero_idx))
-                else:
-                    parts.append(
-                        da_raw.isel(time=zero_idx).assign_coords(
-                            time=valid_times[zero_idx]
-                        )
-                    )
-
-            # Steps 1+ from previous reftime file (positional index = step value)
-            nz_idx = [i for i, s in enumerate(steps) if s != 0]
-            if nz_idx:
-                nz_steps = [steps[i] for i in nz_idx]
-                fp, da_raw = _open_convert(prev_rf, prefix)
-                if da_raw is None:
-                    if not fill_missing_files:
-                        raise FileNotFoundError(
-                            f"INCA file not found for parameter {param!r}: {fp}"
-                        )
-                    LOG.warning(
-                        "INCA file not found, filling %s with NaN: %s", param, fp
-                    )
-                    parts.append(_nan_array(PARAM_UNITS[param]).isel(time=nz_idx))
-                else:
-                    parts.append(
-                        da_raw.isel(time=nz_steps).assign_coords(
-                            time=valid_times[nz_idx]
-                        )
-                    )
-
-            da = xr.concat(parts, dim="time") if len(parts) > 1 else parts[0]
-            datasets[param] = da.rename(param)
+        if param in _SHIFTED_PARAMS and freq == "1h":
+            datasets[param] = _load_shifted(param, prefix)
             continue
 
         filepath = (
