@@ -50,3 +50,52 @@ rule report_experiment_dashboard:
             --stratification {params.stratification} \
             --output {output} >{log} 2>&1
         """
+
+
+rule report_scorecard:
+    input:
+        script="workflow/scripts/report_scorecard.py",
+        verif_run=lambda wc: EXPERIMENT_PARTICIPANTS[f"{wc.env_id}/{wc.config_hash}"],
+        verif_baseline=lambda wc: EXPERIMENT_PARTICIPANTS[
+            SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]
+        ],
+    output:
+        report(
+            OUT_ROOT
+            / "results/{experiment}/scorecards/{scorecard_name}/scorecard_{scorecard_name}_{env_id}_{config_hash}.png",
+        ),
+    log:
+        OUT_ROOT
+        / "logs/report_scorecard/{experiment}/{scorecard_name}/{env_id}/{config_hash}.log",
+    wildcard_constraints:
+        env_id="[^/]+",  # no slashes
+        config_hash="[^/]+",
+        scorecard_name="[^/]+",
+    localrule: True
+    params:
+        lead_times=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["lead_times"],
+        stratification=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["stratification"],
+        variables=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["variables"],
+        run_source=lambda wc: RUN_CONFIGS[f"{wc.env_id}/{wc.config_hash}"].get(
+            "label", f"{wc.env_id}/{wc.config_hash}"
+        ),
+        baseline_source=lambda wc: BASELINE_CONFIGS[
+            SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]
+        ].get("label", SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]),
+    shell:
+        """
+        VAR_ARGS=()
+        for v in {params.variables:q}; do
+            VAR_ARGS+=(--variable "$v")
+        done
+
+        python {input.script} \
+            --verif_run {input.verif_run:q} \
+            --verif_baseline {input.verif_baseline:q} \
+            --run_source {params.run_source:q} \
+            --baseline_source {params.baseline_source:q} \
+            --lead_times {params.lead_times:q} \
+            --stratification {params.stratification:q} \
+            "${{VAR_ARGS[@]}}" \
+            --output {output:q} >{log} 2>&1
+        """
