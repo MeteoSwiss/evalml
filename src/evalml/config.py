@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet
+from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
 
 from pydantic import BaseModel, Field, RootModel, field_validator
 
@@ -259,6 +259,49 @@ class AnimationsConfig(BaseModel):
     )
 
 
+class ScorecardConfig(BaseModel):
+    """Configuration for a single named scorecard."""
+
+    baseline: str = Field(
+        ...,
+        description="Baseline label to compare against (must match the `label` field of a baseline entry in `runs`).",
+    )
+    lead_times: str = Field(
+        ...,
+        description="Lead-time range as start/stop/step (hours).",
+    )
+    stratification: str = Field(
+        ...,
+        description="Dimension to use as scorecard columns (e.g. 'region').",
+    )
+    variables: List[str] = Field(
+        ...,
+        description=(
+            "Variables and metrics as scorecard rows (VAR:M1,M2 format). "
+            "An empty list [] is accepted by the schema but falls back to a "
+            "hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). "
+            "Omit ':...' after a variable name to include all available metrics for it."
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class ExperimentScorecardConfig(BaseModel):
+    """Top-level scorecard block: a single enabled flag plus named scorecard sections."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether to generate scorecards.",
+    )
+    sections: Dict[str, ScorecardConfig] = Field(
+        default_factory=dict,
+        description="Named scorecard configurations (e.g. nowcasting, short_range, medium_range).",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class ShowcaseConfig(BaseModel):
     """Configuration for the showcase workflow."""
 
@@ -325,6 +368,10 @@ class ExperimentConfig(BaseModel):
     dashboard: Dashboard = Field(
         ...,
         description="Settings for the experiment dashboard.",
+    )
+    scorecards: Optional[ExperimentScorecardConfig] = Field(
+        default=None,
+        description="Scorecard generation configuration. Omit or set enabled: false to disable.",
     )
 
     @field_validator("thresholds")
