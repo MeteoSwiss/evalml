@@ -158,7 +158,7 @@ def _is_model_better(
 def _format_slice_label(s, strat_dim: str) -> str:
     """Format a stratification coordinate value as a human-readable label."""
     if isinstance(s, str):
-        return s.upper() if strat_dim == "season" else s.capitalize()
+        return s.upper() if strat_dim == "season" and s != "all" else s.capitalize()
     # Numeric init_hour: -999 is the "all hours" sentinel, others are formatted as HHZ
     return "All" if int(s) == -999 else f"{int(s):02d}Z"
 
