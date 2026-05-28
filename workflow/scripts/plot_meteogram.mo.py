@@ -193,7 +193,7 @@ def load_data(
     )
     forecast_ds = preprocess_ds(forecast_ds, param)
 
-    steps = forecast_ds.lead_time.dt.total_seconds().values / 3600
+    steps = forecast_ds["step"].dt.total_seconds().values / 3600
     analysis_ds = load_truth_data(analysis_zarr, init_time, steps, paramlist)
     analysis_ds = preprocess_ds(analysis_ds, param)
 
@@ -214,8 +214,8 @@ def _(PeakWeatherDataset, peakweather_dir, station):
     stations = peakweather.stations_table
     stations.index.names = ["values"]
     station_ds = stations.to_xarray().sel(values=[station])  # keep singleton dim
-    station_ds = station_ds.rename({"latitude": "lat", "longitude": "lon"})
-    station_ds = station_ds.set_coords(("lat", "lon", "station_name"))
+    # station_ds = station_ds.rename({"latitude": "lat", "longitude": "lon"})
+    station_ds = station_ds.set_coords(("latitude", "longitude", "station_name"))
     station_ds = station_ds.drop_vars(list(station_ds.data_vars))
     station_ds
     return (station_ds,)
@@ -261,14 +261,14 @@ def _(
         zip(baseline_labels, baseline_station_ds_list), start=1
     ):
         ax.plot(
-            baseline_station_ds["time"].values,
+            baseline_station_ds["valid_time"].values,
             baseline_station_ds[param].values,
             color=f"C{i}",
             label=f"{baseline_label}",
         )
     # forecast
     ax.plot(
-        forecast_station_ds["time"].values,
+        forecast_station_ds["valid_time"].values,
         forecast_station_ds[param].values,
         color="C0",
         label=forecast_label,

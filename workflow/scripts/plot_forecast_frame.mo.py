@@ -94,9 +94,9 @@ def _(ArgumentParser, Path):
 
 
 @app.cell
-def _(accu, grib_dir, init_time, lead_time, load_state_from_grib, param):
-    # load grib file
-    grib_file = grib_dir / f"{init_time}_{lead_time}.grib"
+def _(accu, grib_dir, init_time, lead_time, load_state_from_grib, param, Path):
+    # TODO: fix file pattern & globbing
+    grib_file = Path(list(grib_dir.glob(f"2*_{lead_time}.grib"))[0])
     if param == "SP_10M":
         paramlist = ["U_10M", "V_10M"]
     elif param == "SP":
