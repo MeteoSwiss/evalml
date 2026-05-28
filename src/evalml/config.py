@@ -276,7 +276,12 @@ class ScorecardConfig(BaseModel):
     )
     variables: List[str] = Field(
         ...,
-        description="Variables and metrics as scorecard rows (VAR:M1,M2 format).",
+        description=(
+            "Variables and metrics as scorecard rows (VAR:M1,M2 format). "
+            "An empty list [] is accepted by the schema but falls back to a "
+            "hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). "
+            "Omit ':...' after a variable name to include all available metrics for it."
+        ),
     )
 
     model_config = {"extra": "forbid"}
