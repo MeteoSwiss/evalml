@@ -131,6 +131,21 @@ rule experiment_all:
             rules.verification_metrics_plot.output,
             experiment=EXPERIMENT_NAME,
         ),
+        (
+            [
+                path
+                for c in CANDIDATES
+                for path in expand(
+                    rules.report_scorecard.output,
+                    env_id=c.split("/")[0],
+                    config_hash=c.split("/")[1],
+                    experiment=EXPERIMENT_NAME,
+                    scorecard_name=list(SCORECARD_CONFIGS),
+                )
+            ]
+            if config.get("experiment", {}).get("scorecards", {}).get("enabled", True)
+            else []
+        ),
 
 
 rule showcase_all:

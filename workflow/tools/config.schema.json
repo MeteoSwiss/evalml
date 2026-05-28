@@ -257,6 +257,18 @@
         "dashboard": {
           "$ref": "#/$defs/Dashboard",
           "description": "Settings for the experiment dashboard."
+        },
+        "scorecards": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExperimentScorecardConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Scorecard generation configuration. Omit or set enabled: false to disable."
         }
       },
       "required": [
@@ -264,6 +276,28 @@
         "dashboard"
       ],
       "title": "ExperimentConfig",
+      "type": "object"
+    },
+    "ExperimentScorecardConfig": {
+      "additionalProperties": false,
+      "description": "Top-level scorecard block: a single enabled flag plus named scorecard sections.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to generate scorecards.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "sections": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ScorecardConfig"
+          },
+          "description": "Named scorecard configurations (e.g. nowcasting, short_range, medium_range).",
+          "title": "Sections",
+          "type": "object"
+        }
+      },
+      "title": "ExperimentScorecardConfig",
       "type": "object"
     },
     "ExplicitDates": {
@@ -636,6 +670,43 @@
         "jobs"
       ],
       "title": "Profile",
+      "type": "object"
+    },
+    "ScorecardConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for a single named scorecard.",
+      "properties": {
+        "baseline": {
+          "description": "Baseline label to compare against (must match the `label` field of a baseline entry in `runs`).",
+          "title": "Baseline",
+          "type": "string"
+        },
+        "lead_times": {
+          "description": "Lead-time range as start/stop/step (hours).",
+          "title": "Lead Times",
+          "type": "string"
+        },
+        "stratification": {
+          "description": "Dimension to use as scorecard columns (e.g. 'region').",
+          "title": "Stratification",
+          "type": "string"
+        },
+        "variables": {
+          "description": "Variables and metrics as scorecard rows (VAR:M1,M2 format). An empty list [] is accepted by the schema but falls back to a hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). Omit ':...' after a variable name to include all available metrics for it.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Variables",
+          "type": "array"
+        }
+      },
+      "required": [
+        "baseline",
+        "lead_times",
+        "stratification",
+        "variables"
+      ],
+      "title": "ScorecardConfig",
       "type": "object"
     },
     "ShowcaseConfig": {
