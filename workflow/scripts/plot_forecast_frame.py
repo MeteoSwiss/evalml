@@ -107,7 +107,10 @@ def main():
 
     # Load grib once — shared across all region plots
     # TODO: fix file pattern & globbing
-    grib_file = Path(list(grib_dir.glob(f"2*_{lead_time}.grib"))[0])
+    grib_file = list(grib_dir.glob(f"2*_{lead_time}.grib"))
+    if not grib_file:
+        grib_file = list(grib_dir.glob(f"2*_{lead_time:03}.grib"))
+    grib_file = Path(grib_file[0])
     LOG.info("Loading grib file %s", grib_file)
     state = load_state_from_grib(grib_file, paramlist=paramlist)
 
