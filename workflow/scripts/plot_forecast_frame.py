@@ -90,6 +90,11 @@ def main():
     outdir.mkdir(parents=True, exist_ok=True)
     accu = args.accu
 
+    LOG.info(
+        "Plotting forecast frame: param=%s, init_time=%s, lead_time=%s, regions=%s",
+        param, init_time, lead_time, list(regions.keys()),
+    )
+
     if param == "SP_10M":
         paramlist = ["U_10M", "V_10M"]
     elif param == "SP":
@@ -99,6 +104,7 @@ def main():
 
     # Load grib once — shared across all region plots
     grib_file = grib_dir / f"{init_time}_{lead_time}.grib"
+    LOG.info("Loading grib file %s", grib_file)
     state = load_state_from_grib(grib_file, paramlist=paramlist)
 
     # tp is accumulated from start of forecast; de-accumulate to get period [lt-accu, lt]
@@ -106,6 +112,7 @@ def main():
         prev_lt = int(lead_time) - accu
         if prev_lt > 0:
             prev_grib_file = grib_dir / f"{init_time}_{prev_lt:03d}.grib"
+            LOG.info("De-accumulating TOT_PREC: loading previous grib file %s", prev_grib_file)
             prev_state = load_state_from_grib(prev_grib_file, paramlist=paramlist)
             state["fields"]["TOT_PREC"] = (
                 state["fields"]["TOT_PREC"]
@@ -117,6 +124,7 @@ def main():
     validtime = state["valid_time"].strftime("%Y%m%d%H%M")
 
     for region_name, region_cfg in regions.items():
+        LOG.info("Plotting region %s", region_name)
         plotter = StatePlotter(state["longitudes"], state["latitudes"], outdir)
         if region_cfg.get("extent") is not None:
             projection = get_projection(region_cfg.get("projection") or "orthographic")
@@ -147,7 +155,7 @@ def main():
 
         outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
         fig.save(outfn, bbox_inches="tight", dpi=200)
-        LOG.info(f"saved: {outfn}")
+        LOG.info("saved: %s", outfn)
 
 
 if __name__ == "__main__":
