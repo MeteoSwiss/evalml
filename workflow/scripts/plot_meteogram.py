@@ -133,7 +133,9 @@ def main():
 
     LOG.info(
         "Plotting meteogram: param=%s, stations=%s, init_time=%s",
-        param, stations, init_time,
+        param,
+        stations,
+        init_time,
     )
 
     if param == "SP_10M":
@@ -175,7 +177,12 @@ def main():
 
     # Loop over stations — data is loaded once, mapping is per station
     for station in stations:
-        LOG.info("Plotting station %s (%d/%d)", station, stations.index(station) + 1, len(stations))
+        LOG.info(
+            "Plotting station %s (%d/%d)",
+            station,
+            stations.index(station) + 1,
+            len(stations),
+        )
         station_ds = stations_table.to_xarray().sel(values=[station])
         station_ds = station_ds.rename({"latitude": "lat", "longitude": "lon"})
         station_ds = station_ds.set_coords(("lat", "lon", "station_name"))

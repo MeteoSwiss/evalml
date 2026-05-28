@@ -92,7 +92,10 @@ def main():
 
     LOG.info(
         "Plotting forecast frame: param=%s, init_time=%s, lead_time=%s, regions=%s",
-        param, init_time, lead_time, list(regions.keys()),
+        param,
+        init_time,
+        lead_time,
+        list(regions.keys()),
     )
 
     if param == "SP_10M":
@@ -112,7 +115,10 @@ def main():
         prev_lt = int(lead_time) - accu
         if prev_lt > 0:
             prev_grib_file = grib_dir / f"{init_time}_{prev_lt:03d}.grib"
-            LOG.info("De-accumulating TOT_PREC: loading previous grib file %s", prev_grib_file)
+            LOG.info(
+                "De-accumulating TOT_PREC: loading previous grib file %s",
+                prev_grib_file,
+            )
             prev_state = load_state_from_grib(prev_grib_file, paramlist=paramlist)
             state["fields"]["TOT_PREC"] = (
                 state["fields"]["TOT_PREC"]

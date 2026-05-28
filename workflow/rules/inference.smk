@@ -334,6 +334,4 @@ rule inference_execute:
                 '
         ) >{log} 2>&1
         """
-
-
 # fmt: on

@@ -85,7 +85,7 @@ rule plot_meteogram:
             CMD_ARGS+=(--baseline_label "${{BASELINE_LABELS[$i]}}")
         done
 
-        python {input.script} "${{CMD_ARGS[@]}}"  >{log} 2>&1
+        python {input.script} "${{CMD_ARGS[@]}}" >{log} 2>&1
         """
 
 
@@ -99,11 +99,11 @@ rule plot_forecast_frame:
             / "data/runs/{{run_id}}/{{init_time}}/frames/frame_{{leadtime}}_{{param}}_{region}.png",
             region=list(SHOWCASE_REGIONS.keys()),
         ),
-    wildcard_constraints:
-        leadtime=r"\d+",  # only digits
     log:
         OUT_ROOT
         / "logs/{run_id}/{init_time}/plot_forecast_frame_{leadtime}_{param}.log",
+    wildcard_constraints:
+        leadtime=r"\d+",  # only digits
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
@@ -125,7 +125,7 @@ rule plot_forecast_frame:
             --param {wildcards.param:q} --leadtime {wildcards.leadtime:q} \
             --regions_json {params.regions_json:q} \
             --outdir {params.outdir:q} \
-            --accu {params.accu}  >{log} 2>&1
+            --accu {params.accu} >{log} 2>&1
         """
 
 
