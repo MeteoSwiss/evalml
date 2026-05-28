@@ -643,6 +643,8 @@ def _render_scorecard(diff: xr.Dataset, cfg: dict, outfn: Path):
         dim: val for dim, val in _STRAT_ALL_VALUES.items() if dim != strat_dim
     }
     title_parts = []
+    if "region" in fixed_dims:
+        title_parts.append(f"region={fixed_dims['region']}")
     if "season" in fixed_dims:
         title_parts.append(f"season={fixed_dims['season']}")
     if "init_hour" in fixed_dims:
