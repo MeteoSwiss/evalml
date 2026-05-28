@@ -101,7 +101,7 @@ output:
                 10u: {"param": 165, "shortName": "10u"}
                 V_10M: {"param": 166, "shortName": "10v"}
                 10v: {"param": 166, "shortName": "10v"}
-                TD_2M: {"param": 167, "shortName": "2d"}
+                TD_2M: {"param": 168, "shortName": "2d"}
                 2d: {"param": 168, "shortName": "2d"}
                 T_2M: {"param": 167, "shortName": "2t"}
                 2t: {"param": 167, "shortName": "2t"}
