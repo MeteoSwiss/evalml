@@ -85,7 +85,7 @@ rule plot_meteogram:
             CMD_ARGS+=(--baseline_label "${{BASELINE_LABELS[$i]}}")
         done
 
-        python {input.script} "${{CMD_ARGS[@]}}"
+        python {input.script} "${{CMD_ARGS[@]}}"  >{log} 2>&1
         """
 
 
@@ -125,7 +125,7 @@ rule plot_forecast_frame:
             --param {wildcards.param:q} --leadtime {wildcards.leadtime:q} \
             --regions_json {params.regions_json:q} \
             --outdir {params.outdir:q} \
-            --accu {params.accu}
+            --accu {params.accu}  >{log} 2>&1
         """
 
 

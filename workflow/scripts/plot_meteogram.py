@@ -68,7 +68,7 @@ def main():
         action="append",
         type=str,
         default=[],
-        help="Path to baseline zarr data (repeatable).",
+        help="Path to baseline data root (repeatable).",
     )
     parser.add_argument(
         "--baseline_steps",
@@ -88,7 +88,7 @@ def main():
         help="Label for each baseline line in plot legend (repeatable).",
     )
     parser.add_argument(
-        "--analysis", type=str, default=None, help="Path to analysis zarr data"
+        "--analysis", type=str, default=None, help="Path to analysis data root"
     )
     parser.add_argument(
         "--analysis_label",
@@ -109,17 +109,17 @@ def main():
     forecast_grib_dir = Path(args.forecast)
     forecast_steps = args.forecast_steps
     forecast_label = args.forecast_label
-    analysis_zarr = Path(args.analysis)
+    analysis_root = Path(args.analysis)
     analysis_label = args.analysis_label
-    baseline_zarrs = [Path(path) for path in args.baseline]
+    baseline_roots = [Path(path) for path in args.baseline]
     baseline_steps = args.baseline_steps
     baseline_labels = args.baseline_label
-    if len(baseline_zarrs) != len(baseline_steps):
+    if len(baseline_roots) != len(baseline_steps):
         raise ValueError(
             "Mismatched baseline arguments: --baseline and --baseline_steps "
             "must be provided the same number of times."
         )
-    if len(baseline_labels) != len(baseline_zarrs):
+    if len(baseline_labels) != len(baseline_roots):
         raise ValueError(
             "Mismatched baseline arguments: --baseline and --baseline_label "
             "must be provided the same number of times."
@@ -131,6 +131,11 @@ def main():
     param = args.param
     stations = args.stations
 
+    LOG.info(
+        "Plotting meteogram: param=%s, stations=%s, init_time=%s",
+        param, stations, init_time,
+    )
+
     if param == "SP_10M":
         paramlist = ["U_10M", "V_10M"]
     elif param == "SP":
@@ -139,24 +144,26 @@ def main():
         paramlist = [param]
 
     # Load gridded data once — shared across all station plots
+    LOG.info("Loading forecast data from %s", forecast_grib_dir)
     forecast_ds = load_forecast_data(
         forecast_grib_dir, init_time, forecast_steps, paramlist
     )
     forecast_ds = preprocess_ds(forecast_ds, param)
 
     steps = [int(s) for s in forecast_ds.lead_time.dt.total_seconds().values / 3600]
-    analysis_ds = load_truth_data(analysis_zarr, init_time, steps, paramlist)
+    LOG.info("Loading analysis data from %s", analysis_root)
+    analysis_ds = load_truth_data(analysis_root, init_time, steps, paramlist)
     analysis_ds = preprocess_ds(analysis_ds, param)
 
-    baseline_ds_list = [
-        preprocess_ds(
-            load_forecast_data(zarr, init_time, step, paramlist),
-            param,
+    baseline_ds_list = []
+    for root, step, label in zip(baseline_roots, baseline_steps, baseline_labels):
+        LOG.info("Loading baseline '%s' from %s", label, root)
+        baseline_ds_list.append(
+            preprocess_ds(load_forecast_data(root, init_time, step, paramlist), param)
         )
-        for zarr, step in zip(baseline_zarrs, baseline_steps)
-    ]
 
     # Load station metadata once
+    LOG.info("Loading station metadata from %s", peakweather_dir)
     peakweather = PeakWeatherDataset(root=peakweather_dir)
     stations_table = peakweather.stations_table
     stations_table.index.names = ["values"]
@@ -168,6 +175,7 @@ def main():
 
     # Loop over stations — data is loaded once, mapping is per station
     for station in stations:
+        LOG.info("Plotting station %s (%d/%d)", station, stations.index(station) + 1, len(stations))
         station_ds = stations_table.to_xarray().sel(values=[station])
         station_ds = station_ds.rename({"latitude": "lat", "longitude": "lon"})
         station_ds = station_ds.set_coords(("lat", "lon", "station_name"))
