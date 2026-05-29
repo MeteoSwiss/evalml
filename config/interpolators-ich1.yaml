@@ -23,12 +23,10 @@ runs:
         steps: 0/120/6
         extra_requirements:
           - git+https://github.com/ecmwf/anemoi-inference.git@e369b1a90313e9701db13f63364a467aa281cf36
-          - anemoi-transform<0.2.0  # e369b1a9 incompatible with anemoi-transform>=0.2.0
           - eccodes==2.39.1
           - eccodes-cosmo-resources-python==2.38.3.1
       extra_requirements:
         - git+https://github.com/ecmwf/anemoi-inference.git@e369b1a90313e9701db13f63364a467aa281cf36
-        - anemoi-transform<0.2.0  # e369b1a9 incompatible with anemoi-transform>=0.2.0
         # pinned anemoi-datasets because of ecmwf/anemoi-utils#284, can be removed when fixed
         - anemoi-datasets==0.5.35
         - eccodes==2.39.1
