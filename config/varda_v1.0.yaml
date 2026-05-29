@@ -28,14 +28,15 @@ runs:
         - eccodes==2.39.1
         - eccodes-cosmo-resources-python==2.38.3.1
         - anemoi-datasets==0.5.35
-  # - baseline:
-  #     label: ICON-CH2-ctrl
-  #     root: /store_new/mch/msopr/osm/ICON-CH2-EPS
-  #     steps: 0/120/1
-  # - baseline:
-  #     label: ICON-CH1-ctrl
-  #     root: /store_new/mch/msopr/osm/ICON-CH1-EPS
-  #     steps: 0/33/1
+        - anemoi-inference==0.10.0
+  - baseline:
+      label: ICON-CH2-ctrl
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/1
+  - baseline:
+      label: ICON-CH1-ctrl
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/33/1
 
 truth:
   label: KENDA-CH1
