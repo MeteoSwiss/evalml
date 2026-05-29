@@ -32,7 +32,6 @@ def load_state_from_grib(
             "The GRIB file may not contain these fields at this lead time "
             "(e.g. accumulated fields like TOT_PREC are undefined at step 0)."
         )
-    lons = ds["longitude"].values.flatten()
     state["forecast_reference_time"] = datetime.fromtimestamp(
         ds["forecast_reference_time"].values.item() / 1e9
     )
@@ -41,7 +40,7 @@ def load_state_from_grib(
     state["latitudes"] = ds["latitude"].values.flatten()
     # Add the limited-area model envelope polygon (convex hull) before global coords are added
     lam_hull = MultiPoint(
-        list(zip(lons.tolist(), state["latitudes"].tolist()))
+        list(zip(state["longitudes"].tolist(), state["latitudes"].tolist()))
     ).convex_hull
     state["lam_envelope"] = gpd.GeoSeries([lam_hull], crs="EPSG:4326")
     state["fields"] = {}
