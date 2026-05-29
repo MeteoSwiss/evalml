@@ -72,22 +72,6 @@ experiment:
       # - init_hour
       - season
 
-showcase:
-  params:
-    - T_2M
-    - SP_10M
-    - TOT_PREC
-  meteograms:
-    enabled: false
-    stations: [JUN] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
-  animations:
-    enabled: true
-    domains:
-      - europe
-      - switzerland
-      - name: alpine_arc
-        extent: [3.0, 17.0, 43.5, 48.5]
-        projection: orthographic
 
 locations:
   output_root: output/
