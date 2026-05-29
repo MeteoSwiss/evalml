@@ -71,6 +71,28 @@ experiment:
       # - region
       # - init_hour
       - season
+  scorecards:
+    enabled: true
+    sections:
+      short_range:
+        baseline: ICON-CH1-ctrl
+        lead_times: "6/33/6"
+        stratification: region
+        variables:
+          - "U_10M:RMSE,R2,ETS"
+          - "V_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2"
+          - "TOT_PREC:ETS"
+      medium_range:
+        baseline: ICON-CH2-ctrl
+        lead_times: "24/120/24"
+        stratification: region
+        variables:
+          - "U_10M:RMSE,R2,ETS"
+          - "V_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2"
+          - "TOT_PREC:ETS"
+
 
 
 locations:
