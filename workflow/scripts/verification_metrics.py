@@ -51,7 +51,9 @@ def main(args: ScriptConfig):
     # get baseline forecast data
     now = datetime.now()
 
-    fcst = load_forecast_data(args.forecast, args.reftime, args.steps, args.params)
+    fcst = load_forecast_data(
+        args.forecast, args.reftime, args.steps, args.params, ensmean=args.ensmean
+    )
 
     LOG.info(
         "Loaded forecast data in %s seconds: \n%s",
@@ -146,6 +148,12 @@ if __name__ == "__main__":
         type=lambda x: eval(x),
         help="Dictionary of thresholds for each parameter in the format '{param: [threshold1, threshold2, ...]}' (default: None).",
         default=None,
+    )
+    parser.add_argument(
+        "--ensmean",
+        action="store_true",
+        default=False,
+        help="Compute ensemble mean across all members before verification.",
     )
     parser.add_argument(
         "--output",

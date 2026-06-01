@@ -183,6 +183,10 @@ class BaselineConfig(BaseModel):
         description="Forecast steps to be used from baseline, e.g. '10/120/1'.",
         pattern=r"^\d*/\d*/\d*$",
     )
+    ensmean: bool = Field(
+        False,
+        description="If true, load all ensemble members and compute their mean before verification.",
+    )
 
 
 class TruthConfig(BaseModel):

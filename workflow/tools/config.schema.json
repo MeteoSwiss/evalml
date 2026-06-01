@@ -67,6 +67,12 @@
           "pattern": "^\\d*/\\d*/\\d*$",
           "title": "Steps",
           "type": "string"
+        },
+        "ensmean": {
+          "default": false,
+          "description": "If true, load all ensemble members and compute their mean before verification.",
+          "title": "Ensmean",
+          "type": "boolean"
         }
       },
       "required": [
