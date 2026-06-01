@@ -131,7 +131,15 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
         and np.max(np.abs(fcst_lat - truth_lat)) < 1e-6
         and np.max(np.abs(fcst_lon - truth_lon)) < 1e-6
     ):
-        return fcst
+        if np.array_equal(fcst_lat, truth_lat) and np.array_equal(fcst_lon, truth_lon):
+            return fcst
+        coords = {
+            "lat": (fcst["lat"].dims, truth["lat"].data),
+            "lon": (fcst["lon"].dims, truth["lon"].data),
+        }
+        if "values" in fcst.dims and "values" in truth.dims:
+            coords["values"] = truth["values"].data
+        return fcst.assign_coords(coords)
 
     truth_is_grid = "y" in truth.dims and "x" in truth.dims
 
