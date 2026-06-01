@@ -282,11 +282,9 @@ All outputs are rooted at `OUT_ROOT` (from `locations.output_root` in the config
 
 The adoption of the first upcoming stable release of earthkit has started.
 Some issues may still be present. A known issue that is affecting us is that the automatic download and caching of files required
-by earthkit to support the ICON-CH grids is currently broken. This requires us to perform this step manually.
+by earthkit to support the ICON-CH grids is currently broken.
 
-```bash
-export ECKIT_GEO_CACHE=$HOME/.local/share/eckit/geo/grid/icon
-mkdir -p $ECKIT_GEO_CACHE
-curl https:/sites.ecmwf.int/repository/eckit/geo/grid/icon-ch/icon-ch1-c.ek > $ECKIT_GEO_CACHE/17643da2574959b644d254a3cd6e2bc0-b0699f374c63d05028c18c12f80a48f4.ek
-curl https:/sites.ecmwf.int/repository/eckit/geo/grid/icon-ch/icon-ch2-c.ek > $ECKIT_GEO_CACHE/bbbd5a09855499243c7a4aa4c8762920-67adabf5c0cff041ebaafa61a3bda267.ek
-```
+The workflow now works around this automatically: the `data_download_eckit_geo_grids` rule fetches
+the required ICON-CH1/CH2 grid-definition files into eckit's default geo cache
+(`$HOME/.local/share/eckit/geo/grid/icon`) before any plotting or verification step that needs them.
+No manual setup is required.
