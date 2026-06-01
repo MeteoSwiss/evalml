@@ -92,7 +92,7 @@ profile:
     gpus: 0
   jobs: 50
 
-metric_maps:
+score_maps:
   params:
     - T_2M
     # - TD_2M

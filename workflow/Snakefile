@@ -135,29 +135,29 @@ rule experiment_all:
         ),
 
 
-rule metric_maps_all:
-    """Target rule for metric maps (opt-in via evalml experiment --maps)."""
+rule score_maps_all:
+    """Target rule for score maps (opt-in via evalml experiment --maps)."""
     input:
         expand(
-            rules.plot_metric_maps.output,
+            rules.plot_score_maps.output,
             run_id=collect_all_candidates(),
-            leadtime=config["metric_maps"]["leadtimes"],
-            metric=config["metric_maps"]["metrics"],
-            param=config["metric_maps"]["params"],
-            region=config["metric_maps"]["regions"],
-            season=config["metric_maps"]["seasons"],
-            init_hour=config["metric_maps"]["init_hours"],
+            leadtime=config["score_maps"]["leadtimes"],
+            metric=config["score_maps"]["metrics"],
+            param=config["score_maps"]["params"],
+            region=config["score_maps"]["regions"],
+            season=config["score_maps"]["seasons"],
+            init_hour=config["score_maps"]["init_hours"],
             experiment=EXPERIMENT_NAME,
         ),
         expand(
-            rules.plot_metric_maps_baseline.output,
+            rules.plot_score_maps_baseline.output,
             baseline_id=list(BASELINE_CONFIGS),
-            leadtime=config["metric_maps"]["leadtimes"],
-            metric=config["metric_maps"]["metrics"],
-            param=config["metric_maps"]["params"],
-            region=config["metric_maps"]["regions"],
-            season=config["metric_maps"]["seasons"],
-            init_hour=config["metric_maps"]["init_hours"],
+            leadtime=config["score_maps"]["leadtimes"],
+            metric=config["score_maps"]["metrics"],
+            param=config["score_maps"]["params"],
+            region=config["score_maps"]["regions"],
+            season=config["score_maps"]["seasons"],
+            init_hour=config["score_maps"]["init_hours"],
             experiment=EXPERIMENT_NAME,
         ),
 

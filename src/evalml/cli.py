@@ -168,7 +168,7 @@ def cli():
     "--maps",
     is_flag=True,
     default=False,
-    help="Also produce metric maps (computationally intensive).",
+    help="Also produce score maps (computationally intensive).",
 )
 @workflow_options
 def experiment(
@@ -194,7 +194,7 @@ def experiment(
         dag,
         rulegraph,
         extra_smk_args,
-        extra_targets=["metric_maps_all"] if maps else [],
+        extra_targets=["score_maps_all"] if maps else [],
     )
 
 

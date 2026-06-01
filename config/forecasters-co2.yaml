@@ -69,7 +69,7 @@ profile:
   batch_rules:
     plot_forecast_frame: 32
 
-metric_maps:
+score_maps:
   params:
     - T_2M
     # - TD_2M

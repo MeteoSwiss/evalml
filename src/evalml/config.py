@@ -208,8 +208,8 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
-class MetricMapsConfig(BaseModel):
-    """Parameters controlling which metric map plots are produced."""
+class ScoreMapsConfig(BaseModel):
+    """Parameters controlling which score map plots are produced."""
 
     params: List[str] = Field(
         default=["T_2M", "TD_2M", "U_10M", "V_10M", "SP_10M", "PS", "PMSL", "TOT_PREC"],
@@ -386,9 +386,9 @@ class ConfigModel(BaseModel):
     dashboard: Dashboard
     locations: Locations
     profile: Profile
-    metric_maps: MetricMapsConfig = Field(
-        default_factory=MetricMapsConfig,
-        description="Parameters for metric map plots (used with --maps flag).",
+    score_maps: ScoreMapsConfig = Field(
+        default_factory=ScoreMapsConfig,
+        description="Parameters for score map plots (used with --maps flag).",
     )
 
     model_config = {

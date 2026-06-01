@@ -144,20 +144,20 @@ rule make_forecast_animation:
         """
 
 
-rule plot_metric_maps:
+rule plot_score_maps:
     # localrule: True
     input:
-        script="workflow/scripts/plot_metric_maps.mo.py",
-        verif_file=OUT_ROOT / "data/runs/{run_id}/metric_maps/{param}_{leadtime}.nc",
+        script="workflow/scripts/plot_score_maps.mo.py",
+        verif_file=OUT_ROOT / "data/runs/{run_id}/score_maps/{param}_{leadtime}.nc",
     output:
         OUT_ROOT
-        / "results/{experiment}/metric_maps/runs/{run_id}/{param}_{metric}_{region}_{season}_{init_hour}_{leadtime}.png",
+        / "results/{experiment}/score_maps/runs/{run_id}/{param}_{metric}_{region}_{season}_{init_hour}_{leadtime}.png",
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
         init_hour=r"all|\d{1,2}",
     log:
         OUT_ROOT
-        / "logs/plot_metric_maps/{experiment}/{run_id}-{param}-{metric}-{region}-{season}-{init_hour}-{leadtime}.log",
+        / "logs/plot_score_maps/{experiment}/{run_id}-{param}-{metric}-{region}-{season}-{init_hour}-{leadtime}.log",
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
@@ -177,14 +177,14 @@ rule plot_metric_maps:
         """
 
 
-use rule plot_metric_maps as plot_metric_maps_baseline with:
+use rule plot_score_maps as plot_score_maps_baseline with:
     input:
-        script="workflow/scripts/plot_metric_maps.mo.py",
+        script="workflow/scripts/plot_score_maps.mo.py",
         verif_file=OUT_ROOT
-        / "data/baselines/{baseline_id}/metric_maps/{param}_{leadtime}.nc",
+        / "data/baselines/{baseline_id}/score_maps/{param}_{leadtime}.nc",
     output:
         OUT_ROOT
-        / "results/{experiment}/metric_maps/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{init_hour}_{leadtime}.png",
+        / "results/{experiment}/score_maps/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{init_hour}_{leadtime}.png",
     log:
         OUT_ROOT
-        / "logs/plot_metric_maps/{experiment}/{baseline_id}-{param}-{metric}-{region}-{season}-{init_hour}-{leadtime}.log",
+        / "logs/plot_score_maps/{experiment}/{baseline_id}-{param}-{metric}-{region}-{season}-{init_hour}-{leadtime}.log",

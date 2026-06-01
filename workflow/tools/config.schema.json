@@ -445,8 +445,46 @@
       "title": "Locations",
       "type": "object"
     },
-    "MetricMapsConfig": {
-      "description": "Parameters controlling which metric map plots are produced.",
+    "Profile": {
+      "description": "Workflow execution profile.",
+      "properties": {
+        "executor": {
+          "description": "Job executor, e.g. 'slurm'.",
+          "title": "Executor",
+          "type": "string"
+        },
+        "global_resources": {
+          "$ref": "#/$defs/GlobalResources"
+        },
+        "default_resources": {
+          "$ref": "#/$defs/DefaultResources"
+        },
+        "jobs": {
+          "description": "Maximum number of parallel jobs.",
+          "minimum": 1,
+          "title": "Jobs",
+          "type": "integer"
+        },
+        "batch_rules": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Define batches of the same rule that shall be executed within one job submission.",
+          "title": "Batch Rules",
+          "type": "object"
+        }
+      },
+      "required": [
+        "executor",
+        "global_resources",
+        "default_resources",
+        "jobs"
+      ],
+      "title": "Profile",
+      "type": "object"
+    },
+    "ScoreMapsConfig": {
+      "description": "Parameters controlling which score map plots are produced.",
       "properties": {
         "params": {
           "default": [
@@ -548,45 +586,7 @@
           "type": "array"
         }
       },
-      "title": "MetricMapsConfig",
-      "type": "object"
-    },
-    "Profile": {
-      "description": "Workflow execution profile.",
-      "properties": {
-        "executor": {
-          "description": "Job executor, e.g. 'slurm'.",
-          "title": "Executor",
-          "type": "string"
-        },
-        "global_resources": {
-          "$ref": "#/$defs/GlobalResources"
-        },
-        "default_resources": {
-          "$ref": "#/$defs/DefaultResources"
-        },
-        "jobs": {
-          "description": "Maximum number of parallel jobs.",
-          "minimum": 1,
-          "title": "Jobs",
-          "type": "integer"
-        },
-        "batch_rules": {
-          "additionalProperties": {
-            "type": "integer"
-          },
-          "description": "Define batches of the same rule that shall be executed within one job submission.",
-          "title": "Batch Rules",
-          "type": "object"
-        }
-      },
-      "required": [
-        "executor",
-        "global_resources",
-        "default_resources",
-        "jobs"
-      ],
-      "title": "Profile",
+      "title": "ScoreMapsConfig",
       "type": "object"
     },
     "Stratification": {
@@ -731,9 +731,9 @@
     "profile": {
       "$ref": "#/$defs/Profile"
     },
-    "metric_maps": {
-      "$ref": "#/$defs/MetricMapsConfig",
-      "description": "Parameters for metric map plots (used with --maps flag)."
+    "score_maps": {
+      "$ref": "#/$defs/ScoreMapsConfig",
+      "description": "Parameters for score map plots (used with --maps flag)."
     }
   },
   "required": [

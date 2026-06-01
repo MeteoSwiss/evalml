@@ -9,7 +9,7 @@ NetCDF file.
 
 Usage
 -----
-    uv run workflow/scripts/verification_metric_maps.py \\
+    uv run workflow/scripts/verification_score_maps.py \\
         output/data/runs/<run_id> \\
         --truth /path/to/truth.zarr \\
         --step 24 \\
@@ -557,7 +557,7 @@ if __name__ == "__main__":
     if args.output is None:
         source = args.run_root or args.baseline_root
         args.output = (
-            source / f"verification_metric_maps_{args.param}_step{args.step:03d}h.nc"
+            source / f"verification_score_maps_{args.param}_step{args.step:03d}h.nc"
         )
 
     main(args)
