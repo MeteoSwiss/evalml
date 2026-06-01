@@ -20,7 +20,6 @@ rule verification_metrics_baseline:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
     log:
         OUT_ROOT / "logs/verification_metrics_baseline/{baseline_id}-{init_time}.log",
-    localrule: True
     resources:
         cpus_per_task=24,
         mem_mb=50_000,
