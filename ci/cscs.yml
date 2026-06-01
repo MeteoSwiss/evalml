@@ -1,0 +1,21 @@
+include:
+  - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
+
+.baremetal-runner-balfrin:
+  # take santis as starting point
+  extends: [.baremetal-runner-santis-gh200]
+  variables:
+    F7T_URL: 'https://api.cscs.ch/mch/firecrest/v2'
+    FIRECREST_SYSTEM: 'balfrin'
+    ARCH: 'x86_64'
+    SLURM_JOB_NUM_NODES: 1
+    SLURM_NTASKS: 1
+
+test_job:
+  extends: [.baremetal-runner-balfrin]
+  script:
+    - echo "Running on $(hostname)"
+    - echo "SLURM_JOB_NUM_NODES: $SLURM_JOB_NUM_NODES"
+    - echo "SLURM_NTASKS: $SLURM_NTASKS"
+    - echo "FIRECREST_SYSTEM: $FIRECREST_SYSTEM"
+    - echo "ARCH: $ARCH"
