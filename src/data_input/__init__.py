@@ -168,6 +168,17 @@ def _collect_icon_archive_files(
     ]
 
 
+def _discover_icon_member_ids(
+    root: Path, reftime: datetime, steps: list[int]
+) -> list[str]:
+    """Return sorted list of numeric member IDs present in the ICON archive for `reftime`."""
+    first_file = _collect_icon_archive_files(root, reftime, [steps[0]])[0]
+    prefix = first_file.name.rsplit("_", 1)[0]
+    return sorted(
+        p.name.rsplit("_", 1)[1] for p in first_file.parent.glob(f"{prefix}_???")
+    )
+
+
 def load_from_grib_file(file: str | list[str], sel_kwargs):
     fieldlist = ekd.from_source("file", file, lazily=True).to_fieldlist()
     return fieldlist_to_xarray(fieldlist.sel(**sel_kwargs))
@@ -584,16 +595,43 @@ def load_icon_baseline_from_grib(
     reftime: datetime,
     steps: list[int],
     params: list[str],
+    ensmean: bool = False,
 ) -> xr.Dataset:
     """Load an ICON-CH1-EPS or ICON-CH2-EPS baseline from the operational GRIB archive."""
-    return load_forecast_data_from_grib(
-        files=_collect_icon_archive_files(root, reftime, steps),
-        params=params,
-    )
+    if not ensmean:
+        return load_forecast_data_from_grib(
+            files=_collect_icon_archive_files(root, reftime, steps),
+            params=params,
+        )
+
+    member_ids = _discover_icon_member_ids(root, reftime, steps)
+    LOG.info("Computing ensemble mean over %d members: %s", len(member_ids), member_ids)
+    acc = None
+    n_loaded = 0
+    for mid in member_ids:
+        try:
+            ds = load_forecast_data_from_grib(
+                files=_collect_icon_archive_files(root, reftime, steps, member_id=mid),
+                params=params,
+            )
+            if "number" in ds.dims:
+                ds = ds.isel(number=0, drop=True)
+            acc = ds if acc is None else acc + ds
+            n_loaded += 1
+        except Exception as exc:
+            LOG.warning("Skipping member %s: %s", mid, exc)
+
+    if acc is None:
+        raise ValueError(
+            f"No ensemble members could be loaded for {reftime} from {root}"
+        )
+
+    LOG.info("Ensemble mean computed over %d members.", n_loaded)
+    return acc / n_loaded
 
 
 def load_forecast_data(
-    root, reftime: datetime, steps: list[int], params: list[str]
+    root, reftime: datetime, steps: list[int], params: list[str], ensmean: bool = False
 ) -> xr.Dataset:
     """Load forecast data from GRIB files or an ICON archive.
 
@@ -615,4 +653,4 @@ def load_forecast_data(
         LOG.info("Loading INCA baseline from NetCDF files...")
         return load_INCA_baseline_from_netcdf(root, reftime, steps, params)
     LOG.info("Loading baseline forecasts from ICON GRIB archive...")
-    return load_icon_baseline_from_grib(root, reftime, steps, params)
+    return load_icon_baseline_from_grib(root, reftime, steps, params, ensmean=ensmean)
