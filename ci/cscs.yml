@@ -15,7 +15,3 @@ test_job:
   extends: [.baremetal-runner-balfrin]
   script:
     - echo "Running on $(hostname)"
-    - echo "SLURM_JOB_NUM_NODES: $SLURM_JOB_NUM_NODES"
-    - echo "SLURM_NTASKS: $SLURM_NTASKS"
-    - echo "FIRECREST_SYSTEM: $FIRECREST_SYSTEM"
-    - echo "ARCH: $ARCH"
