@@ -118,8 +118,13 @@ def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_aligned():
     )
 
     result = map_forecast_to_truth(fcst, truth)
+    _, result_aligned = xr.align(truth, result)
 
     assert result is fcst
+    assert result["T_2M"].values is fcst["T_2M"].values
+    assert np.array_equal(result["lat"].values, truth["lat"].values)
+    assert np.array_equal(result["lon"].values, truth["lon"].values)
+    assert np.array_equal(result_aligned["T_2M"].values, fcst["T_2M"].values)
 
 
 def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_within_tolerance():
