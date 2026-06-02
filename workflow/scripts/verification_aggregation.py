@@ -45,28 +45,39 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
         init_hour=lambda ds: ds["forecast_reference_time"].dt.hour,
     ).drop_vars(["time"], errors="ignore")
 
+    # Counter used to track the number of ref_time samples per stratum so that
+    # aggregated results can be correctly re-aggregated later (weighted mean).
+    n_counter = xr.DataArray(
+        np.ones(len(ds.ref_time), dtype=np.int64),
+        coords={c: ds[c] for c in ["ref_time", "season", "init_hour"]},
+        dims=["ref_time"],
+    )
+
     # compute mean with grouping by all permutations of season and init_hour
     ds_mean = []
     for group in [[], "season", "init_hour", ["season", "init_hour"]]:
         if group == []:
             ds_grouped = ds
+            n_grouped = n_counter.sum().compute()
         else:
             ds_grouped = ds.groupby(group)
-        ds_grouped = ds_grouped.mean(dim="forecast_reference_time").compute(
+            n_grouped = n_counter.groupby(group).sum().compute()
+        ds_result = ds_grouped.mean(dim="forecast_reference_time").compute(
             num_workers=4, scheduler="threads"
         )
+        ds_result["n_samples"] = n_grouped
         if "init_hour" not in group:
-            ds_grouped = ds_grouped.expand_dims({"init_hour": [-999]})
+            ds_result = ds_result.expand_dims({"init_hour": [-999]})
         if "season" not in group:
-            ds_grouped = ds_grouped.expand_dims({"season": ["all"]})
-        LOG.info("Aggregated by %s: \n %s", group, ds_grouped)
-        ds_mean.append(ds_grouped)
+            ds_result = ds_result.expand_dims({"season": ["all"]})
+        LOG.info("Aggregated by %s: \n %s", group, ds_result)
+        ds_mean.append(ds_result)
     out = xr.merge(ds_mean, compat="no_conflicts", join="outer")
 
     for var in out.data_vars:
         if "contingency_table" in var:
-            # convert contingency table elements to counts
-            out[var] = out[var] * len(ds["forecast_reference_time"])
+            # convert contingency table means back to per-stratum counts
+            out[var] = out[var] * out["n_samples"]
             contingency_manager = scores.categorical.BasicContingencyManager(
                 {
                     "tp_count": out[var].sel(contingency="tp_count"),
