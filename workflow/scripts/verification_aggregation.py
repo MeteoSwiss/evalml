@@ -39,18 +39,18 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
     LOG.info("Aggregation results")
     start = time.time()
 
-    # for simplicity we group by season based on ref_time (as this is a dimension of the dataset)
+    # for simplicity we group by season based on forecast_reference_time (as this is a dimension of the dataset)
     ds = ds.assign_coords(
         season=lambda ds: ds["forecast_reference_time"].dt.season,
         init_hour=lambda ds: ds["forecast_reference_time"].dt.hour,
     ).drop_vars(["time"], errors="ignore")
 
-    # Counter used to track the number of ref_time samples per stratum so that
+    # Counter used to track the number of forecast_reference_time samples per stratum so that
     # aggregated results can be correctly re-aggregated later (weighted mean).
     n_counter = xr.DataArray(
-        np.ones(len(ds.ref_time), dtype=np.int64),
-        coords={c: ds[c] for c in ["ref_time", "season", "init_hour"]},
-        dims=["ref_time"],
+        np.ones(len(ds["forecast_reference_time"]), dtype=np.int64),
+        coords={c: ds[c] for c in ["forecast_reference_time", "season", "init_hour"]},
+        dims=["forecast_reference_time"],
     )
 
     # compute mean with grouping by all permutations of season and init_hour
