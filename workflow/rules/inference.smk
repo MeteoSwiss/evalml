@@ -362,6 +362,7 @@ rule inference_execute:
             SLURM_JOB=$(cat "$METRICS_DIR/slurm_job_id")
             sleep 5
             sacct -j "$SLURM_JOB" \
+                --parsable2 \
                 --format=JobID,JobName,Elapsed,CPUTime,MaxRSS,MaxVMSize,AveRSS,MaxDiskRead,MaxDiskWrite \
                 > "$METRICS_DIR/slurm_metrics.log" 2>/dev/null || true
         fi

@@ -36,11 +36,14 @@ rule collect_system_metrics:
     output:
         OUT_ROOT / "results/{experiment}/system_metrics.json",
     params:
-        log_files=[
-            str(
-                OUT_ROOT
-                / f"logs/inference_execute/{run_id}-{t.strftime('%Y%m%d%H%M')}.log"
-            )
+        run_info=[
+            {
+                "workdir": str(
+                    (OUT_ROOT / f"data/runs/{run_id}/{t.strftime('%Y%m%d%H%M')}").resolve()
+                ),
+                "run_id": run_id,
+                "init_time": t.strftime("%Y%m%d%H%M"),
+            }
             for run_id in RUN_CONFIGS
             for t in REFTIMES
         ],
@@ -51,7 +54,6 @@ rule collect_system_metrics:
         gpu_map={
             run_id: _candidate_gpu(run_cfg) for run_id, run_cfg in RUN_CONFIGS.items()
         },
-        log_dir=str(OUT_ROOT / "logs/inference_execute"),
     run:
         import json
         from pathlib import Path
@@ -59,10 +61,9 @@ rule collect_system_metrics:
         from diagnostics import parse_logs
 
         records = parse_logs(
-            log_files=params.log_files,
+            run_info=params.run_info,
             label_map=params.label_map,
             gpu_map=params.gpu_map,
-            log_dir=params.log_dir,
         )
         out_path = Path(str(output[0]))
         out_path.parent.mkdir(parents=True, exist_ok=True)
