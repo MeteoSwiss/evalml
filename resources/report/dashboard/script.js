@@ -211,34 +211,68 @@ if (sysData.length > 0) {
   });
   document.getElementById("sys-source-select").addEventListener("change", updateSysChart);
 
+  // Populate metric filter from the data, then initialise Choices on it
+  const sysMetricEl = document.getElementById("sys-metric-select");
+  [...new Set(sysData.map(d => d.metric))].sort().forEach(m => {
+    const opt = document.createElement("option");
+    opt.value = m;
+    opt.textContent = m;
+    opt.selected = true;
+    sysMetricEl.appendChild(opt);
+  });
+  choicesInstances["sys-metric-select"] = new Choices("#sys-metric-select", {
+    searchEnabled: false,
+    removeItemButton: true,
+    shouldSort: false,
+    itemSelectText: "",
+    placeholder: false,
+  });
+  document.getElementById("sys-metric-select").addEventListener("change", updateSysChart);
+
   const sysSpec = {
     "data": { "values": sysData },
-    "facet": {
-      "column": { "field": "metric", "type": "nominal", "title": null },
-    },
-    "resolve": { "scale": { "y": "independent" } },
+    "facet": { "field": "metric", "type": "nominal", "title": null },
+    "columns": 4,
+    "resolve": { "scale": { "x": "shared", "y": "independent" } },
     "spec": {
-      "width": 280,
-      "height": 240,
-      "mark": { "type": "point", "filled": true, "size": 70, "opacity": 0.85 },
+      "params": [
+        {
+          "name": "xZoom",
+          "select": {
+            "type": "interval",
+            "encodings": ["x"],
+            "zoom": "wheel![!event.shiftKey]"
+          },
+          "bind": "scales"
+        }
+      ],
+      "width": 300,
+      "height": 200,
+      "mark": { "type": "line", "point": { "filled": true, "size": 50 } },
       "encoding": {
         "x": {
-          "field": "source",
-          "type": "nominal",
-          "axis": { "labelAngle": -30, "title": null }
+          "field": "init_time",
+          "type": "temporal",
+          "title": null,
+          "axis": { "labelAngle": -30, "format": "%b %d" }
         },
         "y": {
           "field": "value",
           "type": "quantitative",
           "title": null,
-          "scale": { "zero": true }
+          "scale": { "zero": false }
         },
         "color": {
+          "field": "source",
+          "type": "nominal",
+          "legend": { "orient": "top", "title": "Source" }
+        },
+        "shape": {
           "field": "model_type",
           "type": "nominal",
           "legend": { "orient": "top", "title": "Model type" }
         },
-        "shape": {
+        "strokeDash": {
           "field": "model_type",
           "type": "nominal",
           "legend": { "orient": "top", "title": "Model type" }
@@ -246,7 +280,7 @@ if (sysData.length > 0) {
         "tooltip": [
           { "field": "source", "type": "nominal", "title": "Source" },
           { "field": "model_type", "type": "nominal", "title": "Model type" },
-          { "field": "init_time", "type": "nominal", "title": "Init time" },
+          { "field": "init_time", "type": "temporal", "title": "Init time", "format": "%Y-%m-%d %H:%M" },
           { "field": "metric", "type": "nominal", "title": "Metric" },
           { "field": "value", "type": "quantitative", "title": "Value", "format": ".3f" },
           { "field": "n_gpu", "type": "quantitative", "title": "GPUs" },
@@ -259,6 +293,7 @@ if (sysData.length > 0) {
   function updateSysChart() {
     const selectedModelTypes = getSelectedValues("sys-model-type-select");
     const selectedSources = getSelectedValues("sys-source-select");
+    const selectedMetrics = getSelectedValues("sys-metric-select");
     const newSpec = JSON.parse(JSON.stringify(sysSpec));
     const filters = [];
     if (selectedModelTypes.length > 0) {
@@ -266,6 +301,9 @@ if (sysData.length > 0) {
     }
     if (selectedSources.length > 0) {
       filters.push({ field: "source", oneOf: selectedSources });
+    }
+    if (selectedMetrics.length > 0) {
+      filters.push({ field: "metric", oneOf: selectedMetrics });
     }
     if (filters.length > 0) {
       newSpec.transform = [{ filter: { and: filters } }];
