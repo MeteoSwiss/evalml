@@ -52,7 +52,7 @@ def main(args: ScriptConfig):
     now = datetime.now()
 
     fcst = load_forecast_data(
-        args.forecast, args.reftime, args.steps, args.params, ensmean=args.ensmean
+        args.forecast, args.reftime, args.steps, args.params, member=args.member
     )
 
     LOG.info(
@@ -150,10 +150,10 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
-        "--ensmean",
-        action="store_true",
-        default=False,
-        help="Compute ensemble mean across all members before verification.",
+        "--member",
+        type=str,
+        default="000",
+        help="Ensemble member to load: '000' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID.",
     )
     parser.add_argument(
         "--output",

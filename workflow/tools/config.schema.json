@@ -68,11 +68,11 @@
           "title": "Steps",
           "type": "string"
         },
-        "ensmean": {
-          "default": false,
-          "description": "If true, load all ensemble members and compute their mean before verification.",
-          "title": "Ensmean",
-          "type": "boolean"
+        "member": {
+          "default": "000",
+          "description": "Ensemble member to use: '000'/'control' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID.",
+          "title": "Member",
+          "type": "string"
         }
       },
       "required": [

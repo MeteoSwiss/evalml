@@ -27,9 +27,7 @@ rule verification_metrics_baseline:
     params:
         baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
-        ensmean=lambda wc: (
-            "--ensmean" if BASELINE_CONFIGS[wc.baseline_id].get("ensmean") else ""
-        ),
+        member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
         truth_label=config["truth"]["label"],
         regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
@@ -47,7 +45,7 @@ rule verification_metrics_baseline:
             --regions "{params.regions}" \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
-            {params.ensmean} \
+            --member "{params.member}" \
             --output {output} >{log} 2>&1
         """
 

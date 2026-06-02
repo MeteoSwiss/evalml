@@ -595,43 +595,54 @@ def load_icon_baseline_from_grib(
     reftime: datetime,
     steps: list[int],
     params: list[str],
-    ensmean: bool = False,
+    member: str = "000",
 ) -> xr.Dataset:
-    """Load an ICON-CH1-EPS or ICON-CH2-EPS baseline from the operational GRIB archive."""
-    if not ensmean:
+    """Load an ICON-CH1-EPS or ICON-CH2-EPS baseline from the operational GRIB archive.
+
+    `member` selects which data to load:
+    - ``"mean"``: compute the average over all available ensemble members
+    - ``"median"``: load the pre-computed median member file from the archive
+    - ``"control"`` or ``"000"``: load the control member
+    - any 3-digit string (e.g. ``"001"``…): load that specific member
+    """
+    if member == "control":
+        member = "000"
+    if member == "mean":
+        member_ids = _discover_icon_member_ids(root, reftime, steps)
+        LOG.info(
+            "Computing ensemble mean over %d members: %s", len(member_ids), member_ids
+        )
+        acc = None
+        n_loaded = 0
+        for mid in member_ids:
+            try:
+                ds = load_forecast_data_from_grib(
+                    files=_collect_icon_archive_files(
+                        root, reftime, steps, member_id=mid
+                    ),
+                    params=params,
+                )
+                if "number" in ds.dims:
+                    ds = ds.isel(number=0, drop=True)
+                acc = ds if acc is None else acc + ds
+                n_loaded += 1
+            except Exception as exc:
+                LOG.warning("Skipping member %s: %s", mid, exc)
+        if acc is None:
+            raise ValueError(
+                f"No ensemble members could be loaded for {reftime} from {root}"
+            )
+        LOG.info("Ensemble mean computed over %d members.", n_loaded)
+        return acc / n_loaded
+    else:
         return load_forecast_data_from_grib(
-            files=_collect_icon_archive_files(root, reftime, steps),
+            files=_collect_icon_archive_files(root, reftime, steps, member_id=member),
             params=params,
         )
 
-    member_ids = _discover_icon_member_ids(root, reftime, steps)
-    LOG.info("Computing ensemble mean over %d members: %s", len(member_ids), member_ids)
-    acc = None
-    n_loaded = 0
-    for mid in member_ids:
-        try:
-            ds = load_forecast_data_from_grib(
-                files=_collect_icon_archive_files(root, reftime, steps, member_id=mid),
-                params=params,
-            )
-            if "number" in ds.dims:
-                ds = ds.isel(number=0, drop=True)
-            acc = ds if acc is None else acc + ds
-            n_loaded += 1
-        except Exception as exc:
-            LOG.warning("Skipping member %s: %s", mid, exc)
-
-    if acc is None:
-        raise ValueError(
-            f"No ensemble members could be loaded for {reftime} from {root}"
-        )
-
-    LOG.info("Ensemble mean computed over %d members.", n_loaded)
-    return acc / n_loaded
-
 
 def load_forecast_data(
-    root, reftime: datetime, steps: list[int], params: list[str], ensmean: bool = False
+    root, reftime: datetime, steps: list[int], params: list[str], member: str = "000"
 ) -> xr.Dataset:
     """Load forecast data from GRIB files or an ICON archive.
 
@@ -653,4 +664,4 @@ def load_forecast_data(
         LOG.info("Loading INCA baseline from NetCDF files...")
         return load_INCA_baseline_from_netcdf(root, reftime, steps, params)
     LOG.info("Loading baseline forecasts from ICON GRIB archive...")
-    return load_icon_baseline_from_grib(root, reftime, steps, params, ensmean=ensmean)
+    return load_icon_baseline_from_grib(root, reftime, steps, params, member=member)

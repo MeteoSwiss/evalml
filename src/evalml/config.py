@@ -183,9 +183,9 @@ class BaselineConfig(BaseModel):
         description="Forecast steps to be used from baseline, e.g. '10/120/1'.",
         pattern=r"^\d*/\d*/\d*$",
     )
-    ensmean: bool = Field(
-        False,
-        description="If true, load all ensemble members and compute their mean before verification.",
+    member: str = Field(
+        "000",
+        description="Ensemble member to use: '000'/'control' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID.",
     )
 
 
