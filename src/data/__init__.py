@@ -8,13 +8,10 @@ import numpy as np
 import xarray as xr
 from pyproj import Transformer
 
-LOG = logging.getLogger(__name__)
+from .naming import PARAMS_MAP
+from .schema import XARRAY_ENGINE_PROFILE
 
-XARRAY_ENGINE_PROFILE = {
-    "ensure_dims": ["z", "number", "step", "forecast_reference_time"],
-    "add_valid_time_coord": True,
-    "global_attrs": [{"institution": "MeteoSwiss"}, {"Conventions": "CF-1.8"}],
-}
+LOG = logging.getLogger(__name__)
 
 ZERO_KELVIN = -273.15  # °C
 
@@ -56,20 +53,11 @@ def load_analysis_data_from_zarr(
     This function loads analysis data from a Zarr dataset, processing it to make it more
     xarray-friendly. It renames variables, sets the time index, and pivots the dataset.
     """
-    PARAMS_MAP_COSMO2 = {
-        "T_2M": "2t",
-        "TD_2M": "2d",
-        "U_10M": "10u",
-        "V_10M": "10v",
-        "PS": "sp",
-        "PMSL": "msl",
-        "TOT_PREC": "tp",
-    }
     tot_prec_string = "TOT_PREC_6H" if min(np.diff(steps)) == 6 else "TOT_PREC_1H"
-    PARAMS_MAP_COSMO1 = {
-        v: v.replace("TOT_PREC", tot_prec_string) for v in PARAMS_MAP_COSMO2.keys()
+    params_map_cosmo1 = {
+        k: k.replace("TOT_PREC", tot_prec_string) for k in PARAMS_MAP
     }
-    PARAMS_MAP = PARAMS_MAP_COSMO2 if "co2" in root.name else PARAMS_MAP_COSMO1
+    params_map = PARAMS_MAP if "co2" in root.name else params_map_cosmo1
 
     ds = xr.open_zarr(root, consolidated=False)
 
@@ -80,7 +68,7 @@ def load_analysis_data_from_zarr(
     ds = ds.assign_coords({"variable": ds.attrs["variables"]})
 
     # select variables and valid time, squeeze ensemble dimension
-    ds = ds.sel(variable=[PARAMS_MAP[p] for p in params]).squeeze("ensemble", drop=True)
+    ds = ds.sel(variable=[params_map[p] for p in params]).squeeze("ensemble", drop=True)
 
     # recover original 2D shape
     if len(ds.attrs["field_shape"]) == 2:
@@ -97,7 +85,7 @@ def load_analysis_data_from_zarr(
     ds = (
         ds["data"]
         .to_dataset("variable")
-        .rename({v: k for k, v in PARAMS_MAP.items() if v in ds["variable"].values})
+        .rename({v: k for k, v in params_map.items() if v in ds["variable"].values})
     )
 
     # change precipitation units from m to kg m-2
