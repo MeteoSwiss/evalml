@@ -150,7 +150,7 @@ def _collect_icon_archive_files(
             f"No archive subdirectory found for {reftime:%y%m%d%H} in {fcst_root}"
         )
     reftime_dir = reftime_dirs[-1]
-    LOG.info("Reading ICON archive from %s", reftime_dir)
+    LOG.info("Reading member %s from %s", member_id, reftime_dir)
 
     if "ICON-CH1-EPS" in root.parts:
         gribname = "i1eff"
