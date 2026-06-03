@@ -11,7 +11,7 @@ The CLI `evalml` orchestrates Snakemake workflows in `workflow/` using YAML expe
 **Repo Layout**
 - `src/evalml/` — CLI (`cli.py`), config models (`config.py`), helpers
 - `src/verification/` — metrics and verification logic (`spatial.py`)
-- `src/data_input/` — data loading and ingestion
+- `src/data/` — data loading and ingestion
 - `src/plotting/` — visualization and colormap handling
 - `workflow/` — Snakemake pipeline (`Snakefile`, `rules/`, `scripts/`, `envs/`, `tools/`)
 - `config/` — example experiment configs

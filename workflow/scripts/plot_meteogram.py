@@ -6,7 +6,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from peakweather import PeakWeatherDataset
 
-from data_input import (
+from data import (
     parse_steps,
     load_forecast_data,
     load_truth_data,

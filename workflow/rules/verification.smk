@@ -12,7 +12,7 @@ include: "common.smk"
 rule verification_metrics_baseline:
     input:
         "src/verification/__init__.py",
-        "src/data_input/__init__.py",
+        "src/data/__init__.py",
         script="workflow/scripts/verification_metrics.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth=config["truth"]["root"],
@@ -59,7 +59,7 @@ def _get_no_none(dict, key, replacement):
 rule verification_metrics:
     input:
         "src/verification/__init__.py",
-        "src/data_input/__init__.py",
+        "src/data/__init__.py",
         script="workflow/scripts/verification_metrics.py",
         inference_okfile=rules.inference_execute.output.okfile,
         truth=config["truth"]["root"],

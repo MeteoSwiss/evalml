@@ -4,7 +4,7 @@ from pathlib import Path
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import MultiPoint
-from data_input import load_from_grib_file
+from data import load_from_grib_file
 
 
 PARAMS_MAP = {

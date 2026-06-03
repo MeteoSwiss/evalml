@@ -7,7 +7,7 @@ from pathlib import Path
 
 from verification import verify  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
-from data_input import (
+from data import (
     parse_steps,
     load_forecast_data,
     load_truth_data,

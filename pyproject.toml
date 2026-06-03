@@ -56,7 +56,7 @@ markers = [
 packages = [
   "src/evalml",
   "src/verification",
-  "src/data_input"
+  "src/data"
 ]
 
 [tool.uv.sources]

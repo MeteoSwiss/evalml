@@ -16,7 +16,7 @@ import numpy as np  # noqa: E402
 import xarray as xr  # noqa: E402
 from earthkit.data.sources.stream import StreamFieldList  # noqa: E402
 
-from data_input import parse_steps  # noqa: E402
+from data import parse_steps  # noqa: E402
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
