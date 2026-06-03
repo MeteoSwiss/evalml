@@ -261,6 +261,23 @@ def collect_all_baselines():
     return baselines
 
 
+def resolve_baseline_id(label: str) -> str:
+    """Resolve a baseline label to its hash-based ID.
+
+    Scorecard configs reference baselines by human-readable label (e.g. 'IFS').
+    This finds the matching baseline_id in BASELINE_CONFIGS.
+    Raises ValueError if the label doesn't match any registered baseline.
+    """
+    for baseline_id, cfg in BASELINE_CONFIGS.items():
+        if cfg.get("label") == label:
+            return baseline_id
+    available = [cfg.get("label") for cfg in BASELINE_CONFIGS.values()]
+    raise ValueError(
+        f"No baseline with label {label!r} found. "
+        f"Available baseline labels: {available}"
+    )
+
+
 def collect_experiment_participants():
     participants = {}
     for base in BASELINE_CONFIGS.keys():
