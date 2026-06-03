@@ -47,7 +47,7 @@
             }
           ],
           "default": null,
-          "description": "Deprecated compatibility field. Workflow baseline IDs are derived from the stem of `root`.",
+          "description": "Deprecated compatibility field. No longer used for ID derivation.",
           "title": "Baseline Id"
         },
         "label": {
@@ -57,7 +57,7 @@
           "type": "string"
         },
         "root": {
-          "description": "Root directory where the baseline data is stored. The workflow derives the baseline ID from the stem of this path.",
+          "description": "Root directory where the baseline data is stored.",
           "minLength": 1,
           "title": "Root",
           "type": "string"

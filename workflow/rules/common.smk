@@ -20,6 +20,8 @@ ENV_HASH_FIELDS = {
 }
 # Fields excluded from ALL hashing (display/resource metadata only).
 RUN_HASH_EXCLUDE = {"label", "inference_resources", "_is_candidate", "model_type"}
+# Fields excluded from baseline hashing (display/legacy metadata only).
+BASELINE_HASH_EXCLUDE = {"label", "baseline_id"}
 
 
 # ============================================================================
@@ -245,15 +247,15 @@ def collect_all_baselines():
         if "baseline" not in run_entry:
             continue
         baseline_config = run_entry["baseline"]
-        baseline_id = baseline_config.get("label", Path(baseline_config["root"]).stem)
+        baseline_id = f"baseline-{baseline_hash(baseline_config)}"
         baselines[baseline_id] = baseline_config
 
     # Backward compatibility with legacy top-level `baselines` block.
     for baseline_entry in copy.deepcopy(config.get("baselines", [])):
         baseline_type = next(iter(baseline_entry))
         baseline_config = baseline_entry[baseline_type]
-        baseline_id = baseline_config.get("label", Path(baseline_config["root"]).stem)
         baseline_config.pop("baseline_id", None)
+        baseline_id = f"baseline-{baseline_hash(baseline_config)}"
         baselines[baseline_id] = baseline_config
 
     return baselines
@@ -306,6 +308,12 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
         # run output depends on which forecaster RUN was used (not just the env)
         configs_to_hash.append(run_config["forecaster"].get("run_id"))
     return generate_json_hash(configs_to_hash)
+
+
+def baseline_hash(baseline_config: dict) -> str:
+    """Hash of fields that determine baseline identity (excludes display/legacy metadata)."""
+    cfg = {k: v for k, v in baseline_config.items() if k not in BASELINE_HASH_EXCLUDE}
+    return generate_json_hash(cfg)
 
 
 def master_hash() -> str:
