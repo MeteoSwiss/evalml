@@ -54,9 +54,7 @@ def load_analysis_data_from_zarr(
     xarray-friendly. It renames variables, sets the time index, and pivots the dataset.
     """
     tot_prec_string = "TOT_PREC_6H" if min(np.diff(steps)) == 6 else "TOT_PREC_1H"
-    params_map_cosmo1 = {
-        k: k.replace("TOT_PREC", tot_prec_string) for k in PARAMS_MAP
-    }
+    params_map_cosmo1 = {k: k.replace("TOT_PREC", tot_prec_string) for k in PARAMS_MAP}
     params_map = PARAMS_MAP if "co2" in root.name else params_map_cosmo1
 
     ds = xr.open_zarr(root, consolidated=False)
