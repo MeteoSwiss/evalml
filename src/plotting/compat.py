@@ -4,20 +4,10 @@ from pathlib import Path
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import MultiPoint
+
 from data import load_from_grib_file
-
-
-PARAMS_MAP = {
-    "T_2M": "2t",
-    "TD_2M": "2d",
-    "U_10M": "10u",
-    "V_10M": "10v",
-    "PS": "sp",
-    "PMSL": "msl",
-    "TOT_PREC": "tp",
-}
-
-PARAMS_MAP_INV = {v: k for k, v in PARAMS_MAP.items()}
+from data.naming import PARAMS_MAP, PARAMS_MAP_INV
+from data.schema import wrap_longitude
 
 
 def load_state_from_grib(
@@ -57,9 +47,7 @@ def load_state_from_grib(
         _paramlist_ecmwf = [PARAMS_MAP[p] for p in paramlist]
         ds = load_from_grib_file(global_file, {"parameter.variable": _paramlist_ecmwf})
         mask = ~np.isnan(ds[_paramlist_ecmwf[0]].values.squeeze())
-        global_lons = ds["longitude"].values.flatten()
-        if np.max(global_lons) > 180:
-            global_lons = ((global_lons + 180) % 360) - 180
+        global_lons = wrap_longitude(ds["longitude"].values.flatten())
         state["longitudes"] = np.concatenate([state["longitudes"], global_lons[mask]])
         state["latitudes"] = np.concatenate(
             [state["latitudes"], ds["latitude"].values.flatten()[mask]]
@@ -89,10 +77,7 @@ def load_state_from_raw(
     reftime = datetime.strptime(file.parents[1].name, "%Y%m%d%H%M")
     validtime = datetime.strptime(file.stem, "%Y%m%d%H%M%S")
     state = {}
-    lons = _state["longitudes"]
-    if max(lons) > 180:
-        lons = ((lons + 180) % 360) - 180
-    state["longitudes"] = lons
+    state["longitudes"] = wrap_longitude(_state["longitudes"])
     state["latitudes"] = _state["latitudes"]
     state["valid_time"] = validtime
     state["lead_time"] = state["valid_time"] - reftime
