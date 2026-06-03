@@ -163,14 +163,9 @@ class InterpolatorConfig(RunConfig):
 class BaselineConfig(BaseModel):
     """Configuration for a single baseline to include in the verification."""
 
-    # Fields excluded from ALL hashing (display/legacy metadata only).
-    HASH_EXCLUDE: ClassVar[FrozenSet[str]] = frozenset({"label", "baseline_id"})
+    # Fields excluded from ALL hashing (display metadata only).
+    HASH_EXCLUDE: ClassVar[FrozenSet[str]] = frozenset({"label"})
 
-    baseline_id: str | None = Field(
-        None,
-        min_length=1,
-        description="Deprecated compatibility field. No longer used for ID derivation.",
-    )
     label: str = Field(
         ...,
         min_length=1,
@@ -475,10 +470,6 @@ class ConfigModel(BaseModel):
     runs: List[ForecasterItem | InterpolatorItem | BaselineItem] = Field(
         ...,
         description="List of experiment participants, including forecaster/interpolator ML runs and baselines.",
-    )
-    baselines: List[BaselineItem] = Field(
-        default_factory=list,
-        description="Deprecated top-level baselines list. Prefer defining baseline entries directly in `runs`.",
     )
     truth: TruthConfig | None
     experiment: ExperimentConfig = Field(

@@ -20,8 +20,8 @@ ENV_HASH_FIELDS = {
 }
 # Fields excluded from ALL hashing (display/resource metadata only).
 RUN_HASH_EXCLUDE = {"label", "inference_resources", "_is_candidate", "model_type"}
-# Fields excluded from baseline hashing (display/legacy metadata only).
-BASELINE_HASH_EXCLUDE = {"label", "baseline_id"}
+# Fields excluded from baseline hashing (display metadata only).
+BASELINE_HASH_EXCLUDE = {"label"}
 
 
 # ============================================================================
@@ -247,14 +247,6 @@ def collect_all_baselines():
         if "baseline" not in run_entry:
             continue
         baseline_config = run_entry["baseline"]
-        baseline_id = f"baseline-{baseline_hash(baseline_config)}"
-        baselines[baseline_id] = baseline_config
-
-    # Backward compatibility with legacy top-level `baselines` block.
-    for baseline_entry in copy.deepcopy(config.get("baselines", [])):
-        baseline_type = next(iter(baseline_entry))
-        baseline_config = baseline_entry[baseline_type]
-        baseline_config.pop("baseline_id", None)
         baseline_id = f"baseline-{baseline_hash(baseline_config)}"
         baselines[baseline_id] = baseline_config
 

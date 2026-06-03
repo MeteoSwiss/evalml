@@ -36,20 +36,6 @@
     "BaselineConfig": {
       "description": "Configuration for a single baseline to include in the verification.",
       "properties": {
-        "baseline_id": {
-          "anyOf": [
-            {
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Deprecated compatibility field. No longer used for ID derivation.",
-          "title": "Baseline Id"
-        },
         "label": {
           "description": "Label for the baseline that will be used in experiment results such as reports and figures.",
           "minLength": 1,
@@ -830,14 +816,6 @@
         ]
       },
       "title": "Runs",
-      "type": "array"
-    },
-    "baselines": {
-      "description": "Deprecated top-level baselines list. Prefer defining baseline entries directly in `runs`.",
-      "items": {
-        "$ref": "#/$defs/BaselineItem"
-      },
-      "title": "Baselines",
       "type": "array"
     },
     "truth": {
