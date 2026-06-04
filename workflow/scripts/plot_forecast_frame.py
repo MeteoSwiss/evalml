@@ -68,7 +68,7 @@ def main():
         "--input", type=str, default=None, help="Directory to grib data"
     )
     parser.add_argument("--date", type=str, default=None, help="reference datetime")
-    parser.add_argument("--leadtime", type=str, help="leadtime")
+    parser.add_argument("--leadtime", type=int, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
     parser.add_argument(
         "--regions_json",
@@ -116,7 +116,7 @@ def main():
 
     # tp is accumulated from start of forecast; de-accumulate to get period [lt-accu, lt]
     if param == "TOT_PREC":
-        prev_lt = int(lead_time) - accu
+        prev_lt = lead_time - accu
         if prev_lt > 0:
             prev_grib_file = grib_dir / f"{init_time}_{prev_lt:03d}.grib"
             LOG.info(
