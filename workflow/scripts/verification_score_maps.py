@@ -548,18 +548,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output",
         type=Path,
-        default=None,
+        required=True,
         help="Output NetCDF file.",
     )
     args = parser.parse_args()
 
     if bool(args.run_root) == bool(args.baseline_root):
         parser.error("Exactly one of --run_root or --baseline_root must be provided.")
-
-    if args.output is None:
-        source = args.run_root or args.baseline_root
-        args.output = (
-            source / f"verification_score_maps_{args.param}_step{args.step:03d}h.nc"
-        )
 
     main(args)
