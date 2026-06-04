@@ -531,7 +531,7 @@ def load_INCA_baseline_from_netcdf(
     merged = merged.swap_dims({"valid_time": "step"})
     merged = merged.assign_coords(forecast_reference_time=ref_time_np)
 
-    return merged[list(params)]
+    return validate_canonical(merged[list(params)])
 
 
 def load_icon_baseline_from_grib(

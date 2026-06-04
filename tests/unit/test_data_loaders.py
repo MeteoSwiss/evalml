@@ -3,7 +3,7 @@ from datetime import datetime
 import numpy as np
 import xarray as xr
 
-from data import load_analysis_data_from_zarr
+from data import load_analysis_data_from_zarr, load_INCA_baseline_from_netcdf
 from data.schema import validate_canonical
 
 
@@ -51,4 +51,40 @@ def test_analysis_zarr_returns_canonical_schema(tmp_path):
     # variables renamed to ICON names; precip converted m -> mm (x1000)
     assert set(out.data_vars) == {"T_2M", "TOT_PREC"}
     # contract holds
+    validate_canonical(out)
+
+
+def _make_inca_file(root):
+    """Minimal INCA NetCDF: TT_INCA_<reftime>.nc, dims (time, chy, chx)."""
+    reftime = datetime(2024, 1, 1)
+    fdir = root / "2024" / "01"
+    fdir.mkdir(parents=True)
+    times = np.array([np.datetime64(reftime) + np.timedelta64(h, "h") for h in range(7)])
+    chx = np.array([255500.0, 256500.0])
+    chy = np.array([-159500.0, -158500.0])
+    da = xr.DataArray(
+        np.zeros((7, 2, 2), dtype="float32"),
+        dims=("time", "chy", "chx"),
+        coords={"time": times, "chy": chy, "chx": chx},
+        attrs={"units": "degrees C"},
+    )
+    xr.Dataset({"TT": da}).to_netcdf(fdir / "TT_INCA_202401010000.nc")
+    return reftime
+
+
+def test_inca_returns_canonical_schema(tmp_path):
+    root = tmp_path / "INCA"
+    reftime = _make_inca_file(root)
+
+    out = load_INCA_baseline_from_netcdf(root, reftime, [0, 1, 2], ["T_2M"])
+
+    assert {"step", "y", "x"} <= set(out.dims)
+    assert {
+        "step",
+        "valid_time",
+        "forecast_reference_time",
+        "latitude",
+        "longitude",
+    } <= set(out.coords)
+    assert out["T_2M"].attrs.get("units") == "K"  # degrees C -> K conversion
     validate_canonical(out)
