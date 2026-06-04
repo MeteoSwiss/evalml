@@ -299,3 +299,20 @@ RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
+
+
+def resolve_leadtimes(spec):
+    """Resolve a lead-time specification from config.
+
+    Accepts:
+    - a list of ints — returned verbatim.
+    - the literal string "all" — expanded to the union of step lists
+      from all configured runs and baselines.
+    """
+    if spec != "all":
+        return spec
+    all_steps = set()
+    for cfg in (*RUN_CONFIGS.values(), *BASELINE_CONFIGS.values()):
+        start, end, step = map(int, cfg["steps"].split("/"))
+        all_steps.update(range(start, end + 1, step))
+    return sorted(all_steps)

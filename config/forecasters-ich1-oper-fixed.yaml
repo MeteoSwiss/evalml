@@ -95,8 +95,9 @@ score_maps:
     # - PS
     # - PMSL
     # - TOT_PREC
-  leadtimes:
-    - 24
+  leadtimes: [6, 24]
+  # Or, to compute every available leadtime from runs+baselines:
+  # leadtimes: "all"
   metrics:
     - BIAS
     # - RMSE

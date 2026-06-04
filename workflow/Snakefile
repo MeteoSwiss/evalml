@@ -141,7 +141,7 @@ rule score_maps_all:
         expand(
             rules.plot_score_maps.output,
             run_id=collect_all_candidates(),
-            leadtime=config["score_maps"]["leadtimes"],
+            leadtime=resolve_leadtimes(config["score_maps"]["leadtimes"]),
             metric=config["score_maps"]["metrics"],
             param=config["score_maps"]["params"],
             region=config["score_maps"]["regions"],
@@ -152,7 +152,7 @@ rule score_maps_all:
         expand(
             rules.plot_score_maps_baseline.output,
             baseline_id=list(BASELINE_CONFIGS),
-            leadtime=config["score_maps"]["leadtimes"],
+            leadtime=resolve_leadtimes(config["score_maps"]["leadtimes"]),
             metric=config["score_maps"]["metrics"],
             param=config["score_maps"]["params"],
             region=config["score_maps"]["regions"],
