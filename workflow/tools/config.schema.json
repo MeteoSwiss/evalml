@@ -70,7 +70,7 @@
         },
         "member": {
           "default": "000",
-          "description": "Ensemble member to use: '000'/'control' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID.",
+          "description": "Ensemble member to use: '000'/'control' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID. WARNING: when using 'median' with temporally aggregated parameters (e.g. 6-hourly precipitation), do NOT aggregate the hourly median \u2014 this introduces a significant negative bias. Instead, read the corresponding pre-aggregated median files (e.g. ..._median06h). Ensure the baseline data files match the aggregation period.",
           "title": "Member",
           "type": "string"
         }
