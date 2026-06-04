@@ -22,9 +22,11 @@ dependencies = [
     "cartopy>=0.25.0",
     "pyproj>=3.7.2",
     "earthkit-plots",
-    "marimo>=0.19.0",
+    "marimo>=0.23.3",
     "geopandas>=0.14.0",
     "peakweather",
+    "pyzmq>=27.1.0",
+    "scores>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -45,7 +47,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "pre-commit>=4.2.0",
-    "snakefmt>=0.11.0",
+    "snakefmt>=2.0",
 ]
 
 [tool.pytest.ini_options]

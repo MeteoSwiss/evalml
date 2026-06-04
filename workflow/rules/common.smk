@@ -64,20 +64,48 @@ def parse_reference_times():
     start = datetime.strptime(cfg["start"], DATETIME_FORMAT)
     end = datetime.strptime(cfg["end"], DATETIME_FORMAT)
     freq = parse_timedelta(cfg["frequency"])
+    blacklist = {
+        datetime.strptime(t, DATETIME_FORMAT) for t in cfg.get("blacklist", [])
+    }
     times = []
     t = start
     while t <= end:
-        times.append(t)
+        if t not in blacklist:
+            times.append(t)
         t += freq
     return times
 
 
 def parse_regions():
     """Parse regions from the configuration."""
-    cfg = config["stratification"]
+    cfg = config["experiment"]["stratification"]
     regions = [f"{cfg['root']}/{region}.shp" for region in cfg["regions"]]
     regions_txt = ",".join(regions)
     return regions_txt
+
+
+def parse_showcase_regions():
+    """Parse showcase domains from config.
+
+    Returns a dict mapping domain name -> {extent, projection}.
+    Named domains (strings) have extent=None and projection=None,
+    meaning the plot script will fall back to the DOMAINS lookup.
+    Custom domains carry their explicit extent and projection.
+    """
+    result = {}
+    for r in (
+        config.get("showcase", {})
+        .get("animations", {})
+        .get("domains", ["globe", "europe", "switzerland"])
+    ):
+        if isinstance(r, str):
+            result[r] = {"extent": None, "projection": None}
+        else:
+            result[r["name"]] = {
+                "extent": r.get("extent"),
+                "projection": r.get("projection", "orthographic"),
+            }
+    return result
 
 
 # ============================================================================
@@ -217,14 +245,14 @@ def collect_all_baselines():
         if "baseline" not in run_entry:
             continue
         baseline_config = run_entry["baseline"]
-        baseline_id = Path(baseline_config["root"]).stem
+        baseline_id = baseline_config.get("label", Path(baseline_config["root"]).stem)
         baselines[baseline_id] = baseline_config
 
     # Backward compatibility with legacy top-level `baselines` block.
     for baseline_entry in copy.deepcopy(config.get("baselines", [])):
         baseline_type = next(iter(baseline_entry))
         baseline_config = baseline_entry[baseline_type]
-        baseline_id = Path(baseline_config["root"]).stem
+        baseline_id = baseline_config.get("label", Path(baseline_config["root"]).stem)
         baseline_config.pop("baseline_id", None)
         baselines[baseline_id] = baseline_config
 
@@ -294,8 +322,17 @@ def master_hash() -> str:
 
 
 REGIONS = parse_regions()
+SHOWCASE_REGIONS = parse_showcase_regions()
+SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])
+EXPERIMENT_PARAMS = config.get("experiment", {}).get(
+    "params", ["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"]
+)
 REFTIMES = parse_reference_times()
 RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
+_scorecard = config.get("experiment", {}).get("scorecards", {})
+SCORECARD_CONFIGS = (
+    _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
+)

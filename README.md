@@ -38,6 +38,9 @@ dates:
   start: 2020-01-01T00:00
   end: 2020-01-10T00:00
   frequency: 60h
+  # Optional: skip specific initialisation dates
+  # blacklist:
+  #   - 2020-01-05T00:00
 
 runs:
   # Each item is either `forecaster`, `interpolator` or `baseline`
@@ -58,6 +61,14 @@ runs:
       label: M-1 forecaster
       steps: 0/120/6
       config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
+  # An interpolator entry can optionally embed its driving forecaster config inline.
+  # - interpolator:
+  #     checkpoint: /path/to/interpolator.ckpt
+  #     label: My interpolator
+  #     steps: 0/120/1
+  #     forecaster:
+  #       checkpoint: https://...
+  #       steps: 0/120/6
   - baseline:
       label: COSMO-E
       root: /store_new/mch/msopr/ml/COSMO-E
@@ -67,15 +78,43 @@ truth:
   label: COSMO KENDA
   root: /scratch/mch/fzanetta/data/anemoi/datasets/mch-co2-an-archive-0p02-2015-2020-6h-v3-pl13.zarr
 
-stratification:
-  regions:
-    - jura
-    - mittelland
-    - voralpen
-    - alpennordhang
-    - innerealpentaeler
-    - alpensuedseite
-  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+experiment:
+  stratification:
+    regions:
+      - jura
+      - mittelland
+      - voralpen
+      - alpennordhang
+      - innerealpentaeler
+      - alpensuedseite
+    root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+  # Optional: categorical thresholds used for binary skill scores, one entry per parameter.
+  thresholds:
+    TOT_PREC:
+      gt: [0.0, 1, 5]
+    T_2M:
+      lt: [273.15]
+      gt: [288.15, 298.15]
+  dashboard:
+    # Stratification dimensions to include in the experiment dashboard (any of season, region, init_hour).
+    stratification:
+      - season
+  # Optional: named scorecards comparing each forecaster against a chosen baseline.
+  scorecards:
+    enabled: true
+    sections:
+      short_range:
+        # Baseline label — must match the `label` field of a baseline entry in `runs`.
+        baseline: COSMO-E
+        # Lead-time range as start/stop/step (hours).
+        lead_times: "0/120/6"
+        # Stratification dimension to use as scorecard columns (e.g. region, season).
+        stratification: region
+        # Variables and metrics as scorecard rows. Format: VAR:METRIC1,METRIC2,...
+        # Supported metrics: RMSE, R2, ETS, POD, FAR (categorical metrics require thresholds).
+        variables:
+          - "T_2M:RMSE,R2"
+          - "TOT_PREC:RMSE,ETS"
 
 locations:
   # All workflow outputs are written under this root.
@@ -98,7 +137,7 @@ profile:
     plot_forecast_frame: 32
 ```
 
-The `runs` list accepts both `forecaster` and `interpolator` entries. For `dates`, you can either provide a `start` / `end` / `frequency` block as above or an explicit list of ISO timestamps for case-study style runs.
+The `runs` list accepts `forecaster`, `interpolator`, and `baseline` entries. For `dates`, you can either provide a `start` / `end` / `frequency` block as above or an explicit list of ISO timestamps for case-study style runs. Stratification, thresholds, dashboard, and scorecard settings are all grouped under the `experiment` key.
 
 You can then run it with:
 
@@ -221,7 +260,8 @@ All outputs are rooted at `OUT_ROOT` (from `locations.output_root` in the config
 ├── logs/                                      # one sub-directory per rule
 └── results/{experiment_name}/               # final products
     ├── dashboard/
-    └── plots/
+    ├── plots/
+    └── scorecards/
 ```
 
 ### Wildcard conventions
