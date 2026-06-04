@@ -10,7 +10,7 @@ from pyproj import Transformer
 
 from .derived import deaccumulate, uv_components
 from .naming import PARAMS_MAP
-from .schema import XARRAY_ENGINE_PROFILE
+from .schema import XARRAY_ENGINE_PROFILE, validate_canonical
 
 LOG = logging.getLogger(__name__)
 
@@ -99,7 +99,18 @@ def load_analysis_data_from_zarr(
         ds = ds.rename({"cell": "values"})
 
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
-    return _select_valid_times(ds, times)
+    ds = _select_valid_times(ds, times)
+
+    # Canonicalize to the GRIB schema: time -> step / valid_time /
+    # forecast_reference_time (mirrors load_INCA_baseline_from_netcdf).
+    ref_time = np.datetime64(reftime, "ns")
+    ds = ds.assign_coords(valid_time=ds["time"])
+    ds = ds.assign_coords(
+        step=("time", (ds["time"].values - ref_time).astype("timedelta64[ns]"))
+    )
+    ds = ds.swap_dims({"time": "step"}).drop_vars("time")
+    ds = ds.assign_coords(forecast_reference_time=ref_time)
+    return validate_canonical(ds)
 
 
 def _collect_ml_grib_files(root: Path, steps: list[int] | None = None) -> list[Path]:
