@@ -64,7 +64,8 @@ def deaccumulate(da, dim="step"):
         raise ValueError(
             f"{name} appears to already be period-accumulated "
             f"(min(.diff()) = {min_diff:.3e}). Check that the "
-            "accumulate_from_start_of_forecast post-processor is enabled."
+            "accumulate_from_start_of_forecast post-processor "
+            "(anemoi-inference) is enabled."
         )
 
     da = da.clip(min=0.0)
