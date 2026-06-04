@@ -208,6 +208,9 @@ rule verification_score_maps:
 rule verification_score_maps_baseline:
     input:
         script="workflow/scripts/verification_score_maps.py",
+        # Declared as inputs purely for dependency tracking (re-run if the baseline
+        # archive changes). The script discovers the zarrs itself by globbing
+        # `--baseline_root`, so this list is intentionally not passed on the CLI.
         baseline_zarrs=lambda wc: expand(
             "{root}/FCST{year}.zarr",
             root=BASELINE_CONFIGS[wc.baseline_id].get("root"),
@@ -231,7 +234,6 @@ rule verification_score_maps_baseline:
         """
         uv run {input.script} \
             --baseline_root {params.baseline_root} \
-            --baseline_zarrs {input.baseline_zarrs} \
             --reftimes {params.reftimes} \
             --truth {input.truth} \
             --step {wildcards.leadtime} \

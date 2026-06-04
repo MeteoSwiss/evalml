@@ -180,11 +180,17 @@ def iter_init_dirs(run_root: Path) -> list[tuple[datetime, Path]]:
     return result
 
 
-def iter_baseline_init_times(zarr_paths: list[Path], step: int) -> list[datetime]:
-    """Return all init times from baseline zarr(s) that have the requested step available."""
+def iter_baseline_init_times(baseline_root: Path, step: int) -> list[datetime]:
+    """Return all init times from a baseline's zarr(s) that have the requested step available.
+
+    The per-year zarrs are discovered by globbing ``FCST*.zarr`` under ``baseline_root``
+    rather than taking an explicit list: the layout is fixed and the discovered init
+    times are filtered down to the configured reftimes by the caller anyway, so any
+    extra years picked up from the archive are harmless.
+    """
     step_td = np.timedelta64(step, "h")
     reftimes = []
-    for zarr_path in zarr_paths:
+    for zarr_path in sorted(baseline_root.glob("FCST*.zarr")):
         if not zarr_path.exists():
             LOG.warning("Baseline zarr not found: %s", zarr_path)
             continue
@@ -228,7 +234,7 @@ def main(args: Namespace) -> None:
     if args.baseline_root:
         init_items = [
             (rt, None)
-            for rt in iter_baseline_init_times(args.baseline_zarrs, args.step)
+            for rt in iter_baseline_init_times(args.baseline_root, args.step)
         ]
         LOG.info("Found %d baseline init times", len(init_items))
     else:
@@ -511,13 +517,6 @@ if __name__ == "__main__":
         type=Path,
         default=None,
         help="Root directory of a baseline (e.g. /path/to/ICON-CH1-EPS), containing FCST<YY>.zarr files.",
-    )
-    parser.add_argument(
-        "--baseline_zarrs",
-        type=Path,
-        nargs="+",
-        default=None,
-        help="Explicit list of baseline zarr paths (used by Snakemake for dependency tracking).",
     )
     parser.add_argument(
         "--truth",
