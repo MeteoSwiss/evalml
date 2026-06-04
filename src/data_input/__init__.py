@@ -190,6 +190,8 @@ def variable_name_profile(
 
 def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
     ds = xr.Dataset()
+    if len(fieldlist) == 0:
+        return ds
     for level_type_group in fieldlist.group_by("vertical.level_type"):
         # earthkit-data should return the group key...TODO: open issue?
         level_type = level_type_group.get("vertical.level_type")[0]
