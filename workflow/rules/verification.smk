@@ -222,7 +222,7 @@ rule verification_score_maps_baseline:
         reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
     log:
         OUT_ROOT
-        / "logs/verification_score_maps_baseline/{baseline_id}-{param}-{leadtime}.log",
+        / f"logs/verification_score_maps_baseline/{{baseline_id}}-{config['truth']['label']}-{{param}}-{{leadtime}}.log",
     resources:
         cpus_per_task=24,
         mem_mb=50_000,
