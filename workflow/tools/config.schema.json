@@ -542,17 +542,17 @@
           "description": "List of lead times (hours) to plot, or the literal string 'all' to expand to the union of step lists from all configured runs and baselines.",
           "title": "Leadtimes"
         },
-        "metrics": {
+        "scores": {
           "default": [
             "BIAS",
             "RMSE",
             "MAE"
           ],
-          "description": "List of verification metrics to plot.",
+          "description": "List of verification scores to plot.",
           "items": {
             "type": "string"
           },
-          "title": "Metrics",
+          "title": "Scores",
           "type": "array"
         },
         "regions": {

@@ -54,9 +54,9 @@ def _(ArgumentParser, Path, np):
     parser.add_argument("--param", type=str, help="parameter")
     parser.add_argument("--region", type=str, help="name of region")
     parser.add_argument(
-        "--metric",
+        "--score",
         type=str,
-        help="Evaluation Metric. So far Bias, RMSE, MAE or STDE are implemented.",
+        help="Evaluation Score. So far Bias, RMSE, MAE or STDE are implemented.",
     )
     parser.add_argument("--season", type=str, default="all", help="season filter")
     parser.add_argument(
@@ -71,7 +71,7 @@ def _(ArgumentParser, Path, np):
     region = args.region
     season = args.season
     init_hour = args.init_hour
-    metric = args.metric
+    score = args.score
 
     if isinstance(init_hour, str):
         if init_hour == "all":
@@ -86,20 +86,20 @@ def _(ArgumentParser, Path, np):
     return (
         init_hour,
         lead_time,
-        metric,
         outfn,
         param,
         region,
+        score,
         season,
         verif_file,
     )
 
 
 @app.cell
-def _(LOG, init_hour, metric, param, season, verif_file, xr):
+def _(LOG, init_hour, param, score, season, verif_file, xr):
     ds = xr.open_dataset(verif_file)
     LOG.info("Opened dataset: %s", ds)
-    var = f"{param}.{metric}"
+    var = f"{param}.{score}"
     LOG.info(
         "Selecting variable '%s' for season '%s', init_hour=%s", var, season, init_hour
     )
@@ -118,15 +118,15 @@ def _(LOG, init_hour, metric, param, season, verif_file, xr):
 
 @app.cell
 def _(CMAP_DEFAULTS, ekp):
-    def get_style(param, metric, units_override=None):
+    def get_style(param, score, units_override=None):
         """Get style and colormap settings for the plot.
         Needed because cmap/norm does not work in Style(colors=cmap),
         still needs to be passed as arguments to tripcolor()/tricontourf().
         """
-        metric_key = f"{param}.{metric}.map"
+        score_key = f"{param}.{score}.map"
         cfg = (
-            CMAP_DEFAULTS[metric_key]
-            if metric_key in CMAP_DEFAULTS
+            CMAP_DEFAULTS[score_key]
+            if score_key in CMAP_DEFAULTS
             else CMAP_DEFAULTS.get(param, {})
         )
         units = units_override if units_override is not None else cfg.get("units", "")
@@ -157,11 +157,11 @@ def _(
     get_style,
     init_hour,
     lead_time,
-    metric,
     np,
     outfn,
     param,
     region,
+    score,
     season,
 ):
     # plot individual fields
@@ -183,14 +183,14 @@ def _(
 
     plot_vals = ds.values.ravel()
 
-    style_kwargs = get_style(param, metric)
+    style_kwargs = get_style(param, score)
     LOG.info("style_kwargs: %s", style_kwargs)
 
     if np.all(np.isnan(plot_vals)):
         LOG.warning(
             "All values are NaN for %s %s season=%s — plotting empty map.",
             param,
-            metric,
+            score,
             season,
         )
         import matplotlib.patches as mpatches
@@ -209,7 +209,7 @@ def _(
 
     init_hour_lbl = "all" if init_hour == -999 else f"{init_hour:02d}"
     fig.title(
-        f"{metric} of {param}, Season: {season}, "
+        f"{score} of {param}, Season: {season}, "
         f"Init hour: {init_hour_lbl}, Lead Time: {lead_time}"
     )
 

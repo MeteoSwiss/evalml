@@ -151,13 +151,13 @@ rule plot_score_maps:
         verif_file=OUT_ROOT / "data/runs/{run_id}/score_maps/{param}_{leadtime}.nc",
     output:
         OUT_ROOT
-        / "results/{experiment}/score_maps/runs/{run_id}/{param}_{metric}_{region}_{season}_{init_hour}_{leadtime}.png",
+        / "results/{experiment}/score_maps/runs/{run_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
         init_hour=r"all|\d{1,2}",
     log:
         OUT_ROOT
-        / "logs/plot_score_maps/{experiment}/{run_id}-{param}-{metric}-{region}-{season}-{init_hour}-{leadtime}.log",
+        / "logs/plot_score_maps/{experiment}/{run_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
@@ -167,12 +167,12 @@ rule plot_score_maps:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run python {input.script} \
             --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
-            --param {wildcards.param} --leadtime {wildcards.leadtime} --metric {wildcards.metric} \
+            --param {wildcards.param} --leadtime {wildcards.leadtime} --score {wildcards.score} \
             --season {wildcards.season} --init_hour {wildcards.init_hour} > {log} 2>&1
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
         #     --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
-        #     --param {wildcards.param} --leadtime {wildcards.leadtime} --metric {wildcards.metric} \
+        #     --param {wildcards.param} --leadtime {wildcards.leadtime} --score {wildcards.score} \
         #     --season {wildcards.season} --init_hour {wildcards.init_hour}
         """
 
@@ -184,7 +184,7 @@ use rule plot_score_maps as plot_score_maps_baseline with:
         / f"data/baselines/{{baseline_id}}/{config['truth']['label']}/score_maps/{{param}}_{{leadtime}}.nc",
     output:
         OUT_ROOT
-        / "results/{experiment}/score_maps/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{init_hour}_{leadtime}.png",
+        / "results/{experiment}/score_maps/baselines/{baseline_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",
     log:
         OUT_ROOT
-        / "logs/plot_score_maps/{experiment}/{baseline_id}-{param}-{metric}-{region}-{season}-{init_hour}-{leadtime}.log",
+        / "logs/plot_score_maps/{experiment}/{baseline_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",

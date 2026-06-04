@@ -98,7 +98,7 @@ score_maps:
   leadtimes: [6, 24]
   # Or, to compute every available leadtime from runs+baselines:
   # leadtimes: "all"
-  metrics:
+  scores:
     - BIAS
     # - RMSE
     # - MAE

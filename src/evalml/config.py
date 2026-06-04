@@ -226,9 +226,9 @@ class ScoreMapsConfig(BaseModel):
             "and baselines."
         ),
     )
-    metrics: List[str] = Field(
+    scores: List[str] = Field(
         default=["BIAS", "RMSE", "MAE"],
-        description="List of verification metrics to plot.",
+        description="List of verification scores to plot.",
     )
     regions: List[str] = Field(
         default=["switzerland", "centraleurope"],
