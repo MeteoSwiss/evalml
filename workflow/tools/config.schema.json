@@ -505,6 +505,18 @@
           "type": "array"
         },
         "leadtimes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "const": "all",
+              "type": "string"
+            }
+          ],
           "default": [
             6,
             12,
@@ -527,12 +539,8 @@
             114,
             120
           ],
-          "description": "List of lead times (hours) to plot.",
-          "items": {
-            "type": "integer"
-          },
-          "title": "Leadtimes",
-          "type": "array"
+          "description": "List of lead times (hours) to plot, or the literal string 'all' to expand to the union of step lists from all configured runs and baselines.",
+          "title": "Leadtimes"
         },
         "metrics": {
           "default": [

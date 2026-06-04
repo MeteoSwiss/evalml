@@ -215,7 +215,8 @@ rule verification_score_maps_baseline:
         ),
         truth=config["truth"]["root"],
     output:
-        OUT_ROOT / "data/baselines/{baseline_id}/score_maps/{param}_{leadtime}.nc",
+        OUT_ROOT
+        / f"data/baselines/{{baseline_id}}/{config['truth']['label']}/score_maps/{{param}}_{{leadtime}}.nc",
     params:
         baseline_root=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("root"),
         reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),

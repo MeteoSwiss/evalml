@@ -181,7 +181,7 @@ use rule plot_score_maps as plot_score_maps_baseline with:
     input:
         script="workflow/scripts/plot_score_maps.mo.py",
         verif_file=OUT_ROOT
-        / "data/baselines/{baseline_id}/score_maps/{param}_{leadtime}.nc",
+        / f"data/baselines/{{baseline_id}}/{config['truth']['label']}/score_maps/{{param}}_{{leadtime}}.nc",
     output:
         OUT_ROOT
         / "results/{experiment}/score_maps/baselines/{baseline_id}/{param}_{metric}_{region}_{season}_{init_hour}_{leadtime}.png",
