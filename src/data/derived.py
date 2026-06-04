@@ -70,3 +70,22 @@ def deaccumulate(da, dim="step"):
 
     da = da.clip(min=0.0)
     return da.reindex({dim: full_coord})
+
+
+def accumulate(da, dim="step"):
+    """Per-interval (additive) series -> cumulative-from-start, via cumsum along `dim`.
+
+    Read-time normalizer for sources that arrive period-accumulated (analysis, INCA).
+    Type-preserving; keeps name and attrs.
+    """
+    return da.cumsum(dim=dim, keep_attrs=True)
+
+
+def interval(da_cumulative, window, dim="step"):
+    """Rolling accumulation over `window` steps: ``cumul - cumul.shift(window)``.
+
+    Inverse of :func:`accumulate` for ``window=1``. The first `window` entries are
+    NaN. `window` is a count of steps; callers convert a time period using the step
+    spacing.
+    """
+    return da_cumulative - da_cumulative.shift({dim: window})

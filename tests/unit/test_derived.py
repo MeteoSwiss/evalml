@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from data.derived import deaccumulate, uv_components, wind_speed
+from data.derived import accumulate, deaccumulate, interval, uv_components, wind_speed
 
 
 def test_wind_speed_numpy():
@@ -59,3 +59,37 @@ def test_deaccumulate_fills_missing_step0():
 def test_deaccumulate_raises_on_period_accumulated():
     with pytest.raises(ValueError, match="period-accumulated"):
         deaccumulate(_cumulative_da([0.0, 5.0, 1.0, 4.0]))
+
+
+def _series(values):
+    return xr.DataArray(
+        np.array(values, dtype=float),
+        dims="step",
+        coords={"step": np.arange(len(values))},
+        name="TOT_PREC",
+    )
+
+
+def test_accumulate_is_cumsum_over_step():
+    out = accumulate(_series([1.0, 2.0, 3.0]))
+    np.testing.assert_allclose(out.values, [1.0, 3.0, 6.0])
+    assert out.name == "TOT_PREC" and list(out.coords) == ["step"]
+
+
+def test_interval_window_is_difference():
+    # cumulative series; window of 2 steps -> cumul - cumul.shift(2)
+    out = interval(_series([0.0, 1.0, 3.0, 6.0, 10.0]), 2)
+    np.testing.assert_allclose(out.values[2:], [3.0, 5.0, 7.0])
+    assert np.isnan(out.values[0]) and np.isnan(out.values[1])
+
+
+def test_interval_window_one_recovers_per_step():
+    out = interval(_series([0.0, 1.0, 3.0, 6.0]), 1)
+    np.testing.assert_allclose(out.values[1:], [1.0, 2.0, 3.0])
+    assert np.isnan(out.values[0])
+
+
+def test_accumulate_interval_round_trip():
+    per_interval = _series([2.0, 1.0, 4.0])
+    cum = accumulate(per_interval)
+    np.testing.assert_allclose(interval(cum, 1).values[1:], per_interval.values[1:])
