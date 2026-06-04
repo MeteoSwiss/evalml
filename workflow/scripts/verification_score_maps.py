@@ -84,6 +84,13 @@ def _compute_derived(ds: xr.Dataset, param: str) -> xr.DataArray:
 # ---------------------------------------------------------------------------
 # Truth loading
 # ---------------------------------------------------------------------------
+# TODO: consolidate with src/data_input/__init__.py once the ongoing
+# data-loading refactor lands. _open_zarr_component below duplicates
+# ~80% of load_analysis_data_from_zarr but returns a lazy DataArray
+# rather than a time-sliced Dataset, which is what our streaming
+# aggregation needs. The right end-state is a shared lazy-open primitive
+# in data_input that both consumers use; not introduced here because
+# data_input is being reworked separately and we don't want to conflict.
 
 
 def _open_zarr_component(root: Path, param: str) -> xr.DataArray:
