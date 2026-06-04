@@ -11,6 +11,7 @@ from data import (
     load_forecast_data,
     load_truth_data,
 )
+from data.derived import wind_speed
 from verification.spatial import map_forecast_to_truth
 
 LOG = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ logging.basicConfig(
 def preprocess_ds(ds, param: str):
     ds = ds.copy()
     if param == "SP_10M":
-        ds[param] = (ds.U_10M**2 + ds.V_10M**2) ** 0.5
+        ds[param] = wind_speed(ds.U_10M, ds.V_10M)
         try:
             units = ds["U_10M"].attrs["parameter"]["units"]
         except KeyError:
@@ -35,7 +36,7 @@ def preprocess_ds(ds, param: str):
         }
         ds = ds.drop_vars(["U_10M", "V_10M"])
     if param == "SP":
-        ds[param] = (ds.U**2 + ds.V**2) ** 0.5
+        ds[param] = wind_speed(ds.U, ds.V)
         units = ds.U.attrs["parameter"]["units"]
         ds[param].attrs["parameter"] = {
             "shortName": "SP",
