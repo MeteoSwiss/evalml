@@ -56,7 +56,7 @@ def _(ArgumentParser, Path, np):
     parser.add_argument(
         "--metric",
         type=str,
-        help="Evaluation Metric. So far Bias, RMSE or MAE are implemented.",
+        help="Evaluation Metric. So far Bias, RMSE, MAE or STDE are implemented.",
     )
     parser.add_argument("--season", type=str, default="all", help="season filter")
     parser.add_argument(

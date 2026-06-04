@@ -4,7 +4,7 @@ For a fixed lead time and variable, iterates over all initialisation times found
 under a run directory, loads the corresponding GRIB forecast field and the
 matching truth slice from a reference zarr, maps the forecast onto the truth
 grid, and accumulates running error statistics without ever holding the full
-time series in memory.  The final BIAS / RMSE / MAE maps are written to a
+time series in memory.  The final BIAS / RMSE / MAE / STDE maps are written to a
 NetCDF file.
 
 Usage
@@ -480,6 +480,19 @@ def main(args: Namespace) -> None:
             ),
             f"{args.param}.MAE": _strat_da(
                 lambda n, s, h: np.where(n > 0, accum_sum_ae[(s, h)] / n, np.nan)
+            ),
+            f"{args.param}.STDE": _strat_da(
+                lambda n, s, h: np.where(
+                    n > 0,
+                    np.sqrt(
+                        np.maximum(
+                            accum_sum_se[(s, h)] / n
+                            - (accum_sum_e[(s, h)] / n) ** 2,
+                            0.0,
+                        )
+                    ),
+                    np.nan,
+                )
             ),
             f"{args.param}.N": _strat_da(lambda n, s, h: np.where(n > 0, n, np.nan)),
         },
