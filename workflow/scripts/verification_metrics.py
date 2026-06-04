@@ -70,7 +70,12 @@ def main(args: ScriptConfig):
 
     # align forecast and truth data spatially and temporally
     fcst = map_forecast_to_truth(fcst, truth)
-    truth = truth.sel(time=fcst["valid_time"])
+    # Station obs (PeakWeather) carry a continuous `time` dimension and must be
+    # sampled at the forecast valid times. Gridded canonical truth (analysis zarr,
+    # INCA) already shares the `step`/`valid_time` grid with the forecast, so
+    # verify()'s xr.align reconciles them on `step` — no manual subset needed.
+    if "time" in truth.dims:
+        truth = truth.sel(time=fcst["valid_time"])
 
     # compute metrics and statistics
     results = verify(
