@@ -5,7 +5,6 @@ from pathlib import Path
 
 import cartopy.crs as ccrs
 from earthkit.meteo.utils.convert import kelvin_to_celsius
-import earthkit.meteo.wind as ekm_wind
 import earthkit.plots as ekp
 import numpy as np
 
@@ -14,6 +13,7 @@ from plotting import get_projection
 from plotting import StatePlotter
 from plotting.colormap_defaults import CMAP_DEFAULTS
 from plotting.compat import load_state_from_grib
+from data.derived import wind_speed
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -54,9 +54,9 @@ def preprocess_field(param: str, state: dict):
     if param in ("T_2M", "TD_2M", "T", "TD"):
         return kelvin_to_celsius(fields[param]), "°C"
     if param == "SP_10M":
-        return ekm_wind.speed(fields["U_10M"], fields["V_10M"]), "m/s"
+        return wind_speed(fields["U_10M"], fields["V_10M"]), "m/s"
     if param == "SP":
-        return ekm_wind.speed(fields["U"], fields["V"]), "m/s"
+        return wind_speed(fields["U"], fields["V"]), "m/s"
     if param == "TOT_PREC":
         return np.maximum(fields[param], 0), "mm"
     return fields[param], None
