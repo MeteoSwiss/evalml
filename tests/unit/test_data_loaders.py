@@ -35,7 +35,9 @@ def test_analysis_zarr_returns_canonical_schema(tmp_path):
     zarr_path = tmp_path / "analysis_co2.zarr"
     reftime = _make_analysis_zarr(zarr_path)
 
-    out = load_analysis_data_from_zarr(zarr_path, reftime, [0, 1, 2], ["T_2M", "TOT_PREC"])
+    out = load_analysis_data_from_zarr(
+        zarr_path, reftime, [0, 1, 2], ["T_2M", "TOT_PREC"]
+    )
 
     # canonical dims/coords (no bare 'time')
     assert "step" in out.dims and "values" in out.dims
@@ -59,7 +61,9 @@ def _make_inca_file(root):
     reftime = datetime(2024, 1, 1)
     fdir = root / "2024" / "01"
     fdir.mkdir(parents=True)
-    times = np.array([np.datetime64(reftime) + np.timedelta64(h, "h") for h in range(7)])
+    times = np.array(
+        [np.datetime64(reftime) + np.timedelta64(h, "h") for h in range(7)]
+    )
     chx = np.array([255500.0, 256500.0])
     chy = np.array([-159500.0, -158500.0])
     da = xr.DataArray(
