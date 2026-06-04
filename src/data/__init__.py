@@ -8,6 +8,7 @@ import numpy as np
 import xarray as xr
 from pyproj import Transformer
 
+from .derived import deaccumulate, uv_components
 from .naming import PARAMS_MAP
 from .schema import XARRAY_ENGINE_PROFILE
 
@@ -185,54 +186,12 @@ def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
     return ds
 
 
-def _tot_prec_handling(tp: xr.DataArray) -> xr.DataArray:
-    _full_step_coord = tp["step"]  # step coordinate before .diff()
-
-    # anemoi-inference sometimes omits step 0 from the GRIB even with
-    # accumulate_from_start_of_forecast enabled. If missing, earthkit-data
-    # will fill it with NaNs following the `allow_holes=True` flag.
-    if tp[{"step": 0}].isnull().all():
-        LOG.warning(
-            "Step 0 of TOT_PREC is missing, filling with zeroes "
-            "assuming accumulate_from_start_of_forecast is enabled."
-        )
-        tp[{"step": 0}] = 0.0
-
-    # Disaggregate TOT_PREC from cumulative-from-start (expected when the
-    # accumulate_from_start_of_forecast post-processor is enabled in
-    # anemoi-inference) to per-step accumulations.
-    LOG.info(
-        "Disaggregating TOT_PREC from cumulative-from-start to per-step accumulations."
-    )
-    tp = tp.diff("step")
-
-    # Sanity-check that the incoming data is actually cumulative. If
-    # some values are significantly negative, it indicates that the data
-    # is already period-accumulated.
-    min_diff = float(tp.min().compute())
-    if min_diff < -0.1:  # NOTE: TOT_PREC canonical units are mm
-        raise ValueError(
-            "TOT_PREC in the GRIB appears to already be "
-            f"period-accumulated (min(.diff()) = {min_diff:.3e} m). "
-            "Check that the accumulate_from_start_of_forecast post-processor "
-            "is enabled in the anemoi-inference config for this source."
-        )
-
-    # Clip remaining small negative values to zero
-    tp = tp.clip(min=0.0)
-
-    # Reindex to match the original lead_time coordinate
-    tp = tp.reindex(step=_full_step_coord)
-
-    return tp
-
-
 def load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
     """Load forecast data from a list of GRIB files."""
     ds = load_from_grib_file(files, {"parameter.variable": params})
 
     if "TOT_PREC" in ds.data_vars:
-        ds["TOT_PREC"] = _tot_prec_handling(ds["TOT_PREC"])
+        ds["TOT_PREC"] = deaccumulate(ds["TOT_PREC"])
 
     return ds
 
@@ -547,12 +506,11 @@ def load_INCA_baseline_from_netcdf(
 
     # Derive wind components (meteorological convention: direction wind blows FROM)
     if "U_10M" in params or "V_10M" in params:
-        dd_rad = np.deg2rad(merged["DD_10M"])
-        ff = merged["FF_10M"]
+        u, v = uv_components(merged["FF_10M"], merged["DD_10M"])
         if "U_10M" in params:
-            merged["U_10M"] = (-ff * np.sin(dd_rad)).assign_attrs(units="m/s")
+            merged["U_10M"] = u.assign_attrs(units="m/s")
         if "V_10M" in params:
-            merged["V_10M"] = (-ff * np.cos(dd_rad)).assign_attrs(units="m/s")
+            merged["V_10M"] = v.assign_attrs(units="m/s")
 
     # Restructure to match the earthkit GRIB engine profile: `step` is the
     # lead-time dimension, `valid_time` and `forecast_reference_time` are coords.
