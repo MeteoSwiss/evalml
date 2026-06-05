@@ -196,8 +196,10 @@ def _compute_statistics(
 
 def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
     out = xr.merge(ds, compat="no_conflicts")
-    if "ref_time" not in out.dims:
-        out = out.expand_dims("ref_time").set_coords("ref_time")
+    if "forecast_reference_time" not in out.dims:
+        out = out.expand_dims("forecast_reference_time").set_coords(
+            "forecast_reference_time"
+        )
     out = out.compute(num_workers=num_workers, scheduler="threads")
     return out
 
@@ -278,7 +280,9 @@ def verify(
     # return the results as a xarray Dataset
     fcst_aligned, obs_aligned = xr.align(fcst, obs, join="inner", copy=False)
     region_polygons = ShapefileSpatialAggregationMasks(shp=regions)
-    masks = region_polygons.get_masks(lon=obs_aligned["lon"], lat=obs_aligned["lat"])
+    masks = region_polygons.get_masks(
+        lon=obs_aligned["longitude"], lat=obs_aligned["latitude"]
+    )
 
     scores = []
     statistics = []

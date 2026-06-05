@@ -119,15 +119,9 @@ class StatePlotter:
                 "bbox must be a list of four floats [lon_min, lon_max, lat_min, lat_max]"
             )
 
-        domain = (
-            ekp.geo.domains.Domain(bbox=bbox, crs=ccrs.PlateCarree(), name=name.title())
-            if bbox is not None
-            else None
-        )
-
         ekp_fig = ekp.Figure(
             crs=projection,
-            domain=domain,
+            domain=bbox,
             rows=nrows,
             columns=ncols,
             size=size,
