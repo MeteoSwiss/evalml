@@ -3,14 +3,14 @@ description: |
   Evaluate skill of Stage E with/without cutoff edges trained with and without subgrid orography.
 
 dates:
-  start: 2025-07-26T00:00
-  end: 2025-07-27T00:00
-  frequency: 6h
+  start: 2025-08-01T00:00
+  end: 2025-08-03T00:00
+  frequency: 12h
 
 runs:
   - forecaster:
       inference_resources:
-          slurm_partition: normal-shared
+          slurm_partition: short-shared
       checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
       label: stage_E_icon_1km_cutoff_edges_subgrid_horography
       steps: 0/24/6

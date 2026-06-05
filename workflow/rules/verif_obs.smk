@@ -14,19 +14,16 @@ def _parse_steps(steps: str) -> list[int]:
 
 def _reftimes_mec():
     """
-    Return the subset of REFTIMES that can serve as MEC init times.
+    Return the subset of REFTIMES that can serve as MEC valid times.
 
-    A time t is eligible only if all source init times required by link_mec_input
-    (i.e. t - l for every configured lead l) are also present in REFTIMES.
-    Works for both range-based and explicit-list date configs.
+    A time t is eligible if it is at least max_lead hours after the first REFTIMES
+    entry, ensuring that at least some source inference runs predate t.
+    Source init times that are missing from REFTIMES are handled gracefully by
+    link_mec_input (warning, no failure).
     """
     leads = _parse_steps(config["runs"][0]["forecaster"]["steps"])
-    reftimes_set = set(REFTIMES)
-    return [
-        t
-        for t in REFTIMES
-        if all(t - timedelta(hours=l) in reftimes_set for l in leads)
-    ]
+    max_lead = max(leads)
+    return [t for t in REFTIMES if t >= REFTIMES[0] + timedelta(hours=max_lead)]
 
 
 REFTIMES_MEC = _reftimes_mec()
@@ -88,6 +85,8 @@ This assembles the model input directory that MEC expects for a single valid tim
                     datetime.strptime(wc.init_time, "%Y%m%d%H%M") - timedelta(hours=l)
                 ).strftime("%Y%m%d%H%M")
                 for l in _parse_steps(RUN_CONFIGS[wc.run_id]["steps"])
+                if datetime.strptime(wc.init_time, "%Y%m%d%H%M") - timedelta(hours=l)
+                in set(REFTIMES)
             ],
         ),
     output:
@@ -193,17 +192,19 @@ rule run_mec:
             abs_mod_root=$(realpath "$run_dir/../..") # two levels up (so that all links are mounted to the container)
 
             # run container
-            sarus run \
-                --mount=type=bind,source=$abs_run_dir,destination=/src/bin2 \
-                --mount=type=bind,source=$abs_mod_root,destination=$abs_mod_root,readonly \
-                --mount=type=bind,source=/oprusers/osm/opr.inn/data/,destination=/oprusers/osm/opr.inn/data/ \
-                container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
+            #sarus run \
+            #    --mount=type=bind,source=$abs_run_dir,destination=/src/bin2 \
+            #    --mount=type=bind,source=$abs_mod_root,destination=$abs_mod_root,readonly \
+            #    --mount=type=bind,source=/oprusers/osm/opr.inn/data/,destination=/oprusers/osm/opr.inn/data/ \
+            #    container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
 
             # Run MEC using local executable (Alternative to sarus container)
-            #cd "$run_dir"
-            #export LM_HOST=balfrin-ln003
-            #source /oprusers/osm/opr.inn/abs/mec.env
-            #./mec > ./mec_out.log 2>&1
+            cd "$run_dir"
+            export LM_HOST=balfrinew-ln002
+            source /oprusers/osm/opr.inn/abs/mec.env
+            cp /oprusers/osm/opr.inn/abs/mec .
+            ./mec > ./mec_out.log 2>&1
+            cd -
 
             # copy the output file to the final location for the Feedback files
             # and rename to match NWP conventions
@@ -275,6 +276,14 @@ rule run_ffv2:
     input:
         namelist=rules.generate_ffv2_namelist.output.namelist,
         pull_ok=rules.sarus_pull_ffv2.output,
+        # Direct dependency on MEC outputs so that Snakemake re-evaluates this rule
+        # when dates change and new fdbk_files are needed (even if scores/ and shiny/
+        # already exist from a prior run with different dates).
+        mec_files=lambda wc: expand(
+            rules.run_mec.output.fdbk_file,
+            run_id=wc.run_id,
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
+        ),
     output:
         scores=directory(OUT_ROOT / "data/runs/{run_id}/scores"),
     log:

@@ -234,3 +234,11 @@ rule ffv2_all:
             rules.reorganize_ffv2_files.output,
             run_id=collect_all_candidates(),
         ),
+        # Explicitly require all MEC feedback files so that Snakemake detects missing
+        # files and triggers the full MEC→FFV2 chain even when shiny/ already exists
+        # from a prior run (intermediate rules may have missing provenance).
+        expand(
+            OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}00.nc",
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
+            run_id=CANDIDATES,
+        ),
