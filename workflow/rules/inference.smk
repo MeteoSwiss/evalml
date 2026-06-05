@@ -369,16 +369,5 @@ rule inference_execute:
             fi
 
         ) > {log} 2>&1
-                srun \
-                    --unbuffered \
-                    --partition={resources.slurm_partition} \
-                    --cpus-per-task={resources.cpus_per_task} \
-                    --mem-per-cpu={resources.mem_mb_per_cpu} \
-                    --time={resources.runtime} \
-                    --gres={resources.gres} \
-                    --ntasks={resources.ntasks} \
-                    anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
-                '
-        ) >{log} 2>&1
         """
 # fmt: on
