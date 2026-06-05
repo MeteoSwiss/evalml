@@ -143,7 +143,9 @@ rule experiment_all:
                     scorecard_name=list(SCORECARD_CONFIGS),
                 )
             ]
-            if config.get("experiment", {}).get("scorecards", {}).get("enabled", True)
+            if (config.get("experiment", {}).get("scorecards") or {}).get(
+                "enabled", True
+            )
             else []
         ),
 

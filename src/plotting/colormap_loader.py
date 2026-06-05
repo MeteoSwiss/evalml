@@ -1,6 +1,6 @@
 import pathlib
 import numpy as np
-from matplotlib.colors import ListedColormap, BoundaryNorm
+from matplotlib.colors import BoundaryNorm
 
 # Base directory for colormap files
 BASE_DIR = (
@@ -50,10 +50,6 @@ def load_ncl_colormap(filename):
     if len(rgb) != n_levs + 1:
         raise ValueError(f"Expected {n_levs} RGB rows, got {len(rgb)}.")
 
-    # Create colormap and norm
-    cmap = ListedColormap(colors=rgb[1:-1], name=pathlib.Path(filename).stem)
-    cmap.set_under(rgb[0])
-    cmap.set_over(rgb[-1])
-    norm = BoundaryNorm(boundaries=bounds, ncolors=cmap.N)
+    norm = BoundaryNorm(boundaries=bounds, ncolors=len(rgb) - 1)
 
-    return {"cmap": cmap, "norm": norm, "bounds": bounds}
+    return {"cmap": rgb[1:-1], "norm": norm, "bounds": bounds}

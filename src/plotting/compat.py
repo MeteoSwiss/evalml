@@ -1,22 +1,29 @@
 from datetime import datetime
 from pathlib import Path
 
-import earthkit.data as ekd
 import geopandas as gpd
 import numpy as np
-import pandas as pd
-from meteodatalab import data_source
-from meteodatalab import grib_decoder
 from shapely.geometry import MultiPoint
+from data_input import load_from_grib_file
+
+
+PARAMS_MAP = {
+    "T_2M": "2t",
+    "TD_2M": "2d",
+    "U_10M": "10u",
+    "V_10M": "10v",
+    "PS": "sp",
+    "PMSL": "msl",
+    "TOT_PREC": "tp",
+}
+
+PARAMS_MAP_INV = {v: k for k, v in PARAMS_MAP.items()}
 
 
 def load_state_from_grib(
     file: Path, paramlist: list[str] | None = None
 ) -> dict[str, np.ndarray | dict[str, np.ndarray] | gpd.GeoSeries]:
-    reftime = datetime.strptime(file.parents[1].name, "%Y%m%d%H%M")
-    lead_time_hours = int(file.stem.split("_")[-1])
-    fds = data_source.FileDataSource(datafiles=[str(file)])
-    ds = grib_decoder.load(fds, {"param": paramlist})
+    ds = load_from_grib_file(file, {"parameter.variable": paramlist})
     state = {}
     ref_param = next((p for p in (paramlist or []) if p in ds), None)
     if ref_param is None:
@@ -25,14 +32,16 @@ def load_state_from_grib(
             "The GRIB file may not contain these fields at this lead time "
             "(e.g. accumulated fields like TOT_PREC are undefined at step 0)."
         )
-    lats = ds[ref_param].lat.data.flatten()
-    lons = ds[ref_param].lon.data.flatten()
-    state["forecast_reference_time"] = reftime
-    state["valid_time"] = reftime + pd.to_timedelta(lead_time_hours, unit="h")
-    state["longitudes"] = lons
-    state["latitudes"] = lats
+    state["forecast_reference_time"] = datetime.fromtimestamp(
+        ds["forecast_reference_time"].values.item() / 1e9
+    )
+    state["valid_time"] = datetime.fromtimestamp(ds["valid_time"].values.item() / 1e9)
+    state["longitudes"] = ds["longitude"].values.flatten()
+    state["latitudes"] = ds["latitude"].values.flatten()
     # Add the limited-area model envelope polygon (convex hull) before global coords are added
-    lam_hull = MultiPoint(list(zip(lons.tolist(), lats.tolist()))).convex_hull
+    lam_hull = MultiPoint(
+        list(zip(state["longitudes"].tolist(), state["latitudes"].tolist()))
+    ).convex_hull
     state["lam_envelope"] = gpd.GeoSeries([lam_hull], crs="EPSG:4326")
     state["fields"] = {}
     for param in paramlist or []:
@@ -40,40 +49,36 @@ def load_state_from_grib(
             state["fields"][param] = ds[param].values.flatten()
         else:
             # initialize with NaNs to keep consistent length
-            state["fields"][param] = np.full(lats.size, np.nan, dtype=float)
+            state["fields"][param] = np.full(
+                ds["longitude"].values.size, np.nan, dtype=float
+            )
     global_file = str(file.parent / f"ifs-{file.stem}.grib")
     if Path(global_file).exists():
-        global_file = str(file.parent / f"ifs-{file.stem}.grib")
-        fds_global = ekd.from_source("file", global_file)
-        ds_global = {
-            u.metadata("param"): u.values
-            for u in fds_global
-            if u.metadata("param") in paramlist
-        }
-        # Use first key from ds_global instead of paramlist[0]
-        ref_key = next(iter(ds_global), None)
-        if ref_key is not None:
-            global_lats = fds_global.metadata("latitudes")[0]
-            global_lons = fds_global.metadata("longitudes")[0]
-            if max(global_lons) > 180:
-                global_lons = ((global_lons + 180) % 360) - 180
-            mask = np.where(~np.isnan(ds_global[ref_key]))[0]
-            n_add = int(mask.size)
-            state["longitudes"] = np.concatenate(
-                [state["longitudes"], global_lons[mask]]
-            )
-            state["latitudes"] = np.concatenate([state["latitudes"], global_lats[mask]])
-            for param in paramlist or state["fields"].keys():
-                add = (
-                    ds_global[param][mask]
-                    if param in ds_global
-                    else np.full(n_add, np.nan, dtype=float)
+        _paramlist_ecmwf = [PARAMS_MAP[p] for p in paramlist]
+        ds = load_from_grib_file(global_file, {"parameter.variable": _paramlist_ecmwf})
+        mask = ~np.isnan(ds[_paramlist_ecmwf[0]].values.squeeze())
+        global_lons = ds["longitude"].values.flatten()
+        if np.max(global_lons) > 180:
+            global_lons = ((global_lons + 180) % 360) - 180
+        state["longitudes"] = np.concatenate([state["longitudes"], global_lons[mask]])
+        state["latitudes"] = np.concatenate(
+            [state["latitudes"], ds["latitude"].values.flatten()[mask]]
+        )
+        for param in _paramlist_ecmwf:
+            if param in ds:
+                state["fields"][PARAMS_MAP_INV[param]] = np.concatenate(
+                    [
+                        state["fields"][PARAMS_MAP_INV[param]],
+                        ds[param].values.flatten()[mask],
+                    ]
                 )
-                # ensure base array exists (in case param wasn't in local ds)
-                base = state["fields"].get(
-                    param, np.full(lats.size, np.nan, dtype=float)
+            else:
+                state["fields"][PARAMS_MAP_INV[param]] = np.concatenate(
+                    [
+                        state["fields"][PARAMS_MAP_INV[param]],
+                        np.full(mask.size, np.nan, dtype=float),
+                    ]
                 )
-                state["fields"][param] = np.concatenate([base, add])
     return state
 
 

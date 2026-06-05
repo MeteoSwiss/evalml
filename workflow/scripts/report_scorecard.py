@@ -225,9 +225,7 @@ def _load_relative_diff(cfg: dict) -> xr.Dataset:
     )
 
     common_vars = [v for v in model_ds.data_vars if v in baseline_ds.data_vars]
-    common_leads = sorted(
-        set(model_ds.lead_time.values) & set(baseline_ds.lead_time.values)
-    )
+    common_leads = sorted(set(model_ds.step.values) & set(baseline_ds.step.values))
 
     if not common_vars:
         raise ValueError(
@@ -238,8 +236,8 @@ def _load_relative_diff(cfg: dict) -> xr.Dataset:
     if not common_leads:
         raise ValueError("No lead times in common between model and baseline.")
 
-    model_slice = model_ds[common_vars].sel(lead_time=common_leads)
-    baseline_slice = baseline_ds[common_vars].sel(lead_time=common_leads)
+    model_slice = model_ds[common_vars].sel(step=common_leads)
+    baseline_slice = baseline_ds[common_vars].sel(step=common_leads)
 
     rel_diff = (model_slice - baseline_slice) / abs(baseline_slice) * 100
     rel_diff = rel_diff.where(
@@ -263,14 +261,14 @@ def _filter_diff(diff: xr.Dataset, cfg: dict) -> xr.Dataset:
     if cfg.get("lead_times"):
         start, stop, step = (int(x) for x in cfg["lead_times"].split("/"))
         requested = {pd.Timedelta(h, "h") for h in range(start, stop + 1, step)}
-        available = {pd.Timedelta(lt) for lt in result.lead_time.values}
+        available = {pd.Timedelta(lt) for lt in result.step.values}
         keep = sorted(requested & available)
         if not keep:
             raise ValueError(
                 f"No lead times match '{cfg['lead_times']}'. "
                 f"Available (h): {sorted(_timedelta_to_hours(lt) for lt in available)}"
             )
-        result = result.sel(lead_time=keep)
+        result = result.sel(step=keep)
 
     keep = [
         var
@@ -599,8 +597,8 @@ def _render_scorecard(diff: xr.Dataset, cfg: dict, outfn: Path):
     # Decompose data-var names (e.g. "T_2M.RMSE") into (group, metric) pairs.
     rows = [tuple(v.rsplit(".", 1)) for v in diff.data_vars]
     slices = list(diff[strat_dim].values)
-    n_leads = diff.sizes["lead_time"]
-    lead_hours = [_timedelta_to_hours(lt) for lt in diff.lead_time.values]
+    n_leads = diff.sizes["step"]
+    lead_hours = [_timedelta_to_hours(lt) for lt in diff.step.values]
     has_missing = any(np.isnan(diff[v].values).any() for v in diff.data_vars)
 
     slice_label_w_in, slice_label_h_rows, metric_label_w_pt = _measure_label_sizes(

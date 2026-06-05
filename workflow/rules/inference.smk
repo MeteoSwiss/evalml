@@ -111,12 +111,10 @@ rule inference_create_venv:
         """
 
 
+# Create a squashfs image for the inference virtual environment of
+# a specific checkpoint. Find more about this at
+# https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
 rule inference_make_squashfs_image:
-    """
-Create a squashfs image for the inference virtual environment of
-a specific checkpoint. Find more about this at
-https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
-"""
     input:
         venv=rules.inference_create_venv.output.venv,
     output:
@@ -125,25 +123,16 @@ https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
         OUT_ROOT / "logs/inference_make_squashfs_image/{env_id}.log",
     localrule: True
     shell:
-        # we can safely ignore the many warnings "Unrecognised xattr prefix..."
         "mksquashfs $(realpath {input.venv}) {output.image}"
         " -no-recovery -noappend -Xcompression-level 3"
         " > {log} 2>/dev/null"
 
 
+# Create a zipped directory that, when extracted, can be used as a sandbox
+# for running inference jobs for a specific checkpoint. Its main purpose is
+# to serve as a development environment for anemoi-inference and to facilitate
+# sharing with external collaborators.
 rule inference_create_sandbox:
-    """
-Create a zipped directory that, when extracted, can be used as a sandbox
-for running inference jobs for a specific checkpoint. Its main purpose is
-to serve as a development environment for anemoi-inference and to facilitate
-sharing with external collaborators.
-
-TO use this sandbox, unzip it to a target directory.
-
-```bash
-unzip sandbox.zip -d /path/to/target/directory
-```
-"""
     input:
         script="workflow/scripts/inference_create_sandbox.py",
         checkpoint=lambda wc: OUT_ROOT
@@ -217,8 +206,8 @@ def _get_forecaster_run_id(run_id):
     return RUN_CONFIGS[run_id]["forecaster"]["run_id"]
 
 
+# Prepare interpolator for a specific run ID
 rule inference_prepare_interpolator:
-    """Run the interpolator for a specific run ID."""
     input:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",

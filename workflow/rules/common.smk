@@ -332,7 +332,7 @@ RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
-_scorecard = config.get("experiment", {}).get("scorecards", {})
+_scorecard = config.get("experiment", {}).get("scorecards") or {}
 SCORECARD_CONFIGS = (
     _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
 )

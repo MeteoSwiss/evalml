@@ -41,12 +41,12 @@ def main(args):
     LOG.info("Loaded verification netcdf: \n%s", ds)
 
     # extract only  non-spatial variables to pd.DataFrame
-    nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
+    nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d and "." in d]
     df = ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
     df[["param", "metric"]] = df["stack"].str.split(".", n=1, expand=True)
     df["metric"] = df.metric.apply(decode_metric)
     df.drop(columns=["stack"], inplace=True)
-    df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
+    df["step"] = df["step"].dt.total_seconds() / 3600
     # convert numeric column init_hour to string in format HH:00 UTC and replace -999 with "all"
     df["init_hour"] = df["init_hour"].astype(str).str.zfill(2) + ":00 UTC"
     df["init_hour"] = df["init_hour"].where(df["init_hour"] != "-999:00 UTC", "all")
@@ -87,7 +87,7 @@ def main(args):
         "source",
         "param",
         "metric",
-        "lead_time",
+        "step",
         "value",
         "region",
         "season",
