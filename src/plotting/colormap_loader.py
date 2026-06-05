@@ -14,10 +14,9 @@ def load_ncl_colormap(filename):
     Returns
     -------
     dict
-        Dictionary containing the colormap and normalisation generated from the
-        colormap file
-        {cmap : matplotlib.colors.ListedColormap,
-         norm : matplotlib.colors.BoundaryNorm  }
+        Dictionary with keys ``cmap`` (``matplotlib.colors.ListedColormap``),
+        ``norm`` (``matplotlib.colors.BoundaryNorm``), and ``bounds``
+        (the list of boundary values).
     """
     cmap_path = BASE_DIR / filename
     if not cmap_path.exists():

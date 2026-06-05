@@ -49,6 +49,15 @@ dev = [
     "pre-commit>=4.2.0",
     "snakefmt>=2.0",
 ]
+docs = [
+    "sphinx>=7.4",
+    "sphinx-rtd-theme>=2.0",
+    "myst-parser>=3.0",
+    "sphinx-autobuild>=2024.10.3",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-click>=6.0",
+    "linkify-it-py>=2.0",
+]
 
 [tool.pytest.ini_options]
 markers = [
