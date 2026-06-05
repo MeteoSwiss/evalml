@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from argparse import ArgumentParser
@@ -51,16 +52,13 @@ def _check_args(args):
             )
 
 
-def _make_veri_ens_member(experiment_ids: str) -> str:
-    num_ids = len(experiment_ids.split(","))
-    return ",".join(["-1"] * num_ids)
-
-
 def main(args):
     # Render template with provided args
     context = {
         "experiment_ids": args.experiment_ids,
-        "veri_ens_member": _make_veri_ens_member(args.experiment_ids),
+        "veri_ens_member": args.veri_ens_member,
+        "catthresholds": json.loads(args.catthresholds),
+        "pecthresholds": json.loads(args.pecthresholds),
         "experiment_description": args.experiment_description,
         "file_description": args.file_description,
         "domain_table": args.domain_table,
@@ -99,6 +97,24 @@ if __name__ == "__main__":
         "--experiment_ids",
         type=str,
         help="namelist variable: comma-separated list of models to compare",
+    )
+
+    parser.add_argument(
+        "--veri_ens_member",
+        type=str,
+        help="namelist variable: comma-separated ensemble member indices, one per experiment ID (typically -1 for deterministic runs)",
+    )
+
+    parser.add_argument(
+        "--catthresholds",
+        type=str,
+        help="namelist variable: JSON object mapping FFV2 variable names to lists of categorical threshold values",
+    )
+
+    parser.add_argument(
+        "--pecthresholds",
+        type=str,
+        help="namelist variable: JSON object mapping FFV2 variable names to dicts with 'lower' and/or 'upper' float values",
     )
 
     parser.add_argument(

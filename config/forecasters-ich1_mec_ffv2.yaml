@@ -4,15 +4,15 @@ description: |
 
 dates:
   start: 2025-08-01T00:00
-  end: 2025-08-03T00:00
-  frequency: 12h
+  end: 2025-08-05T00:00
+  frequency: 30h
 
 runs:
   - forecaster:
       inference_resources:
           slurm_partition: short-shared
       checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
-      label: stage_E_icon_1km_cutoff_edges_subgrid_horography
+      label: stage_E_icon_1km_cutoff_edges_subgrid_orography
       steps: 0/24/6
       config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
       extra_requirements:
@@ -75,8 +75,51 @@ ffv2:
   experiment_ids: Varda
   experiment_description: Varda-Single_suboro
   file_description: exp_Varda-Single_2025
-  domain_table: /users/paa/01_store/02_FFV2/data/8_CH_box
+  domain_table: /users/paa/01_store/02_FFV2/data/8_CH_bo
   blacklists: /users/paa/01_store/02_FFV2/data/blacklist
+  veri_ens_member: -1
+  catthresholds:
+    T2M: [282.0, 292.0]
+    TD2M: [260.0, 273.0]
+    RH2M: [0.9, 1.0]
+    U10M: [5.0, 10.0]
+    V10M: [5.0, 10.0]
+    PS: [100000.0, 101000.0]
+    FF: [10.0, 15.0]
+    DD: [180.0, 270.0]
+    GUST_6h: [5.0, 15.0]
+    RR_6h: [5.0, 10.0]
+  pecthresholds:
+    T2M:
+      lower: 263.0
+      upper: 273.0
+    TD2M:
+      lower: 273.0
+      upper: 283.0
+    RH2M:
+      lower: 0.9
+      upper: 1.0
+    U10M:
+      lower: 2.0
+      upper: 7.0
+    V10M:
+      lower: 2.0
+      upper: 7.0
+    PS:
+      lower: 100000.0
+      upper: 101000.0
+    FF:
+      lower: 10.0
+      upper: 15.0
+    DD:
+      lower: 0.0
+      upper: 45.0
+    GUST_6h:
+      lower: 20.0
+      upper: 25.0
+    RR_6h:
+      lower: 10.0
+      upper: 50.0
 
 profile:
   executor: slurm

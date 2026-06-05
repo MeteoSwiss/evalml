@@ -283,6 +283,35 @@
           "title": "Experiment Ids",
           "type": "string"
         },
+        "veri_ens_member": {
+          "description": "Comma-separated ensemble member indices passed to FFV2, one per experiment ID (typically -1 for deterministic runs).",
+          "title": "Veri Ens Member",
+          "type": "string"
+        },
+        "catthresholds": {
+          "description": "Per-variable categorical thresholds for FFV2, mapping FFV2 variable names to lists of threshold values.",
+          "title": "Catthresholds",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "pecthresholds": {
+          "description": "Per-variable PEC thresholds for FFV2, mapping FFV2 variable names to a dict with 'lower' and/or 'upper' float values.",
+          "title": "Pecthresholds",
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "lower": { "type": "number" },
+              "upper": { "type": "number" }
+            },
+            "additionalProperties": false
+          }
+        },
         "experiment_description": {
           "description": "Short description of the experiment for FFV2 output files.",
           "title": "Experiment Description",
@@ -306,6 +335,9 @@
       },
       "required": [
         "experiment_ids",
+        "veri_ens_member",
+        "catthresholds",
+        "pecthresholds",
         "experiment_description",
         "file_description",
         "domain_table",

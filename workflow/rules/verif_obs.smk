@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from datetime import timedelta
 
@@ -240,6 +241,9 @@ rule generate_ffv2_namelist:
         output_directory=lambda wc: str(OUT_ROOT / f"data/runs/{wc.run_id}/scores"),
         # TODO: consider including run_ids here?
         experiment_ids=config["ffv2"]["experiment_ids"],
+        veri_ens_member=config["ffv2"]["veri_ens_member"],
+        catthresholds=json.dumps(config["ffv2"]["catthresholds"]),
+        pecthresholds=json.dumps(config["ffv2"]["pecthresholds"]),
         experiment_description=config["ffv2"]["experiment_description"],
         file_description=config["ffv2"]["file_description"],
         domain_table=config["ffv2"]["domain_table"],
@@ -253,6 +257,9 @@ rule generate_ffv2_namelist:
                 --template {input.template} \
                 --namelist {output.namelist} \
                 --experiment_ids {params.experiment_ids} \
+                --veri_ens_member {params.veri_ens_member} \
+                --catthresholds '{params.catthresholds}' \
+                --pecthresholds '{params.pecthresholds}' \
                 --feedback_directories {params.feedback_directory} \
                 --output_directory {params.output_directory} \
                 --experiment_description {params.experiment_description} \

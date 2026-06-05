@@ -1,8 +1,8 @@
 
 # variables to verify.
-varnoContinuous     'T2M,TD2M,RH2M,U10M,V10M,PS,FF,DD,GUST_6h,RR_6h' #,RR_6h,N,N_L,N_M,N_H,RAD_GL_1h
-pecthresholds       list('FF'=list('lower'=c(2),'upper'=c(7))) # hit rates (percent correct forecast) for the forecast to hit the observation within the given limits are calculated.
-catthresholds       list('T2M'=c(282,292),'FF'=c(2.5,5,10)) # no space allowed between variables
+varnoContinuous     'T2M,TD2M,RH2M,U10M,V10M,PS,FF,DD,GUST_6h,RR_6h' #RR_1h,RAD_GL_1h,N,N_L,N_M,N_H
+pecthresholds       list({% for var, bounds in pecthresholds.items() %}'{{ var }}'=list({% for side, val in bounds.items() %}'{{ side }}'=c({{ val }}){% if not loop.last %},{% endif %}{% endfor %}){% if not loop.last %},{% endif %}{% endfor %}) # hit rates (percent correct forecast) for the forecast to hit the observation within the given limits are calculated.
+catthresholds       list({% for var, vals in catthresholds.items() %}'{{ var }}'=c({{ vals | join(',') }}){% if not loop.last %},{% endif %}{% endfor %}) # no space allowed between variables
 
 # senseful and short description of the model versions to verify.
 # example: 'D-metno,C-metno_rollout,C-cerra_rollout'
