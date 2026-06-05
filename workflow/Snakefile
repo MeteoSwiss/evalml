@@ -19,6 +19,7 @@ include: "rules/inference.smk"
 include: "rules/verification.smk"
 include: "rules/report.smk"
 include: "rules/plot.smk"
+include: "rules/spectra.smk"
 
 
 # about workflow
@@ -146,6 +147,11 @@ rule experiment_all:
             if (config.get("experiment", {}).get("scorecards") or {}).get(
                 "enabled", True
             )
+            else []
+        ),
+        (
+            expand(rules.spectra_plot.output, experiment=EXPERIMENT_NAME)
+            if config.get("experiment", {}).get("spectra", {}).get("enabled", False)
             else []
         ),
 
