@@ -135,7 +135,9 @@ def test_parse_logs_no_metrics_files_is_skipped(tmp_path):
     workdir = tmp_path / "empty_run"
     workdir.mkdir()
     records = parse_logs(
-        run_info=[{"workdir": str(workdir), "run_id": "x", "init_time": "202503010000"}],
+        run_info=[
+            {"workdir": str(workdir), "run_id": "x", "init_time": "202503010000"}
+        ],
         label_map={},
         gpu_map={},
     )
@@ -152,7 +154,9 @@ def test_parse_logs_model_type_from_run_id_prefix(tmp_path):
         (workdir / "slurm_metrics.log").write_text(SACCT_CONTENT)
 
         records = parse_logs(
-            run_info=[{"workdir": str(workdir), "run_id": prefix, "init_time": "202503010000"}],
+            run_info=[
+                {"workdir": str(workdir), "run_id": prefix, "init_time": "202503010000"}
+            ],
             label_map={},
             gpu_map={},
         )
@@ -165,7 +169,9 @@ def test_parse_logs_fallback_label_is_run_id(tmp_path):
     (workdir / "slurm_metrics.log").write_text(SACCT_CONTENT)
 
     records = parse_logs(
-        run_info=[{"workdir": str(workdir), "run_id": "env-abc", "init_time": "202503020000"}],
+        run_info=[
+            {"workdir": str(workdir), "run_id": "env-abc", "init_time": "202503020000"}
+        ],
         label_map={},
         gpu_map={},
     )

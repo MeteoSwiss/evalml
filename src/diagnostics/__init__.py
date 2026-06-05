@@ -145,11 +145,7 @@ def parse_gpu_metrics_log(log_path: str) -> dict:
         idx = col_idx.get(col)
         if idx is None:
             return []
-        return [
-            r[idx]
-            for r in data_rows
-            if idx < len(r) and math.isfinite(r[idx])
-        ]
+        return [r[idx] for r in data_rows if idx < len(r) and math.isfinite(r[idx])]
 
     result: dict = {}
 
