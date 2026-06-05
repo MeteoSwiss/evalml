@@ -108,8 +108,8 @@ rule plot_forecast_frame:
         leadtime=r"\d+",  # only digits
     resources:
         slurm_partition="postproc",
-        cpus_per_task=1,
-        runtime="10m",
+        cpus_per_task=4,
+        runtime="20m",
     params:
         grib_out_dir=lambda wc: str(
             (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib").resolve()
