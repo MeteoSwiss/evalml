@@ -162,7 +162,7 @@ def register_run(model_type, run_config, as_candidate=True):
     mid = model_id(run_cfg["checkpoint"])
 
     out = {}
-    if model_type == "interpolator":
+    if model_type == "temporal_downscaler":
         forecaster = run_cfg.get("forecaster")
         if forecaster is None:
             run_cfg["forecaster"] = None
@@ -182,7 +182,7 @@ def register_run(model_type, run_config, as_candidate=True):
     # Compute env_id (determines which venv/squashfs to use)
     e_hash = env_entry_hash(run_cfg, model_type)
     env_id_base = f"{model_type}-{mid}-{e_hash}"
-    if model_type == "interpolator":
+    if model_type == "temporal_downscaler":
         env_id = f"{env_id_base}-on-{env_dep_suffix}"
     else:
         env_id = env_id_base
@@ -292,11 +292,11 @@ def env_entry_hash(run_config: dict, model_type: str) -> str:
     - checkpoint (different model)
     - extra_requirements (different dependencies)
     - disable_local_eccodes_definitions (different ECCODES setup)
-    - For interpolators: the forecaster's env_id (different upstream model)
+    - For temporal downscalers: the forecaster's env_id (different upstream model)
     """
     cfg = {k: v for k, v in run_config.items() if k in ENV_HASH_FIELDS}
     configs_to_hash = [cfg]
-    if model_type == "interpolator" and run_config.get("forecaster"):
+    if model_type == "temporal_downscaler" and run_config.get("forecaster"):
         # environment depends on which forecaster model (not which run config)
         configs_to_hash.append(run_config["forecaster"].get("env_id"))
     return generate_json_hash(configs_to_hash)
@@ -308,12 +308,12 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
     Changes to these fields create a new run_id (new outputs) but reuse the environment:
     - steps (lead times)
     - config YAML file contents (inference parameters)
-    - For interpolators: the forecaster's run_id (which run's outputs to read)
+    - For temporal downscalers: the forecaster's run_id (which run's outputs to read)
     """
     configs_to_hash = [{"steps": run_config["steps"]}]
     with open(run_config["config"], "r") as f:
         configs_to_hash.append(yaml.safe_load(f))
-    if model_type == "interpolator" and run_config.get("forecaster"):
+    if model_type == "temporal_downscaler" and run_config.get("forecaster"):
         # run output depends on which forecaster RUN was used (not just the env)
         configs_to_hash.append(run_config["forecaster"].get("run_id"))
     return generate_json_hash(configs_to_hash)

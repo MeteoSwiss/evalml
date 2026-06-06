@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Evaluate skill of new time-interpolator (trained on ICON-REA-L, fine-tuned on KENDA-ICON-CH1)
+  Evaluate skill of new temporal downscaler (trained on ICON-REA-L, fine-tuned on KENDA-ICON-CH1)
   driven by ICON-CH1 stage_E forecaster with subgrid orography, using anemoi-inference patch from
   issue #482.
 
@@ -10,13 +10,13 @@ dates:
   frequency: 24h
 
 runs:
-  - interpolator:
+  - temporal_downscaler:
       # for checkpoints trained on a different HPC, using mlflow doesn't work due to difference in
       # paths, so we directly specify the checkpoint path here
       checkpoint: /store_new/mch/msopr/ml/tmp/inference-last.ckpt
       label: Varda-Single
       steps: 0/120/1
-      config: resources/inference/configs/sgm-interpolator-global_trimedge_multi.yaml
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml

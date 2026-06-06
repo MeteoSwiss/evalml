@@ -15,8 +15,8 @@ def example_forecasters_config():
 
 
 @pytest.fixture
-def example_interpolators_config():
-    configfile = PROJECT_ROOT / "config/interpolators-ich1.yaml"
+def example_temporal_downscalers_config():
+    configfile = PROJECT_ROOT / "config/temporal-downscalers-ich1.yaml"
     with open(configfile, "r") as f:
         config = yaml.safe_load(f)
     return config

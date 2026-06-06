@@ -140,20 +140,24 @@ class ForecasterConfig(RunConfig):
     )
 
 
-class InterpolatorConfig(RunConfig):
+class TemporalDownscalerConfig(RunConfig):
     """Single training run stored in MLflow."""
 
     config: Dict[str, Any] | str = Field(
         default_factory=lambda _: str(
-            PROJECT_ROOT / "resources" / "inference" / "configs" / "interpolator.yaml"
+            PROJECT_ROOT
+            / "resources"
+            / "inference"
+            / "configs"
+            / "temporal_downscaler.yaml"
         ),
-        description="Configuration for the interpolator run. Can be a dictionary of parameters or a path to a configuration file. "
-        "By default, it will point to resources/inference/configs/interpolator.yaml in the evalml repository.",
+        description="Configuration for the temporal downscaler run. Can be a dictionary of parameters or a path to a configuration file. "
+        "By default, it will point to resources/inference/configs/temporal_downscaler.yaml in the evalml repository.",
     )
 
     forecaster: ForecasterConfig | None = Field(
         None,
-        description="Configuration for the forecaster run that this interpolator is based on.",
+        description="Configuration for the forecaster run that this temporal downscaler is based on.",
     )
 
 
@@ -207,8 +211,8 @@ class ForecasterItem(BaseModel):
     forecaster: ForecasterConfig
 
 
-class InterpolatorItem(BaseModel):
-    interpolator: InterpolatorConfig
+class TemporalDownscalerItem(BaseModel):
+    temporal_downscaler: TemporalDownscalerConfig
 
 
 class BaselineItem(BaseModel):
@@ -472,9 +476,9 @@ class ConfigModel(BaseModel):
         description="Optional label for the experiment that will be used in the experiment directory name. Defaults to the config file name if not provided.",
     )
     dates: Dates | ExplicitDates
-    runs: List[ForecasterItem | InterpolatorItem | BaselineItem] = Field(
+    runs: List[ForecasterItem | TemporalDownscalerItem | BaselineItem] = Field(
         ...,
-        description="List of experiment participants, including forecaster/interpolator ML runs and baselines.",
+        description="List of experiment participants, including forecaster/temporal downscaler ML runs and baselines.",
     )
     truth: TruthConfig | None
     experiment: ExperimentConfig = Field(
