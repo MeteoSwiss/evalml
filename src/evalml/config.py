@@ -69,9 +69,6 @@ class RunConfig(BaseModel):
     ENV_FIELDS: ClassVar[FrozenSet[str]] = frozenset(
         {"checkpoint", "extra_requirements", "disable_local_eccodes_definitions"}
     )
-    # Fields excluded from ALL hashing (display/resource metadata only).
-    HASH_EXCLUDE: ClassVar[FrozenSet[str]] = frozenset({"label", "inference_resources"})
-
     checkpoint: str = Field(
         ...,
         description="The mlflow run ID, as a 32-character hexadecimal string.",
@@ -163,11 +160,6 @@ class InterpolatorConfig(RunConfig):
 class BaselineConfig(BaseModel):
     """Configuration for a single baseline to include in the verification."""
 
-    baseline_id: str | None = Field(
-        None,
-        min_length=1,
-        description="Deprecated compatibility field. Workflow baseline IDs are derived from the stem of `root`.",
-    )
     label: str = Field(
         ...,
         min_length=1,
@@ -176,7 +168,7 @@ class BaselineConfig(BaseModel):
     root: str = Field(
         ...,
         min_length=1,
-        description="Root directory where the baseline data is stored. The workflow derives the baseline ID from the stem of this path.",
+        description="Root directory where the baseline data is stored.",
     )
     steps: str = Field(
         ...,
@@ -484,10 +476,6 @@ class ConfigModel(BaseModel):
         ...,
         description="List of experiment participants, including forecaster/interpolator ML runs and baselines.",
     )
-    baselines: List[BaselineItem] = Field(
-        default_factory=list,
-        description="Deprecated top-level baselines list. Prefer defining baseline entries directly in `runs`.",
-    )
     truth: TruthConfig | None
     experiment: ExperimentConfig = Field(
         ...,
@@ -513,7 +501,6 @@ def generate_config_schema() -> str:
 
 # Module-level constants for use in Snakemake and elsewhere
 RUN_ENV_FIELDS = RunConfig.ENV_FIELDS
-RUN_HASH_EXCLUDE = RunConfig.HASH_EXCLUDE
 
 
 if __name__ == "__main__":

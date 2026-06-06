@@ -25,17 +25,3 @@ def test_example_interpolators_config(example_interpolators_config):
     del example_interpolators_config["runs"]
     with pytest.raises(ValueError, match="Field required"):
         _ = ConfigModel.model_validate(example_interpolators_config)
-
-
-def test_legacy_top_level_baselines_still_supported(example_forecasters_config):
-    """Top-level `baselines` remains accepted for backward compatibility."""
-
-    cfg = {k: v for k, v in example_forecasters_config.items() if k != "runs"}
-    cfg["runs"] = [
-        run for run in example_forecasters_config["runs"] if "forecaster" in run
-    ]
-    cfg["baselines"] = [
-        run for run in example_forecasters_config["runs"] if "baseline" in run
-    ]
-
-    _ = ConfigModel.model_validate(cfg)
