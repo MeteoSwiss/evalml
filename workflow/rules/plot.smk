@@ -108,8 +108,8 @@ rule plot_forecast_frame:
         leadtime=r"\d+",  # only digits
     resources:
         slurm_partition="postproc",
-        cpus_per_task=1,
-        runtime="10m",
+        cpus_per_task=4,
+        runtime="20m",
     params:
         grib_out_dir=lambda wc: str(
             (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib").resolve()
@@ -135,7 +135,7 @@ def get_leadtimes(wc):
     """Get all lead times from the run config."""
     start, end, step = map(int, RUN_CONFIGS[wc.run_id]["steps"].split("/"))
     # skip lead time 0 for diagnostic variables
-    if wc.param in ["tp", "TOT_PREC"] and step == 0:  # TODO: make this more general
+    if wc.param in ["tp", "TOT_PREC"] and start == 0:
         start += step
     return [f"{i}" for i in range(start, end + 1, step)]
 
