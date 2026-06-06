@@ -43,7 +43,7 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
     ds = ds.assign_coords(
         season=lambda ds: ds["forecast_reference_time"].dt.season,
         init_hour=lambda ds: ds["forecast_reference_time"].dt.hour,
-    ).drop_vars(["time"], errors="ignore")
+    ).drop_vars(["time", "valid_time"], errors="ignore")
 
     # Counter used to track the number of forecast_reference_time samples per stratum so that
     # aggregated results can be correctly re-aggregated later (weighted mean).
