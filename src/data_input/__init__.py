@@ -470,7 +470,7 @@ def load_INCA_baseline_from_netcdf(
         )
         try:
             d = xr.open_dataset(fp, drop_variables=["grid_mapping"]).rename(
-                {"chx": "x", "chy": "y"}
+                {"chx": "x", "chy": "y", "time": "valid_time"}
             )
         except FileNotFoundError:
             return fp, None
@@ -512,7 +512,9 @@ def load_INCA_baseline_from_netcdf(
                 parts.append(_nan_array(PARAM_UNITS[param]).isel(valid_time=zero_idx))
             else:
                 parts.append(
-                    da_raw.isel(time=zero_idx).assign_coords(time=valid_times[zero_idx])
+                    da_raw.isel(valid_time=zero_idx).assign_coords(
+                        valid_time=valid_times[zero_idx]
+                    )
                 )
 
         # Steps 1+ from previous reftime file (positional index = step value)
@@ -529,10 +531,12 @@ def load_INCA_baseline_from_netcdf(
                 parts.append(_nan_array(PARAM_UNITS[param]).isel(valid_time=nz_idx))
             else:
                 parts.append(
-                    da_raw.isel(time=nz_steps).assign_coords(time=valid_times[nz_idx])
+                    da_raw.isel(valid_time=nz_steps).assign_coords(
+                        valid_time=valid_times[nz_idx]
+                    )
                 )
 
-        da = xr.concat(parts, dim="time") if len(parts) > 1 else parts[0]
+        da = xr.concat(parts, dim="valid_time") if len(parts) > 1 else parts[0]
         return da.rename(param)
 
     # Maps output variable name -> INCA file prefix, per freq.
