@@ -270,7 +270,7 @@ All outputs are rooted at `OUT_ROOT` (from `locations.output_root` in the config
 |---|---|---|
 | `{env_id}` | `{type}-{model_id}-{env_hash}` | `forecaster-1a2b-c3d4` |
 | `{run_id}` | `{env_id}/{config_hash}` | `forecaster-1a2b-c3d4/e5f6` |
-| `{baseline_id}` | slug derived from root path | `COSMO-E` |
+| `{baseline_id}` | `baseline-{hash}` | `baseline-3f9a` |
 | `{init_time}` | `%Y%m%d%H%M` | `202001011200` |
 | `{experiment}` | `{YYYYMMDD}_{label}_{hash}` | `20260331_demo_a1b2` |
 | `{param}` | variable name | `T_2M`, `TOT_PREC` |
