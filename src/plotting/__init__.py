@@ -42,8 +42,20 @@ DOMAINS = {
         "extent": [-2.6, 19.5, 40.2, 52.3],
         "projection": _PROJECTIONS["orthographic"],
     },
-    "switzerland": {
+    "icon-ch": {
         "extent": [0, 17.5, 40.5, 53.0],
+        "projection": _PROJECTIONS["orthographic"],
+    },
+    "alps": {
+        "extent": [4.0, 16.5, 43.5, 48.5],
+        "projection": _PROJECTIONS["orthographic"],
+    },
+    "radar": {
+        "extent": [3.2, 12.5, 43.6, 49.4],
+        "projection": _PROJECTIONS["orthographic"],
+    },
+    "switzerland": {
+        "extent": [5.6, 10.8, 45.0, 48.6],
         "projection": _PROJECTIONS["orthographic"],
     },
 }

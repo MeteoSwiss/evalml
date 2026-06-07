@@ -116,11 +116,10 @@ showcase:
   animations:
     enabled: true
     domains:
+      - globe
       - europe
+      - icon-ch1
       - switzerland
-      - name: alpine_arc
-        extent: [3.0, 17.0, 43.5, 48.5]
-        projection: orthographic
 
 locations:
   output_root: output/
