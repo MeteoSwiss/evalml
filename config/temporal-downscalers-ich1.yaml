@@ -81,7 +81,7 @@ experiment:
           - "T_2M:RMSE,R2,ETS"
           - "TOT_PREC:RMSE,R2,ETS"
       short_range:
-        baseline: ICON-CH1-ctrl
+        baseline: ICON-CH1-CTRL
         lead_times: "6/33/6"
         stratification: region
         variables:
@@ -90,7 +90,7 @@ experiment:
           - "T_2M:RMSE,R2,ETS"
           - "TOT_PREC:RMSE,R2,ETS"
       medium_range:
-        baseline: ICON-CH2-ctrl
+        baseline: ICON-CH2-CTRL
         lead_times: "24/120/24"
         stratification: region
         variables:
@@ -129,6 +129,7 @@ profile:
     mem_mb_per_cpu: 1800
     runtime: "1h"
     gpus: 0
+    account: s83
   jobs: 50
   batch_rules:
     plot_forecast_frame: 8
