@@ -54,7 +54,19 @@ rule collect_system_metrics:
             for t in REFTIMES
         ],
         label_map={
-            run_id: run_cfg.get("label", run_id)
+            run_id: (
+                run_cfg.get("label")
+                or next(
+                    (
+                        cfg.get("label")
+                        for cfg in RUN_CONFIGS.values()
+                        if cfg.get("forecaster")
+                        and cfg["forecaster"].get("run_id") == run_id
+                    ),
+                    None,
+                )
+                or run_id
+            )
             for run_id, run_cfg in RUN_CONFIGS.items()
         },
         gpu_map={
