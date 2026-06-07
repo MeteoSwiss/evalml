@@ -118,7 +118,8 @@ showcase:
     domains:
       - globe
       - europe
-      - icon-ch1
+      - alps
+      - icon-ch
       - switzerland
 
 locations:

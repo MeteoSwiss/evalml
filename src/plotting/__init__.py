@@ -47,7 +47,7 @@ DOMAINS = {
         "projection": _PROJECTIONS["orthographic"],
     },
     "alps": {
-        "extent": [4.0, 16.5, 43.5, 48.5],
+        "extent": [4.5, 16.0, 43.5, 48.5],
         "projection": _PROJECTIONS["orthographic"],
     },
     "radar": {
