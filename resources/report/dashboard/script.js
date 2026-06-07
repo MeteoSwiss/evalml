@@ -119,7 +119,7 @@ if (sysData.length > 0) {
           "field": "value",
           "type": "quantitative",
           "title": null,
-          "scale": { "zero": false }
+          "scale": { "zero": true }
         },
         "color": {
           "field": "source",
@@ -150,9 +150,9 @@ if (sysData.length > 0) {
   };
 
   function updateSysChart() {
-    const selectedModelTypes = getSelectedValues("sys-model-type-select");
-    const selectedSources = getSelectedValues("sys-source-select");
-    const selectedMetrics = getSelectedValues("sys-metric-select");
+    const selectedModelTypes = getSelected("sys-model-type-select");
+    const selectedSources = getSelected("sys-source-select");
+    const selectedMetrics = getSelected("sys-metric-select");
     const newSpec = JSON.parse(JSON.stringify(sysSpec));
     const filters = [];
     if (selectedModelTypes.length > 0) {
