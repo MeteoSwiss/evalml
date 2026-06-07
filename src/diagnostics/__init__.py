@@ -9,7 +9,7 @@ LOG = logging.getLogger(__name__)
 
 # Columns exposed as distribution metrics in the dashboard
 SYSMETRICS_COLS = {
-    "wall_time_s": "Wall Time (s)",
+    "wall_time_s": "Wall Time (min)",
     "gpu_hours": "GPU Hours",
     "max_rss_mb": "Peak CPU Memory (MB)",
     "gpu_util_mean": "Mean GPU Util (%)",
@@ -259,8 +259,9 @@ def melt_for_dashboard(records: list[dict]) -> tuple[str, list[str], list[str]]:
         }
         for col, label in SYSMETRICS_COLS.items():
             if r.get(col) is not None:
-                long_records.append({**base, "metric": label, "value": r[col]})
+                value = r[col] / 60 if col == "wall_time_s" else r[col]
+                long_records.append({**base, "metric": label, "value": round(value, 2)})
 
-    sources = sorted({r["source"] for r in records})
-    model_types = sorted({r.get("model_type", "unknown") for r in records})
+    sources = sorted({r["source"] for r in records if r["source"] is not None})
+    model_types = sorted({r.get("model_type") or "unknown" for r in records})
     return json.dumps(long_records), sources, model_types
