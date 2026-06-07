@@ -327,7 +327,9 @@ rule inference_execute:
                 trap 'kill $DMON_PID 2>/dev/null; wait $DMON_PID 2>/dev/null' EXIT INT TERM
             fi
             anemoi-inference run config.yaml $INFERENCE_CMD_ARGS
-            RUN_METRICS_EOF
+# fmt: off
+RUN_METRICS_EOF
+# fmt: on
             chmod +x "$METRICS_DIR/run_with_metrics.sh"
 
             squashfs-mount {params.image_path}:/user-environment -- bash -c '
