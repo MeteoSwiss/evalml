@@ -227,11 +227,12 @@ class StatePlotter:
             )  # avoid interpolation being performed by earthkit-plots resulting in an error
             return style, plot_kwargs
 
-        # Continuous mode: remove None entries to avoid matplotlib errors
-        if plot_kwargs.get("colors", None) is None:
-            plot_kwargs.pop("colors", None)
-        if plot_kwargs.get("levels", None) is None:
-            plot_kwargs.pop("levels", None)
+        # Continuous mode: remove None entries so configure_style doesn't call
+        # style.with_overrides(colors=None, vmin=None, ...) and wipe the style's
+        # pre-configured values.
+        for key in ("colors", "levels", "cmap", "norm", "vmin", "vmax"):
+            if plot_kwargs.get(key) is None:
+                plot_kwargs.pop(key, None)
 
         return style, plot_kwargs
 
