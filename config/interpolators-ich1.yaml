@@ -116,9 +116,9 @@ showcase:
   animations:
     enabled: true
     domains:
-      - globe
+      # - globe
       - europe
-      - alps
+      # - alps
       - icon-ch
       - switzerland
 
