@@ -116,11 +116,11 @@ showcase:
   animations:
     enabled: true
     domains:
+      # - globe
       - europe
+      # - alps
+      - icon-ch
       - switzerland
-      - name: alpine_arc
-        extent: [3.0, 17.0, 43.5, 48.5]
-        projection: orthographic
 
 locations:
   output_root: output/
@@ -136,5 +136,3 @@ profile:
     runtime: "1h"
     gpus: 0
   jobs: 50
-  batch_rules:
-    plot_forecast_frame: 8

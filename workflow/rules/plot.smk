@@ -143,7 +143,8 @@ def get_leadtimes(wc):
 rule make_forecast_animation:
     input:
         lambda wc: expand(
-            rules.plot_forecast_frame.output,
+            OUT_ROOT
+            / "data/runs/{run_id}/{init_time}/frames/frame_{leadtime}_{param}_{region}.png",
             run_id=wc.run_id,
             init_time=wc.init_time,
             param=wc.param,
