@@ -15,18 +15,20 @@ def test_load_valid_colormap(monkeypatch, tmp_path):
     monkeypatch.setattr(colormap_loader, "BASE_DIR", tmp_path)
 
     result = colormap_loader.load_ncl_colormap("test_colormap.ct")
-    # cmap is a list of RGB colors (earthkit-plots consumes it as `colors`)
-    assert isinstance(result["cmap"], np.ndarray)
+    assert isinstance(result["cmap"], ListedColormap)
     assert isinstance(result["norm"], BoundaryNorm)
 
     cmap = result["cmap"]
     norm = result["norm"]
     bounds = result["bounds"]
 
-    # cmap holds the n_levs-1 inner colors, under/over rows excluded
-    assert cmap.shape == (2, 3)
-    assert np.allclose(cmap[0], (40 / 255, 50 / 255, 60 / 255))
-    assert np.allclose(cmap[1], (70 / 255, 80 / 255, 90 / 255))
+    # cmap holds the n_levs-1 inner colors, under/over excluded
+    assert cmap.N == 2
+    assert np.allclose(cmap(0), (*[x / 255 for x in (40, 50, 60)], 1.0))
+    assert np.allclose(cmap(1), (*[x / 255 for x in (70, 80, 90)], 1.0))
+    # under/over are set separately
+    assert np.allclose(cmap.get_under(), (*[x / 255 for x in (10, 20, 30)], 1.0))
+    assert np.allclose(cmap.get_over(), (*[x / 255 for x in (100, 110, 120)], 1.0))
     # bounds
     assert np.allclose(norm.boundaries, [0, 1, 2])
     assert np.allclose(bounds, [0, 1, 2])
@@ -69,11 +71,6 @@ def test_cmap_defaults_smoke(field, var):
     norm = var.get("norm", None)
     vmin = var.get("vmin", None)
     vmax = var.get("vmax", None)
-
-    # NCL colormaps are stored as a list of RGB colors (earthkit-plots
-    # consumes them as `colors`); wrap into a ListedColormap to plot here.
-    if isinstance(cmap, np.ndarray):
-        cmap = ListedColormap(cmap)
 
     # make some synthetic data
     data = np.linspace(0, 1, 100).reshape(10, 10)
