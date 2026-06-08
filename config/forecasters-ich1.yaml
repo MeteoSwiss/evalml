@@ -94,5 +94,4 @@ profile:
     runtime: "1h"
     gpus: 0
   jobs: 50
-  batch_rules:
-    plot_forecast_frame: 8
+
