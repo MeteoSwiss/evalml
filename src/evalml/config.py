@@ -71,7 +71,7 @@ class RunConfig(BaseModel):
     )
     checkpoint: str = Field(
         ...,
-        description="The mlflow run ID, as a 32-character hexadecimal string.",
+        description="The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
     )
     label: str | None = Field(
         None,
