@@ -147,7 +147,10 @@ def main():
     if param == "TOT_PREC":
         prev_lt = lead_time - accu
         if prev_lt > 0:
-            prev_grib_file = grib_dir / f"{init_time}_{prev_lt:03d}.grib"
+            prev_grib_files = list(grib_dir.glob(f"2*_{prev_lt}.grib"))
+            if not prev_grib_files:
+                prev_grib_files = list(grib_dir.glob(f"2*_{prev_lt:03d}.grib"))
+            prev_grib_file = Path(prev_grib_files[0])
             LOG.info(
                 "De-accumulating TOT_PREC: loading previous grib file %s",
                 prev_grib_file,

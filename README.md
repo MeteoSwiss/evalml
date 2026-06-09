@@ -43,7 +43,7 @@ dates:
   #   - 2020-01-05T00:00
 
 runs:
-  # Each item is either `forecaster`, `interpolator` or `baseline`
+  # Each item is either `forecaster`, `temporal_downscaler` or `baseline`
   - forecaster:
       # `checkpoint` may point to a supported MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.
       checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/228/runs/2f962c89ff644ca7940072fa9cd088ec
@@ -61,10 +61,10 @@ runs:
       label: M-1 forecaster
       steps: 0/120/6
       config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
-  # An interpolator entry can optionally embed its driving forecaster config inline.
-  # - interpolator:
-  #     checkpoint: /path/to/interpolator.ckpt
-  #     label: My interpolator
+  # A temporal_downscaler entry can optionally embed its driving forecaster config inline.
+  # - temporal_downscaler:
+  #     checkpoint: /path/to/temporal_downscaler.ckpt
+  #     label: My temporal downscaler
   #     steps: 0/120/1
   #     forecaster:
   #       checkpoint: https://...
@@ -137,7 +137,7 @@ profile:
     plot_forecast_frame: 32
 ```
 
-The `runs` list accepts `forecaster`, `interpolator`, and `baseline` entries. For `dates`, you can either provide a `start` / `end` / `frequency` block as above or an explicit list of ISO timestamps for case-study style runs. Stratification, thresholds, dashboard, and scorecard settings are all grouped under the `experiment` key.
+The `runs` list accepts `forecaster`, `temporal_downscaler`, and `baseline` entries. For `dates`, you can either provide a `start` / `end` / `frequency` block as above or an explicit list of ISO timestamps for case-study style runs. Stratification, thresholds, dashboard, and scorecard settings are all grouped under the `experiment` key.
 
 You can then run it with:
 
@@ -218,7 +218,7 @@ Scripts live in `workflow/scripts/` and mirror the rule that calls them:
 
 Examples: `inference_prepare.py`, `verification_metrics.py`, `verification_aggregation.py`, `plot_forecast_frame.mo.py`.
 
-In some cases, a single script may be shared by more than one rule (e.g. `inference_prepare.py` is used by both `inference_prepare_forecaster` and `inference_prepare_interpolator`).
+In some cases, a single script may be shared by more than one rule (e.g. `inference_prepare.py` is used by both `inference_prepare_forecaster` and `inference_prepare_temporal_downscaler`).
 
 ### Log file paths
 
