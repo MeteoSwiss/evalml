@@ -134,8 +134,8 @@ rule plot_forecast_frame:
 def get_leadtimes(wc):
     """Get all lead times from the run config."""
     start, end, step = map(int, RUN_CONFIGS[wc.run_id]["steps"].split("/"))
-    # skip lead time 0 for diagnostic variables
-    if wc.param in ["tp", "TOT_PREC"] and start == 0:
+    # skip lead time 0 for diagnostic variables (accumulations and period maxima)
+    if wc.param in ["tp", "TOT_PREC", "VMAX_10M"] and start == 0:
         start += step
     return [f"{i}" for i in range(start, end + 1, step)]
 

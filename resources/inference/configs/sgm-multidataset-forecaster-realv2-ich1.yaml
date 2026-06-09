@@ -1,0 +1,76 @@
+# Inference template for the multi-output "realv2" anemoi architecture.
+#
+# This checkpoint emits TWO named output streams (see metadata_inference.dataset_names):
+#   - data:   the cutout state (ICON-CH1 1km LAM + AIFS N320 global), IFS variable names
+#   - realv2: a diagnostic-only stream on the REAL-CH1 / ICON-CH1 1km grid carrying VMAX_10M
+#
+# Each stream is keyed by its dataset name under `output:` and encoded to GRIB so the rest of
+# the evalml pipeline (showcase plotting, verification) can consume it unchanged. The `data`
+# stream reuses the proven cutout encoding (ICON LAM + IFS global); the `realv2` stream is a
+# single LAM grid (no cutout mask) written to its own grib/realv2-*.grib files.
+lead_time: 120h
+write_initial_state: true
+allow_nans: true
+
+env:
+  ANEMOI_INFERENCE_NUM_CHUNKS: 8 # OOM error if not set
+
+# inputs
+input:
+  test:
+    use_original_paths: true
+
+# NOTE: top-level state post_processors (e.g. accumulate_from_start_of_forecast /
+# forward_transform_filter for tp) are intentionally omitted. With this multi-output
+# checkpoint + write_initial_state, they are applied to the realv2 diagnostic stream's
+# initial state (which has no prognostic input) and fail with KeyError: 'date'. The
+# VMAX_10M showcase does not need them; tp handling for the data stream is a follow-up.
+
+output:
+  # Global cutout state (ICON-CH1 LAM + AIFS N320 global).
+  data:
+    tee:
+      - grib:
+          path: grib/{date}{time:04}_{step:03}.grib
+          encoding:
+            typeOfGeneratingProcess: 2
+            centre: lssw
+          templates:
+            samples: resources/templates_index_icon.yaml
+          post_processors:
+            - extract_mask: # keep only LAM points
+                mask: "lam_0/cutout_mask"
+                as_slice: true
+      - grib:
+          path: grib/ifs-{date}{time:04}_{step:03}.grib
+          encoding:
+            typeOfGeneratingProcess: 2
+            centre: ecmf
+          templates:
+            samples: resources/templates_index_ifs.yaml
+          post_processors:
+            - extract_mask: # removes LAM points
+                mask: "lam_0/cutout_mask"
+                as_slice: true
+                inverse: true
+            - assign_mask: # fill local/global overlapping points with nan
+                mask: "global/cutout_mask"
+  # Regional diagnostic stream (VMAX_10M) on the REAL-CH1 / ICON-CH1 1km grid.
+  realv2:
+    grib:
+      path: grib/realv2-{date}{time:04}_{step:03}.grib
+      # VMAX_10M is diagnostic-only: there is no initial (analysis) state for it, so
+      # writing the initial step would fail with KeyError: 'date'. Skip it here; the
+      # diagnostic is first valid at the model step (e.g. +6h) anyway.
+      write_initial_state: false
+      encoding:
+        typeOfGeneratingProcess: 2
+        centre: lssw
+      templates:
+        samples: resources/templates_index_realch1.yaml
+
+# Remaps the `data` stream's IFS variable names (2t, 10u, tp, ...) to the COSMO
+# shortNames expected by the ICON GRIB templates, AND gives the realv2 VMAX_10M
+# diagnostic a whole-hour max period (['6h','12h']) so the GRIB time-processing
+# encoder does not hit the integer-hour assertion on its native ['650m','12h'] period.
+patch_metadata: resources/sgm-realv2-ich1-patch.yaml

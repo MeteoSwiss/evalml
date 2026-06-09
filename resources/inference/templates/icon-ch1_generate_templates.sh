@@ -19,3 +19,11 @@ grib_copy -w shortName=T,level=500 $PL_SAMPLE /dev/stdout | grib_set -d 0 - icon
 
 # template for typeOfLevel=meanSea
 grib_copy -w shortName=PMSL $SFC_SAMPLE /dev/stdout | grib_set -d 0 - icon-ch1-typeOfLevel=meanSea.grib
+
+# template for VMAX_10M (max 10m wind speed) on the ICON-CH1 1km grid.
+# Used by the realv2 output stream of the multi-output architecture. Derive it from
+# the heightAboveGround template (which is in HOURS) and retarget to VMAX_10M @ 10m:
+# setting shortName=VMAX_10M makes eccodes pick the max stepType automatically, while
+# keeping stepUnits=hours. Extracting straight from the ICON source instead yields a
+# minute-unit step (stepUnits=0), which mislabels the 6 h max window as 6 minutes.
+grib_set -s shortName=VMAX_10M,level=10 -d 0 icon-ch1-typeOfLevel=heightAboveGround.grib icon-ch1-shortName=VMAX_10M.grib
