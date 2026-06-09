@@ -9,14 +9,11 @@ dates:
 
 runs:
   - forecaster:
-      # Verified-working checkpoint for the realv2 multi-output architecture.
-      # Replace with an MLflow run URL/ID once the checkpoint is registered.
       checkpoint: /scratch/mch/rradev/output/checkpoint/9efa01f8c7464328897edb2c03a407c2/inference-last.ckpt
       label: realv2_vmax10m
       steps: 0/120/6
       config: resources/inference/configs/sgm-multidataset-forecaster-realv2-ich1.yaml
       extra_requirements:
-        # anemoi-inference fork = upstream main + two fixes this multi-output
         # checkpoint needs: (1) EmptyInput.create_input_state propagates the date
         # (else KeyError 'date' in add_initial_forcings_to_input_state for the
         # diagnostic-only realv2 stream), and (2) format_dataset_name preserves the
@@ -53,9 +50,6 @@ experiment:
     stratification:
       - season
 
-# Showcase (animation) settings. VMAX_10M (max 10m wind) is the diagnostic from the
-# realv2 output stream, defined only over the Alpine LAM domain -> restrict the showcase
-# domains to Switzerland / ICON-CH so every param (including VMAX_10M) stays on-grid.
 showcase:
   params:
     - T_2M
