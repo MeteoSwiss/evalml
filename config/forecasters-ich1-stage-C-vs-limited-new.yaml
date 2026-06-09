@@ -1,0 +1,80 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Evaluate skill of finetuned models with different configurations.
+
+dates:
+  start: 2025-01-01T00:00
+  end: 2025-06-20T00:00
+  frequency: 54h
+  # # or
+  # - 2024-01-01T12:00
+  # - 2024-02-01T18:00
+  # - 2024-03-01T00:00
+
+
+runs:
+  - forecaster:
+      inference_resources: 
+          slurm_partition: normal-shared
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/73467c0d592241b4a4aaaf21ce7359f6
+      label: stage_C_realch1
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+      extra_requirements:
+        - git+https://github.com/ecmwf/anemoi-inference.git@b9aaee5df86614cad9d8d08b76876a4be4e980db
+
+  - forecaster:
+      inference_resources: 
+          slurm_partition: normal-shared
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/8ae20d4a75a849f8bf275b9905fad25e
+      label: stage_C_icon_1km_limited_to_cosmo
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+      extra_requirements:
+        - git+https://github.com/ecmwf/anemoi-inference.git@b9aaee5df86614cad9d8d08b76876a4be4e980db
+  
+
+baselines:
+  - baseline:
+      baseline_id: ICON-CH1-EPS
+      label: ICON-CH1-ctrl
+      root: /scratch/mch/cmerker/ICON-CH1-EPS
+      steps: 0/33/6
+  
+  - baseline:
+      baseline_id: ICON-CH2-EPS
+      label: ICON-CH2-ctrl
+      root: /scratch/mch/cmerker/ICON-CH2-EPS
+      steps: 0/120/6
+
+
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
+stratification:
+  regions:
+    - jura
+    - mittelland
+    - voralpen
+    - alpennordhang
+    - innerealpentaeler
+    - alpensuedseite
+  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+
+locations:
+  output_root: /scratch/mch/apennino/evalml/output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50
+  batch_rules:
+    plot_forecast_frame: 32

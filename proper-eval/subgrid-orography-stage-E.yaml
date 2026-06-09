@@ -1,0 +1,80 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Evaluate skill of Stage E with/without cutoff edges trained with and without subgrid orography.
+
+dates:
+  start: 2025-01-01T00:00
+  end: 2025-12-26T00:00
+  frequency: 54h
+
+
+runs:
+  - forecaster:
+      inference_resources: 
+          slurm_partition: normal-shared
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/57684b20f64f414b937cce10e5ceeb68
+      label: stage_E_realch1_new
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+      extra_requirements:
+        - git+https://github.com/ecmwf/anemoi-inference.git@b9aaee5df86614cad9d8d08b76876a4be4e980db
+
+  - forecaster:
+      inference_resources: 
+          slurm_partition: normal-shared
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/2265ae18b04e4470ab89314a85a822ae
+      label: stage_E_icon_1km_cutoff_edges_KNN_5_dec
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+      extra_requirements:
+        - git+https://github.com/ecmwf/anemoi-inference.git@b9aaee5df86614cad9d8d08b76876a4be4e980db
+  
+  - forecaster:
+      inference_resources: 
+          slurm_partition: normal-shared
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
+      label: stage_E_icon_1km_cutoff_edges_subgrid_horography
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+      extra_requirements:
+        - git+https://github.com/ecmwf/anemoi-inference.git@b9aaee5df86614cad9d8d08b76876a4be4e980db
+
+baselines:
+  - baseline:
+      baseline_id: ICON-CH1-EPS
+      label: ICON-CH1-ctrl
+      root: /scratch/mch/cmerker/ICON-CH1-EPS
+      steps: 0/33/6
+  
+  - baseline:
+      baseline_id: ICON-CH2-EPS
+      label: ICON-CH2-ctrl
+      root: /scratch/mch/cmerker/ICON-CH2-EPS
+      steps: 0/120/6
+
+
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
+stratification:
+  regions:
+    - jura
+  root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+
+locations:
+  output_root: /scratch/mch/apennino/evalml/output/paper
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50
+  batch_rules:
+    plot_forecast_frame: 32
