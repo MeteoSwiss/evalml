@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 import xarray as xr
 
-from data_input import load_fct_data_from_grib, load_baseline_from_zarr
+from data_input import load_fct_data_from_grib, load_baseline_from_zarr, parse_steps
 from verification.spatial import map_forecast_to_truth
 
 LOG = logging.getLogger(__name__)
@@ -62,16 +62,28 @@ _PARAMS_MAP_CO2 = {
     "PMSL": "msl",
     "TOT_PREC": "tp",
 }
-_PARAMS_MAP_CO1 = {k: k.replace("TOT_PREC", "TOT_PREC_6H") for k in _PARAMS_MAP_CO2}
-
 # Derived variables and the components they require.
 _DERIVED = {
     "SP_10M": ("U_10M", "V_10M"),
 }
 
+# Params whose GRIB/zarr values are cumulative-from-start accumulations and must
+# be de-accumulated over a [step - period, step] window before verification.
+_ACCUMULATED_PARAMS = {"TOT_PREC"}
 
-def _params_map(truth_root: Path) -> dict[str, str]:
-    return _PARAMS_MAP_CO2 if "co2" in truth_root.name else _PARAMS_MAP_CO1
+
+def _params_map(truth_root: Path, accum_h: int | None = None) -> dict[str, str]:
+    """Map canonical parameter names to truth-zarr variable names.
+
+    COSMO-2e zarrs use short CF names. COSMO-1e / ICON zarrs store precip as
+    period accumulations named ``TOT_PREC_<N>H``, where N is the accumulation
+    length in hours (matching the verification step spacing); pass it via
+    ``accum_h``.
+    """
+    if "co2" in truth_root.name:
+        return _PARAMS_MAP_CO2
+    suffix = f"TOT_PREC_{accum_h}H" if accum_h else "TOT_PREC_6H"
+    return {k: k.replace("TOT_PREC", suffix) for k in _PARAMS_MAP_CO2}
 
 
 def _compute_derived(ds: xr.Dataset, param: str) -> xr.DataArray:
@@ -93,9 +105,11 @@ def _compute_derived(ds: xr.Dataset, param: str) -> xr.DataArray:
 # data_input is being reworked separately and we don't want to conflict.
 
 
-def _open_zarr_component(root: Path, param: str) -> xr.DataArray:
+def _open_zarr_component(
+    root: Path, param: str, accum_h: int | None = None
+) -> xr.DataArray:
     """Open a single native zarr variable lazily as a DataArray."""
-    zarr_param = _params_map(root)[param]
+    zarr_param = _params_map(root, accum_h)[param]
 
     ds = xr.open_zarr(root, consolidated=False)
     ds = ds.set_index(time="dates")
@@ -135,21 +149,26 @@ def _open_zarr_component(root: Path, param: str) -> xr.DataArray:
     return da
 
 
-def open_truth_zarr(root: Path, param: str) -> xr.DataArray:
+def open_truth_zarr(
+    root: Path, param: str, accum_h: int | None = None
+) -> xr.DataArray:
     """Open the truth zarr lazily and return a DataArray for *param*.
 
     For derived variables (e.g. SP_10M) the required components are loaded and
     the derivation is applied on the fly.  The returned DataArray has dimensions
     ``(time, y, x)`` or ``(time, values)`` and always exposes ``lat``/``lon``.
+    ``accum_h`` selects the precip accumulation length (TOT_PREC_<N>H).
     """
     if param in _DERIVED:
         components = {
-            c: _open_zarr_component(root, c).drop_vars("variable", errors="ignore")
+            c: _open_zarr_component(root, c, accum_h).drop_vars(
+                "variable", errors="ignore"
+            )
             for c in _DERIVED[param]
         }
         ds = xr.Dataset(components)
         return _compute_derived(ds, param)
-    return _open_zarr_component(root, param)
+    return _open_zarr_component(root, param, accum_h)
 
 
 # ---------------------------------------------------------------------------
@@ -217,8 +236,38 @@ def main(args: Namespace) -> None:
     LOG.info("Output   : %s", args.output)
     LOG.info("=" * 60)
 
+    # Accumulated params (TOT_PREC) are stored cumulative-from-start, while the
+    # truth is a period accumulation whose length equals the verification step
+    # spacing (e.g. 6h for steps "0/120/6"). Derive that period so we can (a)
+    # request the matching [step - period, step] window from the forecast loader
+    # and (b) read the matching TOT_PREC_<period>H truth variable. We do not
+    # assume a fixed period; it follows the configured --steps.
+    accum_h: int | None = None
+    if args.param in _ACCUMULATED_PARAMS:
+        if not args.steps:
+            raise ValueError(
+                f"--steps is required for accumulated param '{args.param}' "
+                "(used to derive the accumulation period)."
+            )
+        spacing = np.diff(parse_steps(args.steps))
+        if spacing.size == 0:
+            raise ValueError(
+                f"Cannot derive an accumulation period from --steps '{args.steps}'."
+            )
+        accum_h = int(spacing.min())
+        if args.step < accum_h:
+            raise ValueError(
+                f"Lead time {args.step}h is smaller than the {accum_h}h "
+                f"accumulation period; cannot form a [step - period, step] "
+                f"window for '{args.param}'."
+            )
+        req_steps = [args.step - accum_h, args.step]
+        LOG.info("Accumulation period: %dh  (forecast window %s)", accum_h, req_steps)
+    else:
+        req_steps = [args.step]
+
     # Open the truth zarr once; individual time slices are loaded on demand.
-    truth_da = open_truth_zarr(args.truth, args.param)
+    truth_da = open_truth_zarr(args.truth, args.param, accum_h)
     # Normalise to datetime64[ns] so membership checks work regardless of zarr precision.
     truth_da = truth_da.assign_coords(
         time=truth_da.time.values.astype("datetime64[ns]")
@@ -299,17 +348,19 @@ def main(args: Namespace) -> None:
                 fcst = load_baseline_from_zarr(
                     root=zarr_path,
                     reftime=reftime,
-                    steps=[args.step],
+                    steps=req_steps,
                     params=fct_params,
                 )
             else:
-                # The loaders handle cumulative-from-start disaggregation
-                # internally (including fetching step 0 when needed for
-                # TOT_PREC), so a single-step request is sufficient here.
+                # For accumulated params (TOT_PREC) req_steps is the
+                # [step - period, step] window; the loader de-accumulates the
+                # cumulative-from-start field over those steps, yielding the
+                # period accumulation at `step`. Instantaneous params request a
+                # single step. The target step is selected just below.
                 fcst = load_fct_data_from_grib(
                     root=grib_dir,
                     reftime=reftime,
-                    steps=[args.step],
+                    steps=req_steps,
                     params=fct_params,
                 )
         except Exception as exc:
@@ -548,6 +599,18 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Variable to verify (e.g. T_2M, TD_2M, U_10M).",
+    )
+    parser.add_argument(
+        "--steps",
+        type=str,
+        default=None,
+        help=(
+            "Forecast step spec 'start/stop/step' (e.g. '0/120/6'). Required for "
+            "accumulated params (TOT_PREC): the accumulation period is the step "
+            "spacing, the forecast is accumulated over [step - period, step], and "
+            "the matching TOT_PREC_<period>H truth variable is read. Ignored for "
+            "instantaneous params."
+        ),
     )
     parser.add_argument(
         "--reftimes",

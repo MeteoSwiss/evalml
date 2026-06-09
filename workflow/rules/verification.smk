@@ -200,6 +200,7 @@ rule verification_score_maps:
             --reftimes {params.reftimes} \
             --truth {input.truth} \
             --step {wildcards.leadtime} \
+            --steps "{params.fcst_steps}" \
             --param {wildcards.param} \
             --output {output} > {log} 2>&1
         """
@@ -222,6 +223,7 @@ rule verification_score_maps_baseline:
         / f"data/baselines/{{baseline_id}}/{config['truth']['label']}/score_maps/{{param}}_{{leadtime}}.nc",
     params:
         baseline_root=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("root"),
+        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
     log:
         OUT_ROOT
@@ -237,6 +239,7 @@ rule verification_score_maps_baseline:
             --reftimes {params.reftimes} \
             --truth {input.truth} \
             --step {wildcards.leadtime} \
+            --steps "{params.baseline_steps}" \
             --param {wildcards.param} \
             --output {output} > {log} 2>&1
         """
