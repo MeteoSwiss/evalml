@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet, Literal
+from typing import Dict, List, Any, ClassVar, FrozenSet, Literal, Optional
 
 from pydantic import BaseModel, Field, RootModel, field_validator
 
@@ -21,6 +21,10 @@ class Dates(BaseModel):
         ...,
         description="Time between initialisations. Must be a combination of a number and a time unit (h or d).",
         pattern=r"^\d+[hd]$",
+    )
+    blacklist: List[str] = Field(
+        default_factory=list,
+        description="Optional list of initialisation dates (ISO-8601) to exclude from processing.",
     )
 
 
@@ -65,12 +69,9 @@ class RunConfig(BaseModel):
     ENV_FIELDS: ClassVar[FrozenSet[str]] = frozenset(
         {"checkpoint", "extra_requirements", "disable_local_eccodes_definitions"}
     )
-    # Fields excluded from ALL hashing (display/resource metadata only).
-    HASH_EXCLUDE: ClassVar[FrozenSet[str]] = frozenset({"label", "inference_resources"})
-
     checkpoint: str = Field(
         ...,
-        description="The mlflow run ID, as a 32-character hexadecimal string.",
+        description="The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
     )
     label: str | None = Field(
         None,
@@ -139,31 +140,30 @@ class ForecasterConfig(RunConfig):
     )
 
 
-class InterpolatorConfig(RunConfig):
+class TemporalDownscalerConfig(RunConfig):
     """Single training run stored in MLflow."""
 
     config: Dict[str, Any] | str = Field(
         default_factory=lambda _: str(
-            PROJECT_ROOT / "resources" / "inference" / "configs" / "interpolator.yaml"
+            PROJECT_ROOT
+            / "resources"
+            / "inference"
+            / "configs"
+            / "temporal_downscaler.yaml"
         ),
-        description="Configuration for the interpolator run. Can be a dictionary of parameters or a path to a configuration file. "
-        "By default, it will point to resources/inference/configs/interpolator.yaml in the evalml repository.",
+        description="Configuration for the temporal downscaler run. Can be a dictionary of parameters or a path to a configuration file. "
+        "By default, it will point to resources/inference/configs/temporal_downscaler.yaml in the evalml repository.",
     )
 
     forecaster: ForecasterConfig | None = Field(
         None,
-        description="Configuration for the forecaster run that this interpolator is based on.",
+        description="Configuration for the forecaster run that this temporal downscaler is based on.",
     )
 
 
 class BaselineConfig(BaseModel):
     """Configuration for a single baseline to include in the verification."""
 
-    baseline_id: str | None = Field(
-        None,
-        min_length=1,
-        description="Deprecated compatibility field. Workflow baseline IDs are derived from the stem of `root`.",
-    )
     label: str = Field(
         ...,
         min_length=1,
@@ -172,12 +172,23 @@ class BaselineConfig(BaseModel):
     root: str = Field(
         ...,
         min_length=1,
-        description="Root directory where the baseline data is stored. The workflow derives the baseline ID from the stem of this path.",
+        description="Root directory where the baseline data is stored.",
     )
     steps: str = Field(
         ...,
         description="Forecast steps to be used from baseline, e.g. '10/120/1'.",
         pattern=r"^\d*/\d*/\d*$",
+    )
+    member: str = Field(
+        "000",
+        description=(
+            "Ensemble member to use: '000'/'control' for control, 'median' for the "
+            "pre-computed median, 'mean' to average all members, or any 3-digit member ID. "
+            "WARNING: when using 'median' with temporally aggregated parameters (e.g. 6-hourly "
+            "precipitation), do NOT aggregate the hourly median — this introduces a significant "
+            "negative bias. Instead, read the corresponding pre-aggregated median files "
+            "(e.g. ..._median06h). Ensure the baseline data files match the aggregation period."
+        ),
     )
 
 
@@ -200,8 +211,8 @@ class ForecasterItem(BaseModel):
     forecaster: ForecasterConfig
 
 
-class InterpolatorItem(BaseModel):
-    interpolator: InterpolatorConfig
+class TemporalDownscalerItem(BaseModel):
+    temporal_downscaler: TemporalDownscalerConfig
 
 
 class BaselineItem(BaseModel):
@@ -247,6 +258,113 @@ class ScoreMapsConfig(BaseModel):
     )
 
 
+class DomainConfig(BaseModel):
+    """A custom map domain defined by name, extent, and projection."""
+
+    name: str = Field(..., description="Name for the custom domain (used as wildcard).")
+    extent: List[float] | None = Field(
+        None,
+        description="Geographic extent as [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates. None means full globe.",
+    )
+    projection: str = Field(
+        "orthographic",
+        description="Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class MeteogramConfig(BaseModel):
+    """Configuration for meteogram generation."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether to generate meteograms (time series plots at stations).",
+    )
+    stations: List[str] = Field(
+        default=["GVE", "KLO", "LUG"],
+        description="List of PeakWeather station IDs to generate meteograms for.",
+    )
+
+
+class AnimationsConfig(BaseModel):
+    """Configuration for animation generation."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether to generate forecast animations (GIFs per param and region).",
+    )
+    domains: List[str | DomainConfig] = Field(
+        default=["globe", "europe", "switzerland"],
+        description=(
+            "Domains to generate animations for. Each entry is either a named domain "
+            "(e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, "
+            "or a custom domain dict with 'name', optional 'extent' "
+            "[lon_min, lon_max, lat_min, lat_max], and optional 'projection'."
+        ),
+    )
+
+
+class ScorecardConfig(BaseModel):
+    """Configuration for a single named scorecard."""
+
+    baseline: str = Field(
+        ...,
+        description="Baseline label to compare against (must match the `label` field of a baseline entry in `runs`).",
+    )
+    lead_times: str = Field(
+        ...,
+        description="Lead-time range as start/stop/step (hours).",
+    )
+    stratification: str = Field(
+        ...,
+        description="Dimension to use as scorecard columns (e.g. 'region').",
+    )
+    variables: List[str] = Field(
+        ...,
+        description=(
+            "Variables and metrics as scorecard rows (VAR:M1,M2 format). "
+            "An empty list [] is accepted by the schema but falls back to a "
+            "hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). "
+            "Omit ':...' after a variable name to include all available metrics for it."
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class ExperimentScorecardConfig(BaseModel):
+    """Top-level scorecard block: a single enabled flag plus named scorecard sections."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether to generate scorecards.",
+    )
+    sections: Dict[str, ScorecardConfig] = Field(
+        default_factory=dict,
+        description="Named scorecard configurations (e.g. nowcasting, short_range, medium_range).",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class ShowcaseConfig(BaseModel):
+    """Configuration for the showcase workflow."""
+
+    params: List[str] = Field(
+        default=["T_2M", "SP_10M"],
+        description="List of parameters to generate animations and meteograms for.",
+    )
+    meteograms: MeteogramConfig = Field(
+        default_factory=MeteogramConfig,
+        description="Configuration for meteogram generation.",
+    )
+    animations: AnimationsConfig = Field(
+        default_factory=AnimationsConfig,
+        description="Configuration for animation generation.",
+    )
+
+
 class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
 
@@ -273,6 +391,49 @@ class Dashboard(BaseModel):
         ...,
         description="Stratifications to include in the dashboard (any of season, region, init_hour)",
     )
+
+
+class ExperimentConfig(BaseModel):
+    """Configuration for the experiment workflow outputs."""
+
+    stratification: Stratification = Field(
+        ...,
+        description="Spatial stratification settings for the analysis.",
+    )
+    params: List[str] = Field(
+        default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"],
+        description="List of parameters to compute verification metrics for.",
+    )
+    thresholds: Dict[str, Dict[str, List[float]]] = Field(
+        default_factory=dict,
+        description=(
+            "Dictionary mapping parameter names to threshold dicts. "
+            "Each dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of threshold values."
+        ),
+    )
+    dashboard: Dashboard = Field(
+        ...,
+        description="Settings for the experiment dashboard.",
+    )
+    scorecards: Optional[ExperimentScorecardConfig] = Field(
+        default=None,
+        description="Scorecard generation configuration. Omit or set enabled: false to disable.",
+    )
+
+    @field_validator("thresholds")
+    @classmethod
+    def validate_threshold_operators(
+        cls, v: Dict[str, Dict[str, List[float]]]
+    ) -> Dict[str, Dict[str, List[float]]]:
+        _VALID_OPS = {"gt", "ge", "lt", "le", "eq", "ne"}
+        for param, op_dict in v.items():
+            invalid = set(op_dict) - _VALID_OPS
+            if invalid:
+                raise ValueError(
+                    f"Invalid operator key(s) {invalid!r} for parameter '{param}'. "
+                    f"Must be one of {_VALID_OPS}."
+                )
+        return v
 
 
 class DefaultResources(BaseModel):
@@ -354,45 +515,24 @@ class ConfigModel(BaseModel):
         description="Optional label for the experiment that will be used in the experiment directory name. Defaults to the config file name if not provided.",
     )
     dates: Dates | ExplicitDates
-    runs: List[ForecasterItem | InterpolatorItem | BaselineItem] = Field(
+    runs: List[ForecasterItem | TemporalDownscalerItem | BaselineItem] = Field(
         ...,
-        description="List of experiment participants, including forecaster/interpolator ML runs and baselines.",
-    )
-    baselines: List[BaselineItem] = Field(
-        default_factory=list,
-        description="Deprecated top-level baselines list. Prefer defining baseline entries directly in `runs`.",
+        description="List of experiment participants, including forecaster/temporal downscaler ML runs and baselines.",
     )
     truth: TruthConfig | None
-    stratification: Stratification
-    thresholds: Dict[str, Dict[str, List[float]]] = Field(
-        default_factory=dict,
-        description=(
-            "Dictionary mapping parameter names to threshold dicts. "
-            "Each dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of threshold values."
-        ),
+    experiment: ExperimentConfig = Field(
+        ...,
+        description="Settings for the experiment workflow outputs.",
     )
-
-    @field_validator("thresholds")
-    @classmethod
-    def validate_threshold_operators(
-        cls, v: Dict[str, Dict[str, List[float]]]
-    ) -> Dict[str, Dict[str, List[float]]]:
-        _VALID_OPS = {"gt", "ge", "lt", "le", "eq", "ne"}
-        for param, op_dict in v.items():
-            invalid = set(op_dict) - _VALID_OPS
-            if invalid:
-                raise ValueError(
-                    f"Invalid operator key(s) {invalid!r} for parameter '{param}'. "
-                    f"Must be one of {_VALID_OPS}."
-                )
-        return v
-
-    dashboard: Dashboard
     locations: Locations
     profile: Profile
     score_maps: ScoreMapsConfig = Field(
         default_factory=ScoreMapsConfig,
         description="Parameters for score map plots (used with --maps flag).",
+    )
+    showcase: ShowcaseConfig = Field(
+        default_factory=ShowcaseConfig,
+        description="Settings for the showcase workflow.",
     )
 
     model_config = {
@@ -408,7 +548,6 @@ def generate_config_schema() -> str:
 
 # Module-level constants for use in Snakemake and elsewhere
 RUN_ENV_FIELDS = RunConfig.ENV_FIELDS
-RUN_HASH_EXCLUDE = RunConfig.HASH_EXCLUDE
 
 
 if __name__ == "__main__":

@@ -20,6 +20,15 @@ _PROJECTIONS: dict[str, ccrs.Projection] = {
 
 # Mapping of region names to their geographic extent and projection
 # extent [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates
+def get_projection(name: str) -> "ccrs.Projection":
+    """Look up a projection by name."""
+    if name not in _PROJECTIONS:
+        raise ValueError(
+            f"Unknown projection {name!r}. Available: {list(_PROJECTIONS)}"
+        )
+    return _PROJECTIONS[name]
+
+
 DOMAINS = {
     "globe": {
         "extent": None,  # full globe view
@@ -33,8 +42,20 @@ DOMAINS = {
         "extent": [-1.5, 18, 41.5, 51],
         "projection": _PROJECTIONS["orthographic"],
     },
+    "icon-ch": {
+        "extent": [0, 17.5, 40.5, 53.0],
+        "projection": _PROJECTIONS["orthographic"],
+    },
+    "alps": {
+        "extent": [4.5, 16.0, 43.5, 48.5],
+        "projection": _PROJECTIONS["orthographic"],
+    },
+    "radar": {
+        "extent": [3.2, 12.5, 43.6, 49.4],
+        "projection": _PROJECTIONS["orthographic"],
+    },
     "switzerland": {
-        "extent": [5.5, 11.0, 45.5, 48.0],
+        "extent": [5.6, 10.8, 45.0, 48.6],
         "projection": _PROJECTIONS["orthographic"],
     },
 }
@@ -110,15 +131,9 @@ class StatePlotter:
                 "bbox must be a list of four floats [lon_min, lon_max, lat_min, lat_max]"
             )
 
-        domain = (
-            ekp.geo.domains.Domain(bbox=bbox, crs=ccrs.PlateCarree(), name=name.title())
-            if bbox is not None
-            else None
-        )
-
         ekp_fig = ekp.Figure(
             crs=projection,
-            domain=domain,
+            domain=bbox,
             rows=nrows,
             columns=ncols,
             size=size,
@@ -224,11 +239,12 @@ class StatePlotter:
             )  # avoid interpolation being performed by earthkit-plots resulting in an error
             return style, plot_kwargs
 
-        # Continuous mode: remove None entries to avoid matplotlib errors
-        if plot_kwargs.get("colors", None) is None:
-            plot_kwargs.pop("colors", None)
-        if plot_kwargs.get("levels", None) is None:
-            plot_kwargs.pop("levels", None)
+        # Continuous mode: remove None entries so configure_style doesn't call
+        # style.with_overrides(colors=None, vmin=None, ...) and wipe the style's
+        # pre-configured values.
+        for key in ("colors", "levels", "cmap", "norm", "vmin", "vmax"):
+            if plot_kwargs.get(key) is None:
+                plot_kwargs.pop(key, None)
 
         return style, plot_kwargs
 

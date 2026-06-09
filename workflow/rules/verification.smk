@@ -9,24 +9,14 @@ import pandas as pd
 include: "common.smk"
 
 
-# TODO: make sure the boundaries aren't used
 rule verification_metrics_baseline:
     input:
         "src/verification/__init__.py",
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_metrics.py",
-        baseline_zarr=lambda wc: expand(
-            "{root}/FCST{year}.zarr",
-            root=BASELINE_CONFIGS[wc.baseline_id].get("root"),
-            year=wc.init_time[2:4],
-        ),
+        forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth=config["truth"]["root"],
-    params:
-        baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
-        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
-        truth_label=config["truth"]["label"],
-        regions=REGIONS,
-        threshold_dict=config["thresholds"],
+        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
     log:
@@ -35,18 +25,29 @@ rule verification_metrics_baseline:
         cpus_per_task=24,
         mem_mb=50_000,
         runtime="60m",
+    params:
+        baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
+        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
+        member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
+        truth_label=config["truth"]["label"],
+        regions=REGIONS,
+        experiment_params=",".join(EXPERIMENT_PARAMS),
+        threshold_dict=config["experiment"]["thresholds"],
     shell:
         """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
-            --forecast {input.baseline_zarr} \
+            --forecast {input.forecast} \
             --truth {input.truth} \
             --reftime {wildcards.init_time} \
             --steps "{params.baseline_steps}" \
             --label "{params.baseline_label}" \
             --truth_label "{params.truth_label}" \
             --regions "{params.regions}" \
+            --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
-            --output {output} > {log} 2>&1
+            --member "{params.member}" \
+            --output {output} >{log} 2>&1
         """
 
 
@@ -64,8 +65,15 @@ rule verification_metrics:
         script="workflow/scripts/verification_metrics.py",
         inference_okfile=rules.inference_execute.output.okfile,
         truth=config["truth"]["root"],
+        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.nc",
+    log:
+        OUT_ROOT / "logs/verification_metrics/{run_id}-{init_time}.log",
+    resources:
+        cpus_per_task=24,
+        mem_mb=50_000,
+        runtime="60m",
     # wildcard_constraints:
     # run_id="^" # to avoid ambiguitiy with run_baseline_verif
     # TODO: implement logic to use experiment name instead of run_id as wildcard
@@ -77,15 +85,11 @@ rule verification_metrics:
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
-        threshold_dict=config["thresholds"],
-    log:
-        OUT_ROOT / "logs/verification_metrics/{run_id}-{init_time}.log",
-    resources:
-        cpus_per_task=24,
-        mem_mb=50_000,
-        runtime="60m",
+        experiment_params=",".join(EXPERIMENT_PARAMS),
+        threshold_dict=config["experiment"]["thresholds"],
     shell:
         """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {params.grib_out_dir} \
             --truth {input.truth} \
@@ -94,8 +98,9 @@ rule verification_metrics:
             --label "{params.fcst_label}" \
             --truth_label "{params.truth_label}" \
             --regions "{params.regions}" \
+            --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
-            --output {output} > {log} 2>&1
+            --output {output} >{log} 2>&1
         """
 
 
@@ -124,7 +129,7 @@ rule verification_metrics_aggregation:
         runtime="2h",
     shell:
         """
-        uv run {input.script} {input.verif_nc} --output {output} > {log} 2>&1
+        uv run {input.script} {input.verif_nc} --output {output} >{log} 2>&1
         """
 
 
@@ -152,17 +157,17 @@ rule verification_metrics_plot:
             directory(OUT_ROOT / "results/{experiment}/plots"),
             patterns=["{name}.png"],
         ),
-    params:
-        labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
     log:
         OUT_ROOT / "logs/verification_metrics_plot/{experiment}.log",
     resources:
         cpus_per_task=16,
         mem_mb=50_000,
         runtime="20m",
+    params:
+        labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
     shell:
         """
-        uv run {input.script} {input.verif} --output_dir {output} > {log} 2>&1
+        uv run {input.script} {input.verif} --output_dir {output} >{log} 2>&1
         """
 
 

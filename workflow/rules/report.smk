@@ -12,11 +12,14 @@ def make_header_text():
     truth = config["truth"]["label"]
     if isinstance(dates, list):
         return f"Explicit initializations from {len(dates)} runs have been used."
-    return f"Verification against {truth} with initializations from {dates.get('start')} to {dates.get('end')} by {dates.get('frequency')}"
+    text = f"Verification against {truth} with initializations from {dates.get('start')} to {dates.get('end')} by {dates.get('frequency')}"
+    blacklist = dates.get("blacklist", [])
+    if blacklist:
+        text += f" (excluding {len(blacklist)} blacklisted date{'s' if len(blacklist)!=1 else ''})"
+    return text
 
 
 rule report_experiment_dashboard:
-    localrule: True
     input:
         "src/verification/__init__.py",
         script="workflow/scripts/report_experiment_dashboard.py",
@@ -29,12 +32,13 @@ rule report_experiment_dashboard:
             directory(OUT_ROOT / "results/{experiment}/dashboard"),
             htmlindex="dashboard.html",
         ),
+    log:
+        OUT_ROOT / "logs/report_experiment_dashboard/{experiment}.log",
+    localrule: True
     params:
         sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
         header_text=make_header_text(),
-        stratification=" ".join(config["dashboard"]["stratification"]),
-    log:
-        OUT_ROOT / "logs/report_experiment_dashboard/{experiment}.log",
+        stratification=" ".join(config["experiment"]["dashboard"]["stratification"]),
     shell:
         """
         python {input.script} \
@@ -44,5 +48,52 @@ rule report_experiment_dashboard:
             --header_text "{params.header_text}" \
             --configfile "{input.configfile}" \
             --stratification {params.stratification} \
-            --output {output} > {log} 2>&1
+            --output {output} >{log} 2>&1
+        """
+
+
+rule report_scorecard:
+    input:
+        script="workflow/scripts/report_scorecard.py",
+        verif_run=lambda wc: EXPERIMENT_PARTICIPANTS[f"{wc.env_id}/{wc.config_hash}"],
+        verif_baseline=lambda wc: EXPERIMENT_PARTICIPANTS[
+            resolve_baseline_id(SCORECARD_CONFIGS[wc.scorecard_name]["baseline"])
+        ],
+    output:
+        report(
+            OUT_ROOT
+            / "results/{experiment}/scorecards/{scorecard_name}/scorecard_{scorecard_name}_{env_id}_{config_hash}.png",
+        ),
+    log:
+        OUT_ROOT
+        / "logs/report_scorecard/{experiment}/{scorecard_name}/{env_id}/{config_hash}.log",
+    wildcard_constraints:
+        env_id="[^/]+",  # no slashes
+        config_hash="[^/]+",
+        scorecard_name="[^/]+",
+    localrule: True
+    params:
+        lead_times=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["lead_times"],
+        stratification=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["stratification"],
+        variables=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["variables"],
+        run_source=lambda wc: RUN_CONFIGS[f"{wc.env_id}/{wc.config_hash}"].get(
+            "label", f"{wc.env_id}/{wc.config_hash}"
+        ),
+        baseline_source=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["baseline"],
+    shell:
+        """
+        VAR_ARGS=()
+        for v in {params.variables:q}; do
+            VAR_ARGS+=(--variable "$v")
+        done
+
+        python {input.script} \
+            --verif_run {input.verif_run:q} \
+            --verif_baseline {input.verif_baseline:q} \
+            --run_source {params.run_source:q} \
+            --baseline_source {params.baseline_source:q} \
+            --lead_times {params.lead_times:q} \
+            --stratification {params.stratification:q} \
+            "${{VAR_ARGS[@]}}" \
+            --output {output:q} >{log} 2>&1
         """

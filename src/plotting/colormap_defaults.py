@@ -13,17 +13,35 @@ def _fallback():
 
 
 _CMAP_DEFAULTS = {
-    "SP": {"cmap": plt.get_cmap("coolwarm", 11), "vmin": 800 * 100, "vmax": 1100 * 100},
-    "TD_2M": load_ncl_colormap("t2m_29lev.ct"),
-    "T_2M": load_ncl_colormap("t2m_29lev.ct") | {"units": "degC"},
-    "V_10M": load_ncl_colormap("modified_uv_17lev.ct") | {"units": "m/s"},
-    "U_10M": load_ncl_colormap("modified_uv_17lev.ct") | {"units": "m/s"},
-    "SP_10M": load_ncl_colormap("modified_uv_17lev.ct") | {"units": "m/s"},
-    # "10si": {"cmap": plt.get_cmap("GnBu", 11), "vmin": 0, "vmax": 25},
-    "T_850": {"cmap": plt.get_cmap("inferno", 11), "vmin": 220, "vmax": 310},
-    "FI_850": {"cmap": plt.get_cmap("coolwarm", 11), "vmin": 8000, "vmax": 17000},
-    "QV_925": load_ncl_colormap("RH_6lev.ct"),
+    "SP": {
+        "cmap": plt.get_cmap("coolwarm", 11),
+        "vmin": 800 * 100,
+        "vmax": 1100 * 100,
+        "extend": "both",
+    },
+    "TD_2M": load_ncl_colormap("t2m_29lev.ct") | {"extend": "both"},
+    "T_2M": load_ncl_colormap("t2m_29lev.ct") | {"units": "degC", "extend": "both"},
+    "V_10M": load_ncl_colormap("modified_uv_17lev.ct")
+    | {"units": "m/s", "extend": "both"},
+    "U_10M": load_ncl_colormap("modified_uv_17lev.ct")
+    | {"units": "m/s", "extend": "both"},
+    "SP_10M": load_ncl_colormap("modified_uv_17lev.ct")
+    | {"units": "m/s", "extend": "max"},
+    "T_850": {
+        "cmap": plt.get_cmap("inferno", 11),
+        "vmin": 220,
+        "vmax": 310,
+        "extend": "both",
+    },
+    "FI_850": {
+        "cmap": plt.get_cmap("coolwarm", 11),
+        "vmin": 8000,
+        "vmax": 17000,
+        "extend": "both",
+    },
+    "QV_925": load_ncl_colormap("RH_6lev.ct") | {"extend": "both"},
     "TOT_PREC_1H": {
+        "extend": "max",
         "colors": [
             "#ffffff",
             "#ebf6ff",
@@ -69,6 +87,7 @@ _CMAP_DEFAULTS = {
         ],
     },
     "TOT_PREC_6H": {
+        "extend": "max",
         "colors": [
             "#ffffff",
             "#d6e2ff",

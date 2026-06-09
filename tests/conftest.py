@@ -8,15 +8,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 @pytest.fixture
 def example_forecasters_config():
-    configfile = PROJECT_ROOT / "config/forecasters-co2.yaml"
+    configfile = PROJECT_ROOT / "config/forecasters-ich1.yaml"
     with open(configfile, "r") as f:
         config = yaml.safe_load(f)
     return config
 
 
 @pytest.fixture
-def example_interpolators_config():
-    configfile = PROJECT_ROOT / "config/interpolators-co2.yaml"
+def example_temporal_downscalers_config():
+    configfile = PROJECT_ROOT / "config/temporal-downscalers-ich1.yaml"
     with open(configfile, "r") as f:
         config = yaml.safe_load(f)
     return config
