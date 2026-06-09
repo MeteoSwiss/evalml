@@ -16,9 +16,10 @@ rule verification_metrics_baseline:
         script="workflow/scripts/verification_metrics.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth=config["truth"]["root"],
+        truth_label=config["truth"]["label"],
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
-        OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif.nc",
+        OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/verif_{truth_label}.nc",
     log:
         OUT_ROOT / "logs/verification_metrics_baseline/{baseline_id}-{init_time}.log",
     resources:
@@ -67,7 +68,8 @@ rule verification_metrics:
         truth=config["truth"]["root"],
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
-        OUT_ROOT / "data/runs/{run_id}/{init_time}/verif.nc",
+        OUT_ROOT
+        / f"data/runs/{{run_id}}/{{init_time}}/verif_{config['truth']['label']}.nc",
     log:
         OUT_ROOT / "logs/verification_metrics/{run_id}-{init_time}.log",
     resources:
@@ -120,7 +122,8 @@ rule verification_metrics_aggregation:
             allow_missing=True,
         ),
     output:
-        OUT_ROOT / "data/runs/{run_id}/verif_aggregated.nc",
+        OUT_ROOT
+        / f"data/runs/{{run_id}}/verif_aggregated_{config['truth']['label']}.nc",
     log:
         OUT_ROOT / "logs/verification_metrics_aggregation/{run_id}.log",
     resources:
@@ -142,7 +145,8 @@ use rule verification_metrics_aggregation as verification_metrics_aggregation_ba
             allow_missing=True,
         ),
     output:
-        OUT_ROOT / "data/baselines/{baseline_id}/verif_aggregated.nc",
+        OUT_ROOT
+        / f"data/baselines/{{baseline_id}}/verif_aggregated_{config['truth']['label']}.nc",
     log:
         OUT_ROOT / "logs/verification_metrics_aggregation_baseline/{baseline_id}.log",
 

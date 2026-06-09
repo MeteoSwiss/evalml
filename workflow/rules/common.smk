@@ -273,10 +273,16 @@ def resolve_baseline_id(label: str) -> str:
 def collect_experiment_participants():
     participants = {}
     for base in BASELINE_CONFIGS.keys():
-        participants[base] = OUT_ROOT / f"data/baselines/{base}/verif_aggregated.nc"
+        participants[base] = (
+            OUT_ROOT
+            / f"data/baselines/{base}/verif_aggregated_{config['truth']['label']}.nc"
+        )
     for exp in RUN_CONFIGS.keys():
         if RUN_CONFIGS[exp].get("_is_candidate", False):
-            participants[exp] = OUT_ROOT / f"data/runs/{exp}/verif_aggregated.nc"
+            participants[exp] = (
+                OUT_ROOT
+                / f"data/runs/{exp}/verif_aggregated_{config['truth']['label']}.nc"
+            )
     return participants
 
 
