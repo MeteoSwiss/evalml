@@ -149,9 +149,7 @@ def _open_zarr_component(
     return da
 
 
-def open_truth_zarr(
-    root: Path, param: str, accum_h: int | None = None
-) -> xr.DataArray:
+def open_truth_zarr(root: Path, param: str, accum_h: int | None = None) -> xr.DataArray:
     """Open the truth zarr lazily and return a DataArray for *param*.
 
     For derived variables (e.g. SP_10M) the required components are loaded and
@@ -282,8 +280,7 @@ def main(args: Namespace) -> None:
 
     if args.baseline_root:
         init_items = [
-            (rt, None)
-            for rt in iter_baseline_init_times(args.baseline_root, args.step)
+            (rt, None) for rt in iter_baseline_init_times(args.baseline_root, args.step)
         ]
         LOG.info("Found %d baseline init times", len(init_items))
     else:
@@ -537,8 +534,7 @@ def main(args: Namespace) -> None:
                     n > 0,
                     np.sqrt(
                         np.maximum(
-                            accum_sum_se[(s, h)] / n
-                            - (accum_sum_e[(s, h)] / n) ** 2,
+                            accum_sum_se[(s, h)] / n - (accum_sum_e[(s, h)] / n) ** 2,
                             0.0,
                         )
                     ),

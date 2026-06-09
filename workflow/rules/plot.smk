@@ -174,12 +174,12 @@ rule plot_score_maps:
     output:
         OUT_ROOT
         / "results/{experiment}/score_maps/runs/{run_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",
-    wildcard_constraints:
-        leadtime=r"\d+",  # only digits
-        init_hour=r"all|\d{1,2}",
     log:
         OUT_ROOT
         / "logs/plot_score_maps/{experiment}/{run_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",
+    wildcard_constraints:
+        leadtime=r"\d+",  # only digits
+        init_hour=r"all|\d{1,2}",
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
@@ -190,7 +190,7 @@ rule plot_score_maps:
         uv run python {input.script} \
             --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
             --param {wildcards.param} --leadtime {wildcards.leadtime} --score {wildcards.score} \
-            --season {wildcards.season} --init_hour {wildcards.init_hour} > {log} 2>&1
+            --season {wildcards.season} --init_hour {wildcards.init_hour} >{log} 2>&1
         # interactive editing (needs to set localrule: True and use only one core)
         # marimo edit {input.script} -- \
         #     --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \

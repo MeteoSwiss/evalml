@@ -184,6 +184,12 @@ rule verification_score_maps:
         truth=config["truth"]["root"],
     output:
         OUT_ROOT / "data/runs/{run_id}/score_maps/{param}_{leadtime}.nc",
+    log:
+        OUT_ROOT / "logs/verification_score_maps/{run_id}-{param}-{leadtime}.log",
+    resources:
+        cpus_per_task=24,
+        mem_mb=50_000,
+        runtime="60m",
     # wildcard_constraints:
     # run_id="^" # to avoid ambiguitiy with run_baseline_verif
     # TODO: implement logic to use experiment name instead of run_id as wildcard
@@ -192,12 +198,6 @@ rule verification_score_maps:
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         truth_label=config["truth"]["label"],
         reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
-    log:
-        OUT_ROOT / "logs/verification_score_maps/{run_id}-{param}-{leadtime}.log",
-    resources:
-        cpus_per_task=24,
-        mem_mb=50_000,
-        runtime="60m",
     shell:
         """
         uv run {input.script} \
@@ -207,7 +207,7 @@ rule verification_score_maps:
             --step {wildcards.leadtime} \
             --steps "{params.fcst_steps}" \
             --param {wildcards.param} \
-            --output {output} > {log} 2>&1
+            --output {output} >{log} 2>&1
         """
 
 
@@ -226,10 +226,6 @@ rule verification_score_maps_baseline:
     output:
         OUT_ROOT
         / f"data/baselines/{{baseline_id}}/{config['truth']['label']}/score_maps/{{param}}_{{leadtime}}.nc",
-    params:
-        baseline_root=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("root"),
-        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
-        reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
     log:
         OUT_ROOT
         / f"logs/verification_score_maps_baseline/{{baseline_id}}-{config['truth']['label']}-{{param}}-{{leadtime}}.log",
@@ -237,6 +233,10 @@ rule verification_score_maps_baseline:
         cpus_per_task=24,
         mem_mb=50_000,
         runtime="60m",
+    params:
+        baseline_root=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("root"),
+        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
+        reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
     shell:
         """
         uv run {input.script} \
@@ -246,5 +246,5 @@ rule verification_score_maps_baseline:
             --step {wildcards.leadtime} \
             --steps "{params.baseline_steps}" \
             --param {wildcards.param} \
-            --output {output} > {log} 2>&1
+            --output {output} >{log} 2>&1
         """
