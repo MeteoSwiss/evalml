@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Evaluation of Varda version 1.0.
+  Evaluation of Varda-Single version 1.0.
 
 dates:
   start: 2025-01-01T00:00
@@ -8,35 +8,42 @@ dates:
   frequency: 54h
 
 runs:
-  - interpolator:
-      inference_resources:
-        slurm_partition: normal-shared
-      # for checkpoints trained on a different HPC, using mlflow doesn't work due to difference in
-      # paths, so we directly specify the checkpoint path here
+  - temporal_downscaler:
       checkpoint: /scratch/mch/miccatta/ICON_interpolator_checkpoints/checkpoint_stage-C-interpolator-n320-6hto1h-reduced-variables/f9279244ed6f4c458597bdcf335ab36f/inference-last.ckpt
       label: Varda-Single
       steps: 0/120/1
-      config: resources/inference/configs/sgm-interpolator-global_trimedge_multi.yaml
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
+      extra_requirements:
+        - anemoi-datasets==0.5.35
+        # - anemoi-inference==0.11.0
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/120/6
-        extra_requirements:
-          - eccodes==2.39.1
-          - eccodes-cosmo-resources-python==2.38.3.1
-      extra_requirements:
-        - eccodes==2.39.1
-        - eccodes-cosmo-resources-python==2.38.3.1
-        - anemoi-datasets==0.5.35
-        - anemoi-inference==0.11.0
   - baseline:
-      label: ICON-CH2-ctrl
-      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
-      steps: 0/120/1
+      label: INCA
+      root: /store_new/mch/msclim/INCA
+      steps: 0/6/1
   - baseline:
-      label: ICON-CH1-ctrl
+      label: ICON-CH1-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
       steps: 0/33/1
+      member: control
+  - baseline:
+      label: ICON-CH1-EPS mean
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/33/1
+      member: mean
+  - baseline:
+      label: ICON-CH2-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/1
+      member: control
+  - baseline:
+      label: ICON-CH2-EPS mean
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/1
+      member: mean
 
 truth:
   label: KENDA-CH1
@@ -75,24 +82,30 @@ experiment:
   scorecards:
     enabled: true
     sections:
+      nowcasting:
+        baseline: INCA
+        lead_times: "0/6/1"
+        stratification: region
+        variables:
+          - "U_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2,ETS"
+          - "TOT_PREC:RMSE,R2,ETS"
       short_range:
-        baseline: ICON-CH1-ctrl
+        baseline: ICON-CH1-CTRL
         lead_times: "6/33/6"
         stratification: region
         variables:
           - "U_10M:RMSE,R2,ETS"
-          - "V_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2"
-          - "TOT_PREC:ETS"
+          - "TOT_PREC:RMSE,R2,ETS"
       medium_range:
-        baseline: ICON-CH2-ctrl
+        baseline: ICON-CH2-CTRL
         lead_times: "24/120/24"
         stratification: region
         variables:
           - "U_10M:RMSE,R2,ETS"
-          - "V_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2"
-          - "TOT_PREC:ETS"
+          - "TOT_PREC:RMSE,R2,ETS"
 
 
 
@@ -109,6 +122,5 @@ profile:
     mem_mb_per_cpu: 1800
     runtime: "1h"
     gpus: 0
+    account: s83
   jobs: 50
-  batch_rules:
-    plot_forecast_frame: 32
