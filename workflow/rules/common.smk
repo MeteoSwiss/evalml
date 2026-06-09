@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
+TRUTH_LABEL = config["truth"]["label"]
 
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
 HASH_LENGTH = 4
@@ -273,10 +274,14 @@ def resolve_baseline_id(label: str) -> str:
 def collect_experiment_participants():
     participants = {}
     for base in BASELINE_CONFIGS.keys():
-        participants[base] = OUT_ROOT / f"data/baselines/{base}/verif_aggregated.nc"
+        participants[base] = (
+            OUT_ROOT / f"data/baselines/{base}/verif_aggregated_{TRUTH_LABEL}.nc"
+        )
     for exp in RUN_CONFIGS.keys():
         if RUN_CONFIGS[exp].get("_is_candidate", False):
-            participants[exp] = OUT_ROOT / f"data/runs/{exp}/verif_aggregated.nc"
+            participants[exp] = (
+                OUT_ROOT / f"data/runs/{exp}/verif_aggregated_{TRUTH_LABEL}.nc"
+            )
     return participants
 
 
