@@ -52,7 +52,7 @@ experiment:
       - alpennordseite
       - alpensuedseite
       - jura
-    root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
   thresholds:
     TOT_PREC:
       gt: [0.0, 1, 5]
