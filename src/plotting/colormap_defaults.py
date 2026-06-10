@@ -26,6 +26,8 @@ _CMAP_DEFAULTS = {
     | {"units": "m/s", "extend": "both"},
     "SP_10M": load_ncl_colormap("modified_uv_17lev.ct")
     | {"units": "m/s", "extend": "max"},
+    "VMAX_10M": load_ncl_colormap("modified_uv_17lev.ct")
+    | {"units": "m/s", "extend": "max"},
     "T_850": {
         "cmap": plt.get_cmap("inferno", 11),
         "vmin": 220,

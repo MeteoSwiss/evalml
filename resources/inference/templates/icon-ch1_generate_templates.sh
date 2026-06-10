@@ -19,3 +19,6 @@ grib_copy -w shortName=T,level=500 $PL_SAMPLE /dev/stdout | grib_set -d 0 - icon
 
 # template for typeOfLevel=meanSea
 grib_copy -w shortName=PMSL $SFC_SAMPLE /dev/stdout | grib_set -d 0 - icon-ch1-typeOfLevel=meanSea.grib
+
+#template for windgust 
+grib_set -s shortName=VMAX_10M,level=10 -d 0 icon-ch1-typeOfLevel=heightAboveGround.grib icon-ch1-shortName=VMAX_10M.grib

@@ -19,10 +19,18 @@ PARAMS_MAP = {
 
 PARAMS_MAP_INV = {v: k for k, v in PARAMS_MAP.items()}
 
+# Diagnostic params emitted by the multi-output "realv2" stream. These are written to a
+# sibling grib/realv2-*.grib file (same LAM grid as the main output), so redirect to it.
+REALV2_PARAMS = frozenset({"VMAX_10M"})
+
 
 def load_state_from_grib(
     file: Path, paramlist: list[str] | None = None
 ) -> dict[str, np.ndarray | dict[str, np.ndarray] | gpd.GeoSeries]:
+    if paramlist and set(paramlist) <= REALV2_PARAMS:
+        realv2_file = file.with_name(f"realv2-{file.name}")
+        if realv2_file.exists():
+            file = realv2_file
     ds = load_from_grib_file(file, {"parameter.variable": paramlist})
     state = {}
     ref_param = next((p for p in (paramlist or []) if p in ds), None)
