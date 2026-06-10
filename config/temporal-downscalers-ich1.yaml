@@ -129,5 +129,5 @@ profile:
     mem_mb_per_cpu: 1800
     runtime: "1h"
     gpus: 0
-    account: s83
+    slurm_account: s83
   jobs: 50
