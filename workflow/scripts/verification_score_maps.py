@@ -7,6 +7,14 @@ grid, and accumulates running error statistics without ever holding the full
 time series in memory.  The final BIAS / RMSE / MAE / STDE maps are written to a
 NetCDF file.
 
+Design note: one Snakemake job per (run, param, lead time), each loading only the
+step(s) it needs. We deliberately do not load all lead times at once: per-job
+memory and output disk scale with N_leadtimes x grid size, which is infeasible at
+interpolator (1 h) and nowcasting (10 min) resolutions; that cost is independent
+of GRIB read speed, so it does not improve as loading gets faster. For TOT_PREC
+the loader (data_input._tot_prec_handling) de-accumulates over the requested
+[step - period, step] window, so we just select the target step.
+
 Usage
 -----
     uv run workflow/scripts/verification_score_maps.py \\
@@ -24,7 +32,7 @@ from pathlib import Path
 import numpy as np
 import xarray as xr
 
-from data_input import load_fct_data_from_grib, load_baseline_from_zarr, parse_steps
+from data_input import load_forecast_data, parse_steps
 from verification.spatial import map_forecast_to_truth
 
 LOG = logging.getLogger(__name__)
@@ -132,18 +140,21 @@ def _open_zarr_component(
 
     da = ds["data"].rename(param).drop_vars("variable", errors="ignore")
 
-    # Attach lat/lon as coordinates on the spatial dimension(s).
+    # Attach latitude/longitude as coordinates on the spatial dimension(s).
+    # Use the full names to match the forecast loader (load_forecast_data) and
+    # map_forecast_to_truth, which key on `latitude`/`longitude`.
     if lat is not None and lon is not None:
         if spatial_dim is not None:
             # flat 1-D case: cell/values dim
             da = da.assign_coords(
-                lat=(spatial_dim, lat.values), lon=(spatial_dim, lon.values)
+                latitude=(spatial_dim, lat.values),
+                longitude=(spatial_dim, lon.values),
             )
         else:
             # 2-D case: lat/lon still on original flat index — attach via unstack
             da = da.assign_coords(
-                lat=(["y", "x"], lat.values.reshape(ny, nx)),
-                lon=(["y", "x"], lon.values.reshape(ny, nx)),
+                latitude=(["y", "x"], lat.values.reshape(ny, nx)),
+                longitude=(["y", "x"], lon.values.reshape(ny, nx)),
             )
 
     return da
@@ -154,7 +165,7 @@ def open_truth_zarr(root: Path, param: str, accum_h: int | None = None) -> xr.Da
 
     For derived variables (e.g. SP_10M) the required components are loaded and
     the derivation is applied on the fly.  The returned DataArray has dimensions
-    ``(time, y, x)`` or ``(time, values)`` and always exposes ``lat``/``lon``.
+    ``(time, y, x)`` or ``(time, values)`` and always exposes ``latitude``/``longitude``.
     ``accum_h`` selects the precip accumulation length (TOT_PREC_<N>H).
     """
     if param in _DERIVED:
@@ -233,6 +244,18 @@ def main(args: Namespace) -> None:
     LOG.info("Truth    : %s", args.truth)
     LOG.info("Output   : %s", args.output)
     LOG.info("=" * 60)
+
+    if args.baseline_root:
+        # TODO(port): baseline score maps previously read a per-year
+        # FCST<yy>.zarr archive via data_input.load_baseline_from_zarr, removed in
+        # the earthkit migration. Baselines now load through the ICON/INCA paths
+        # (load_forecast_data / load_icon_baseline_from_grib); porting the baseline
+        # score-maps path onto those is a separate task. Fail fast until then.
+        raise NotImplementedError(
+            "Baseline (--baseline-root) score maps are not yet ported to the "
+            "post-earthkit data_input API (load_baseline_from_zarr was removed). "
+            "Only run-directory forecasts (--run-root) are supported for now."
+        )
 
     # Accumulated params (TOT_PREC) are stored cumulative-from-start, while the
     # truth is a period accumulation whose length equals the verification step
@@ -340,34 +363,35 @@ def main(args: Namespace) -> None:
         )
 
         try:
-            if args.baseline_root:
-                zarr_path = args.baseline_root / f"FCST{reftime.strftime('%y')}.zarr"
-                fcst = load_baseline_from_zarr(
-                    root=zarr_path,
-                    reftime=reftime,
-                    steps=req_steps,
-                    params=fct_params,
-                )
-            else:
-                # For accumulated params (TOT_PREC) req_steps is the
-                # [step - period, step] window; the loader de-accumulates the
-                # cumulative-from-start field over those steps, yielding the
-                # period accumulation at `step`. Instantaneous params request a
-                # single step. The target step is selected just below.
-                fcst = load_fct_data_from_grib(
-                    root=grib_dir,
-                    reftime=reftime,
-                    steps=req_steps,
-                    params=fct_params,
-                )
+            # For accumulated params (TOT_PREC) req_steps is the [step - period,
+            # step] window; load_forecast_data de-accumulates the
+            # cumulative-from-start field over the requested steps (diff over
+            # `step`), so the target step holds the period accumulation.
+            # Instantaneous params request a single step. The target step is
+            # selected just below.
+            #
+            # NOTE: data_input._tot_prec_handling treats the FIRST loaded step
+            # positionally as the forecast initial condition and zero-fills it
+            # when it is present-but-all-NaN. For our window the first step is
+            # `step - period` (non-zero except at the first lead time); a
+            # corrupt/NaN field there would be silently zeroed, turning the diff
+            # into a cumulative-from-start value. A missing GRIB instead yields
+            # NaN and is skipped downstream. The principled fix belongs in
+            # _tot_prec_handling (gate the IC zero-fill on step 0 being
+            # requested) — see the port note.
+            fcst = load_forecast_data(grib_dir, reftime, req_steps, fct_params)
         except Exception as exc:
             LOG.warning("Could not load forecast for %s: %s", reftime, exc)
             n_skip += 1
             continue
 
-        # Drop lead_time dimension (select only the requested step).
-        if "lead_time" in fcst.dims:
-            fcst = fcst.sel(lead_time=np.timedelta64(args.step, "h"))
+        # Select the target step. The earthkit loader returns forecasts over the
+        # requested steps with a `step` (timedelta64) dimension; for TOT_PREC the
+        # loader has already de-accumulated over the window, so the target step
+        # holds the period accumulation, and for instantaneous params only the
+        # single requested step is present.
+        if "step" in fcst.dims:
+            fcst = fcst.sel(step=np.timedelta64(args.step, "h"))
 
         # Compute derived variable if needed.
         if args.param in _DERIVED:
@@ -426,8 +450,10 @@ def main(args: Namespace) -> None:
             continue
 
         fcst_param = fcst_mapped[args.param]
-        # Squeeze any ensemble/eps dimension (deterministic run stored with size-1 eps).
-        for dim in ["eps", "ensemble", "number"]:
+        # Squeeze size-1 non-spatial dims so the error array is purely spatial.
+        # The earthkit loader keeps `number` (ensemble), `z` (vertical) and
+        # `forecast_reference_time` as size-1 dims for a deterministic surface run.
+        for dim in ["eps", "ensemble", "number", "z", "forecast_reference_time"]:
             if dim in fcst_param.dims and fcst_param.sizes[dim] == 1:
                 fcst_param = fcst_param.squeeze(dim, drop=True)
         fcst_vals = fcst_param.values
