@@ -39,7 +39,7 @@ output:
                 inverse: true
             - assign_mask: # fill local/global overlapping points with nan
                 mask: "global/cutout_mask"
-  # Regional diagnostic stream (VMAX_10M) on the REAL-CH1 / ICON-CH1 1km grid.
+  # Dianostic decoder on ICON grid only
   realv2:
     grib:
       path: grib/realv2-{date}{time:04}_{step:03}.grib
@@ -52,7 +52,7 @@ output:
         samples: resources/templates_index_realch1.yaml
 
 # Remaps the `data` stream's IFS variable names (2t, 10u, tp, ...) to the COSMO
-# shortNames expected by the ICON GRIB templates, AND gives the realv2 VMAX_10M
-# diagnostic a whole-hour max period (['6h','12h']) so the GRIB time-processing
-# encoder does not hit the integer-hour assertion on its native ['650m','12h'] period.
-patch_metadata: resources/sgm-realv2-ich1-patch.yaml
+# shortNames expected by the ICON GRIB templates, and gives the realv2 VMAX_10M
+# diagnostic a whole-hour max period (['6h', '12h']) so its GRIB time-processing
+# is encoded correctly.
+patch_metadata: resources/sgm-windgust-ich1-patch.yaml

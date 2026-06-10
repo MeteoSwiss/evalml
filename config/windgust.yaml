@@ -12,13 +12,12 @@ runs:
       checkpoint: /scratch/mch/rradev/output/checkpoint/9efa01f8c7464328897edb2c03a407c2/inference-last.ckpt
       label: realv2_vmax10m
       steps: 0/120/6
-      config: resources/inference/configs/sgm-multidataset-forecaster-realv2-ich1.yaml
+      config: resources/inference/configs/sgm-multidataset-forecaster-windgust-ich1.yaml
       extra_requirements:
         # checkpoint needs: (1) EmptyInput.create_input_state propagates the date
         # (else KeyError 'date' in add_initial_forcings_to_input_state for the
-        # diagnostic-only realv2 stream), and (2) format_dataset_name preserves the
-        # {time:04}/{step:03} padding in GRIB output paths.
         - git+https://github.com/radiradev/anemoi-inference.git@fix/empty-input-propagate-date
+
         - eccodes==2.39.1
         - eccodes-cosmo-resources-python==2.38.3.1
 
