@@ -404,10 +404,27 @@ class DefaultResources(BaseModel):
     cpus_per_task: int = Field(..., ge=1, description="Number of CPUs per task.")
     mem_mb_per_cpu: int = Field(..., ge=1, description="Memory per CPU in MB.")
     runtime: str = Field(..., description="Maximum runtime, e.g. '1h'.")
+    slurm_extra: str | None = Field(
+        None,
+        description=(
+            "Extra sbatch flags applied to every job, e.g. '--exclusive' to "
+            "request whole nodes and avoid sharing (oversubscribing) them."
+        ),
+    )
 
     def parsable(self) -> str:
         """Convert the default resources to a string of key=value pairs."""
-        return [f"{key}={value}" for key, value in self.model_dump().items()]
+        items = []
+        for key, value in self.model_dump().items():
+            if value is None:
+                continue
+            if key == "slurm_extra":
+                # Snakemake evaluates resource values as Python expressions; wrap the
+                # flag string in quotes so e.g. --exclusive is taken as a literal string.
+                items.append(f'{key}="{value}"')
+            else:
+                items.append(f"{key}={value}")
+        return items
 
 
 class GlobalResources(BaseModel):

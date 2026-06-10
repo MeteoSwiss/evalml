@@ -3,9 +3,11 @@ description: |
   Showcase the multi-output "realv2" anemoi architecture (ICON-CH1 cutout forecaster
   with a diagnostic VMAX_10M stream on the REAL-CH1 / ICON-CH1 1km grid).
 
-# Explicit init times for case studies / showcases.
+# One week of daily initialisations for verification.
 dates:
-  - 2024-02-01T00:00
+  start: 2024-02-01T00:00
+  end: 2024-02-07T00:00
+  frequency: 24h
 
 runs:
   - forecaster:
@@ -76,6 +78,7 @@ profile:
     mem_mb_per_cpu: 1800
     runtime: "1h"
     gpus: 0
+    slurm_extra: "--exclusive"  # whole nodes; avoid oversubscription
   jobs: 50
   batch_rules:
     plot_forecast_frame: 32

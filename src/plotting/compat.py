@@ -4,7 +4,7 @@ from pathlib import Path
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import MultiPoint
-from data_input import load_from_grib_file
+from data_input import load_from_grib_file, REALV2_PARAMS
 
 
 PARAMS_MAP = {
@@ -18,10 +18,6 @@ PARAMS_MAP = {
 }
 
 PARAMS_MAP_INV = {v: k for k, v in PARAMS_MAP.items()}
-
-# Diagnostic params emitted by the multi-output "realv2" stream. These are written to a
-# sibling grib/realv2-*.grib file (same LAM grid as the main output), so redirect to it.
-REALV2_PARAMS = frozenset({"VMAX_10M"})
 
 
 def load_state_from_grib(

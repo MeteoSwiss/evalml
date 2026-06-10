@@ -159,6 +159,19 @@
           "description": "Maximum runtime, e.g. '1h'.",
           "title": "Runtime",
           "type": "string"
+        },
+        "slurm_extra": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Extra sbatch flags applied to every job, e.g. '--exclusive' to request whole nodes and avoid sharing (oversubscribing) them.",
+          "title": "Slurm Extra"
         }
       },
       "required": [
