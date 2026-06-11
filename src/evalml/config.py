@@ -404,10 +404,20 @@ class DefaultResources(BaseModel):
     cpus_per_task: int = Field(..., ge=1, description="Number of CPUs per task.")
     mem_mb_per_cpu: int = Field(..., ge=1, description="Memory per CPU in MB.")
     runtime: str = Field(..., description="Maximum runtime, e.g. '1h'.")
+    slurm_account: str | None = Field(None, description="SLURM account to charge.")
+    gpus: int | None = Field(
+        None, ge=0, description="Default GPU count per job (0 for non-GPU jobs)."
+    )
 
-    def parsable(self) -> str:
+    model_config = {"extra": "forbid"}
+
+    def parsable(self) -> list[str]:
         """Convert the default resources to a string of key=value pairs."""
-        return [f"{key}={value}" for key, value in self.model_dump().items()]
+        return [
+            f"{key}={value}"
+            for key, value in self.model_dump().items()
+            if value is not None
+        ]
 
 
 class GlobalResources(BaseModel):

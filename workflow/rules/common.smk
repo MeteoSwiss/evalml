@@ -22,6 +22,7 @@ ENV_HASH_FIELDS = {
 RUN_HASH_EXCLUDE = {"label", "inference_resources", "_is_candidate", "model_type"}
 # Fields excluded from baseline hashing (display metadata only).
 BASELINE_HASH_EXCLUDE = {"label"}
+TRUTH_HASH_EXCLUDE = {"label"}
 
 
 # ============================================================================
@@ -273,10 +274,14 @@ def resolve_baseline_id(label: str) -> str:
 def collect_experiment_participants():
     participants = {}
     for base in BASELINE_CONFIGS.keys():
-        participants[base] = OUT_ROOT / f"data/baselines/{base}/verif_aggregated.nc"
+        participants[base] = (
+            OUT_ROOT / f"data/baselines/{base}/verif_aggregated_{TRUTH_HASH}.nc"
+        )
     for exp in RUN_CONFIGS.keys():
         if RUN_CONFIGS[exp].get("_is_candidate", False):
-            participants[exp] = OUT_ROOT / f"data/runs/{exp}/verif_aggregated.nc"
+            participants[exp] = (
+                OUT_ROOT / f"data/runs/{exp}/verif_aggregated_{TRUTH_HASH}.nc"
+            )
     return participants
 
 
@@ -338,6 +343,13 @@ def master_hash() -> str:
     return generate_json_hash(configs_to_hash)
 
 
+def truth_hash(truth_config: dict) -> str:
+    """Generate a short hash of the configs for the truth data."""
+    cfg = {k: v for k, v in truth_config.items() if k not in TRUTH_HASH_EXCLUDE}
+    return generate_json_hash(cfg)
+
+
+TRUTH_HASH = truth_hash(config["truth"])
 REGIONS = parse_regions()
 SHOWCASE_REGIONS = parse_showcase_regions()
 SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])
