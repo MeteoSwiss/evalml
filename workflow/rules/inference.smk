@@ -298,6 +298,30 @@ rule inference_execute:
 
             cd {params.workdir}
 
+            METRICS_DIR={params.workdir}
+
+            # Write wrapper script that collects GPU metrics alongside inference.
+            # It runs as the srun payload so it executes on the compute node where
+            # the GPU lives. nvidia-smi is a system binary, available outside the
+            # squashfs venv. Task 0 owns metric collection to avoid conflicts in
+            # multi-task jobs. METRICS_DIR and INFERENCE_CMD_ARGS are propagated
+            # via Slurm's default --export=ALL env forwarding.
+            cat > "$METRICS_DIR/run_with_metrics.sh" << 'RUN_METRICS_EOF'
+            #!/bin/bash
+            set -euo pipefail
+            if [ "${{SLURM_PROCID:-0}}" = "0" ]; then
+                echo "$SLURM_JOB_ID" > "$METRICS_DIR/slurm_job_id"
+                nvidia-smi dmon -s pucvmet -d 5 -o DT \
+                    > "$METRICS_DIR/gpu_metrics.log" 2>/dev/null &
+                DMON_PID=$!
+                trap 'kill $DMON_PID 2>/dev/null; wait $DMON_PID 2>/dev/null' EXIT INT TERM
+            fi
+            anemoi-inference run config.yaml $INFERENCE_CMD_ARGS
+# fmt: off
+RUN_METRICS_EOF
+# fmt: on
+            chmod +x "$METRICS_DIR/run_with_metrics.sh"
+
             squashfs-mount {params.image_path}:/user-environment -- bash -c '
                 source /user-environment/bin/activate
 
@@ -312,6 +336,9 @@ rule inference_execute:
                     CMD_ARGS+=(runner.parallel.cluster=slurm)
                 fi
 
+                export METRICS_DIR={params.workdir}
+                export INFERENCE_CMD_ARGS="${{CMD_ARGS[*]}}"
+
                 srun \
                     --unbuffered \
                     --partition={resources.slurm_partition} \
@@ -320,8 +347,19 @@ rule inference_execute:
                     --time={resources.runtime} \
                     --gres={resources.gres} \
                     --ntasks={resources.ntasks} \
-                    anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
-                '
-        ) >{log} 2>&1
+                    bash "$METRICS_DIR/run_with_metrics.sh"
+            '
+
+            # Post-job: collect Slurm CPU/memory accounting once sacct catches up
+            if [ -f "$METRICS_DIR/slurm_job_id" ]; then
+                SLURM_JOB=$(cat "$METRICS_DIR/slurm_job_id")
+                sleep 5
+                sacct -j "$SLURM_JOB" \
+                    --parsable2 \
+                    --format=JobID,JobName,Elapsed,CPUTime,MaxRSS,MaxVMSize,AveRSS,MaxDiskRead,MaxDiskWrite \
+                    > "$METRICS_DIR/slurm_metrics.log" 2>/dev/null || true
+            fi
+
+        ) > {log} 2>&1
         """
 # fmt: on
