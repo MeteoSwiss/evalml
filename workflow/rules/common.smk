@@ -349,6 +349,7 @@ def truth_hash(truth_config: dict) -> str:
     return generate_json_hash(cfg)
 
 
+TRUTH_HASH = truth_hash(config["truth"])
 REGIONS = parse_regions()
 SHOWCASE_REGIONS = parse_showcase_regions()
 SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])
@@ -364,4 +365,3 @@ _scorecard = config.get("experiment", {}).get("scorecards") or {}
 SCORECARD_CONFIGS = (
     _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
 )
-TRUTH_HASH = truth_hash(config["truth"])
