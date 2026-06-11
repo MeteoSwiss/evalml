@@ -85,8 +85,6 @@ def main(args: ScriptConfig):
     )
 
     # save results to NetCDF
-    results.attrs["truth_label"] = args.truth_label
-    results.attrs["truth_root"] = str(args.truth)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     results.earthkit.to_netcdf(args.output)
     LOG.info("Saved verification results to %s", args.output)
