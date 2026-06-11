@@ -18,8 +18,7 @@ rule verification_metrics_baseline:
         truth=config["truth"]["root"],
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
-        OUT_ROOT
-        / f"data/baselines/{{baseline_id}}/{{init_time}}/verif_{TRUTH_LABEL}.nc",
+        OUT_ROOT / f"data/baselines/{{baseline_id}}/{{init_time}}/verif_{TRUTH_HASH}.nc",
     log:
         OUT_ROOT / "logs/verification_metrics_baseline/{baseline_id}-{init_time}.log",
     resources:
@@ -68,7 +67,7 @@ rule verification_metrics:
         truth=config["truth"]["root"],
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
-        OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/verif_{TRUTH_LABEL}.nc",
+        OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/verif_{TRUTH_HASH}.nc",
     log:
         OUT_ROOT / "logs/verification_metrics/{run_id}-{init_time}.log",
     resources:
@@ -121,7 +120,7 @@ rule verification_metrics_aggregation:
             allow_missing=True,
         ),
     output:
-        OUT_ROOT / f"data/runs/{{run_id}}/verif_aggregated_{TRUTH_LABEL}.nc",
+        OUT_ROOT / f"data/runs/{{run_id}}/verif_aggregated_{TRUTH_HASH}.nc",
     log:
         OUT_ROOT / "logs/verification_metrics_aggregation/{run_id}.log",
     resources:
@@ -143,7 +142,7 @@ use rule verification_metrics_aggregation as verification_metrics_aggregation_ba
             allow_missing=True,
         ),
     output:
-        OUT_ROOT / f"data/baselines/{{baseline_id}}/verif_aggregated_{TRUTH_LABEL}.nc",
+        OUT_ROOT / f"data/baselines/{{baseline_id}}/verif_aggregated_{TRUTH_HASH}.nc",
     log:
         OUT_ROOT / "logs/verification_metrics_aggregation_baseline/{baseline_id}.log",
 
