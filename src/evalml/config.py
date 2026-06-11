@@ -419,6 +419,10 @@ class ExperimentConfig(BaseModel):
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
     )
+    score_maps: ScoreMapsConfig = Field(
+        default_factory=ScoreMapsConfig,
+        description="Parameters for score map plots (used with --maps flag).",
+    )
 
     @field_validator("thresholds")
     @classmethod
@@ -526,10 +530,6 @@ class ConfigModel(BaseModel):
     )
     locations: Locations
     profile: Profile
-    score_maps: ScoreMapsConfig = Field(
-        default_factory=ScoreMapsConfig,
-        description="Parameters for score map plots (used with --maps flag).",
-    )
     showcase: ShowcaseConfig = Field(
         default_factory=ShowcaseConfig,
         description="Settings for the showcase workflow.",

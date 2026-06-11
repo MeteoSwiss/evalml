@@ -261,6 +261,10 @@
           ],
           "default": null,
           "description": "Scorecard generation configuration. Omit or set enabled: false to disable."
+        },
+        "score_maps": {
+          "$ref": "#/$defs/ScoreMapsConfig",
+          "description": "Parameters for score map plots (used with --maps flag)."
         }
       },
       "required": [
@@ -957,10 +961,6 @@
     },
     "profile": {
       "$ref": "#/$defs/Profile"
-    },
-    "score_maps": {
-      "$ref": "#/$defs/ScoreMapsConfig",
-      "description": "Parameters for score map plots (used with --maps flag)."
     },
     "showcase": {
       "$ref": "#/$defs/ShowcaseConfig",
