@@ -91,6 +91,115 @@ def test_map_forecast_to_truth_maps_forecast_to_truth_locations():
     )
 
 
+def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_aligned():
+    fcst_time = np.array(["2024-01-01T00:00"], dtype="datetime64[ns]")
+    lat = np.array([[46.0, 46.0], [47.0, 47.0]])
+    lon = np.array([[7.0, 8.0], [7.0, 8.0]])
+
+    fcst = xr.Dataset(
+        data_vars={"T_2M": (("time", "y", "x"), np.array([[[1.0, 2.0], [3.0, 4.0]]]))},
+        coords={
+            "time": fcst_time,
+            "y": [0, 1],
+            "x": [0, 1],
+            "lat": (("y", "x"), lat),
+            "lon": (("y", "x"), lon),
+        },
+    )
+    truth = xr.Dataset(
+        data_vars={"T_2M": (("time", "y", "x"), np.zeros((1, 2, 2)))},
+        coords={
+            "time": fcst_time,
+            "y": [0, 1],
+            "x": [0, 1],
+            "lat": (("y", "x"), lat),
+            "lon": (("y", "x"), lon),
+        },
+    )
+
+    result = map_forecast_to_truth(fcst, truth)
+    _, result_aligned = xr.align(truth, result)
+
+    assert result is fcst
+    assert result["T_2M"].values is fcst["T_2M"].values
+    assert np.array_equal(result["lat"].values, truth["lat"].values)
+    assert np.array_equal(result["lon"].values, truth["lon"].values)
+    assert np.array_equal(result_aligned["T_2M"].values, fcst["T_2M"].values)
+
+
+def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_within_tolerance():
+    fcst_time = np.array(["2024-01-01T00:00"], dtype="datetime64[ns]")
+    lat = np.array([[46.0, 46.0], [47.0, 47.0]])
+    lon = np.array([[7.0, 8.0], [7.0, 8.0]])
+
+    fcst = xr.Dataset(
+        data_vars={"T_2M": (("time", "y", "x"), np.array([[[1.0, 2.0], [3.0, 4.0]]]))},
+        coords={
+            "time": fcst_time,
+            "y": [0, 1],
+            "x": [0, 1],
+            "lat": (("y", "x"), lat + 5e-8),
+            "lon": (("y", "x"), lon - 5e-8),
+        },
+    )
+    # Nudge coordinates by less than the 1e-6 tolerance — should still be treated as aligned.
+    truth = xr.Dataset(
+        data_vars={"T_2M": (("time", "y", "x"), np.zeros((1, 2, 2)))},
+        coords={
+            "time": fcst_time,
+            "y": [0, 1],
+            "x": [0, 1],
+            "lat": (("y", "x"), lat),
+            "lon": (("y", "x"), lon),
+        },
+    )
+
+    result = map_forecast_to_truth(fcst, truth)
+    _, result_aligned = xr.align(truth, result)
+
+    assert result is not fcst
+    assert result["T_2M"].values is fcst["T_2M"].values
+    assert np.array_equal(result["lat"].values, truth["lat"].values)
+    assert np.array_equal(result["lon"].values, truth["lon"].values)
+    assert np.array_equal(result_aligned["T_2M"].values, fcst["T_2M"].values)
+
+
+def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_within_tolerance_icon():
+    fcst_time = np.array(["2024-01-01T00:00"], dtype="datetime64[ns]")
+    lat = np.array([[46.0, 46.0], [47.0, 47.0]]).flatten()
+    lon = np.array([[7.0, 8.0], [7.0, 8.0]]).flatten()
+
+    fcst = xr.Dataset(
+        data_vars={"T_2M": (("time", "values"), np.array([[1.0, 2.0, 3.0, 4.0]]))},
+        coords={
+            "time": fcst_time,
+            "values": [0, 1, 2, 3],
+            "lat": (("values"), lat + 5e-8),
+            "lon": (("values"), lon - 5e-8),
+        },
+    )
+    # Nudge coordinates by less than the 1e-6 tolerance — should still be treated as aligned.
+    truth = xr.Dataset(
+        data_vars={"T_2M": (("time", "values"), np.zeros((1, 4)))},
+        coords={
+            "time": fcst_time,
+            "values": [3, 1, 2, 0],
+            "lat": (("values"), lat),
+            "lon": (("values"), lon),
+        },
+    )
+
+    result = map_forecast_to_truth(fcst, truth)
+    _, result_aligned = xr.align(truth, result)
+
+    assert result is not fcst
+    assert result["T_2M"].values is fcst["T_2M"].values
+    assert np.array_equal(result["lat"].values, truth["lat"].values)
+    assert np.array_equal(result["lon"].values, truth["lon"].values)
+    assert np.array_equal(result["values"].values, truth["values"].values)
+    assert np.array_equal(result_aligned["T_2M"].values, fcst["T_2M"].values)
+
+
 def test_map_forecast_to_truth_restores_grid_when_truth_is_gridded():
     fcst_time = np.array(["2024-01-01T00:00"], dtype="datetime64[ns]")
 
