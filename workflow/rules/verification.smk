@@ -213,16 +213,12 @@ rule verification_score_maps:
 
 rule verification_score_maps_baseline:
     input:
+        "src/verification/__init__.py",
+        "src/data_input/__init__.py",
         script="workflow/scripts/verification_score_maps.py",
-        # Declared as inputs purely for dependency tracking (re-run if the baseline
-        # archive changes). The script discovers the zarrs itself by globbing
-        # `--baseline_root`, so this list is intentionally not passed on the CLI.
-        baseline_zarrs=lambda wc: expand(
-            "{root}/FCST{year}.zarr",
-            root=BASELINE_CONFIGS[wc.baseline_id].get("root"),
-            year=sorted({t.strftime("%y") for t in REFTIMES}),
-        ),
+        forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth=config["truth"]["root"],
+        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT
         / f"data/baselines/{{baseline_id}}/{config['truth']['label']}/score_maps/{{param}}_{{leadtime}}.nc",
@@ -234,17 +230,19 @@ rule verification_score_maps_baseline:
         mem_mb=50_000,
         runtime="60m",
     params:
-        baseline_root=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("root"),
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
+        member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
         reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
     shell:
         """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
-            --baseline_root {params.baseline_root} \
+            --baseline_root {input.forecast} \
             --reftimes {params.reftimes} \
             --truth {input.truth} \
             --step {wildcards.leadtime} \
             --steps "{params.baseline_steps}" \
             --param {wildcards.param} \
+            --member "{params.member}" \
             --output {output} >{log} 2>&1
         """

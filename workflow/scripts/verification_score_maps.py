@@ -1,11 +1,17 @@
 """Compute spatial maps of temporally-aggregated forecast errors.
 
-For a fixed lead time and variable, iterates over all initialisation times found
-under a run directory, loads the corresponding GRIB forecast field and the
-matching truth slice from a reference zarr, maps the forecast onto the truth
-grid, and accumulates running error statistics without ever holding the full
-time series in memory.  The final BIAS / RMSE / MAE / STDE maps are written to a
-NetCDF file.
+For a fixed lead time and variable, iterates over all initialisation times
+(discovered under a run directory, or taken from --reftimes for baselines),
+loads the corresponding forecast field and the matching truth slice from a
+reference zarr, maps the forecast onto the truth grid, and accumulates running
+error statistics without ever holding the full time series in memory.  The
+final BIAS / RMSE / MAE / STDE maps are written to a NetCDF file.
+
+Forecasts load through data_input.load_forecast_data, which routes by source:
+ML run directories (GRIB files), INCA (NetCDF archive), or otherwise the ICON
+operational GRIB archive. Baselines (--baseline_root) use the latter two paths;
+init times are not discovered from the archive but taken from --reftimes, with
+unavailable dates skipped at load time.
 
 Design note: one Snakemake job per (run, param, lead time), each loading only the
 step(s) it needs. We deliberately do not load all lead times at once: per-job
@@ -104,13 +110,15 @@ def _compute_derived(ds: xr.Dataset, param: str) -> xr.DataArray:
 # ---------------------------------------------------------------------------
 # Truth loading
 # ---------------------------------------------------------------------------
-# TODO: consolidate with src/data_input/__init__.py once the ongoing
-# data-loading refactor lands. _open_zarr_component below duplicates
+# TODO: consolidate with src/data_input/__init__.py as part of the
+# refactor/data-io branch. _open_zarr_component below duplicates
 # ~80% of load_analysis_data_from_zarr but returns a lazy DataArray
 # rather than a time-sliced Dataset, which is what our streaming
 # aggregation needs. The right end-state is a shared lazy-open primitive
-# in data_input that both consumers use; not introduced here because
-# data_input is being reworked separately and we don't want to conflict.
+# in data_input that both consumers use; not introduced here to avoid
+# conflicting with the data-io refactor. Until then this opener must
+# mirror the loader's conventions (notably the m -> mm precip conversion
+# from MRB-820).
 
 
 def _open_zarr_component(
@@ -139,6 +147,13 @@ def _open_zarr_component(
         spatial_dim = None  # now (y, x)
 
     da = ds["data"].rename(param).drop_vars("variable", errors="ignore")
+
+    # Truth zarrs store precip in m (anemoi convention); all forecast loaders
+    # deliver canonical mm (kg m-2) since MRB-820, which put this conversion in
+    # load_analysis_data_from_zarr. Mirror it here until this opener is
+    # consolidated into data_input (refactor/data-io). Stays lazy (dask).
+    if param in _ACCUMULATED_PARAMS:
+        da = da * 1000
 
     # Attach latitude/longitude as coordinates on the spatial dimension(s).
     # Use the full names to match the forecast loader (load_forecast_data) and
@@ -208,30 +223,6 @@ def iter_init_dirs(run_root: Path) -> list[tuple[datetime, Path]]:
     return result
 
 
-def iter_baseline_init_times(baseline_root: Path, step: int) -> list[datetime]:
-    """Return all init times from a baseline's zarr(s) that have the requested step available.
-
-    The per-year zarrs are discovered by globbing ``FCST*.zarr`` under ``baseline_root``
-    rather than taking an explicit list: the layout is fixed and the discovered init
-    times are filtered down to the configured reftimes by the caller anyway, so any
-    extra years picked up from the archive are harmless.
-    """
-    step_td = np.timedelta64(step, "h")
-    reftimes = []
-    for zarr_path in sorted(baseline_root.glob("FCST*.zarr")):
-        if not zarr_path.exists():
-            LOG.warning("Baseline zarr not found: %s", zarr_path)
-            continue
-        ds = xr.open_zarr(zarr_path, consolidated=True, decode_timedelta=True)
-        if step_td not in ds["step"].values:
-            LOG.warning("Step %dh not in %s, skipping", step, zarr_path)
-            continue
-        for rt in ds["forecast_reference_time"].values:
-            ts = (rt - np.datetime64("1970-01-01T00:00:00")) / np.timedelta64(1, "s")
-            reftimes.append(datetime.utcfromtimestamp(float(ts)))
-    return sorted(reftimes)
-
-
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -244,18 +235,6 @@ def main(args: Namespace) -> None:
     LOG.info("Truth    : %s", args.truth)
     LOG.info("Output   : %s", args.output)
     LOG.info("=" * 60)
-
-    if args.baseline_root:
-        # TODO(port): baseline score maps previously read a per-year
-        # FCST<yy>.zarr archive via data_input.load_baseline_from_zarr, removed in
-        # the earthkit migration. Baselines now load through the ICON/INCA paths
-        # (load_forecast_data / load_icon_baseline_from_grib); porting the baseline
-        # score-maps path onto those is a separate task. Fail fast until then.
-        raise NotImplementedError(
-            "Baseline (--baseline-root) score maps are not yet ported to the "
-            "post-earthkit data_input API (load_baseline_from_zarr was removed). "
-            "Only run-directory forecasts (--run-root) are supported for now."
-        )
 
     # Accumulated params (TOT_PREC) are stored cumulative-from-start, while the
     # truth is a period accumulation whose length equals the verification step
@@ -284,6 +263,19 @@ def main(args: Namespace) -> None:
             )
         req_steps = [args.step - accum_h, args.step]
         LOG.info("Accumulation period: %dh  (forecast window %s)", accum_h, req_steps)
+
+        # INCA delivers native 1h precip sums and (unlike the GRIB paths, where
+        # the cumulative-from-start diff adapts to the requested window) cannot
+        # re-aggregate to a coarser period: the value at the target step would
+        # stay a 1h sum while the truth read is TOT_PREC_<accum_h>H — a silent
+        # mismatch. Re-aggregation in the loader is a planned follow-up.
+        if args.baseline_root and "INCA" in args.baseline_root.parts and accum_h != 1:
+            raise ValueError(
+                f"INCA provides native 1h accumulations only, but the step "
+                f"spacing of --steps '{args.steps}' implies a {accum_h}h "
+                f"accumulation period for '{args.param}'. Use 1h-spaced steps "
+                f"for INCA score maps."
+            )
     else:
         req_steps = [args.step]
 
@@ -302,22 +294,23 @@ def main(args: Namespace) -> None:
     LOG.info("Truth opened lazily: %s", truth_da)
 
     if args.baseline_root:
+        # The operational archive is too large to enumerate up front; the
+        # experiment's configured init times define the work list, and dates
+        # missing from the archive are skipped at load time below.
         init_items = [
-            (rt, None) for rt in iter_baseline_init_times(args.baseline_root, args.step)
+            (rt, None)
+            for rt in sorted(datetime.strptime(s, DATETIME_FMT) for s in args.reftimes)
         ]
-        LOG.info("Found %d baseline init times", len(init_items))
+        LOG.info("Using %d baseline init times from --reftimes", len(init_items))
     else:
         init_items = iter_init_dirs(args.run_root)
         LOG.info("Found %d init time directories", len(init_items))
 
-    # Restrict to the experiment's configured init times if provided.
-    # Without this, baseline zarrs (which contain a continuous archive) would
-    # cause the script to process every init time in the file rather than
-    # only those in the user's hindcast period.
-    if args.reftimes:
-        wanted = {datetime.strptime(s, DATETIME_FMT) for s in args.reftimes}
-        init_items = [(rt, d) for rt, d in init_items if rt in wanted]
-        LOG.info("Filtered to %d init times matching --reftimes", len(init_items))
+        # Restrict to the experiment's configured init times if provided.
+        if args.reftimes:
+            wanted = {datetime.strptime(s, DATETIME_FMT) for s in args.reftimes}
+            init_items = [(rt, d) for rt, d in init_items if rt in wanted]
+            LOG.info("Filtered to %d init times matching --reftimes", len(init_items))
 
     step_td = timedelta(hours=args.step)
 
@@ -364,11 +357,13 @@ def main(args: Namespace) -> None:
 
         try:
             # For accumulated params (TOT_PREC) req_steps is the [step - period,
-            # step] window; load_forecast_data de-accumulates the
-            # cumulative-from-start field over the requested steps (diff over
-            # `step`), so the target step holds the period accumulation.
-            # Instantaneous params request a single step. The target step is
-            # selected just below.
+            # step] window; for GRIB sources (runs and the ICON archive) the
+            # loader de-accumulates the cumulative-from-start field over the
+            # requested steps (diff over `step`), so the target step holds the
+            # period accumulation; INCA returns native 1h sums, matching the
+            # period because accum_h == 1 is enforced above. Instantaneous
+            # params request a single step. The target step is selected just
+            # below.
             #
             # NOTE: data_input._tot_prec_handling treats the FIRST loaded step
             # positionally as the forecast initial condition and zero-fills it
@@ -378,8 +373,12 @@ def main(args: Namespace) -> None:
             # into a cumulative-from-start value. A missing GRIB instead yields
             # NaN and is skipped downstream. The principled fix belongs in
             # _tot_prec_handling (gate the IC zero-fill on step 0 being
-            # requested) — see the port note.
-            fcst = load_forecast_data(grib_dir, reftime, req_steps, fct_params)
+            # requested) — see the port note. This applies to runs and ICON
+            # baselines alike.
+            src_root = args.baseline_root if args.baseline_root else grib_dir
+            fcst = load_forecast_data(
+                src_root, reftime, req_steps, fct_params, member=args.member
+            )
         except Exception as exc:
             LOG.warning("Could not load forecast for %s: %s", reftime, exc)
             n_skip += 1
@@ -572,6 +571,10 @@ def main(args: Namespace) -> None:
         attrs={
             "param": args.param,
             "step_h": args.step,
+            # Accumulation period of the verified quantity (accumulated params
+            # only) — lets consumers tell a 1h INCA map from a 6h ICON map.
+            "accum_h": accum_h if accum_h is not None else "n/a",
+            "member": args.member,
             "source": str(args.baseline_root if args.baseline_root else args.run_root),
             "n_processed": n_ok,
             "n_skipped": n_skip,
@@ -588,7 +591,8 @@ if __name__ == "__main__":
     parser = ArgumentParser(
         description=(
             "Compute spatial maps of temporally-aggregated forecast errors. "
-            "Supports both model runs (GRIB) and baselines (zarr). "
+            "Supports model runs (GRIB) and baselines (ICON GRIB archive or "
+            "INCA NetCDF archive). "
             "Exactly one of --run_root or --baseline_root must be provided."
         )
     )
@@ -602,7 +606,21 @@ if __name__ == "__main__":
         "--baseline_root",
         type=Path,
         default=None,
-        help="Root directory of a baseline (e.g. /path/to/ICON-CH1-EPS), containing FCST<YY>.zarr files.",
+        help=(
+            "Root directory of a baseline archive (e.g. the ICON-CH1/CH2-EPS "
+            "operational GRIB archive, or an INCA NetCDF archive). Requires "
+            "--reftimes."
+        ),
+    )
+    parser.add_argument(
+        "--member",
+        type=str,
+        default="000",
+        help=(
+            "Ensemble member to load for ICON baselines: '000' for control, "
+            "'median' for the pre-computed median, 'mean' to average all "
+            "members, or any 3-digit member ID. Ignored for runs and INCA."
+        ),
     )
     parser.add_argument(
         "--truth",
@@ -639,8 +657,9 @@ if __name__ == "__main__":
         nargs="+",
         default=None,
         help=(
-            "Optional list of init times (YYYYMMDDHHMM) to restrict processing to. "
-            "Required for baselines whose zarr contains a continuous archive."
+            "List of init times (YYYYMMDDHHMM). For runs: optional restriction of "
+            "the discovered init-time directories. For baselines: required; "
+            "defines the init times to load from the archive."
         ),
     )
     parser.add_argument(
@@ -653,5 +672,10 @@ if __name__ == "__main__":
 
     if bool(args.run_root) == bool(args.baseline_root):
         parser.error("Exactly one of --run_root or --baseline_root must be provided.")
+    if args.baseline_root and not args.reftimes:
+        parser.error(
+            "--reftimes is required with --baseline_root: init times cannot be "
+            "discovered from the operational archive."
+        )
 
     main(args)
