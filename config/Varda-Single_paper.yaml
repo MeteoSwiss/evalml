@@ -4,7 +4,7 @@ description: |
 
 dates:
   start: 2025-04-01T00:00
-  end: 2025-12-31T18:00
+  end: 2025-12-26T18:00
   frequency: 54h
 
 runs:
@@ -26,20 +26,10 @@ runs:
       steps: 0/33/1
       member: control
   - baseline:
-      label: ICON-CH1-EPS mean
-      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
-      steps: 0/33/1
-      member: mean
-  - baseline:
       label: ICON-CH2-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH2-EPS
       steps: 0/120/1
       member: control
-  - baseline:
-      label: ICON-CH2-EPS mean
-      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
-      steps: 0/120/1
-      member: mean
 
 truth:
   label: KENDA-CH1
@@ -111,4 +101,4 @@ profile:
     runtime: "1h"
     gpus: 0
     account: s83
-  jobs: 50
+  jobs: 20
