@@ -65,6 +65,39 @@ def _build_env(stage: str) -> dict[str, str]:
     return env
 
 
+def check_prerequisites(stage: str = "prod") -> None:
+    """Fail-fast validation that the jretrievedwh environment is usable.
+
+    Verifies the CLI is on $PATH, $OPR_HOME is set, and the conf file for
+    ``stage`` exists and is readable. Raises a single ``JretrieveError`` listing
+    *all* problems found, so a misconfigured environment is reported up front
+    (e.g. at workflow launch) instead of hours later inside the verification job.
+    """
+    problems: list[str] = []
+    if shutil.which(BINARY_NAME) is None:
+        problems.append(
+            f"{BINARY_NAME} not found in $PATH "
+            "(e.g. add /oprusers/osm/opr.inn/bin to $PATH)."
+        )
+    opr_home = os.environ.get("OPR_HOME")
+    if not opr_home:
+        problems.append("$OPR_HOME is not set.")
+    elif stage not in VALID_STAGES:
+        problems.append(
+            f"Invalid stage {stage!r}; must be one of {sorted(VALID_STAGES)}."
+        )
+    else:
+        conf_path = os.path.join(opr_home, f".jretrievedwh-conf.{stage}.py")
+        if not os.path.isfile(conf_path):
+            problems.append(f"jretrieve conf file not found: {conf_path}")
+        elif not os.access(conf_path, os.R_OK):
+            problems.append(f"jretrieve conf file not readable: {conf_path}")
+    if problems:
+        raise JretrieveError(
+            "jretrievedwh prerequisites not met:\n  - " + "\n  - ".join(problems)
+        )
+
+
 def _fmt_time(dt: datetime) -> str:
     return dt.strftime("%Y%m%d%H%M")
 

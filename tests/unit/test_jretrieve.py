@@ -53,6 +53,32 @@ def test_parse_selection_keyvalue_and_stage():
     )
 
 
+def test_check_prerequisites_ok(monkeypatch, tmp_path):
+    conf = tmp_path / ".jretrievedwh-conf.prod.py"
+    conf.write_text("# conf\n")
+    monkeypatch.setattr(jr.shutil, "which", lambda name: "/opt/bin/jretrievedwh.py")
+    monkeypatch.setenv("OPR_HOME", str(tmp_path))
+    jr.check_prerequisites("prod")  # should not raise
+
+
+def test_check_prerequisites_missing_binary(monkeypatch, tmp_path):
+    conf = tmp_path / ".jretrievedwh-conf.prod.py"
+    conf.write_text("# conf\n")
+    monkeypatch.setattr(jr.shutil, "which", lambda name: None)
+    monkeypatch.setenv("OPR_HOME", str(tmp_path))
+    with pytest.raises(jr.JretrieveError, match=r"\$PATH"):
+        jr.check_prerequisites("prod")
+
+
+def test_check_prerequisites_aggregates_all_problems(monkeypatch):
+    monkeypatch.setattr(jr.shutil, "which", lambda name: None)
+    monkeypatch.delenv("OPR_HOME", raising=False)
+    with pytest.raises(jr.JretrieveError) as exc:
+        jr.check_prerequisites("prod")
+    msg = str(exc.value)
+    assert "$PATH" in msg and "$OPR_HOME" in msg  # both reported, not just the first
+
+
 def _sample_meta():
     return pd.DataFrame(
         {

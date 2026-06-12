@@ -356,6 +356,16 @@ def truth_file_dep(_):
     return [] if "jretrieve" in str(root) else [root]
 
 
+# Fail fast: when the truth source is the live DWH (jretrievedwh), verify its
+# prerequisites at workflow-build time so a misconfigured environment is caught
+# at launch, before any (expensive) inference job runs.
+if "jretrieve" in str(config["truth"]["root"]):
+    from data_input.jretrieve import check_prerequisites, parse_selection
+
+    _, _jretrieve_stage, _ = parse_selection(config["truth"]["root"])
+    check_prerequisites(_jretrieve_stage)
+
+
 TRUTH_HASH = truth_hash(config["truth"])
 REGIONS = parse_regions()
 SHOWCASE_REGIONS = parse_showcase_regions()

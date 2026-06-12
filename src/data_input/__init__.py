@@ -395,6 +395,7 @@ def load_obs_data_from_jretrieve(
     from data_input import jretrieve as jr
 
     stations, stage, seq_type = jr.parse_selection(root)
+    jr.check_prerequisites(stage)
 
     want_uv = "U_10M" in params or "V_10M" in params
     short_names: list[str] = [DWH_PARAM_MAP[p] for p in params if p in DWH_PARAM_MAP]
