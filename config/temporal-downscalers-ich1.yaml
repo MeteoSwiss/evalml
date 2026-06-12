@@ -37,6 +37,13 @@ runs:
 truth:
   label: SwissMetNet
   root: output/data/observations/peakweather
+  # To verify against SwissMetNet observations from the DWH via jretrievedwh,
+  # set instead (requires jretrievedwh.py on $PATH and $OPR_HOME set):
+  #   label: SwissMetNet (DWH)
+  #   root: jretrievedwh:SwissMetNet
+  # Other selectors: root: jretrievedwh:locations=ARO,KLO,LUG
+  #                  root: jretrievedwh:bbox=45.8,47.8,5.9,10.5
+  #                  append ;stage=devt to target a non-prod DWH stage
 
 experiment:
   params:

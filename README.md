@@ -145,6 +145,33 @@ You can then run it with:
 evalml experiment path/to/experiment/config.yaml --report
 ```
 
+### Truth sources
+
+The `truth.root` value selects how the ground truth is loaded:
+
+- **Analysis Zarr** — a path ending in `.zarr` (anemoi analysis dataset).
+- **PeakWeather** — a path containing `peakweather` (SwissMetNet station obs from Hugging Face).
+- **DWH / jretrievedwh** — a `jretrievedwh:` marker string fetching SwissMetNet (SNM)
+  surface observations live from the MeteoSwiss data warehouse. Variables are mapped to
+  ICON names in SI units (temperatures in K, pressure in Pa, precipitation as the hourly
+  sum); wind `U_10M`/`V_10M` are derived from speed + direction.
+
+  Marker syntax (station selection is required; pick one of group/locations/bbox):
+
+  ```yaml
+  truth:
+    label: SwissMetNet (DWH)
+    root: jretrievedwh:SwissMetNet                  # stn_group (default group)
+    # root: jretrievedwh:locations=ARO,KLO,LUG      # explicit nat_abbr list
+    # root: jretrievedwh:bbox=45.8,47.8,5.9,10.5    # minlat,maxlat,minlon,maxlon
+    # append ;stage=devt to target a non-prod DWH stage (prod|depl|devt)
+  ```
+
+  **Prerequisites:** `jretrievedwh.py` must be on `$PATH` (e.g.
+  `/oprusers/osm/opr.inn/bin`) and `$OPR_HOME` set with a readable
+  `.jretrievedwh-conf.<stage>.py` conf file. No data is pre-downloaded — the obs are
+  queried at verification time.
+
 
 ## Installation
 
