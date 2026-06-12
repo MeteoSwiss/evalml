@@ -410,11 +410,18 @@ def load_obs_data_from_jretrieve(
         end += timedelta(hours=steps[-1] - steps[-2])
 
     catalog = jr.StationCatalog.from_meta(
-        jr.fetch_meta(stations=stations, params=short_names, seq_type=seq_type, stage=stage)
+        jr.fetch_meta(
+            stations=stations, params=short_names, seq_type=seq_type, stage=stage
+        )
     )
     df = jr.fetch_data(
-        stations=stations, params=short_names, start=start, end=end,
-        increment_minutes=60, seq_type=seq_type, stage=stage,
+        stations=stations,
+        params=short_names,
+        start=start,
+        end=end,
+        increment_minutes=60,
+        seq_type=seq_type,
+        stage=stage,
     )
     raw = _jretrieve_df_to_xarray(df, short_names, catalog)
 

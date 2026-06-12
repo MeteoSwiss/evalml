@@ -47,7 +47,9 @@ def _resolve_binary() -> str:
 
 def _build_env(stage: str) -> dict[str, str]:
     if stage not in VALID_STAGES:
-        raise ValueError(f"Invalid stage {stage!r}. Must be one of {sorted(VALID_STAGES)}.")
+        raise ValueError(
+            f"Invalid stage {stage!r}. Must be one of {sorted(VALID_STAGES)}."
+        )
     opr_home = os.environ.get("OPR_HOME")
     if not opr_home:
         raise JretrieveError("OPR_HOME is not set; cannot locate jretrieve conf file.")
@@ -134,10 +136,17 @@ def parse_selection(root: Any) -> tuple[dict[str, Any], str, str]:
 def _run(argv: list[str], env: dict[str, str], timeout_s: int) -> str:
     try:
         proc = subprocess.run(
-            argv, env=env, capture_output=True, text=True, timeout=timeout_s, check=False
+            argv,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+            check=False,
         )
     except subprocess.TimeoutExpired as e:
-        raise JretrieveError(f"jretrieve timed out after {timeout_s}s: {' '.join(argv)}") from e
+        raise JretrieveError(
+            f"jretrieve timed out after {timeout_s}s: {' '.join(argv)}"
+        ) from e
     if proc.returncode != 0:
         raise JretrieveError(
             f"jretrieve exited with {proc.returncode}\nargv: {argv}\n"
@@ -160,7 +169,10 @@ def _run_with_retry(argv, env, timeout_s, attempts=3) -> str:
             backoff = 2**attempt
             LOG.warning(
                 "jretrieve attempt %d/%d failed (%s); retrying in %ds",
-                attempt, attempts, e, backoff,
+                attempt,
+                attempts,
+                e,
+                backoff,
             )
             time.sleep(backoff)
     assert last_err is not None
@@ -175,17 +187,30 @@ def _parse_csv(csv_text: str) -> pd.DataFrame:
 
 
 def fetch_meta(
-    *, stations, params, seq_type="surface", stage="prod",
-    meta_fields=DEFAULT_META_FIELDS, timeout_s=300,
+    *,
+    stations,
+    params,
+    seq_type="surface",
+    stage="prod",
+    meta_fields=DEFAULT_META_FIELDS,
+    timeout_s=300,
 ) -> pd.DataFrame:
     """Fetch the station catalog (rows per station x parameter x period) over a
     fixed wide time range so the response is deterministic."""
     if not params:
         raise ValueError("params must be non-empty.")
     argv = [
-        _resolve_binary(), "-s", seq_type, "-n", ",".join(params),
-        "-t", f"{_fmt_time(CATALOG_TIME_RANGE_START)},{_fmt_time(CATALOG_TIME_RANGE_END)}",
-        "--meta-info", ",".join(meta_fields), "--format", "csv",
+        _resolve_binary(),
+        "-s",
+        seq_type,
+        "-n",
+        ",".join(params),
+        "-t",
+        f"{_fmt_time(CATALOG_TIME_RANGE_START)},{_fmt_time(CATALOG_TIME_RANGE_END)}",
+        "--meta-info",
+        ",".join(meta_fields),
+        "--format",
+        "csv",
         *_stations_to_argv(stations),
     ]
     LOG.info("jretrieve meta: %s", " ".join(argv))
@@ -196,17 +221,31 @@ def fetch_meta(
 
 
 def fetch_data(
-    *, stations, params, start, end, increment_minutes=60,
-    seq_type="surface", stage="prod", timeout_s=600,
+    *,
+    stations,
+    params,
+    start,
+    end,
+    increment_minutes=60,
+    seq_type="surface",
+    stage="prod",
+    timeout_s=600,
 ) -> pd.DataFrame:
     """Fetch observation data; columns: station (int), termin (YYYYMMDDhhmmss),
     one column per requested short name."""
     if not params:
         raise ValueError("params must be non-empty.")
     argv = [
-        _resolve_binary(), "-s", seq_type, "-n", ",".join(params),
-        "-t", f"{_fmt_time(start)},{_fmt_time(end)},{int(increment_minutes)}",
-        "--format", "csv", *_stations_to_argv(stations),
+        _resolve_binary(),
+        "-s",
+        seq_type,
+        "-n",
+        ",".join(params),
+        "-t",
+        f"{_fmt_time(start)},{_fmt_time(end)},{int(increment_minutes)}",
+        "--format",
+        "csv",
+        *_stations_to_argv(stations),
     ]
     LOG.info("jretrieve data: %s", " ".join(argv))
     return _parse_csv(_run_with_retry(argv, env=_build_env(stage), timeout_s=timeout_s))
