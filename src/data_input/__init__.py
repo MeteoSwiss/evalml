@@ -180,6 +180,12 @@ def _discover_icon_member_ids(
 
 
 def load_from_grib_file(file: str | list[str], sel_kwargs):
+    # Coerce Path objects to str: earthkit-data unwraps a single-element list
+    # into one File source without converting, and then fails on non-str paths.
+    if isinstance(file, (list, tuple)):
+        file = [str(f) for f in file]
+    else:
+        file = str(file)
     fieldlist = ekd.from_source("file", file, lazily=True).to_fieldlist()
     return fieldlist_to_xarray(fieldlist.sel(**sel_kwargs))
 

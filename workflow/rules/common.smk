@@ -365,3 +365,20 @@ _scorecard = config.get("experiment", {}).get("scorecards") or {}
 SCORECARD_CONFIGS = (
     _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
 )
+
+
+def resolve_leadtimes(spec):
+    """Resolve a lead-time specification from config.
+
+    Accepts:
+    - a list of ints — returned verbatim.
+    - the literal string "all" — expanded to the union of step lists
+      from all configured runs and baselines.
+    """
+    if spec != "all":
+        return spec
+    all_steps = set()
+    for cfg in (*RUN_CONFIGS.values(), *BASELINE_CONFIGS.values()):
+        start, end, step = map(int, cfg["steps"].split("/"))
+        all_steps.update(range(start, end + 1, step))
+    return sorted(all_steps)

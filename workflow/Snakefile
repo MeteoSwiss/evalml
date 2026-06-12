@@ -130,6 +130,36 @@ onerror:
 # -----------------------------------------------------
 
 
+SCORE_MAPS_CONFIG = config["experiment"]["score_maps"]
+
+
+rule score_maps_all:
+    """Target rule for score maps (opt-in via experiment.score_maps.enabled)."""
+    input:
+        expand(
+            rules.plot_score_maps.output,
+            run_id=collect_all_candidates(),
+            leadtime=resolve_leadtimes(SCORE_MAPS_CONFIG["leadtimes"]),
+            score=SCORE_MAPS_CONFIG["scores"],
+            param=SCORE_MAPS_CONFIG["params"],
+            region=SCORE_MAPS_CONFIG["regions"],
+            season=SCORE_MAPS_CONFIG["seasons"],
+            init_hour=SCORE_MAPS_CONFIG["init_hours"],
+            experiment=EXPERIMENT_NAME,
+        ),
+        expand(
+            rules.plot_score_maps_baseline.output,
+            baseline_id=list(BASELINE_CONFIGS),
+            leadtime=resolve_leadtimes(SCORE_MAPS_CONFIG["leadtimes"]),
+            score=SCORE_MAPS_CONFIG["scores"],
+            param=SCORE_MAPS_CONFIG["params"],
+            region=SCORE_MAPS_CONFIG["regions"],
+            season=SCORE_MAPS_CONFIG["seasons"],
+            init_hour=SCORE_MAPS_CONFIG["init_hours"],
+            experiment=EXPERIMENT_NAME,
+        ),
+
+
 rule experiment_all:
     """Target rule for experiment workflow."""
     input:
@@ -158,6 +188,7 @@ rule experiment_all:
             )
             else []
         ),
+        (rules.score_maps_all.input if SCORE_MAPS_CONFIG["enabled"] else []),
 
 
 rule showcase_all:

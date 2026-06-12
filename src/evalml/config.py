@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
+from typing import Dict, List, Any, ClassVar, FrozenSet, Literal, Optional
 
 from pydantic import BaseModel, Field, RootModel, field_validator
 
@@ -219,6 +219,49 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
+class ScoreMapsConfig(BaseModel):
+    """Parameters controlling which score map plots are produced."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to produce score maps (computationally intensive).",
+    )
+    params: List[str] = Field(
+        default=["T_2M"],
+        description=(
+            "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
+            "PS, PMSL, TOT_PREC (native), and SP_10M (derived wind speed from U_10M/V_10M)."
+        ),
+    )
+    leadtimes: List[int] | Literal["all"] = Field(
+        default=[6, 24],
+        description=(
+            "List of lead times (hours) to plot, or the literal string 'all' "
+            "to expand to the union of step lists from all configured runs "
+            "and baselines."
+        ),
+    )
+    scores: List[str] = Field(
+        default=["BIAS"],
+        description="List of verification scores to plot. Supported: BIAS, RMSE, MAE.",
+    )
+    regions: List[str] = Field(
+        default=["switzerland"],
+        description="List of regions to plot (e.g. switzerland, centraleurope).",
+    )
+    seasons: List[str] = Field(
+        default=["all"],
+        description="List of seasons to plot ('all', 'DJF', 'MAM', 'JJA', 'SON').",
+    )
+    init_hours: List[str] = Field(
+        default=["all"],
+        description=(
+            "List of initialization hours to plot. Use 'all' for the unstratified "
+            "view, or zero-padded hour strings like '00', '06', '12', '18'."
+        ),
+    )
+
+
 class DomainConfig(BaseModel):
     """A custom map domain defined by name, extent, and projection."""
 
@@ -379,6 +422,10 @@ class ExperimentConfig(BaseModel):
     scorecards: Optional[ExperimentScorecardConfig] = Field(
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
+    )
+    score_maps: ScoreMapsConfig = Field(
+        default_factory=ScoreMapsConfig,
+        description="Score map plot configuration. Set enabled: true to produce score maps.",
     )
 
     @field_validator("thresholds")
