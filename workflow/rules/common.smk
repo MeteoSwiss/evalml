@@ -349,6 +349,13 @@ def truth_hash(truth_config: dict) -> str:
     return generate_json_hash(cfg)
 
 
+def truth_file_dep(_):
+    """Truth file dependency: a real path for zarr/peakweather, but a live-query
+    marker (no input file) for jretrieve."""
+    root = config["truth"]["root"]
+    return [] if "jretrieve" in str(root) else [root]
+
+
 TRUTH_HASH = truth_hash(config["truth"])
 REGIONS = parse_regions()
 SHOWCASE_REGIONS = parse_showcase_regions()
