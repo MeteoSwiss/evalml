@@ -115,7 +115,7 @@ def _stations_to_argv(stations: dict[str, Any]) -> list[str]:
     key = keys[0]
     val = stations[key]
     if key == "group":
-        return ["-a", f"stn_group,{val}"]
+        return ["-a", f"stn_group_id,{val}"]
     if key == "locations":
         if isinstance(val, str):
             val = [v for v in val.split(",") if v]

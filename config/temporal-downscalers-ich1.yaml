@@ -6,25 +6,9 @@ description: |
 dates:
   start: 2025-03-01T00:00
   end: 2025-03-03T00:00
-  frequency: 24h
+  frequency: 48h
 
 runs:
-  - temporal_downscaler:
-      checkpoint: /scratch/mch/miccatta/ICON_interpolator_checkpoints/checkpoint_stage-C-interpolator-n320-6hto1h-reduced-variables/f9279244ed6f4c458597bdcf335ab36f/inference-last.ckpt
-      label: Varda-Single
-      steps: 0/120/1
-      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
-      extra_requirements:
-        - anemoi-datasets==0.5.35
-        # - anemoi-inference==0.11.0
-      forecaster:
-        checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
-        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
-        steps: 0/120/6
-  - baseline:
-      label: INCA
-      root: /store_new/mch/msclim/INCA
-      steps: 0/6/1
   - baseline:
       label: ICON-CH2-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH2-EPS
@@ -36,11 +20,11 @@ runs:
 
 truth:
   label: SwissMetNet
-  root: output/data/observations/peakweather
+  root: jretrievedwh:SMN
   # To verify against SwissMetNet observations from the DWH via jretrievedwh,
   # set instead (requires jretrievedwh.py on $PATH and $OPR_HOME set):
-  #   label: SwissMetNet (DWH)
-  #   root: jretrievedwh:SwissMetNet
+  #   label: SwissMetNet
+  #   root: jretrievedwh:SMN
   # Other selectors: root: jretrievedwh:locations=ARO,KLO,LUG
   #                  root: jretrievedwh:bbox=45.8,47.8,5.9,10.5
   #                  append ;stage=devt to target a non-prod DWH stage
@@ -76,7 +60,7 @@ experiment:
       # - init_hour
       - season
   scorecards:
-    enabled: true
+    enabled: false
     sections:
       nowcasting:
         baseline: INCA
@@ -127,7 +111,7 @@ locations:
   output_root: output/
 
 profile:
-  executor: slurm
+  executor: local
   global_resources:
     gpus: 16
   default_resources:

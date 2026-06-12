@@ -10,9 +10,9 @@ from data_input import jretrieve as jr
 
 
 def test_stations_to_argv_group():
-    assert jr._stations_to_argv({"group": "SwissMetNet"}) == [
+    assert jr._stations_to_argv({"group": "1,2"}) == [
         "-a",
-        "stn_group,SwissMetNet",
+        "stn_group_id,1,2",
     ]
 
 
