@@ -1,5 +1,5 @@
 """Subprocess wrapper around ``jretrievedwh.py`` for retrieving SwissMetNet
-(SNM) surface observations from the MeteoSwiss data warehouse (DWH).
+(SMN) surface observations from the MeteoSwiss data warehouse (DWH).
 
 Ported/adapted from MeteoSwiss/anemoi-plugins-meteoswiss (add-synop-dwh-source).
 Requires ``jretrievedwh.py`` on $PATH and $OPR_HOME set with a readable

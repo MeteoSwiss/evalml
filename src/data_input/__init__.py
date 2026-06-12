@@ -383,7 +383,7 @@ def _jretrieve_df_to_xarray(df, short_names, catalog) -> xr.Dataset:
 def load_obs_data_from_jretrieve(
     root, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
-    """Load SwissMetNet (SNM) surface observations from the DWH via jretrievedwh.
+    """Load SwissMetNet (SMN) surface observations from the DWH via jretrievedwh.
 
     ``root`` is a marker string selecting stations, e.g. ``jretrievedwh:SwissMetNet``
     (default group), ``jretrievedwh:locations=ARO,KLO``, or
