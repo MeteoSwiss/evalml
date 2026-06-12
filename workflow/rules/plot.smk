@@ -32,9 +32,8 @@ rule plot_meteogram:
     output:
         expand(
             OUT_ROOT
-            / "results/{{showcase}}/{{run_id}}/{{init_time}}/{{init_time}}_{{param}}_{sta}_{truth_hash}.png",
+            / "results/{{showcase}}/{{run_id}}/{{init_time}}/{{init_time}}_{{param}}_{sta}.png",
             sta=config["showcase"]["meteograms"]["stations"],
-            truth_hash=TRUTH_HASH,
         ),
     log:
         OUT_ROOT / "logs/{showcase}/{run_id}/{init_time}/plot_meteogram_{param}.log",
