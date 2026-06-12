@@ -27,14 +27,14 @@ rule plot_meteogram:
     input:
         script="workflow/scripts/plot_meteogram.py",
         inference_okfile=rules.inference_execute.output.okfile,
-        truth=config["truth"]["root"],
-        peakweather_dir=rules.data_download_obs_from_peakweather.output.root,
+        truth_dep=truth_file_dep,
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         expand(
             OUT_ROOT
-            / "results/{{showcase}}/{{run_id}}/{{init_time}}/{{init_time}}_{{param}}_{sta}.png",
+            / "results/{{showcase}}/{{run_id}}/{{init_time}}/{{init_time}}_{{param}}_{sta}_{truth_hash}.png",
             sta=config["showcase"]["meteograms"]["stations"],
+            truth_hash=TRUTH_HASH,
         ),
     log:
         OUT_ROOT / "logs/{showcase}/{run_id}/{init_time}/plot_meteogram_{param}.log",
@@ -44,6 +44,7 @@ rule plot_meteogram:
         runtime="60m",
     params:
         ana_label=lambda wc: config["truth"]["label"],
+        truth_root=config["truth"]["root"],
         fcst_grib=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
@@ -71,9 +72,8 @@ rule plot_meteogram:
             --forecast {params.fcst_grib:q}
             --forecast_steps {params.fcst_steps:q}
             --forecast_label {params.fcst_label:q}
-            --analysis {input.truth:q}
+            --analysis {params.truth_root:q}
             --analysis_label {params.ana_label:q}
-            --peakweather {input.peakweather_dir:q}
             --date {wildcards.init_time:q}
             --outdir {params.outdir:q}
             --param {wildcards.param:q}

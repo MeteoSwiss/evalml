@@ -350,7 +350,7 @@ def truth_hash(truth_config: dict) -> str:
 
 
 def truth_file_dep(_):
-    """Truth file dependency: a real path for zarr/peakweather, but a live-query
+    """Truth file dependency: a real path for zarr, but a live-query
     marker (no input file) for jretrieve."""
     root = config["truth"]["root"]
     return [] if "jretrieve" in str(root) else [root]

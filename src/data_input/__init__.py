@@ -265,67 +265,6 @@ def load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Dat
     return ds
 
 
-def load_obs_data_from_peakweather(
-    root, reftime: datetime, steps: list[int], params: list[str], freq: str = "1h"
-) -> xr.Dataset:
-    """Load PeakWeather station observations into an xarray Dataset.
-
-    Returns a Dataset with dimensions `time` and `values`, values coordinates
-    (`lat`, `lon`), and variables renamed to ICON parameter names.
-    Temperatures are converted to Kelvin when present.
-    """
-    from peakweather.dataset import PeakWeatherDataset
-
-    param_names = {
-        "temperature": "T_2M",
-        "wind_u": "U_10M",
-        "wind_v": "V_10M",
-        "precipitation": "TOT_PREC",
-        "pressure": "PS",
-        "wind_gust": "VMAX_10M",
-    }
-    param_names = {k: v for k, v in param_names.items() if v in params}
-    start = reftime
-    end = start + timedelta(hours=max(steps))
-    if len(steps) > 1:
-        end += timedelta(hours=steps[-1] - steps[-2])  # extend by 1 extra step
-    years = list(set([start.year, end.year]))
-    if "wind_u" in param_names or "wind_v" in param_names:
-        compute_uv = True
-    else:
-        compute_uv = False
-    pw = PeakWeatherDataset(root=root, years=years, freq=freq, compute_uv=compute_uv)
-    ds, mask = pw.get_observations(
-        parameters=[k for k in param_names.keys()],
-        first_date=f"{start:%Y-%m-%d %H:%M}",
-        last_date=f"{end:%Y-%m-%d %H:%M}",
-        return_mask=True,
-    )
-    ds = (
-        ds.stack(["nat_abbr", "name"], future_stack=True)
-        .to_xarray()
-        .to_dataset(dim="name")
-    )
-    mask = (
-        mask.stack(["nat_abbr", "name"], future_stack=True)
-        .to_xarray()
-        .to_dataset(dim="name")
-    )
-    ds = ds.where(mask)
-    ds = ds.rename({"datetime": "time", "nat_abbr": "values"})
-    ds = ds.rename(param_names)
-    ds = ds.assign_coords(time=ds.indexes["time"].tz_convert("UTC").tz_localize(None))
-    ds = ds.assign_coords(values=ds.indexes["values"])
-    ds = ds.assign_coords(longitude=("values", pw.stations_table["longitude"]))
-    ds = ds.assign_coords(latitude=("values", pw.stations_table["latitude"]))
-    if "T_2M" in ds:
-        ds["T_2M"] = ds["T_2M"] - ZERO_KELVIN  # convert to Kelvin
-    ds = ds.dropna("values", how="all")
-
-    times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
-    return _select_valid_times(ds, times)
-
-
 DWH_PARAM_MAP = {
     "T_2M": "tre200s0",
     "TD_2M": "tde200s0",
@@ -451,7 +390,7 @@ def load_obs_data_from_jretrieve(
 def load_truth_data(
     root, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
-    """Load truth data from analysis Zarr or PeakWeather observations."""
+    """Load truth data from an analysis Zarr dataset or DWH observations via jretrieve."""
     if root.suffix == ".zarr":
         LOG.info("Loading ground truth from an analysis zarr dataset...")
         truth = load_analysis_data_from_zarr(
@@ -464,14 +403,6 @@ def load_truth_data(
             {"y": -1, "x": -1}
             if "y" in truth.dims and "x" in truth.dims
             else {"values": -1}
-        )
-    elif "peakweather" in str(root):
-        LOG.info("Loading ground truth from PeakWeather observations...")
-        truth = load_obs_data_from_peakweather(
-            root=root,
-            reftime=reftime,
-            steps=steps,
-            params=params,
         )
     elif "jretrieve" in str(root):
         LOG.info("Loading ground truth from JRetrieve...")

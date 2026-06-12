@@ -4,13 +4,14 @@ from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from peakweather import PeakWeatherDataset
+import xarray as xr
 
 from data_input import (
     parse_steps,
     load_forecast_data,
     load_truth_data,
 )
+from data_input import jretrieve as jr
 from verification.spatial import map_forecast_to_truth
 
 LOG = logging.getLogger(__name__)
@@ -96,9 +97,6 @@ def main():
         default="truth",
         help="Label for analysis line in plot legend.",
     )
-    parser.add_argument(
-        "--peakweather", type=str, default=None, help="Path to PeakWeather dataset"
-    )
     parser.add_argument("--date", type=str, default=None, help="reference datetime")
     parser.add_argument("--outdir", type=str, help="output directory")
     parser.add_argument("--param", type=str, help="parameter")
@@ -124,7 +122,6 @@ def main():
             "Mismatched baseline arguments: --baseline and --baseline_label "
             "must be provided the same number of times."
         )
-    peakweather_dir = Path(args.peakweather)
     init_time = datetime.strptime(args.date, "%Y%m%d%H%M")
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -145,6 +142,28 @@ def main():
     else:
         paramlist = [param]
 
+    # Load station metadata from DWH
+    LOG.info("Fetching station metadata from jretrieve (SwissMetNet catalog)")
+    _jr_stations, _jr_stage, _jr_seq_type = jr.parse_selection("jretrievedwh:1,2")
+    _catalog = jr.StationCatalog.from_meta(
+        jr.fetch_meta(
+            stations=_jr_stations,
+            params=["rre150h0"],
+            seq_type=_jr_seq_type,
+            stage=_jr_stage,
+        )
+    )
+    catalog_lookup = {
+        abbr: (lat, lon)
+        for abbr, lat, lon in zip(
+            _catalog.nat_abbr, _catalog.latitude, _catalog.longitude
+        )
+    }
+
+    LOG.info("Loading analysis data from %s", analysis_root)
+    analysis_ds = load_truth_data(analysis_root, init_time, forecast_steps, paramlist)
+    analysis_ds = preprocess_ds(analysis_ds, param)
+
     # Load gridded data once — shared across all station plots
     LOG.info("Loading forecast data from %s", forecast_grib_dir)
     forecast_ds = load_forecast_data(
@@ -152,23 +171,12 @@ def main():
     )
     forecast_ds = preprocess_ds(forecast_ds, param)
 
-    steps = [int(s) for s in forecast_ds["step"].dt.total_seconds().values / 3600]
-    LOG.info("Loading analysis data from %s", analysis_root)
-    analysis_ds = load_truth_data(analysis_root, init_time, steps, paramlist)
-    analysis_ds = preprocess_ds(analysis_ds, param)
-
     baseline_ds_list = []
     for root, step, label in zip(baseline_roots, baseline_steps, baseline_labels):
         LOG.info("Loading baseline '%s' from %s", label, root)
         baseline_ds_list.append(
             preprocess_ds(load_forecast_data(root, init_time, step, paramlist), param)
         )
-
-    # Load station metadata once
-    LOG.info("Loading station metadata from %s", peakweather_dir)
-    peakweather = PeakWeatherDataset(root=peakweather_dir)
-    stations_table = peakweather.stations_table
-    stations_table.index.names = ["values"]
 
     param2plot = forecast_ds[param].attrs.get("parameter", {})
     short = param2plot.get("shortName", "")
@@ -183,9 +191,14 @@ def main():
             stations.index(station) + 1,
             len(stations),
         )
-        station_ds = stations_table.to_xarray().sel(values=[station])
-        station_ds = station_ds.set_coords(("latitude", "longitude", "station_name"))
-        station_ds = station_ds.drop_vars(list(station_ds.data_vars))
+        lat, lon = catalog_lookup[station]
+        station_ds = xr.Dataset(
+            coords={
+                "values": [station],
+                "latitude": ("values", [lat]),
+                "longitude": ("values", [lon]),
+            }
+        )
 
         forecast_station_ds = map_forecast_to_truth(forecast_ds, station_ds)
         analysis_station_ds = map_forecast_to_truth(analysis_ds, station_ds)

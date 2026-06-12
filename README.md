@@ -150,9 +150,8 @@ evalml experiment path/to/experiment/config.yaml --report
 The `truth.root` value selects how the ground truth is loaded:
 
 - **Analysis Zarr** — a path ending in `.zarr` (anemoi analysis dataset).
-- **PeakWeather** — a path containing `peakweather` (SwissMetNet station obs from Hugging Face).
-- **DWH / jretrievedwh** — a `jretrievedwh:` marker string fetching SwissMetNet (SMN)
-  surface observations live from the MeteoSwiss data warehouse. Variables are mapped to
+- **DWH / jretrievedwh** — a `jretrievedwh:` marker string fetching surface observations
+  (e.g. SMN) live from the MeteoSwiss data warehouse. Variables are mapped to
   ICON names in SI units (temperatures in K, pressure in Pa, precipitation as the hourly
   sum); wind `U_10M`/`V_10M` are derived from speed + direction.
 
@@ -160,7 +159,7 @@ The `truth.root` value selects how the ground truth is loaded:
 
   ```yaml
   truth:
-    label: SwissMetNet (DWH)
+    label: SwissMetNet
     root: jretrievedwh:1,2                          # stn_group_id (default)
     # root: jretrievedwh:locations=ARO,KLO,LUG      # explicit nat_abbr list
     # root: jretrievedwh:bbox=45.8,47.8,5.9,10.5    # minlat,maxlat,minlon,maxlon
