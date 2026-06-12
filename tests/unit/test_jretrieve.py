@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -99,3 +100,18 @@ def test_load_obs_data_from_jretrieve(monkeypatch):
     np.testing.assert_allclose(ds["U_10M"].sel(values="ARO").values, [0.0, -4.0], atol=1e-5)
     np.testing.assert_allclose(ds["V_10M"].sel(values="ARO").values, [-3.0, 0.0], atol=1e-5)
     np.testing.assert_allclose(ds["latitude"].values, [46.79])
+
+
+def test_load_truth_data_forwards_root(monkeypatch):
+    seen = {}
+
+    def fake_loader(root, reftime, steps, params):
+        seen["root"] = root
+        return "SENTINEL"
+
+    monkeypatch.setattr(data_input, "load_obs_data_from_jretrieve", fake_loader)
+    out = data_input.load_truth_data(
+        Path("jretrievedwh:SwissMetNet"), datetime(2025, 1, 15), [0], ["T_2M"]
+    )
+    assert out == "SENTINEL"
+    assert "jretrievedwh:SwissMetNet" in str(seen["root"])

@@ -468,6 +468,7 @@ def load_truth_data(
     elif "jretrieve" in str(root):
         LOG.info("Loading ground truth from JRetrieve...")
         truth = load_obs_data_from_jretrieve(
+            root=root,
             reftime=reftime,
             steps=steps,
             params=params,
