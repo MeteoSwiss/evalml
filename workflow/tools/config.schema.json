@@ -264,7 +264,7 @@
         },
         "score_maps": {
           "$ref": "#/$defs/ScoreMapsConfig",
-          "description": "Parameters for score map plots (used with --maps flag)."
+          "description": "Score map plot configuration. Set enabled: true to produce score maps."
         }
       },
       "required": [
@@ -573,16 +573,15 @@
     "ScoreMapsConfig": {
       "description": "Parameters controlling which score map plots are produced.",
       "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to produce score maps (computationally intensive).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
         "params": {
           "default": [
-            "T_2M",
-            "TD_2M",
-            "U_10M",
-            "V_10M",
-            "SP_10M",
-            "PS",
-            "PMSL",
-            "TOT_PREC"
+            "T_2M"
           ],
           "description": "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, PS, PMSL, TOT_PREC (native), and SP_10M (derived wind speed from U_10M/V_10M).",
           "items": {
@@ -606,36 +605,16 @@
           ],
           "default": [
             6,
-            12,
-            18,
-            24,
-            30,
-            36,
-            42,
-            48,
-            54,
-            60,
-            66,
-            72,
-            78,
-            84,
-            90,
-            96,
-            102,
-            108,
-            114,
-            120
+            24
           ],
           "description": "List of lead times (hours) to plot, or the literal string 'all' to expand to the union of step lists from all configured runs and baselines.",
           "title": "Leadtimes"
         },
         "scores": {
           "default": [
-            "BIAS",
-            "RMSE",
-            "MAE"
+            "BIAS"
           ],
-          "description": "List of verification scores to plot.",
+          "description": "List of verification scores to plot. Supported: BIAS, RMSE, MAE.",
           "items": {
             "type": "string"
           },
@@ -644,10 +623,9 @@
         },
         "regions": {
           "default": [
-            "switzerland",
-            "centraleurope"
+            "switzerland"
           ],
-          "description": "List of regions to plot.",
+          "description": "List of regions to plot (e.g. switzerland, centraleurope).",
           "items": {
             "type": "string"
           },
@@ -656,13 +634,9 @@
         },
         "seasons": {
           "default": [
-            "all",
-            "DJF",
-            "MAM",
-            "JJA",
-            "SON"
+            "all"
           ],
-          "description": "List of seasons to plot.",
+          "description": "List of seasons to plot ('all', 'DJF', 'MAM', 'JJA', 'SON').",
           "items": {
             "type": "string"
           },

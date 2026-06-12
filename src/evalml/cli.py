@@ -129,7 +129,6 @@ def execute_workflow(
     dag: bool = False,
     rulegraph: bool = False,
     extra_smk_args: tuple[str, ...] = (),
-    extra_targets: list[str] = [],
 ):
     if dag or rulegraph:
         generate_graph(
@@ -147,7 +146,7 @@ def execute_workflow(
     if report and not dry_run:
         command += ["--report-after-run", "--report", str(report)]
 
-    command += [target] + extra_targets
+    command += [target]
     command += list(extra_smk_args)
     if not verbose:
         command += ["--quiet", "rules"]  # reduce verobosity of snakemake output
@@ -164,16 +163,9 @@ def cli():
 @click.argument(
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
-@click.option(
-    "--maps",
-    is_flag=True,
-    default=False,
-    help="Also produce score maps (computationally intensive).",
-)
 @workflow_options
 def experiment(
     configfile,
-    maps,
     cores,
     verbose,
     dry_run,
@@ -194,7 +186,6 @@ def experiment(
         dag,
         rulegraph,
         extra_smk_args,
-        extra_targets=["score_maps_all"] if maps else [],
     )
 
 

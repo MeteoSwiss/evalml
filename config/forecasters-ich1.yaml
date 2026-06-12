@@ -80,37 +80,7 @@ experiment:
       # - region
       - season
   score_maps:
-    params:
-      - T_2M
-      # - TD_2M
-      # - U_10M
-      # - V_10M
-      # - SP_10M
-      # - PS
-      # - PMSL
-      # - TOT_PREC
-    leadtimes: [6, 24]
-    # Or, to compute every available leadtime from runs+baselines:
-    # leadtimes: "all"
-    scores:
-      - BIAS
-      # - RMSE
-      # - MAE
-    regions:
-      - switzerland
-      # - centraleurope
-    seasons:
-      - all
-      # - DJF
-      # - MAM
-      # - JJA
-      # - SON
-    init_hours:
-      - all
-      # - "00"
-      # - "06"
-      # - "12"
-      # - "18"
+    enabled: false
 
 locations:
   output_root: output/

@@ -222,15 +222,19 @@ class BaselineItem(BaseModel):
 class ScoreMapsConfig(BaseModel):
     """Parameters controlling which score map plots are produced."""
 
+    enabled: bool = Field(
+        default=False,
+        description="Whether to produce score maps (computationally intensive).",
+    )
     params: List[str] = Field(
-        default=["T_2M", "TD_2M", "U_10M", "V_10M", "SP_10M", "PS", "PMSL", "TOT_PREC"],
+        default=["T_2M"],
         description=(
             "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
             "PS, PMSL, TOT_PREC (native), and SP_10M (derived wind speed from U_10M/V_10M)."
         ),
     )
     leadtimes: List[int] | Literal["all"] = Field(
-        default=list(range(6, 121, 6)),
+        default=[6, 24],
         description=(
             "List of lead times (hours) to plot, or the literal string 'all' "
             "to expand to the union of step lists from all configured runs "
@@ -238,16 +242,16 @@ class ScoreMapsConfig(BaseModel):
         ),
     )
     scores: List[str] = Field(
-        default=["BIAS", "RMSE", "MAE"],
-        description="List of verification scores to plot.",
+        default=["BIAS"],
+        description="List of verification scores to plot. Supported: BIAS, RMSE, MAE.",
     )
     regions: List[str] = Field(
-        default=["switzerland", "centraleurope"],
-        description="List of regions to plot.",
+        default=["switzerland"],
+        description="List of regions to plot (e.g. switzerland, centraleurope).",
     )
     seasons: List[str] = Field(
-        default=["all", "DJF", "MAM", "JJA", "SON"],
-        description="List of seasons to plot.",
+        default=["all"],
+        description="List of seasons to plot ('all', 'DJF', 'MAM', 'JJA', 'SON').",
     )
     init_hours: List[str] = Field(
         default=["all"],
@@ -421,7 +425,7 @@ class ExperimentConfig(BaseModel):
     )
     score_maps: ScoreMapsConfig = Field(
         default_factory=ScoreMapsConfig,
-        description="Parameters for score map plots (used with --maps flag).",
+        description="Score map plot configuration. Set enabled: true to produce score maps.",
     )
 
     @field_validator("thresholds")
