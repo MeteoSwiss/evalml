@@ -126,6 +126,9 @@ def test_load_obs_data_from_jretrieve(monkeypatch):
             "dkl010z0": [0.0, 90.0],  # deg
         }
     )
+    # Skip the live environment check so the test runs anywhere (incl. CI,
+    # which has no jretrievedwh.py / $OPR_HOME).
+    monkeypatch.setattr(jr, "check_prerequisites", lambda *a, **k: None)
     monkeypatch.setattr(jr, "fetch_meta", lambda **kw: meta)
     monkeypatch.setattr(jr, "fetch_data", lambda **kw: data)
 
