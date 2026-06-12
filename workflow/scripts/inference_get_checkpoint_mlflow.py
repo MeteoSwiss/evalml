@@ -17,12 +17,18 @@ def main(args):
     parsed_url = urlparse(run_uri)
     if parsed_url.netloc in KNOWN_MLFLOW_TRACKING_URI:
         uri, fragment = run_uri.split("#")
-        run_id = fragment.split("/")[-1]
         if parsed_url.netloc == "mlflow.ecmwf.int":
             TokenAuth(uri).login()
             client = AnemoiMlflowClient(uri, authentication=True)
         else:
             client = MlflowClient(tracking_uri=uri)
+        if "/models/" in fragment:
+            parts = fragment.strip("/").split("/")
+            model_name, version = parts[1], parts[3]
+            model_version = client.get_model_version(model_name, version)
+            run_id = model_version.run_id
+        else:
+            run_id = fragment.split("/")[-1]
         run = client.get_run(run_id)
         path = run.data.params.get("config.hardware.paths.checkpoints")
         path = path or run.data.params.get("config.system.output.checkpoints.root")
