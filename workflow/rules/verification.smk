@@ -15,7 +15,7 @@ rule verification_metrics_baseline:
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_metrics.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
-        truth=config["truth"]["root"],
+        truth_dep=truth_file_dep,
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT / f"data/baselines/{{baseline_id}}/{{init_time}}/verif_{TRUTH_HASH}.nc",
@@ -29,6 +29,7 @@ rule verification_metrics_baseline:
         baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
+        truth=config["truth"]["root"],
         truth_label=config["truth"]["label"],
         regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
@@ -38,7 +39,7 @@ rule verification_metrics_baseline:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {input.forecast} \
-            --truth {input.truth} \
+            --truth {params.truth} \
             --reftime {wildcards.init_time} \
             --steps "{params.baseline_steps}" \
             --label "{params.baseline_label}" \
@@ -64,7 +65,7 @@ rule verification_metrics:
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_metrics.py",
         inference_okfile=rules.inference_execute.output.okfile,
-        truth=config["truth"]["root"],
+        truth_dep=truth_file_dep,
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/verif_{TRUTH_HASH}.nc",
@@ -80,6 +81,7 @@ rule verification_metrics:
     params:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
+        truth=config["truth"]["root"],
         truth_label=config["truth"]["label"],
         regions=REGIONS,
         grib_out_dir=lambda wc: (
@@ -92,7 +94,7 @@ rule verification_metrics:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {params.grib_out_dir} \
-            --truth {input.truth} \
+            --truth {params.truth} \
             --reftime {wildcards.init_time} \
             --steps "{params.fcst_steps}" \
             --label "{params.fcst_label}" \

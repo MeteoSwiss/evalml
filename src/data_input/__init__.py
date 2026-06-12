@@ -5,6 +5,7 @@ from typing import Literal, Any
 
 import earthkit.data as ekd
 import numpy as np
+import pandas as pd
 import xarray as xr
 from pyproj import Transformer
 
@@ -264,71 +265,132 @@ def load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Dat
     return ds
 
 
-def load_obs_data_from_peakweather(
-    root, reftime: datetime, steps: list[int], params: list[str], freq: str = "1h"
-) -> xr.Dataset:
-    """Load PeakWeather station observations into an xarray Dataset.
+DWH_PARAM_MAP = {
+    "T_2M": "tre200s0",
+    "TD_2M": "tde200s0",
+    "PS": "prestas0",
+    "PMSL": "pp0qffs0",
+    "TOT_PREC": "rre150h0",
+    "FF_10M": "fkl010z0",
+    "DD_10M": "dkl010z0",
+    "VMAX_10M": "fkl010z1",
+}
+DWH_WIND_SPEED = "fkl010z0"
+DWH_WIND_DIR = "dkl010z0"
+DWH_CELSIUS_TO_KELVIN = {"tre200s0", "tde200s0"}
+DWH_HPA_TO_PA = {"prestas0", "pp0qffs0"}
 
-    Returns a Dataset with dimensions `time` and `values`, values coordinates
-    (`lat`, `lon`), and variables renamed to ICON parameter names.
-    Temperatures are converted to Kelvin when present.
-    """
-    from peakweather.dataset import PeakWeatherDataset
 
-    param_names = {
-        "temperature": "T_2M",
-        "wind_u": "U_10M",
-        "wind_v": "V_10M",
-        "precipitation": "TOT_PREC",
-        "pressure": "PS",
-        "wind_gust": "VMAX_10M",
+def _jretrieve_df_to_xarray(df, short_names, catalog) -> xr.Dataset:
+    """Pivot long-form jretrieve obs into a (time, values) cube aligned to the
+    catalog, NaN-filled for missing cells."""
+    station_to_idx = {sid: i for i, sid in enumerate(catalog.station_id)}
+    if df.empty:
+        time_index = pd.DatetimeIndex([])
+    else:
+        df = df.copy()
+        df["time"] = pd.to_datetime(df["termin"].astype(str), format="%Y%m%d%H%M%S")
+        time_index = pd.DatetimeIndex(sorted(df["time"].unique()))
+    n_t, n_s = len(time_index), catalog.n
+    coords = {
+        "time": ("time", time_index.values.astype("datetime64[ns]")),
+        "values": ("values", catalog.nat_abbr),
+        "latitude": ("values", catalog.latitude),
+        "longitude": ("values", catalog.longitude),
     }
-    param_names = {k: v for k, v in param_names.items() if v in params}
+    data_vars: dict[str, tuple] = {}
+    if df.empty:
+        for p in short_names:
+            data_vars[p] = (("time", "values"), np.full((n_t, n_s), np.nan, np.float32))
+    else:
+        time_to_idx = {t: i for i, t in enumerate(time_index)}
+        df["_si"] = df["station"].map(station_to_idx)
+        df["_ti"] = df["time"].map(time_to_idx)
+        df = df.dropna(subset=["_si", "_ti"])
+        df["_si"] = df["_si"].astype(int)
+        df["_ti"] = df["_ti"].astype(int)
+        for p in short_names:
+            arr = np.full((n_t, n_s), np.nan, dtype=np.float32)
+            if p in df.columns:
+                arr[df["_ti"].to_numpy(), df["_si"].to_numpy()] = df[p].to_numpy(
+                    dtype=np.float32
+                )
+            data_vars[p] = (("time", "values"), arr)
+    return xr.Dataset(data_vars=data_vars, coords=coords)
+
+
+def load_obs_data_from_jretrieve(
+    root, reftime: datetime, steps: list[int], params: list[str]
+) -> xr.Dataset:
+    """Load SwissMetNet (SMN) surface observations from the DWH via jretrievedwh.
+
+    ``root`` is a marker string selecting stations, e.g. ``jretrievedwh:SwissMetNet``
+    (default group), ``jretrievedwh:locations=ARO,KLO``, or
+    ``jretrievedwh:bbox=45.8,47.8,5.9,10.5`` (optionally ``;stage=devt``). Returns
+    a Dataset with dims (time, values), values=nat_abbr, latitude/longitude coords,
+    variables renamed to ICON names in SI units (T/TD in Kelvin, pressure in Pa).
+    Only the requested hourly valid times are kept.
+    """
+    from data_input import jretrieve as jr
+
+    stations, stage, seq_type = jr.parse_selection(root)
+    jr.check_prerequisites(stage)
+
+    want_uv = "U_10M" in params or "V_10M" in params
+    short_names: list[str] = [DWH_PARAM_MAP[p] for p in params if p in DWH_PARAM_MAP]
+    if want_uv:
+        short_names += [DWH_WIND_SPEED, DWH_WIND_DIR]
+    short_names = list(dict.fromkeys(short_names))
+    if not short_names:
+        raise ValueError(f"No DWH parameter mapping for requested params: {params}")
+
     start = reftime
     end = start + timedelta(hours=max(steps))
     if len(steps) > 1:
-        end += timedelta(hours=steps[-1] - steps[-2])  # extend by 1 extra step
-    years = list(set([start.year, end.year]))
-    if "wind_u" in param_names or "wind_v" in param_names:
-        compute_uv = True
-    else:
-        compute_uv = False
-    pw = PeakWeatherDataset(root=root, years=years, freq=freq, compute_uv=compute_uv)
-    ds, mask = pw.get_observations(
-        parameters=[k for k in param_names.keys()],
-        first_date=f"{start:%Y-%m-%d %H:%M}",
-        last_date=f"{end:%Y-%m-%d %H:%M}",
-        return_mask=True,
-    )
-    ds = (
-        ds.stack(["nat_abbr", "name"], future_stack=True)
-        .to_xarray()
-        .to_dataset(dim="name")
-    )
-    mask = (
-        mask.stack(["nat_abbr", "name"], future_stack=True)
-        .to_xarray()
-        .to_dataset(dim="name")
-    )
-    ds = ds.where(mask)
-    ds = ds.rename({"datetime": "time", "nat_abbr": "values"})
-    ds = ds.rename(param_names)
-    ds = ds.assign_coords(time=ds.indexes["time"].tz_convert("UTC").tz_localize(None))
-    ds = ds.assign_coords(values=ds.indexes["values"])
-    ds = ds.assign_coords(longitude=("values", pw.stations_table["longitude"]))
-    ds = ds.assign_coords(latitude=("values", pw.stations_table["latitude"]))
-    if "T_2M" in ds:
-        ds["T_2M"] = ds["T_2M"] - ZERO_KELVIN  # convert to Kelvin
-    ds = ds.dropna("values", how="all")
+        end += timedelta(hours=steps[-1] - steps[-2])
 
+    catalog = jr.StationCatalog.from_meta(
+        jr.fetch_meta(
+            stations=stations, params=short_names, seq_type=seq_type, stage=stage
+        )
+    )
+    df = jr.fetch_data(
+        stations=stations,
+        params=short_names,
+        start=start,
+        end=end,
+        increment_minutes=60,
+        seq_type=seq_type,
+        stage=stage,
+    )
+    raw = _jretrieve_df_to_xarray(df, short_names, catalog)
+
+    out = xr.Dataset(coords=raw.coords)
+    for icon, short in DWH_PARAM_MAP.items():
+        if icon in params and short in raw:
+            var = raw[short]
+            if short in DWH_CELSIUS_TO_KELVIN:
+                var = var - ZERO_KELVIN
+            elif short in DWH_HPA_TO_PA:
+                var = var * 100.0
+            out[icon] = var
+    if want_uv and DWH_WIND_SPEED in raw and DWH_WIND_DIR in raw:
+        ff = raw[DWH_WIND_SPEED]
+        dd_rad = np.deg2rad(raw[DWH_WIND_DIR])
+        if "U_10M" in params:
+            out["U_10M"] = -ff * np.sin(dd_rad)
+        if "V_10M" in params:
+            out["V_10M"] = -ff * np.cos(dd_rad)
+
+    out = out.dropna("values", how="all")
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
-    return _select_valid_times(ds, times)
+    return _select_valid_times(out, times)
 
 
 def load_truth_data(
     root, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
-    """Load truth data from analysis Zarr or PeakWeather observations."""
+    """Load truth data from an analysis Zarr dataset or DWH observations via jretrieve."""
     if root.suffix == ".zarr":
         LOG.info("Loading ground truth from an analysis zarr dataset...")
         truth = load_analysis_data_from_zarr(
@@ -342,9 +404,9 @@ def load_truth_data(
             if "y" in truth.dims and "x" in truth.dims
             else {"values": -1}
         )
-    elif "peakweather" in str(root):
-        LOG.info("Loading ground truth from PeakWeather observations...")
-        truth = load_obs_data_from_peakweather(
+    elif "jretrieve" in str(root):
+        LOG.info("Loading ground truth from JRetrieve...")
+        truth = load_obs_data_from_jretrieve(
             root=root,
             reftime=reftime,
             steps=steps,

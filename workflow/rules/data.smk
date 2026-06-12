@@ -4,23 +4,6 @@ from pathlib import Path
 include: "common.smk"
 
 
-if config["truth"]["root"].endswith("peakweather"):
-    output_peakweather_root = config["truth"]["root"]
-else:
-    output_peakweather_root = OUT_ROOT / "data/observations/peakweather"
-
-
-rule data_download_obs_from_peakweather:
-    output:
-        root=directory(output_peakweather_root),
-    localrule: True
-    run:
-        from peakweather.dataset import PeakWeatherDataset
-
-        # Download the data from Huggingface
-        ds = PeakWeatherDataset(root=output.root)
-
-
 # Grid-definition files required by earthkit/eckit to decode the ICON-CH grids.
 # Automatic download/caching of these is currently broken (see README), so we
 # fetch them into eckit's default geo grid cache under $HOME, where it finds
