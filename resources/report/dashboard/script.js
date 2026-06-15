@@ -226,7 +226,7 @@ function makeCellSpec(cellData) {
     height: 160,
     encoding: {
       x: {
-        field: "lead_time",
+        field: "step",
         type: "quantitative",
         title: "Lead time (h)",
       },
@@ -255,7 +255,7 @@ function makeCellSpec(cellData) {
       tooltip: [
         { field: "source",            type: "nominal",      title: "Source" },
         { field: "region_season_init",type: "nominal",      title: "Region/Season/Init" },
-        { field: "lead_time",         type: "quantitative", title: "Lead time (h)" },
+        { field: "step",         type: "quantitative", title: "Lead time (h)" },
         { field: "value",             type: "quantitative", title: "Value", format: ".4f" },
       ],
     },

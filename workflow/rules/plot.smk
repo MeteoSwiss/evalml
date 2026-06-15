@@ -29,6 +29,7 @@ rule plot_meteogram:
         inference_okfile=rules.inference_execute.output.okfile,
         truth=config["truth"]["root"],
         peakweather_dir=rules.data_download_obs_from_peakweather.output.root,
+        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         expand(
             OUT_ROOT
@@ -93,6 +94,7 @@ rule plot_forecast_frame:
     input:
         script="workflow/scripts/plot_forecast_frame.py",
         inference_okfile=rules.inference_execute.output.okfile,
+        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         expand(
             OUT_ROOT
@@ -106,8 +108,8 @@ rule plot_forecast_frame:
         leadtime=r"\d+",  # only digits
     resources:
         slurm_partition="postproc",
-        cpus_per_task=1,
-        runtime="10m",
+        cpus_per_task=4,
+        runtime="20m",
     params:
         grib_out_dir=lambda wc: str(
             (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib").resolve()
@@ -133,15 +135,16 @@ def get_leadtimes(wc):
     """Get all lead times from the run config."""
     start, end, step = map(int, RUN_CONFIGS[wc.run_id]["steps"].split("/"))
     # skip lead time 0 for diagnostic variables
-    if wc.param in ["tp", "TOT_PREC"]:  # TODO: make this more general
+    if wc.param in ["tp", "TOT_PREC"] and start == 0:
         start += step
-    return [f"{i:03}" for i in range(start, end + 1, step)]
+    return [f"{i}" for i in range(start, end + 1, step)]
 
 
 rule make_forecast_animation:
     input:
         lambda wc: expand(
-            rules.plot_forecast_frame.output,
+            OUT_ROOT
+            / "data/runs/{run_id}/{init_time}/frames/frame_{leadtime}_{param}_{region}.png",
             run_id=wc.run_id,
             init_time=wc.init_time,
             param=wc.param,

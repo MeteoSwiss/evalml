@@ -1,19 +1,20 @@
 import logging
-import os
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Literal, Any
 
-eccodes_definition_path = Path(sys.prefix) / "share/eccodes-cosmo-resources/definitions"
-os.environ["ECCODES_DEFINITION_PATH"] = str(eccodes_definition_path)
-
-from pyproj import Transformer  # noqa: E402
-from meteodatalab import data_source, grib_decoder  # noqa: E402
-
-import numpy as np  # noqa: E402
-import xarray as xr  # noqa: E402
+import earthkit.data as ekd
+import numpy as np
+import xarray as xr
+from pyproj import Transformer
 
 LOG = logging.getLogger(__name__)
+
+XARRAY_ENGINE_PROFILE = {
+    "ensure_dims": ["z", "number", "step", "forecast_reference_time"],
+    "add_valid_time_coord": True,
+    "global_attrs": [{"institution": "MeteoSwiss"}, {"Conventions": "CF-1.8"}],
+}
 
 ZERO_KELVIN = -273.15  # °C
 
@@ -91,8 +92,8 @@ def load_analysis_data_from_zarr(
 
     # set lat lon as coords (optional)
     if "latitudes" in ds and "longitudes" in ds:
-        ds = ds.rename({"latitudes": "lat", "longitudes": "lon"})
-    ds = ds.set_coords(["lat", "lon"])
+        ds = ds.rename({"latitudes": "latitude", "longitudes": "longitude"})
+    ds = ds.set_coords(["latitude", "longitude"])
     ds = (
         ds["data"]
         .to_dataset("variable")
@@ -114,18 +115,22 @@ def load_analysis_data_from_zarr(
     return _select_valid_times(ds, times)
 
 
-def _collect_ml_grib_files(
-    root: Path, reftime: datetime, steps: list[int] | None = None
-) -> list[Path]:
+def _collect_ml_grib_files(root: Path, steps: list[int] | None = None) -> list[Path]:
     """Return GRIB files for an ML inference run (flat directory layout).
 
     When `steps` is provided, the discovered files are filtered to those whose
     name ends with ``_{step:03d}.grib``.
     """
-    files = sorted(root.glob(f"{reftime:%Y%m%d%H%M}*.grib"))
+    # TODO: this glob pattern is a dirty fix for anemoi-inference writing outputs
+    # with wrong formatting. Eventually we will either have to have a fix upstream
+    # or write a single output file.
+    files = sorted(root.glob("20*.grib"))
     if steps is None:
         return files
+
+    # again, two different patterns might be used for step formatting
     suffixes = {f"_{step:03d}.grib" for step in steps}
+    suffixes |= {f"_{step}.grib" for step in steps}
     return [f for f in files if any(f.name.endswith(s) for s in suffixes)]
 
 
@@ -145,7 +150,7 @@ def _collect_icon_archive_files(
             f"No archive subdirectory found for {reftime:%y%m%d%H} in {fcst_root}"
         )
     reftime_dir = reftime_dirs[-1]
-    LOG.info("Reading ICON archive from %s", reftime_dir)
+    LOG.info("Reading member %s from %s", member_id, reftime_dir)
 
     if "ICON-CH1-EPS" in root.parts:
         gribname = "i1eff"
@@ -163,67 +168,99 @@ def _collect_icon_archive_files(
     ]
 
 
+def _discover_icon_member_ids(
+    root: Path, reftime: datetime, steps: list[int]
+) -> list[str]:
+    """Return sorted list of numeric member IDs present in the ICON archive for `reftime`."""
+    first_file = _collect_icon_archive_files(root, reftime, [steps[0]])[0]
+    prefix = first_file.name.rsplit("_", 1)[0]
+    return sorted(
+        p.name.rsplit("_", 1)[1] for p in first_file.parent.glob(f"{prefix}_???")
+    )
+
+
+def load_from_grib_file(file: str | list[str], sel_kwargs):
+    fieldlist = ekd.from_source("file", file, lazily=True).to_fieldlist()
+    return fieldlist_to_xarray(fieldlist.sel(**sel_kwargs))
+
+
+def variable_name_profile(
+    level_type: Literal["height_above_ground_level", "mean_sea", "surface", "pressure"],
+) -> dict[str, Any]:
+    """Resolve variable name profile based on the level type."""
+    if level_type in ["height_above_ground_level", "mean_sea", "surface"]:
+        return {}
+    elif level_type == "pressure":
+        return {
+            "variable_key": "p_l",
+            "remapping": {"p_l": "{parameter.variable}_{vertical.level}"},
+        }
+    else:
+        raise ValueError(f"Unsupported level type: {level_type}")
+
+
+def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
+    ds = xr.Dataset()
+    if len(fieldlist) == 0:
+        return ds
+    for level_type_group in fieldlist.group_by("vertical.level_type"):
+        # earthkit-data should return the group key...TODO: open issue?
+        level_type = level_type_group.get("vertical.level_type")[0]
+        profile = XARRAY_ENGINE_PROFILE | variable_name_profile(level_type)
+        _ds = level_type_group.to_xarray(**profile, allow_holes=True)
+        ds = ds.merge(_ds, compat="no_conflicts", combine_attrs="no_conflicts")
+    return ds
+
+
+def _tot_prec_handling(tp: xr.DataArray) -> xr.DataArray:
+    _full_step_coord = tp["step"]  # step coordinate before .diff()
+
+    # anemoi-inference sometimes omits step 0 from the GRIB even with
+    # accumulate_from_start_of_forecast enabled. If missing, earthkit-data
+    # will fill it with NaNs following the `allow_holes=True` flag.
+    if tp[{"step": 0}].isnull().all():
+        LOG.warning(
+            "Step 0 of TOT_PREC is missing, filling with zeroes "
+            "assuming accumulate_from_start_of_forecast is enabled."
+        )
+        tp[{"step": 0}] = 0.0
+
+    # Disaggregate TOT_PREC from cumulative-from-start (expected when the
+    # accumulate_from_start_of_forecast post-processor is enabled in
+    # anemoi-inference) to per-step accumulations.
+    LOG.info(
+        "Disaggregating TOT_PREC from cumulative-from-start to per-step accumulations."
+    )
+    tp = tp.diff("step")
+
+    # Sanity-check that the incoming data is actually cumulative. If
+    # some values are significantly negative, it indicates that the data
+    # is already period-accumulated.
+    min_diff = float(tp.min().compute())
+    if min_diff < -0.1:  # NOTE: TOT_PREC canonical units are mm
+        raise ValueError(
+            "TOT_PREC in the GRIB appears to already be "
+            f"period-accumulated (min(.diff()) = {min_diff:.3e} m). "
+            "Check that the accumulate_from_start_of_forecast post-processor "
+            "is enabled in the anemoi-inference config for this source."
+        )
+
+    # Clip remaining small negative values to zero
+    tp = tp.clip(min=0.0)
+
+    # Reindex to match the original lead_time coordinate
+    tp = tp.reindex(step=_full_step_coord)
+
+    return tp
+
+
 def load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
     """Load forecast data from a list of GRIB files."""
-    fds = data_source.FileDataSource(datafiles=files)
-    ds = grib_decoder.load(fds, {"param": params})
-    for var, da in ds.items():
-        if "z" in da.dims and da.sizes["z"] == 1:
-            ds[var] = da.squeeze("z", drop=True)
-        elif "z" in da.dims and da.sizes["z"] > 1:
-            ds[var] = da.rename({"z": da.attrs["vcoord_type"]})
-    ds = xr.merge([ds[p].rename(p) for p in ds], compat="no_conflicts")
-    lead_times = ds.lead_time.values
-    if "TOT_PREC" in ds.data_vars:
-        ## Disaggregate TOT_PREC from cumulative-from-start (expected when the
-        ## accumulate_from_start_of_forecast post-processor is enabled in
-        ## anemoi-inference) to per-step accumulations.
-        ##
-        ## anemoi-inference sometimes omits step 0 from the GRIB even with
-        ## accumulate_from_start_of_forecast enabled. After the outer-join
-        ## merge above, lead_time=0 of TOT_PREC is then NaN, which would
-        ## propagate through .diff() and wipe out the first period
-        ## accumulation. Set it explicitly to 0 (cumulative-from-start has
-        ## nothing accumulated at the forecast initial time by definition).
-        ## Restricting to lead_time=0 leaves any other NaNs (e.g. from
-        ## boundary-trim masks) untouched.
-        ds = ds.assign(
-            TOT_PREC=xr.where(
-                ds.lead_time == np.timedelta64(0, "h"),
-                0.0,
-                ds.TOT_PREC,
-            )
-        )
-        ## Sanity-check that the incoming data is actually cumulative: if
-        ## .diff() produces significantly negative values, TOT_PREC is already
-        ## period-accumulated and a second disaggregation would produce
-        ## garbage. In that case raise — we always expect cumulative-from-
-        ## start precipitation here.
-        diff = ds.TOT_PREC.diff("lead_time")
-        min_diff = float(diff.min().compute())
-        if min_diff < -0.1:  # TOT_PREC canonical units are mm
-            raise ValueError(
-                f"TOT_PREC in the GRIB appears to already be "
-                f"period-accumulated (min(.diff()) = {min_diff:.3e} m). "
-                f"Check that the accumulate_from_start_of_forecast "
-                f"post-processor is enabled in the anemoi-inference config "
-                f"for this source."
-            )
-        ## .diff() drops lead_time=0; .reindex() restores it as NaN (no
-        ## accumulation period exists at the forecast initial time). Clip
-        ## small float-noise negatives to zero (anything below -0.1 mm has
-        ## already been caught by the check above).
-        ds = ds.assign(TOT_PREC=diff.clip(min=0.0).reindex(lead_time=lead_times))
-    # make sure time coordinate is available, and valid_time is not
-    if "valid_time" in ds.coords:
-        ds = ds.rename({"valid_time": "time"})
-    if "time" not in ds.coords:
-        ds = ds.assign_coords(time=ds.ref_time + ds.lead_time)
-    ds = ds.squeeze("ref_time", drop=False)
+    ds = load_from_grib_file(files, {"parameter.variable": params})
 
-    # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
-    if "cell" in ds.dims:
-        ds = ds.rename({"cell": "values"})
+    if "TOT_PREC" in ds.data_vars:
+        ds["TOT_PREC"] = _tot_prec_handling(ds["TOT_PREC"])
+
     return ds
 
 
@@ -247,13 +284,16 @@ def load_obs_data_from_peakweather(
         "wind_gust": "VMAX_10M",
     }
     param_names = {k: v for k, v in param_names.items() if v in params}
-
     start = reftime
     end = start + timedelta(hours=max(steps))
     if len(steps) > 1:
         end += timedelta(hours=steps[-1] - steps[-2])  # extend by 1 extra step
     years = list(set([start.year, end.year]))
-    pw = PeakWeatherDataset(root=root, years=years, freq=freq)
+    if "wind_u" in param_names or "wind_v" in param_names:
+        compute_uv = True
+    else:
+        compute_uv = False
+    pw = PeakWeatherDataset(root=root, years=years, freq=freq, compute_uv=compute_uv)
     ds, mask = pw.get_observations(
         parameters=[k for k in param_names.keys()],
         first_date=f"{start:%Y-%m-%d %H:%M}",
@@ -275,8 +315,8 @@ def load_obs_data_from_peakweather(
     ds = ds.rename(param_names)
     ds = ds.assign_coords(time=ds.indexes["time"].tz_convert("UTC").tz_localize(None))
     ds = ds.assign_coords(values=ds.indexes["values"])
-    ds = ds.assign_coords(lon=("values", pw.stations_table["longitude"]))
-    ds = ds.assign_coords(lat=("values", pw.stations_table["latitude"]))
+    ds = ds.assign_coords(longitude=("values", pw.stations_table["longitude"]))
+    ds = ds.assign_coords(latitude=("values", pw.stations_table["latitude"]))
     if "T_2M" in ds:
         ds["T_2M"] = ds["T_2M"] - ZERO_KELVIN  # convert to Kelvin
     ds = ds.dropna("values", how="all")
@@ -326,7 +366,7 @@ def load_INCA_baseline_from_netcdf(
     """Load INCA analysis/nowcast data from per-variable NetCDF files.
 
     Files are read from {root}/{year}/{month}/{VAR}_INCA_{YYYYmmddHHMM}.nc.
-    Each INCA variable lives in a separate file and covers 6 hours from ref_time.
+    Each INCA variable lives in a separate file and covers 6 hours from reftime.
 
     Args:
         root:    Base directory of the INCA archive, e.g.
@@ -335,9 +375,9 @@ def load_INCA_baseline_from_netcdf(
         reftime: Reference time (forecast initialisation time). Used to locate
                  the source files and to build the output time coordinate.
         steps:   List of step indices interpreted as multiples of freq.
-                 freq='1h'  : integers 0–6  (hours from ref_time).
-                 freq='10min': integers 0–36 (× 10 min from ref_time).
-                 freq='5min' : integers 0–72 (× 5 min from ref_time).
+                 freq='1h'  : integers 0–6  (hours from reftime).
+                 freq='10min': integers 0–36 (× 10 min from reftime).
+                 freq='5min' : integers 0–72 (× 5 min from reftime).
         params:  List of output variable names. Supported values:
 
                    param     description               unit     freq       source    native   src unit  avail.from
@@ -367,13 +407,14 @@ def load_INCA_baseline_from_netcdf(
                  non-hourly timestamps.
         fill_missing_files: If True, missing files are filled with NaN arrays instead
                  of raising. Defaults to True.
-
     Returns:
-        xr.Dataset with dimensions (time, y, x) and coordinates:
-          x, y  – Swiss CH1903 (EPSG:21781) easting/northing [m]
-          lat, lon  – WGS84 latitude/longitude [°], shape (y, x),
-                      derived from CH1903 via pyproj
-          time      – absolute timestamps (datetime64[ns]).
+        xr.Dataset with dimensions (step, y, x) and coordinates:
+          x, y                     – Swiss CH1903 (EPSG:21781) easting/northing [m]
+          latitude, longitude      – WGS84 latitude/longitude [°], shape (y, x),
+                                     derived from CH1903 via pyproj
+          step                     – forecast lead time (timedelta64[ns])
+          valid_time               – absolute timestamps (datetime64[ns])
+          forecast_reference_time  – scalar reference time (datetime64[ns])
         in case one or more variables are missing return array(s) filled with NaNs
     """
     # INCA grid in CH1903/LV03 (EPSG:21781): 1 km spacing, 710 × 640 points
@@ -387,12 +428,12 @@ def load_INCA_baseline_from_netcdf(
             "EPSG:21781", "EPSG:4326", always_xy=True
         ).transform(x_2d, y_2d)
         return {
-            "lat": (
+            "latitude": (
                 ("y", "x"),
                 lat_2d,
                 {"units": "degrees_north", "long_name": "latitude"},
             ),
-            "lon": (
+            "longitude": (
                 ("y", "x"),
                 lon_2d,
                 {"units": "degrees_east", "long_name": "longitude"},
@@ -406,15 +447,97 @@ def load_INCA_baseline_from_netcdf(
                 np.nan,
                 dtype=np.float32,
             ),
-            dims=["time", "y", "x"],
+            dims=["valid_time", "y", "x"],
             coords={
-                "time": valid_times,
+                "valid_time": valid_times,
                 "y": _INCA_CHY,
                 "x": _INCA_CHX,
                 **_chxy_to_latlon(_INCA_CHX, _INCA_CHY),
             },
             attrs={"units": units},
         )
+
+    def _open_convert(rt: datetime, pfx: str) -> tuple[Path, xr.DataArray | None]:
+        """Open an INCA file and apply unit conversion.
+
+        Returns (path, DataArray) on success, (path, None) when the file is missing.
+        """
+        fp = (
+            root
+            / f"{rt.year:04d}"
+            / f"{rt.month:02d}"
+            / f"{pfx}_INCA_{rt:%Y%m%d%H%M}.nc"
+        )
+        try:
+            d = xr.open_dataset(fp, drop_variables=["grid_mapping"]).rename(
+                {"chx": "x", "chy": "y", "time": "valid_time"}
+            )
+        except FileNotFoundError:
+            return fp, None
+        LOG.info("Reading %s", fp)
+        da = d[pfx]
+        u = da.attrs.get("units", "")
+        if u == "degrees C":
+            da = (da - ZERO_KELVIN).assign_attrs({**da.attrs, "units": "K"})
+        elif u == "mm/h":
+            da = da.assign_attrs({**da.attrs, "units": "kg m-2"})
+        return fp, da
+
+    def _load_shifted(param: str, prefix: str) -> xr.DataArray:
+        """Load T_2M / TD_2M working around the INCA full-hour bug.
+
+        For reftimes at full hours (HH:00), steps 1-N in the current run file are
+        affected by a known INCA bug.  Step 0 is taken from the current reftime;
+        steps 1+ are taken from the run 10 min earlier (HH-1:50), which is unaffected.
+        """
+        prev_rf = reftime - timedelta(minutes=10)
+        LOG.info(
+            "Applying INCA shifted-run workaround for %s: step 0 from %s, steps 1+ from %s",
+            param,
+            reftime,
+            prev_rf,
+        )
+        parts: list[xr.DataArray] = []
+
+        # Step 0 from current reftime file
+        zero_idx = [i for i, s in enumerate(steps) if s == 0]
+        if zero_idx:
+            fp, da_raw = _open_convert(reftime, prefix)
+            if da_raw is None:
+                if not fill_missing_files:
+                    raise FileNotFoundError(
+                        f"INCA file not found for parameter {param!r}: {fp}"
+                    )
+                LOG.warning("INCA file not found, filling %s with NaN: %s", param, fp)
+                parts.append(_nan_array(PARAM_UNITS[param]).isel(valid_time=zero_idx))
+            else:
+                parts.append(
+                    da_raw.isel(valid_time=zero_idx).assign_coords(
+                        valid_time=valid_times[zero_idx]
+                    )
+                )
+
+        # Steps 1+ from previous reftime file (positional index = step value)
+        nz_idx = [i for i, s in enumerate(steps) if s != 0]
+        if nz_idx:
+            nz_steps = [steps[i] for i in nz_idx]
+            fp, da_raw = _open_convert(prev_rf, prefix)
+            if da_raw is None:
+                if not fill_missing_files:
+                    raise FileNotFoundError(
+                        f"INCA file not found for parameter {param!r}: {fp}"
+                    )
+                LOG.warning("INCA file not found, filling %s with NaN: %s", param, fp)
+                parts.append(_nan_array(PARAM_UNITS[param]).isel(valid_time=nz_idx))
+            else:
+                parts.append(
+                    da_raw.isel(valid_time=nz_steps).assign_coords(
+                        valid_time=valid_times[nz_idx]
+                    )
+                )
+
+        da = xr.concat(parts, dim="valid_time") if len(parts) > 1 else parts[0]
+        return da.rename(param)
 
     # Maps output variable name -> INCA file prefix, per freq.
     # File prefix == variable name inside the NetCDF file.
@@ -494,9 +617,17 @@ def load_INCA_baseline_from_netcdf(
             datasets[param] = _nan_array("unknown").rename(param)
             continue
 
-    # load parameter by parameter
+    # T_2M and TD_2M are affected by a known INCA bug at full-hour reftimes (steps 1-6).
+    # Use the run from 10 min earlier for those steps; see _load_shifted().
+    _SHIFTED_PARAMS = {"T_2M", "TD_2M"}
+
     for param in to_load:
         prefix = prefix_map[param]
+
+        if param in _SHIFTED_PARAMS and freq == "1h":
+            datasets[param] = _load_shifted(param, prefix)
+            continue
+
         filepath = (
             root
             / f"{reftime.year:04d}"
@@ -505,7 +636,7 @@ def load_INCA_baseline_from_netcdf(
         )
         try:
             ds_var = xr.open_dataset(filepath, drop_variables=["grid_mapping"])
-            ds_var = ds_var.rename({"chx": "x", "chy": "y"})
+            ds_var = ds_var.rename({"chx": "x", "chy": "y", "time": "valid_time"})
         except FileNotFoundError:
             if not fill_missing_files:
                 raise FileNotFoundError(
@@ -514,6 +645,7 @@ def load_INCA_baseline_from_netcdf(
             LOG.warning("INCA file not found, filling %s with NaN: %s", param, filepath)
             datasets[param] = _nan_array(PARAM_UNITS[param]).rename(param)
             continue
+        LOG.info("Reading %s", filepath)
         # Convert units if necessary
         da = ds_var[prefix]
         units = da.attrs.get("units", "")
@@ -523,9 +655,9 @@ def load_INCA_baseline_from_netcdf(
             da = da.assign_attrs({**da.attrs, "units": "kg m-2"})
         # Reindex to the target time grid; variables coarser than freq get NaN
         # at timestamps absent from their native resolution
-        datasets[param] = da.rename(param).reindex(time=valid_times)
+        datasets[param] = da.rename(param).reindex(valid_time=valid_times)
 
-    merged = xr.merge(list(datasets.values()), join="override")
+    merged = xr.merge(list(datasets.values()), join="override", compat="override")
 
     # Add lat/lon derived from the x/y coordinates in the loaded NetCDF files
     merged = merged.assign_coords(**_chxy_to_latlon(merged.x.values, merged.y.values))
@@ -539,13 +671,13 @@ def load_INCA_baseline_from_netcdf(
         if "V_10M" in params:
             merged["V_10M"] = (-ff * np.cos(dd_rad)).assign_attrs(units="m/s")
 
-    # Restructure to match load_forecast_data_from_grib: lead_time is the dimension,
-    # time (valid_time) and ref_time (scalar) are coordinates.
+    # Restructure to match the earthkit GRIB engine profile: `step` is the
+    # lead-time dimension, `valid_time` and `forecast_reference_time` are coords.
     ref_time_np = np.datetime64(reftime, "ns")
     lead_times = (np.array(steps) * step_td).astype("timedelta64[ns]")
-    merged = merged.assign_coords(lead_time=("time", lead_times))
-    merged = merged.swap_dims({"time": "lead_time"})
-    merged = merged.assign_coords(ref_time=ref_time_np)
+    merged = merged.assign_coords(step=("valid_time", lead_times))
+    merged = merged.swap_dims({"valid_time": "step"})
+    merged = merged.assign_coords(forecast_reference_time=ref_time_np)
 
     return merged[list(params)]
 
@@ -555,16 +687,54 @@ def load_icon_baseline_from_grib(
     reftime: datetime,
     steps: list[int],
     params: list[str],
+    member: str = "000",
 ) -> xr.Dataset:
-    """Load an ICON-CH1-EPS or ICON-CH2-EPS baseline from the operational GRIB archive."""
-    return load_forecast_data_from_grib(
-        files=_collect_icon_archive_files(root, reftime, steps),
-        params=params,
-    )
+    """Load an ICON-CH1-EPS or ICON-CH2-EPS baseline from the operational GRIB archive.
+
+    `member` selects which data to load:
+    - ``"mean"``: compute the average over all available ensemble members
+    - ``"median"``: load the pre-computed median member file from the archive
+    - ``"control"`` or ``"000"``: load the control member
+    - any 3-digit string (e.g. ``"001"``…): load that specific member
+    """
+    if member == "control":
+        member = "000"
+    if member == "mean":
+        member_ids = _discover_icon_member_ids(root, reftime, steps)
+        LOG.info(
+            "Computing ensemble mean over %d members: %s", len(member_ids), member_ids
+        )
+        acc = None
+        n_loaded = 0
+        for mid in member_ids:
+            try:
+                ds = load_forecast_data_from_grib(
+                    files=_collect_icon_archive_files(
+                        root, reftime, steps, member_id=mid
+                    ),
+                    params=params,
+                )
+                if "number" in ds.dims:
+                    ds = ds.isel(number=0, drop=True)
+                acc = ds if acc is None else acc + ds
+                n_loaded += 1
+            except Exception as exc:
+                LOG.warning("Skipping member %s: %s", mid, exc)
+        if acc is None:
+            raise ValueError(
+                f"No ensemble members could be loaded for {reftime} from {root}"
+            )
+        LOG.info("Ensemble mean computed over %d members.", n_loaded)
+        return acc / n_loaded
+    else:
+        return load_forecast_data_from_grib(
+            files=_collect_icon_archive_files(root, reftime, steps, member_id=member),
+            params=params,
+        )
 
 
 def load_forecast_data(
-    root, reftime: datetime, steps: list[int], params: list[str]
+    root, reftime: datetime, steps: list[int], params: list[str], member: str = "000"
 ) -> xr.Dataset:
     """Load forecast data from GRIB files or an ICON archive.
 
@@ -578,11 +748,12 @@ def load_forecast_data(
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
         return load_forecast_data_from_grib(
-            files=_collect_ml_grib_files(root, reftime, steps),
+            # NOTE: root is already for a specific reftime
+            files=_collect_ml_grib_files(root, steps),
             params=params,
         )
     if "INCA" in root.parts:
         LOG.info("Loading INCA baseline from NetCDF files...")
         return load_INCA_baseline_from_netcdf(root, reftime, steps, params)
     LOG.info("Loading baseline forecasts from ICON GRIB archive...")
-    return load_icon_baseline_from_grib(root, reftime, steps, params)
+    return load_icon_baseline_from_grib(root, reftime, steps, params, member=member)

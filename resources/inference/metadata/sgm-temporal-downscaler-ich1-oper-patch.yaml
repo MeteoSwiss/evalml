@@ -18,7 +18,7 @@ config:
 dataset:
   data:
     constant_fields: [z, lsm]
-    # variables_metadata is necessary due to missing variables_metadata section in interpolator patch_metdata
+    # variables_metadata is necessary due to missing variables_metadata section in temporal downscaler patch_metdata
     # else mapping with grib templates fails
     variables_metadata:
       10u:

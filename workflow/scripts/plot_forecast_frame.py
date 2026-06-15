@@ -4,9 +4,10 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import cartopy.crs as ccrs
-import earthkit.meteo.thermo as ekm_thermo
+from earthkit.meteo.utils.convert import kelvin_to_celsius
 import earthkit.meteo.wind as ekm_wind
 import earthkit.plots as ekp
+from matplotlib.colors import Colormap
 import numpy as np
 
 from plotting import DOMAINS
@@ -27,19 +28,47 @@ def get_style(param, units_override=None, accu=1):
     lookup = f"{param}_{accu}H" if param == "TOT_PREC" else param
     cfg = CMAP_DEFAULTS[lookup]
     units = units_override if units_override is not None else cfg.get("units", "")
+
+    bounds = cfg.get("bounds", cfg.get("levels", None))
+    prebuilt_cmap = cfg.get("cmap", None)
+
+    # When the config provides a pre-built matplotlib Colormap (e.g. a
+    # ListedColormap), we must use the earthkit Style's vmin/vmax path, which
+    # handles isinstance(colors, Colormap) correctly.  The levels path calls
+    # cmap_and_norm → len(Colormap) → TypeError.
+    #
+    # earthkit's configure_style intercepts _STYLE_KWARGS (cmap/colors/levels/vmin/vmax)
+    # from tricontourf kwargs before matplotlib sees them.  To work around this:
+    #  - embed the Colormap directly in the Style via colors=
+    #  - inject bounds as 'levels' into style._kwargs so they survive to matplotlib
+    #  - pass only norm= as a kwarg (not in _STYLE_KWARGS, so not intercepted)
+    extend = cfg.get("extend", "both")
+
+    if isinstance(prebuilt_cmap, Colormap) and bounds is not None:
+        style = ekp.styles.Style(
+            colors=prebuilt_cmap,
+            vmin=bounds[0],
+            vmax=bounds[-1],
+            extend=extend,
+            units=units,
+        )
+        style._kwargs["levels"] = list(bounds)
+        return {
+            "style": style,
+            "norm": cfg.get("norm", None),
+        }
+
     return {
         "style": ekp.styles.Style(
-            levels=cfg.get("bounds", cfg.get("levels", None)),
-            extend="both",
+            levels=bounds,
+            extend=extend,
             units=units,
             colors=cfg.get("colors", None),
         ),
         "norm": cfg.get("norm", None),
-        "cmap": cfg.get("cmap", None),
-        "levels": cfg.get("levels", None),
+        "cmap": prebuilt_cmap,
         "vmin": cfg.get("vmin", None),
         "vmax": cfg.get("vmax", None),
-        "colors": cfg.get("colors", None),
     }
 
 
@@ -52,7 +81,7 @@ def preprocess_field(param: str, state: dict):
     """
     fields = state["fields"]
     if param in ("T_2M", "TD_2M", "T", "TD"):
-        return ekm_thermo.kelvin_to_celsius(fields[param]), "°C"
+        return kelvin_to_celsius(fields[param]), "°C"
     if param == "SP_10M":
         return ekm_wind.speed(fields["U_10M"], fields["V_10M"]), "m/s"
     if param == "SP":
@@ -68,7 +97,7 @@ def main():
         "--input", type=str, default=None, help="Directory to grib data"
     )
     parser.add_argument("--date", type=str, default=None, help="reference datetime")
-    parser.add_argument("--leadtime", type=str, help="leadtime")
+    parser.add_argument("--leadtime", type=int, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
     parser.add_argument(
         "--regions_json",
@@ -106,15 +135,22 @@ def main():
         paramlist = [param]
 
     # Load grib once — shared across all region plots
-    grib_file = grib_dir / f"{init_time}_{lead_time}.grib"
+    # TODO: fix file pattern & globbing
+    grib_file = list(grib_dir.glob(f"2*_{lead_time}.grib"))
+    if not grib_file:
+        grib_file = list(grib_dir.glob(f"2*_{lead_time:03}.grib"))
+    grib_file = Path(grib_file[0])
     LOG.info("Loading grib file %s", grib_file)
     state = load_state_from_grib(grib_file, paramlist=paramlist)
 
     # tp is accumulated from start of forecast; de-accumulate to get period [lt-accu, lt]
     if param == "TOT_PREC":
-        prev_lt = int(lead_time) - accu
+        prev_lt = lead_time - accu
         if prev_lt > 0:
-            prev_grib_file = grib_dir / f"{init_time}_{prev_lt:03d}.grib"
+            prev_grib_files = list(grib_dir.glob(f"2*_{prev_lt}.grib"))
+            if not prev_grib_files:
+                prev_grib_files = list(grib_dir.glob(f"2*_{prev_lt:03d}.grib"))
+            prev_grib_file = Path(prev_grib_files[0])
             LOG.info(
                 "De-accumulating TOT_PREC: loading previous grib file %s",
                 prev_grib_file,

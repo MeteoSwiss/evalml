@@ -69,12 +69,9 @@ class RunConfig(BaseModel):
     ENV_FIELDS: ClassVar[FrozenSet[str]] = frozenset(
         {"checkpoint", "extra_requirements", "disable_local_eccodes_definitions"}
     )
-    # Fields excluded from ALL hashing (display/resource metadata only).
-    HASH_EXCLUDE: ClassVar[FrozenSet[str]] = frozenset({"label", "inference_resources"})
-
     checkpoint: str = Field(
         ...,
-        description="The mlflow run ID, as a 32-character hexadecimal string.",
+        description="The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
     )
     label: str | None = Field(
         None,
@@ -143,31 +140,30 @@ class ForecasterConfig(RunConfig):
     )
 
 
-class InterpolatorConfig(RunConfig):
+class TemporalDownscalerConfig(RunConfig):
     """Single training run stored in MLflow."""
 
     config: Dict[str, Any] | str = Field(
         default_factory=lambda _: str(
-            PROJECT_ROOT / "resources" / "inference" / "configs" / "interpolator.yaml"
+            PROJECT_ROOT
+            / "resources"
+            / "inference"
+            / "configs"
+            / "temporal_downscaler.yaml"
         ),
-        description="Configuration for the interpolator run. Can be a dictionary of parameters or a path to a configuration file. "
-        "By default, it will point to resources/inference/configs/interpolator.yaml in the evalml repository.",
+        description="Configuration for the temporal downscaler run. Can be a dictionary of parameters or a path to a configuration file. "
+        "By default, it will point to resources/inference/configs/temporal_downscaler.yaml in the evalml repository.",
     )
 
     forecaster: ForecasterConfig | None = Field(
         None,
-        description="Configuration for the forecaster run that this interpolator is based on.",
+        description="Configuration for the forecaster run that this temporal downscaler is based on.",
     )
 
 
 class BaselineConfig(BaseModel):
     """Configuration for a single baseline to include in the verification."""
 
-    baseline_id: str | None = Field(
-        None,
-        min_length=1,
-        description="Deprecated compatibility field. Workflow baseline IDs are derived from the stem of `root`.",
-    )
     label: str = Field(
         ...,
         min_length=1,
@@ -176,12 +172,23 @@ class BaselineConfig(BaseModel):
     root: str = Field(
         ...,
         min_length=1,
-        description="Root directory where the baseline data is stored. The workflow derives the baseline ID from the stem of this path.",
+        description="Root directory where the baseline data is stored.",
     )
     steps: str = Field(
         ...,
         description="Forecast steps to be used from baseline, e.g. '10/120/1'.",
         pattern=r"^\d*/\d*/\d*$",
+    )
+    member: str = Field(
+        "000",
+        description=(
+            "Ensemble member to use: '000'/'control' for control, 'median' for the "
+            "pre-computed median, 'mean' to average all members, or any 3-digit member ID. "
+            "WARNING: when using 'median' with temporally aggregated parameters (e.g. 6-hourly "
+            "precipitation), do NOT aggregate the hourly median — this introduces a significant "
+            "negative bias. Instead, read the corresponding pre-aggregated median files "
+            "(e.g. ..._median06h). Ensure the baseline data files match the aggregation period."
+        ),
     )
 
 
@@ -204,8 +211,8 @@ class ForecasterItem(BaseModel):
     forecaster: ForecasterConfig
 
 
-class InterpolatorItem(BaseModel):
-    interpolator: InterpolatorConfig
+class TemporalDownscalerItem(BaseModel):
+    temporal_downscaler: TemporalDownscalerConfig
 
 
 class BaselineItem(BaseModel):
@@ -397,10 +404,20 @@ class DefaultResources(BaseModel):
     cpus_per_task: int = Field(..., ge=1, description="Number of CPUs per task.")
     mem_mb_per_cpu: int = Field(..., ge=1, description="Memory per CPU in MB.")
     runtime: str = Field(..., description="Maximum runtime, e.g. '1h'.")
+    slurm_account: str | None = Field(None, description="SLURM account to charge.")
+    gpus: int | None = Field(
+        None, ge=0, description="Default GPU count per job (0 for non-GPU jobs)."
+    )
 
-    def parsable(self) -> str:
+    model_config = {"extra": "forbid"}
+
+    def parsable(self) -> list[str]:
         """Convert the default resources to a string of key=value pairs."""
-        return [f"{key}={value}" for key, value in self.model_dump().items()]
+        return [
+            f"{key}={value}"
+            for key, value in self.model_dump().items()
+            if value is not None
+        ]
 
 
 class GlobalResources(BaseModel):
@@ -469,13 +486,9 @@ class ConfigModel(BaseModel):
         description="Optional label for the experiment that will be used in the experiment directory name. Defaults to the config file name if not provided.",
     )
     dates: Dates | ExplicitDates
-    runs: List[ForecasterItem | InterpolatorItem | BaselineItem] = Field(
+    runs: List[ForecasterItem | TemporalDownscalerItem | BaselineItem] = Field(
         ...,
-        description="List of experiment participants, including forecaster/interpolator ML runs and baselines.",
-    )
-    baselines: List[BaselineItem] = Field(
-        default_factory=list,
-        description="Deprecated top-level baselines list. Prefer defining baseline entries directly in `runs`.",
+        description="List of experiment participants, including forecaster/temporal downscaler ML runs and baselines.",
     )
     truth: TruthConfig | None
     experiment: ExperimentConfig = Field(
@@ -502,7 +515,6 @@ def generate_config_schema() -> str:
 
 # Module-level constants for use in Snakemake and elsewhere
 RUN_ENV_FIELDS = RunConfig.ENV_FIELDS
-RUN_HASH_EXCLUDE = RunConfig.HASH_EXCLUDE
 
 
 if __name__ == "__main__":

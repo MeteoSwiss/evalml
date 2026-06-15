@@ -152,7 +152,7 @@ def main():
     )
     forecast_ds = preprocess_ds(forecast_ds, param)
 
-    steps = [int(s) for s in forecast_ds.lead_time.dt.total_seconds().values / 3600]
+    steps = [int(s) for s in forecast_ds["step"].dt.total_seconds().values / 3600]
     LOG.info("Loading analysis data from %s", analysis_root)
     analysis_ds = load_truth_data(analysis_root, init_time, steps, paramlist)
     analysis_ds = preprocess_ds(analysis_ds, param)
@@ -184,8 +184,7 @@ def main():
             len(stations),
         )
         station_ds = stations_table.to_xarray().sel(values=[station])
-        station_ds = station_ds.rename({"latitude": "lat", "longitude": "lon"})
-        station_ds = station_ds.set_coords(("lat", "lon", "station_name"))
+        station_ds = station_ds.set_coords(("latitude", "longitude", "station_name"))
         station_ds = station_ds.drop_vars(list(station_ds.data_vars))
 
         forecast_station_ds = map_forecast_to_truth(forecast_ds, station_ds)
@@ -207,13 +206,13 @@ def main():
             zip(baseline_labels, baseline_station_ds_list), start=1
         ):
             ax.plot(
-                baseline_station_ds["time"].values,
+                baseline_station_ds["valid_time"].values,
                 baseline_station_ds[param].values,
                 color=f"C{i}",
                 label=baseline_label,
             )
         ax.plot(
-            forecast_station_ds["time"].values,
+            forecast_station_ds["valid_time"].values,
             forecast_station_ds[param].values,
             color="C0",
             label=forecast_label,

@@ -51,7 +51,9 @@ def main(args: ScriptConfig):
     # get baseline forecast data
     now = datetime.now()
 
-    fcst = load_forecast_data(args.forecast, args.reftime, args.steps, args.params)
+    fcst = load_forecast_data(
+        args.forecast, args.reftime, args.steps, args.params, member=args.member
+    )
 
     LOG.info(
         "Loaded forecast data in %s seconds: \n%s",
@@ -70,7 +72,7 @@ def main(args: ScriptConfig):
 
     # align forecast and truth data spatially and temporally
     fcst = map_forecast_to_truth(fcst, truth)
-    truth = truth.sel(time=fcst.time)
+    truth = truth.sel(time=fcst["valid_time"])
 
     # compute metrics and statistics
     results = verify(
@@ -84,7 +86,7 @@ def main(args: ScriptConfig):
 
     # save results to NetCDF
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    results.to_netcdf(args.output)
+    results.earthkit.to_netcdf(args.output)
     LOG.info("Saved verification results to %s", args.output)
 
     LOG.info("Program completed successfully.")
@@ -146,6 +148,12 @@ if __name__ == "__main__":
         type=lambda x: eval(x),
         help="Dictionary of thresholds for each parameter in the format '{param: [threshold1, threshold2, ...]}' (default: None).",
         default=None,
+    )
+    parser.add_argument(
+        "--member",
+        type=str,
+        default="000",
+        help="Ensemble member to load: '000' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID.",
     )
     parser.add_argument(
         "--output",
