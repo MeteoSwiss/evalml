@@ -120,9 +120,13 @@ def _(LOG, init_hour, param, score, season, verif_file, xr):
 def _(CMAP_DEFAULTS, ekp):
     def get_style(param, score, units_override=None):
         """Get style and colormap settings for the plot.
-        Needed because cmap/norm does not work in Style(colors=cmap),
-        still needs to be passed as arguments to tripcolor()/tricontourf().
+
+        earthkit-plots >= 1.0 expects ``Style.colors`` to be a list of
+        colours; Matplotlib ``Colormap`` objects from CMAP_DEFAULTS are
+        sampled into one colour per level interval.
         """
+        from matplotlib import colors as mcolors
+
         score_key = f"{param}.{score}.map"
         cfg = (
             CMAP_DEFAULTS[score_key]
@@ -130,19 +134,19 @@ def _(CMAP_DEFAULTS, ekp):
             else CMAP_DEFAULTS.get(param, {})
         )
         units = units_override if units_override is not None else cfg.get("units", "")
+        levels = cfg.get("bounds", cfg.get("levels", None))
+        colors = cfg.get("colors", None)
+        cmap = cfg.get("cmap", None)
+        if colors is None and cmap is not None:
+            n = len(levels) - 1 if levels is not None else getattr(cmap, "N", 256)
+            colors = [mcolors.to_hex(cmap(i / max(n - 1, 1))) for i in range(n)]
         return {
             "style": ekp.styles.Style(
-                levels=cfg.get("bounds", cfg.get("levels", None)),
+                levels=levels,
                 extend="both",
                 units=units,
-                colors=cfg.get("colors", None),
+                colors=colors,
             ),
-            "norm": cfg.get("norm", None),
-            "cmap": cfg.get("cmap", None),
-            "levels": cfg.get("levels", None),
-            "vmin": cfg.get("vmin", None),
-            "vmax": cfg.get("vmax", None),
-            "colors": cfg.get("colors", None),
         }
 
     return (get_style,)
@@ -167,8 +171,8 @@ def _(
     # plot individual fields
 
     plotter = StatePlotter(
-        ds["lon"].values.ravel(),
-        ds["lat"].values.ravel(),
+        ds["longitude"].values.ravel(),
+        ds["latitude"].values.ravel(),
         outfn.parent,
     )
     fig = plotter.init_geoaxes(
