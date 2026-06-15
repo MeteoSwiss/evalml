@@ -143,10 +143,6 @@ def model_id(checkpoint_uri: str) -> str:
     """Generate a model ID based on the checkpoint URI."""
     ckpt_type = _checkpoint_uri_type(checkpoint_uri)
     if ckpt_type == "mlflow":
-        fragment = checkpoint_uri.split("#")[-1]
-        if "/models/" in fragment:
-            parts = fragment.strip("/").split("/")
-            return f"{parts[1]}-v{parts[3]}"[:HASH_LENGTH]
         return checkpoint_uri.split("/")[-1][:HASH_LENGTH]
     elif ckpt_type == "huggingface":
         return checkpoint_uri.split("/")[-1].split(".")[0]
