@@ -20,16 +20,21 @@ XARRAY_ENGINE_PROFILE = {
 ZERO_KELVIN = -273.15  # °C
 
 
-def _select_valid_times(ds, times: np.datetime64):
+def _select_valid_times(ds, times: np.datetime64, strict: bool = False):
     # (handle special case where some valid times are not in the dataset, e.g. at the end)
     times_np = np.asarray(times, dtype="datetime64[ns]")
     times_included = np.isin(times_np, ds.time.values)
     if times_included.all():
         return ds.sel(time=times_np)
     elif times_included.any():
+        missing = times_np[~times_included]
+        if strict:
+            raise ValueError(
+                f"Some valid times are not included in the dataset:\n{missing}"
+            )
         LOG.warning(
             "Some valid times are not included in the dataset: \n%s",
-            times_np[~times_included],
+            missing,
         )
         return ds.sel(time=times_np[times_included])
     else:
@@ -385,7 +390,7 @@ def load_obs_data_from_jretrieve(
 
     out = out.dropna("values", how="all")
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
-    return _select_valid_times(out, times)
+    return _select_valid_times(out, times, strict=True)
 
 
 def load_truth_data(
