@@ -206,6 +206,6 @@ def test_melt_for_dashboard_exposes_model_type_and_distribution_metrics():
     assert model_types == ["forecaster", "interpolator"]
     # only wall_time_s and gpu_hours are present in the test records
     metrics_present = {r["metric"] for r in rows}
-    assert metrics_present == {"Wall Time (s)", "GPU Hours"}
+    assert metrics_present == {"Wall Time (min)", "GPU Hours"}
     # model_type must be present in every row
     assert all("model_type" in r for r in rows)
