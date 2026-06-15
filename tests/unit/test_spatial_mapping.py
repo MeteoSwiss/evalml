@@ -9,30 +9,30 @@ from verification.spatial import (
 
 
 def test_spherical_nearest_neighbor_indices_returns_expected_points():
-    source_lat = np.array([46.0, 46.0, 47.0, 47.0])
-    source_lon = np.array([7.0, 8.0, 7.0, 8.0])
-    target_lat = np.array([46.1, 46.9])
-    target_lon = np.array([7.1, 7.9])
+    source_latitude = np.array([46.0, 46.0, 47.0, 47.0])
+    source_longitude = np.array([7.0, 8.0, 7.0, 8.0])
+    target_latitude = np.array([46.1, 46.9])
+    target_longitude = np.array([7.1, 7.9])
 
     idx = spherical_nearest_neighbor_indices(
-        source_lat=source_lat,
-        source_lon=source_lon,
-        target_lat=target_lat,
-        target_lon=target_lon,
+        source_latitude=source_latitude,
+        source_longitude=source_longitude,
+        target_latitude=target_latitude,
+        target_longitude=target_longitude,
     )
 
     assert np.array_equal(idx, np.array([0, 3]))
 
 
 def test_nearest_grid_yx_indices_returns_grid_indices():
-    lat = xr.DataArray([[46.0, 46.0], [47.0, 47.0]], dims=("y", "x"))
-    lon = xr.DataArray([[7.0, 8.0], [7.0, 8.0]], dims=("y", "x"))
-    grid = xr.Dataset(coords={"latitude": lat, "longitude": lon})
+    latitude = xr.DataArray([[46.0, 46.0], [47.0, 47.0]], dims=("y", "x"))
+    longitude = xr.DataArray([[7.0, 8.0], [7.0, 8.0]], dims=("y", "x"))
+    grid = xr.Dataset(coords={"latitude": latitude, "longitude": longitude})
 
     y_idx, x_idx = nearest_grid_yx_indices(
         grid=grid,
-        target_lat=np.array([46.1, 46.9]),
-        target_lon=np.array([7.1, 7.9]),
+        target_latitude=np.array([46.1, 46.9]),
+        target_longitude=np.array([7.1, 7.9]),
     )
 
     assert np.array_equal(y_idx, np.array([0, 1]))
@@ -93,8 +93,8 @@ def test_map_forecast_to_truth_maps_forecast_to_truth_locations():
 
 def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_aligned():
     fcst_time = np.array(["2024-01-01T00:00"], dtype="datetime64[ns]")
-    lat = np.array([[46.0, 46.0], [47.0, 47.0]])
-    lon = np.array([[7.0, 8.0], [7.0, 8.0]])
+    latitude = np.array([[46.0, 46.0], [47.0, 47.0]])
+    longitude = np.array([[7.0, 8.0], [7.0, 8.0]])
 
     fcst = xr.Dataset(
         data_vars={"T_2M": (("time", "y", "x"), np.array([[[1.0, 2.0], [3.0, 4.0]]]))},
@@ -102,8 +102,8 @@ def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_aligned():
             "time": fcst_time,
             "y": [0, 1],
             "x": [0, 1],
-            "lat": (("y", "x"), lat),
-            "lon": (("y", "x"), lon),
+            "latitude": (("y", "x"), latitude),
+            "longitude": (("y", "x"), longitude),
         },
     )
     truth = xr.Dataset(
@@ -112,8 +112,8 @@ def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_aligned():
             "time": fcst_time,
             "y": [0, 1],
             "x": [0, 1],
-            "lat": (("y", "x"), lat),
-            "lon": (("y", "x"), lon),
+            "latitude": (("y", "x"), latitude),
+            "longitude": (("y", "x"), longitude),
         },
     )
 
@@ -122,15 +122,15 @@ def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_aligned():
 
     assert result is fcst
     assert result["T_2M"].values is fcst["T_2M"].values
-    assert np.array_equal(result["lat"].values, truth["lat"].values)
-    assert np.array_equal(result["lon"].values, truth["lon"].values)
+    assert np.array_equal(result["latitude"].values, truth["latitude"].values)
+    assert np.array_equal(result["longitude"].values, truth["longitude"].values)
     assert np.array_equal(result_aligned["T_2M"].values, fcst["T_2M"].values)
 
 
 def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_within_tolerance():
     fcst_time = np.array(["2024-01-01T00:00"], dtype="datetime64[ns]")
-    lat = np.array([[46.0, 46.0], [47.0, 47.0]])
-    lon = np.array([[7.0, 8.0], [7.0, 8.0]])
+    latitude = np.array([[46.0, 46.0], [47.0, 47.0]])
+    longitude = np.array([[7.0, 8.0], [7.0, 8.0]])
 
     fcst = xr.Dataset(
         data_vars={"T_2M": (("time", "y", "x"), np.array([[[1.0, 2.0], [3.0, 4.0]]]))},
@@ -138,8 +138,8 @@ def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_within_tole
             "time": fcst_time,
             "y": [0, 1],
             "x": [0, 1],
-            "lat": (("y", "x"), lat + 5e-8),
-            "lon": (("y", "x"), lon - 5e-8),
+            "latitude": (("y", "x"), latitude + 5e-8),
+            "longitude": (("y", "x"), longitude - 5e-8),
         },
     )
     # Nudge coordinates by less than the 1e-6 tolerance — should still be treated as aligned.
@@ -149,8 +149,8 @@ def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_within_tole
             "time": fcst_time,
             "y": [0, 1],
             "x": [0, 1],
-            "lat": (("y", "x"), lat),
-            "lon": (("y", "x"), lon),
+            "latitude": (("y", "x"), latitude),
+            "longitude": (("y", "x"), longitude),
         },
     )
 
@@ -159,23 +159,23 @@ def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_within_tole
 
     assert result is not fcst
     assert result["T_2M"].values is fcst["T_2M"].values
-    assert np.array_equal(result["lat"].values, truth["lat"].values)
-    assert np.array_equal(result["lon"].values, truth["lon"].values)
+    assert np.array_equal(result["latitude"].values, truth["latitude"].values)
+    assert np.array_equal(result["longitude"].values, truth["longitude"].values)
     assert np.array_equal(result_aligned["T_2M"].values, fcst["T_2M"].values)
 
 
 def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_within_tolerance_icon():
     fcst_time = np.array(["2024-01-01T00:00"], dtype="datetime64[ns]")
-    lat = np.array([[46.0, 46.0], [47.0, 47.0]]).flatten()
-    lon = np.array([[7.0, 8.0], [7.0, 8.0]]).flatten()
+    latitude = np.array([[46.0, 46.0], [47.0, 47.0]]).flatten()
+    longitude = np.array([[7.0, 8.0], [7.0, 8.0]]).flatten()
 
     fcst = xr.Dataset(
         data_vars={"T_2M": (("time", "values"), np.array([[1.0, 2.0, 3.0, 4.0]]))},
         coords={
             "time": fcst_time,
             "values": [0, 1, 2, 3],
-            "lat": (("values"), lat + 5e-8),
-            "lon": (("values"), lon - 5e-8),
+            "latitude": (("values"), latitude + 5e-8),
+            "longitude": (("values"), longitude - 5e-8),
         },
     )
     # Nudge coordinates by less than the 1e-6 tolerance — should still be treated as aligned.
@@ -184,8 +184,8 @@ def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_within_tole
         coords={
             "time": fcst_time,
             "values": [3, 1, 2, 0],
-            "lat": (("values"), lat),
-            "lon": (("values"), lon),
+            "latitude": (("values"), latitude),
+            "longitude": (("values"), longitude),
         },
     )
 
@@ -194,8 +194,8 @@ def test_map_forecast_to_truth_returns_fcst_unchanged_when_grids_are_within_tole
 
     assert result is not fcst
     assert result["T_2M"].values is fcst["T_2M"].values
-    assert np.array_equal(result["lat"].values, truth["lat"].values)
-    assert np.array_equal(result["lon"].values, truth["lon"].values)
+    assert np.array_equal(result["latitude"].values, truth["latitude"].values)
+    assert np.array_equal(result["longitude"].values, truth["longitude"].values)
     assert np.array_equal(result["values"].values, truth["values"].values)
     assert np.array_equal(result_aligned["T_2M"].values, fcst["T_2M"].values)
 
