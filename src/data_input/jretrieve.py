@@ -1,9 +1,10 @@
 """Subprocess wrapper around ``jretrievedwh.py`` for retrieving SwissMetNet
 (SMN) surface observations from the MeteoSwiss data warehouse (DWH).
 
-Ported/adapted from MeteoSwiss/anemoi-plugins-meteoswiss (add-synop-dwh-source).
-Requires ``jretrievedwh.py`` on $PATH and $OPR_HOME set with a readable
-``.jretrievedwh-conf.<stage>.py`` conf file.
+Requires ``jretrievedwh.py`` (resolved via $PATH, $OPR_HOME, or the hardcoded
+fallback path) and credentials set as ``JRETRIEVE_CLIENT_ID`` /
+``JRETRIEVE_CLIENT_SECRET`` in the environment or in a ``.env`` file in the
+working directory.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from io import StringIO
+from pathlib import Path
 from typing import Any, Sequence
 
 import numpy as np
@@ -24,7 +26,7 @@ import pandas as pd
 LOG = logging.getLogger(__name__)
 
 BINARY_NAME = "jretrievedwh.py"
-VALID_STAGES = {"prod", "depl", "devt"}
+HARDCODED_BINARY_PATH = "/oprusers/osm/opr.inn/bin/jretrievedwh.py"
 DEFAULT_META_FIELDS: tuple[str, ...] = ("lat", "lon", "elev", "name", "nat_abbr")
 DEFAULT_GROUP = "SwissMetNet"
 CATALOG_TIME_RANGE_START = datetime(1900, 1, 1)
@@ -37,30 +39,22 @@ class JretrieveError(RuntimeError):
 
 def _resolve_binary() -> str:
     path = shutil.which(BINARY_NAME)
-    if path is None:
-        raise JretrieveError(
-            f"{BINARY_NAME} not found in $PATH. "
-            "Make sure /oprusers/osm/opr.inn/bin (or equivalent) is on your PATH."
-        )
-    return path
+    if path is not None:
+        return path
+    if os.path.isfile(HARDCODED_BINARY_PATH):
+        return HARDCODED_BINARY_PATH
+    raise JretrieveError(
+        f"{BINARY_NAME} not found on $PATH or at {HARDCODED_BINARY_PATH}."
+    )
 
 
 def _build_env(stage: str) -> dict[str, str]:
-    if stage not in VALID_STAGES:
-        raise ValueError(
-            f"Invalid stage {stage!r}. Must be one of {sorted(VALID_STAGES)}."
-        )
-    opr_home = os.environ.get("OPR_HOME")
-    if not opr_home:
-        raise JretrieveError("OPR_HOME is not set; cannot locate jretrieve conf file.")
-    conf_name = f".jretrievedwh-conf.{stage}.py"
-    conf_path = os.path.join(opr_home, conf_name)
-    if not os.path.isfile(conf_path):
-        raise JretrieveError(f"jretrieve conf file not found: {conf_path}")
-    if not os.access(conf_path, os.R_OK):
-        raise JretrieveError(f"jretrieve conf file not readable: {conf_path}")
+    if stage != "prod":
+        raise ValueError(f"Only 'prod' stage is supported, got {stage!r}.")
+    conf_dir = str(Path(__file__).parents[2])  # project root
+    conf_name = ".jretrievedwh-conf.prod.py"
     env = os.environ.copy()
-    env["JRETRIEVE_CONF_DIR"] = opr_home
+    env["JRETRIEVE_CONF_DIR"] = conf_dir
     env["JRETRIEVE_CONF_NAME"] = conf_name
     return env
 
@@ -68,30 +62,20 @@ def _build_env(stage: str) -> dict[str, str]:
 def check_prerequisites(stage: str = "prod") -> None:
     """Fail-fast validation that the jretrievedwh environment is usable.
 
-    Verifies the CLI is on $PATH, $OPR_HOME is set, and the conf file for
-    ``stage`` exists and is readable. Raises a single ``JretrieveError`` listing
-    *all* problems found, so a misconfigured environment is reported up front
-    (e.g. at workflow launch) instead of hours later inside the verification job.
+    Checks the binary is reachable and credentials are available. Raises a
+    single ``JretrieveError`` listing *all* problems found, so a misconfigured
+    environment is reported up front rather than hours into a verification job.
     """
     problems: list[str] = []
-    if shutil.which(BINARY_NAME) is None:
-        problems.append(
-            f"{BINARY_NAME} not found in $PATH "
-            "(e.g. add /oprusers/osm/opr.inn/bin to $PATH)."
-        )
-    opr_home = os.environ.get("OPR_HOME")
-    if not opr_home:
-        problems.append("$OPR_HOME is not set.")
-    elif stage not in VALID_STAGES:
-        problems.append(
-            f"Invalid stage {stage!r}; must be one of {sorted(VALID_STAGES)}."
-        )
-    else:
-        conf_path = os.path.join(opr_home, f".jretrievedwh-conf.{stage}.py")
-        if not os.path.isfile(conf_path):
-            problems.append(f"jretrieve conf file not found: {conf_path}")
-        elif not os.access(conf_path, os.R_OK):
-            problems.append(f"jretrieve conf file not readable: {conf_path}")
+    if stage != "prod":
+        problems.append(f"Only 'prod' stage is supported, got {stage!r}.")
+    try:
+        _resolve_binary()
+    except JretrieveError as e:
+        problems.append(str(e))
+    conf_path = Path(__file__).parents[2] / ".jretrievedwh-conf.prod.py"
+    if not conf_path.is_file():
+        problems.append(f"jretrieve conf file not found: {conf_path}")
     if problems:
         raise JretrieveError(
             "jretrievedwh prerequisites not met:\n  - " + "\n  - ".join(problems)

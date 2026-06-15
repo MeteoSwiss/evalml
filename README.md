@@ -166,10 +166,10 @@ The `truth.root` value selects how the ground truth is loaded:
     # append ;stage=devt to target a non-prod DWH stage (prod|depl|devt)
   ```
 
-  **Prerequisites:** `jretrievedwh.py` must be on `$PATH` (e.g.
-  `/oprusers/osm/opr.inn/bin`) and `$OPR_HOME` set with a readable
-  `.jretrievedwh-conf.<stage>.py` conf file. No data is pre-downloaded — the obs are
-  queried at verification time.
+  **Prerequisites:** `jretrievedwh.py` must be on `$PATH` (falls back to
+  `/oprusers/osm/opr.inn/bin/jretrievedwh.py`) and DWH credentials must be
+  available — see [Credentials setup](#credentials-setup). No data is
+  pre-downloaded — the obs are queried at verification time.
 
 
 ## Installation
@@ -200,6 +200,25 @@ After this step, your token is stored locally and used for subsequent runs. Toke
 valid for 30 days. Every training or evaluation run within this period automatically
 extends the token by another 30 days. It’s good practice to run the login command before
 executing the workflow to ensure your token is still valid.
+
+### DWH / jretrieve credentials
+
+To use `jretrievedwh:` as a truth source, provide a client ID and secret for
+the MeteoSwiss service account. Set them as environment variables:
+
+```bash
+export JRETRIEVE_CLIENT_ID=your-client-id
+export JRETRIEVE_CLIENT_SECRET=your-client-secret
+```
+
+or place them in a `.env` file at the project root (next to `.jretrievedwh-conf.prod.py`):
+
+```
+JRETRIEVE_CLIENT_ID=your-client-id
+JRETRIEVE_CLIENT_SECRET=your-client-secret
+```
+
+The `.env` file is listed in `.gitignore` and is never committed.
 
 ## Workspace setup
 
