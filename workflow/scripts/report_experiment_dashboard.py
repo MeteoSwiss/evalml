@@ -1,5 +1,7 @@
 import argparse
+import json as _json
 import logging
+import math
 import sys as _sys
 from pathlib import Path
 
@@ -7,8 +9,8 @@ import jinja2
 import xarray as xr
 
 _sys.path.append(str(Path(__file__).parent))
-from verif_plot_metrics import _ensure_unique_lead_time
-from verif_plot_metrics import _select_best_sources
+from verification_plot_metrics import _ensure_unique_lead_time, _select_best_sources
+from verification import decode_metric
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -39,24 +41,26 @@ def main(args):
     LOG.info("Loaded verification netcdf: \n%s", ds)
 
     # extract only  non-spatial variables to pd.DataFrame
-    nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
+    nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d and "." in d]
     df = ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
     df[["param", "metric"]] = df["stack"].str.split(".", n=1, expand=True)
+    df["metric"] = df.metric.apply(decode_metric)
     df.drop(columns=["stack"], inplace=True)
-    df["lead_time"] = df["lead_time"].dt.total_seconds() / 3600
+    df["step"] = df["step"].dt.total_seconds() / 3600
     # convert numeric column init_hour to string in format HH:00 UTC and replace -999 with "all"
     df["init_hour"] = df["init_hour"].astype(str).str.zfill(2) + ":00 UTC"
     df["init_hour"] = df["init_hour"].where(df["init_hour"] != "-999:00 UTC", "all")
-    # create a new column for line styles and shapes in dashboard
-    df["region_season_init"] = (
-        "Region: "
-        + df["region"].astype(str)
-        + ", Season: "
-        + df["season"].astype(str)
-        + ", Init: "
-        + df["init_hour"].astype(str)
-    )
 
+    # retain only rows relevant for the active stratifications
+    stratification = args.stratification
+    if "region" not in stratification:
+        df = df[df["region"] == "all"]
+    if "season" not in stratification:
+        df = df[df["season"] == "all"]
+    if "init_hour" not in stratification:
+        df = df[df["init_hour"] == "all"]
+
+    # create a new column for line styles and shapes in dashboard
     df.dropna(inplace=True)
     LOG.info("Loaded verification data frame: \n%s", df)
 
@@ -64,12 +68,48 @@ def main(args):
     sources = df["source"].unique()
     params = df["param"].unique()
     metrics = df["metric"].unique()
-    regions = df["region"].unique()
-    seasons = df["season"].unique()
-    init_hours = df["init_hour"].unique()
+    regions = df["region"].unique() if "region" in stratification else []
+    seasons = df["season"].unique() if "season" in stratification else []
+    init_hours = df["init_hour"].unique() if "init_hour" in stratification else []
 
-    # get json string to embed in the HTML
-    df_json = df.to_json(orient="records", lines=False)
+    # Columnar JSON: store columns + data array (no repeated keys per row).
+    # region_season_init is a derived column — computed in JS at parse time.
+    # Round float values to 6 significant digits to avoid unnecessary precision.
+    def _round_sig(x, sig=6):
+        if not math.isfinite(x) or x == 0:
+            return None  # Infinity/NaN → null in JSON
+        d = math.ceil(math.log10(abs(x)))
+        power = sig - d
+        factor = 10**power
+        return round(x * factor) / factor
+
+    export_cols = [
+        "source",
+        "param",
+        "metric",
+        "step",
+        "value",
+        "region",
+        "season",
+        "init_hour",
+    ]
+    df_export = df[export_cols].copy()
+    df_export["value"] = df_export["value"].apply(
+        lambda v: _round_sig(float(v), 6) if v is not None else v
+    )
+
+    def _sanitize(v):
+        """Replace non-finite floats (NaN/Inf) with None so JSON stays valid."""
+        if isinstance(v, float) and not math.isfinite(v):
+            return None
+        return v
+
+    df_json = _json.dumps(
+        {
+            "columns": export_cols,
+            "data": [[_sanitize(v) for v in row] for row in df_export.values.tolist()],
+        }
+    )
 
     # compute number of bytes in the JSON string
     json_size = len(df_json.encode("utf-8"))
@@ -93,6 +133,7 @@ def main(args):
         regions=regions,
         seasons=seasons,
         init_hours=init_hours,
+        stratification=stratification,
         header_text=args.header_text,
         configfile_content=open(args.configfile, "r").read()
         if args.configfile.is_file()
@@ -133,6 +174,12 @@ if __name__ == "__main__":
         type=str,
         default="",
         help="Text to display in the header of the dashboard.",
+    )
+    parser.add_argument(
+        "--stratification",
+        nargs="*",
+        default=["region", "season", "init_hour"],
+        help="Stratification dimensions to include in the dashboard (any of region, season, init_hour).",
     )
     parser.add_argument(
         "--configfile",

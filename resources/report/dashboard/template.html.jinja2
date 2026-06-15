@@ -1,179 +1,231 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <title>Verification dashboard</title>
 
-    <!-- Vega-Lite plotting -->
     <script src="https://cdn.jsdelivr.net/npm/vega@6"></script>
     <script src="https://cdn.jsdelivr.net/npm/vega-lite@6"></script>
-    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-embed@7"></script>
 
-    <!-- Choices.js widgets -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/choices.js@9.0.1/public/assets/scripts/choices.min.js"></script>
 
-
-    <!-- Styles -->
     <style>
-        body {
-            font-family: system-ui, sans-serif;
-            margin: 0;
-            padding: 2rem;
+        body { font-family: system-ui, sans-serif; margin: 0; padding: 2rem; background: white; }
+
+        .tab-buttons { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+        .tab-buttons button {
+            background: none; border: none; border-bottom: 2px solid transparent;
+            padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; color: #333;
+        }
+        .tab-buttons button.active { border-bottom: 2px solid #007acc; font-weight: bold; color: #007acc; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .controls-header {
+            display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;
+        }
+        .controls-toggle {
+            background: none; border: 1px solid #ccc; border-radius: 4px;
+            padding: 2px 8px; font-size: 0.8rem; cursor: pointer; color: #555;
+            line-height: 1.4;
+        }
+        .controls-toggle:hover { border-color: #007acc; color: #007acc; }
+        .controls-summary { font-size: 0.8rem; color: #555; display: none; }
+        .controls { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+        .controls.collapsed { display: none; }
+        .control-group { flex: 1 1 220px; min-width: 180px; }
+        .choices__inner { min-height: 80px; }
+        label { font-weight: bold; display: block; }
+
+        /* Legend sits above the table */
+        #legend-chart { margin-bottom: 4px; }
+
+        /* Scrollable table wrapper */
+        #chart-scroll {
+            overflow: auto;
+            border: 1px solid #ddd;
+        }
+
+        /* Table layout — border-collapse:separate is REQUIRED for position:sticky */
+        #chart-table {
+            border-collapse: separate;
+            border-spacing: 0;
             background: white;
         }
 
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
+        /* Sticky column headers (param names) */
+        #chart-table thead th {
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 3;
+            padding: 6px 10px;
+            border-bottom: 1px solid #ddd;
+            font-size: 12px;
+            white-space: nowrap;
+            text-align: center;
         }
 
-        .tab-buttons {
-            display: flex;
-            gap: 1rem;
+        /* Sticky row headers (metric names) */
+        #chart-table tbody th {
+            position: sticky;
+            left: 0;
+            background: white;
+            z-index: 2;
+            padding: 6px 10px;
+            border-right: 1px solid #ddd;
+            font-size: 11px;
+            white-space: nowrap;
+            max-width: 140px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-align: right;
+            vertical-align: middle;
         }
 
-        .tab-buttons button {
-            background: none;
-            border: none;
-            border-bottom: 2px solid transparent;
-            padding: 0.5rem 1rem;
-            font-size: 1rem;
-            cursor: pointer;
-            color: #333;
+        /* Corner cell: sticky in both directions */
+        #chart-table thead th.corner {
+            left: 0;
+            z-index: 4;
+            border-bottom: 1px solid #ddd;
+            border-right: 1px solid #ddd;
+            min-width: 100px;
         }
 
-        .tab-buttons button.active {
-            border-bottom: 2px solid #007acc;
-            font-weight: bold;
-            color: #007acc;
+        /* Chart cells */
+        #chart-table td {
+            padding: 4px;
+            border-bottom: 1px solid #f0f0f0;
+            border-right: 1px solid #f0f0f0;
+            vertical-align: top;
         }
 
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .controls {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-            margin-bottom: 1.5rem;
-        }
-
-        .control-group {
-            flex: 1 1 250px;
-            min-width: 200px;
-        }
-
-        .choices__inner {
-            min-height: 100px;
-        }
-
-        /* .choices__list--multiple .choices__item { */
-        /* background-color:  */
-        /* } */
-
-        label {
-            font-weight: bold;
-            display: block;
-        }
+        .chart-cell { display: block; }
     </style>
-
-
 </head>
-
 <body>
 
-    <div class="header">
-        <div class="tab-buttons">
-            <button class="tab-link active" data-tab="tab_scores">Standard verification</button>
-            <button class="tab-link" data-tab="tab_config">Config</button>
+<div class="tab-buttons">
+    <button class="tab-link active" data-tab="tab_scores">Standard verification</button>
+    <button class="tab-link" data-tab="tab_config">Config</button>
+</div>
+
+<div id="tab_scores" class="tab-content active">
+    <div class="controls-header">
+        <button class="controls-toggle" id="controls-toggle">▲ Hide filters</button>
+        <span class="controls-summary" id="controls-summary"></span>
+    </div>
+    <div class="controls">
+        {% if 'region' in stratification %}
+        <div class="control-group">
+            <label>Region</label>
+            <select id="region-select" multiple>
+                {% for region in regions %}
+                <option value="{{ region | e }}"{% if region == 'all' %} selected{% endif %}>{{ region | e }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        {% if 'season' in stratification %}
+        <div class="control-group">
+            <label>Season</label>
+            <select id="season-select" multiple>
+                {% for season in seasons %}
+                <option value="{{ season | e }}"{% if season == 'all' %} selected{% endif %}>{{ season | e }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        {% if 'init_hour' in stratification %}
+        <div class="control-group">
+            <label>Initialization</label>
+            <select id="init-select" multiple>
+                {% for init_hour in init_hours %}
+                <option value="{{ init_hour | e }}"{% if init_hour == 'all' %} selected{% endif %}>{{ init_hour | e }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <div class="control-group">
+            <label>Source(s)</label>
+            <select id="source-select" multiple>
+                {% for source in sources %}
+                <option value="{{ source | e }}" selected>{{ source | e }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% set default_metrics = ['RMSE', 'BIAS', 'std', 'mean'] %}
+        <div class="control-group">
+            <label>Metric(s)</label>
+            <select id="metric-select" multiple>
+                {% for metric in metrics %}
+                <option value="{{ metric | e }}"{% if metric in default_metrics %} selected{% endif %}>{{ metric | e }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="control-group">
+            <label>Param(s)</label>
+            <select id="param-select" multiple>
+                {% for var in params %}
+                <option value="{{ var | e }}" selected>{{ var | e }}</option>
+                {% endfor %}
+            </select>
         </div>
     </div>
 
-    <!-- First tab -->
-    <div id="tab_scores" class="tab-content active">
-        <div class="controls">
-            <div class="control-group">
-                <label>Region</label>
-                <select id="region-select" multiple>
-                    {% for region in regions %}
-                    <option value="{{region}}"{% if region == 'all' %} selected{% endif %}>{{region}}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="control-group">
-                <label>Season</label>
-                <select id="season-select" multiple>
-                    {% for season in seasons %}
-                    <option value="{{season}}"{% if season == 'all' %} selected{% endif %}>{{season}}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="control-group">
-                <label>Initialization</label>
-                <select id="init-select" multiple>
-                    {% for init_hour in init_hours %}
-                    <option value="{{init_hour}}"{% if init_hour == 'all' %} selected{% endif %}>{{init_hour}}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="control-group">
-                <label>Source(s)</label>
-                <select id="source-select" multiple>
-                    {% for source in sources %}
-                    <option value="{{source}}" selected>{{source}}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="control-group">
-                <label>Metric(s)</label>
-                <select id="metric-select" multiple>
-                    {% for metric in metrics %}
-                    <option value="{{metric}}" selected>{{metric}}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="control-group">
-                <label>Param(s)</label>
-                <select id="param-select" multiple>
+    <div id="legend-chart"></div>
+
+    <div id="chart-scroll">
+        <table id="chart-table">
+            <thead>
+                <tr>
+                    <th class="corner"></th>
                     {% for var in params %}
-                    <option value="{{var}}" selected>{{var}}</option>
+                    <th data-param="{{ var | e }}">{{ var | e }}</th>
                     {% endfor %}
-                </select>
-            </div>
-        </div>
-        <div id="vis"></div>
+                </tr>
+            </thead>
+            <tbody>
+                {% for metric in metrics %}
+                <tr data-metric="{{ metric | e }}">
+                    <th title="{{ metric | e }}">{{ metric | e }}</th>
+                    {% for var in params %}
+                    <td data-param="{{ var | e }}">
+                        <div class="chart-cell"
+                             data-metric="{{ metric | e }}"
+                             data-param="{{ var | e }}"></div>
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
+</div>
 
-
-    <!-- Config file tab -->
-    <div id="tab_config" class="tab-content">
-        <pre style="background:#f7f7f7; border:1px solid #ddd; padding:1em; overflow-x:auto; max-height:60vh;">
+<div id="tab_config" class="tab-content">
+    <pre style="background:#f7f7f7; border:1px solid #ddd; padding:1em; overflow-x:auto; max-height:60vh;">
 {{ configfile_content | e }}
-        </pre>
-    </div>
+    </pre>
+</div>
 
+<script id="verif-data" type="application/json">
+    {{ verif_data | safe | indent(4, false) }}
+</script>
 
-    <script id="verif-data" type="application/json">
-        {{ verif_data | safe | indent(8, false)}}
-    </script>
-
-    <script id="header-text" type="text">
-        {{ header_text }}
-    </script>
-
-    <script>
-        {{ js_src | indent(8, true) }}
-    </script>
+<script>
+window.onerror = function(msg, src, line, col, err) {
+    var d = document.getElementById("js-error-box");
+    if (d) d.innerHTML += "<p>" + msg + " @ " + src + ":" + line + "</p>";
+};
+</script>
+<div id="js-error-box" style="color:red;font-size:12px;border:1px solid red;padding:4px;margin:4px;display:none;"></div>
+<script>document.getElementById("js-error-box").style.display="";</script>
+<script>
+    {{ js_src | indent(4, true) }}
+</script>
+<script>document.getElementById("js-error-box").textContent || (document.getElementById("js-error-box").style.display="none");</script>
 </body>
-
 </html>

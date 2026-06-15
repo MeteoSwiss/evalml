@@ -1,22 +1,41 @@
 {
   "$defs": {
+    "AnimationsConfig": {
+      "description": "Configuration for animation generation.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to generate forecast animations (GIFs per param and region).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "domains": {
+          "default": [
+            "globe",
+            "europe",
+            "switzerland"
+          ],
+          "description": "Domains to generate animations for. Each entry is either a named domain (e.g. 'globe', 'europe', 'switzerland') defined in plotting.DOMAINS, or a custom domain dict with 'name', optional 'extent' [lon_min, lon_max, lat_min, lat_max], and optional 'projection'.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/DomainConfig"
+              }
+            ]
+          },
+          "title": "Domains",
+          "type": "array"
+        }
+      },
+      "title": "AnimationsConfig",
+      "type": "object"
+    },
     "BaselineConfig": {
       "description": "Configuration for a single baseline to include in the verification.",
       "properties": {
-        "baseline_id": {
-          "anyOf": [
-            {
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Deprecated compatibility field. Workflow baseline IDs are derived from the stem of `root`.",
-          "title": "Baseline Id"
-        },
         "label": {
           "description": "Label for the baseline that will be used in experiment results such as reports and figures.",
           "minLength": 1,
@@ -24,7 +43,7 @@
           "type": "string"
         },
         "root": {
-          "description": "Root directory where the baseline data is stored. The workflow derives the baseline ID from the stem of this path.",
+          "description": "Root directory where the baseline data is stored.",
           "minLength": 1,
           "title": "Root",
           "type": "string"
@@ -33,6 +52,12 @@
           "description": "Forecast steps to be used from baseline, e.g. '10/120/1'.",
           "pattern": "^\\d*/\\d*/\\d*$",
           "title": "Steps",
+          "type": "string"
+        },
+        "member": {
+          "default": "000",
+          "description": "Ensemble member to use: '000'/'control' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID. WARNING: when using 'median' with temporally aggregated parameters (e.g. 6-hourly precipitation), do NOT aggregate the hourly median \u2014 this introduces a significant negative bias. Instead, read the corresponding pre-aggregated median files (e.g. ..._median06h). Ensure the baseline data files match the aggregation period.",
+          "title": "Member",
           "type": "string"
         }
       },
@@ -56,6 +81,24 @@
       "title": "BaselineItem",
       "type": "object"
     },
+    "Dashboard": {
+      "description": "Settings for the dashboard",
+      "properties": {
+        "stratification": {
+          "description": "Stratifications to include in the dashboard (any of season, region, init_hour)",
+          "items": {
+            "type": "string"
+          },
+          "title": "Stratification",
+          "type": "array"
+        }
+      },
+      "required": [
+        "stratification"
+      ],
+      "title": "Dashboard",
+      "type": "object"
+    },
     "Dates": {
       "description": "Start/stop of the hindcast period and the launch frequency.",
       "properties": {
@@ -74,6 +117,14 @@
           "pattern": "^\\d+[hd]$",
           "title": "Frequency",
           "type": "string"
+        },
+        "blacklist": {
+          "description": "Optional list of initialisation dates (ISO-8601) to exclude from processing.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Blacklist",
+          "type": "array"
         }
       },
       "required": [
@@ -85,6 +136,7 @@
       "type": "object"
     },
     "DefaultResources": {
+      "additionalProperties": false,
       "description": "Default resource settings for job execution.",
       "properties": {
         "slurm_partition": {
@@ -108,6 +160,33 @@
           "description": "Maximum runtime, e.g. '1h'.",
           "title": "Runtime",
           "type": "string"
+        },
+        "slurm_account": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "SLURM account to charge.",
+          "title": "Slurm Account"
+        },
+        "gpus": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Default GPU count per job (0 for non-GPU jobs).",
+          "title": "Gpus"
         }
       },
       "required": [
@@ -117,6 +196,128 @@
         "runtime"
       ],
       "title": "DefaultResources",
+      "type": "object"
+    },
+    "DomainConfig": {
+      "additionalProperties": false,
+      "description": "A custom map domain defined by name, extent, and projection.",
+      "properties": {
+        "name": {
+          "description": "Name for the custom domain (used as wildcard).",
+          "title": "Name",
+          "type": "string"
+        },
+        "extent": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Geographic extent as [lon_min, lon_max, lat_min, lat_max] in PlateCarree coordinates. None means full globe.",
+          "title": "Extent"
+        },
+        "projection": {
+          "default": "orthographic",
+          "description": "Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
+          "title": "Projection",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "DomainConfig",
+      "type": "object"
+    },
+    "ExperimentConfig": {
+      "description": "Configuration for the experiment workflow outputs.",
+      "properties": {
+        "stratification": {
+          "$ref": "#/$defs/Stratification",
+          "description": "Spatial stratification settings for the analysis."
+        },
+        "params": {
+          "default": [
+            "T_2M",
+            "TD_2M",
+            "U_10M",
+            "V_10M",
+            "PS",
+            "PMSL",
+            "TOT_PREC"
+          ],
+          "description": "List of parameters to compute verification metrics for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "thresholds": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
+          "description": "Dictionary mapping parameter names to threshold dicts. Each dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of threshold values.",
+          "title": "Thresholds",
+          "type": "object"
+        },
+        "dashboard": {
+          "$ref": "#/$defs/Dashboard",
+          "description": "Settings for the experiment dashboard."
+        },
+        "scorecards": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExperimentScorecardConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Scorecard generation configuration. Omit or set enabled: false to disable."
+        }
+      },
+      "required": [
+        "stratification",
+        "dashboard"
+      ],
+      "title": "ExperimentConfig",
+      "type": "object"
+    },
+    "ExperimentScorecardConfig": {
+      "additionalProperties": false,
+      "description": "Top-level scorecard block: a single enabled flag plus named scorecard sections.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to generate scorecards.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "sections": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ScorecardConfig"
+          },
+          "description": "Named scorecard configurations (e.g. nowcasting, short_range, medium_range).",
+          "title": "Sections",
+          "type": "object"
+        }
+      },
+      "title": "ExperimentScorecardConfig",
       "type": "object"
     },
     "ExplicitDates": {
@@ -132,7 +333,7 @@
       "description": "Single training run stored in MLflow.",
       "properties": {
         "checkpoint": {
-          "description": "The mlflow run ID, as a 32-character hexadecimal string.",
+          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
           "title": "Checkpoint",
           "type": "string"
         },
@@ -313,12 +514,178 @@
       "title": "InferenceResources",
       "type": "object"
     },
-    "InterpolatorConfig": {
+    "Locations": {
+      "description": "Locations of data and services used in the workflow.",
+      "properties": {
+        "output_root": {
+          "description": "Root directory for all output files.",
+          "format": "path",
+          "title": "Output Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "output_root"
+      ],
+      "title": "Locations",
+      "type": "object"
+    },
+    "MeteogramConfig": {
+      "description": "Configuration for meteogram generation.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to generate meteograms (time series plots at stations).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "stations": {
+          "default": [
+            "GVE",
+            "KLO",
+            "LUG"
+          ],
+          "description": "List of PeakWeather station IDs to generate meteograms for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Stations",
+          "type": "array"
+        }
+      },
+      "title": "MeteogramConfig",
+      "type": "object"
+    },
+    "Profile": {
+      "description": "Workflow execution profile.",
+      "properties": {
+        "executor": {
+          "description": "Job executor, e.g. 'slurm'.",
+          "title": "Executor",
+          "type": "string"
+        },
+        "global_resources": {
+          "$ref": "#/$defs/GlobalResources"
+        },
+        "default_resources": {
+          "$ref": "#/$defs/DefaultResources"
+        },
+        "jobs": {
+          "description": "Maximum number of parallel jobs.",
+          "minimum": 1,
+          "title": "Jobs",
+          "type": "integer"
+        },
+        "batch_rules": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Define batches of the same rule that shall be executed within one job submission.",
+          "title": "Batch Rules",
+          "type": "object"
+        }
+      },
+      "required": [
+        "executor",
+        "global_resources",
+        "default_resources",
+        "jobs"
+      ],
+      "title": "Profile",
+      "type": "object"
+    },
+    "ScorecardConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for a single named scorecard.",
+      "properties": {
+        "baseline": {
+          "description": "Baseline label to compare against (must match the `label` field of a baseline entry in `runs`).",
+          "title": "Baseline",
+          "type": "string"
+        },
+        "lead_times": {
+          "description": "Lead-time range as start/stop/step (hours).",
+          "title": "Lead Times",
+          "type": "string"
+        },
+        "stratification": {
+          "description": "Dimension to use as scorecard columns (e.g. 'region').",
+          "title": "Stratification",
+          "type": "string"
+        },
+        "variables": {
+          "description": "Variables and metrics as scorecard rows (VAR:M1,M2 format). An empty list [] is accepted by the schema but falls back to a hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). Omit ':...' after a variable name to include all available metrics for it.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Variables",
+          "type": "array"
+        }
+      },
+      "required": [
+        "baseline",
+        "lead_times",
+        "stratification",
+        "variables"
+      ],
+      "title": "ScorecardConfig",
+      "type": "object"
+    },
+    "ShowcaseConfig": {
+      "description": "Configuration for the showcase workflow.",
+      "properties": {
+        "params": {
+          "default": [
+            "T_2M",
+            "SP_10M"
+          ],
+          "description": "List of parameters to generate animations and meteograms for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "meteograms": {
+          "$ref": "#/$defs/MeteogramConfig"
+        },
+        "animations": {
+          "$ref": "#/$defs/AnimationsConfig"
+        }
+      },
+      "title": "ShowcaseConfig",
+      "type": "object"
+    },
+    "Stratification": {
+      "description": "Stratification settings for the analysis.",
+      "properties": {
+        "regions": {
+          "description": "List of region names for stratification.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Regions",
+          "type": "array"
+        },
+        "root": {
+          "description": "Root directory where the region shapefiles are stored.",
+          "title": "Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "regions",
+        "root"
+      ],
+      "title": "Stratification",
+      "type": "object"
+    },
+    "TemporalDownscalerConfig": {
       "additionalProperties": false,
       "description": "Single training run stored in MLflow.",
       "properties": {
         "checkpoint": {
-          "description": "The mlflow run ID, as a 32-character hexadecimal string.",
+          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
           "title": "Checkpoint",
           "type": "string"
         },
@@ -376,7 +743,7 @@
               "type": "string"
             }
           ],
-          "description": "Configuration for the interpolator run. Can be a dictionary of parameters or a path to a configuration file. By default, it will point to resources/inference/configs/interpolator.yaml in the evalml repository.",
+          "description": "Configuration for the temporal downscaler run. Can be a dictionary of parameters or a path to a configuration file. By default, it will point to resources/inference/configs/temporal_downscaler.yaml in the evalml repository.",
           "title": "Config"
         },
         "forecaster": {
@@ -389,104 +756,26 @@
             }
           ],
           "default": null,
-          "description": "Configuration for the forecaster run that this interpolator is based on."
+          "description": "Configuration for the forecaster run that this temporal downscaler is based on."
         }
       },
       "required": [
         "checkpoint",
         "steps"
       ],
-      "title": "InterpolatorConfig",
+      "title": "TemporalDownscalerConfig",
       "type": "object"
     },
-    "InterpolatorItem": {
+    "TemporalDownscalerItem": {
       "properties": {
-        "interpolator": {
-          "$ref": "#/$defs/InterpolatorConfig"
+        "temporal_downscaler": {
+          "$ref": "#/$defs/TemporalDownscalerConfig"
         }
       },
       "required": [
-        "interpolator"
+        "temporal_downscaler"
       ],
-      "title": "InterpolatorItem",
-      "type": "object"
-    },
-    "Locations": {
-      "description": "Locations of data and services used in the workflow.",
-      "properties": {
-        "output_root": {
-          "description": "Root directory for all output files.",
-          "format": "path",
-          "title": "Output Root",
-          "type": "string"
-        }
-      },
-      "required": [
-        "output_root"
-      ],
-      "title": "Locations",
-      "type": "object"
-    },
-    "Profile": {
-      "description": "Workflow execution profile.",
-      "properties": {
-        "executor": {
-          "description": "Job executor, e.g. 'slurm'.",
-          "title": "Executor",
-          "type": "string"
-        },
-        "global_resources": {
-          "$ref": "#/$defs/GlobalResources"
-        },
-        "default_resources": {
-          "$ref": "#/$defs/DefaultResources"
-        },
-        "jobs": {
-          "description": "Maximum number of parallel jobs.",
-          "minimum": 1,
-          "title": "Jobs",
-          "type": "integer"
-        },
-        "batch_rules": {
-          "additionalProperties": {
-            "type": "integer"
-          },
-          "description": "Define batches of the same rule that shall be executed within one job submission.",
-          "title": "Batch Rules",
-          "type": "object"
-        }
-      },
-      "required": [
-        "executor",
-        "global_resources",
-        "default_resources",
-        "jobs"
-      ],
-      "title": "Profile",
-      "type": "object"
-    },
-    "Stratification": {
-      "description": "Stratification settings for the analysis.",
-      "properties": {
-        "regions": {
-          "description": "List of region names for stratification.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Regions",
-          "type": "array"
-        },
-        "root": {
-          "description": "Root directory where the region shapefiles are stored.",
-          "title": "Root",
-          "type": "string"
-        }
-      },
-      "required": [
-        "regions",
-        "root"
-      ],
-      "title": "Stratification",
+      "title": "TemporalDownscalerItem",
       "type": "object"
     },
     "TruthConfig": {
@@ -546,14 +835,14 @@
       "title": "Dates"
     },
     "runs": {
-      "description": "List of experiment participants, including forecaster/interpolator ML runs and baselines.",
+      "description": "List of experiment participants, including forecaster/temporal downscaler ML runs and baselines.",
       "items": {
         "anyOf": [
           {
             "$ref": "#/$defs/ForecasterItem"
           },
           {
-            "$ref": "#/$defs/InterpolatorItem"
+            "$ref": "#/$defs/TemporalDownscalerItem"
           },
           {
             "$ref": "#/$defs/BaselineItem"
@@ -561,14 +850,6 @@
         ]
       },
       "title": "Runs",
-      "type": "array"
-    },
-    "baselines": {
-      "description": "Deprecated top-level baselines list. Prefer defining baseline entries directly in `runs`.",
-      "items": {
-        "$ref": "#/$defs/BaselineItem"
-      },
-      "title": "Baselines",
       "type": "array"
     },
     "truth": {
@@ -581,14 +862,19 @@
         }
       ]
     },
-    "stratification": {
-      "$ref": "#/$defs/Stratification"
+    "experiment": {
+      "$ref": "#/$defs/ExperimentConfig",
+      "description": "Settings for the experiment workflow outputs."
     },
     "locations": {
       "$ref": "#/$defs/Locations"
     },
     "profile": {
       "$ref": "#/$defs/Profile"
+    },
+    "showcase": {
+      "$ref": "#/$defs/ShowcaseConfig",
+      "description": "Settings for the showcase workflow."
     }
   },
   "required": [
@@ -596,7 +882,7 @@
     "dates",
     "runs",
     "truth",
-    "stratification",
+    "experiment",
     "locations",
     "profile"
   ],

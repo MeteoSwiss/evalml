@@ -20,6 +20,9 @@ ENV_HASH_FIELDS = {
 }
 # Fields excluded from ALL hashing (display/resource metadata only).
 RUN_HASH_EXCLUDE = {"label", "inference_resources", "_is_candidate", "model_type"}
+# Fields excluded from baseline hashing (display metadata only).
+BASELINE_HASH_EXCLUDE = {"label"}
+TRUTH_HASH_EXCLUDE = {"label"}
 
 
 # ============================================================================
@@ -64,20 +67,48 @@ def parse_reference_times():
     start = datetime.strptime(cfg["start"], DATETIME_FORMAT)
     end = datetime.strptime(cfg["end"], DATETIME_FORMAT)
     freq = parse_timedelta(cfg["frequency"])
+    blacklist = {
+        datetime.strptime(t, DATETIME_FORMAT) for t in cfg.get("blacklist", [])
+    }
     times = []
     t = start
     while t <= end:
-        times.append(t)
+        if t not in blacklist:
+            times.append(t)
         t += freq
     return times
 
 
 def parse_regions():
     """Parse regions from the configuration."""
-    cfg = config["stratification"]
+    cfg = config["experiment"]["stratification"]
     regions = [f"{cfg['root']}/{region}.shp" for region in cfg["regions"]]
     regions_txt = ",".join(regions)
     return regions_txt
+
+
+def parse_showcase_regions():
+    """Parse showcase domains from config.
+
+    Returns a dict mapping domain name -> {extent, projection}.
+    Named domains (strings) have extent=None and projection=None,
+    meaning the plot script will fall back to the DOMAINS lookup.
+    Custom domains carry their explicit extent and projection.
+    """
+    result = {}
+    for r in (
+        config.get("showcase", {})
+        .get("animations", {})
+        .get("domains", ["globe", "europe", "switzerland"])
+    ):
+        if isinstance(r, str):
+            result[r] = {"extent": None, "projection": None}
+        else:
+            result[r["name"]] = {
+                "extent": r.get("extent"),
+                "projection": r.get("projection", "orthographic"),
+            }
+    return result
 
 
 # ============================================================================
@@ -132,7 +163,7 @@ def register_run(model_type, run_config, as_candidate=True):
     mid = model_id(run_cfg["checkpoint"])
 
     out = {}
-    if model_type == "interpolator":
+    if model_type == "temporal_downscaler":
         forecaster = run_cfg.get("forecaster")
         if forecaster is None:
             run_cfg["forecaster"] = None
@@ -152,7 +183,7 @@ def register_run(model_type, run_config, as_candidate=True):
     # Compute env_id (determines which venv/squashfs to use)
     e_hash = env_entry_hash(run_cfg, model_type)
     env_id_base = f"{model_type}-{mid}-{e_hash}"
-    if model_type == "interpolator":
+    if model_type == "temporal_downscaler":
         env_id = f"{env_id_base}-on-{env_dep_suffix}"
     else:
         env_id = env_id_base
@@ -176,7 +207,13 @@ def collect_all_runs() -> dict:
         if model_type == "baseline":
             continue
         run_config = run_entry[model_type]
-        runs |= register_run(model_type, run_config)
+        for run_id, run_cfg in register_run(model_type, run_config).items():
+            if run_id in runs and runs[run_id].get("_is_candidate", False):
+                # Preserve candidates by not letting a dependency registration
+                # (as_candidate=False) demote a run that was already registered as
+                # an explicit candidate. Order in config["runs"] must not matter.
+                run_cfg["_is_candidate"] = True
+            runs[run_id] = run_cfg
     return runs
 
 
@@ -211,27 +248,40 @@ def collect_all_baselines():
         if "baseline" not in run_entry:
             continue
         baseline_config = run_entry["baseline"]
-        baseline_id = Path(baseline_config["root"]).stem
-        baselines[baseline_id] = baseline_config
-
-    # Backward compatibility with legacy top-level `baselines` block.
-    for baseline_entry in copy.deepcopy(config.get("baselines", [])):
-        baseline_type = next(iter(baseline_entry))
-        baseline_config = baseline_entry[baseline_type]
-        baseline_id = Path(baseline_config["root"]).stem
-        baseline_config.pop("baseline_id", None)
+        baseline_id = f"baseline-{baseline_hash(baseline_config)}"
         baselines[baseline_id] = baseline_config
 
     return baselines
 
 
+def resolve_baseline_id(label: str) -> str:
+    """Resolve a baseline label to its hash-based ID.
+
+    Scorecard configs reference baselines by human-readable label (e.g. 'IFS').
+    This finds the matching baseline_id in BASELINE_CONFIGS.
+    Raises ValueError if the label doesn't match any registered baseline.
+    """
+    for baseline_id, cfg in BASELINE_CONFIGS.items():
+        if cfg.get("label") == label:
+            return baseline_id
+    available = [cfg.get("label") for cfg in BASELINE_CONFIGS.values()]
+    raise ValueError(
+        f"No baseline with label {label!r} found. "
+        f"Available baseline labels: {available}"
+    )
+
+
 def collect_experiment_participants():
     participants = {}
     for base in BASELINE_CONFIGS.keys():
-        participants[base] = OUT_ROOT / f"data/baselines/{base}/verif_aggregated.nc"
+        participants[base] = (
+            OUT_ROOT / f"data/baselines/{base}/verif_aggregated_{TRUTH_HASH}.nc"
+        )
     for exp in RUN_CONFIGS.keys():
         if RUN_CONFIGS[exp].get("_is_candidate", False):
-            participants[exp] = OUT_ROOT / f"data/runs/{exp}/verif_aggregated.nc"
+            participants[exp] = (
+                OUT_ROOT / f"data/runs/{exp}/verif_aggregated_{TRUTH_HASH}.nc"
+            )
     return participants
 
 
@@ -247,11 +297,11 @@ def env_entry_hash(run_config: dict, model_type: str) -> str:
     - checkpoint (different model)
     - extra_requirements (different dependencies)
     - disable_local_eccodes_definitions (different ECCODES setup)
-    - For interpolators: the forecaster's env_id (different upstream model)
+    - For temporal downscalers: the forecaster's env_id (different upstream model)
     """
     cfg = {k: v for k, v in run_config.items() if k in ENV_HASH_FIELDS}
     configs_to_hash = [cfg]
-    if model_type == "interpolator" and run_config.get("forecaster"):
+    if model_type == "temporal_downscaler" and run_config.get("forecaster"):
         # environment depends on which forecaster model (not which run config)
         configs_to_hash.append(run_config["forecaster"].get("env_id"))
     return generate_json_hash(configs_to_hash)
@@ -263,15 +313,21 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
     Changes to these fields create a new run_id (new outputs) but reuse the environment:
     - steps (lead times)
     - config YAML file contents (inference parameters)
-    - For interpolators: the forecaster's run_id (which run's outputs to read)
+    - For temporal downscalers: the forecaster's run_id (which run's outputs to read)
     """
     configs_to_hash = [{"steps": run_config["steps"]}]
     with open(run_config["config"], "r") as f:
         configs_to_hash.append(yaml.safe_load(f))
-    if model_type == "interpolator" and run_config.get("forecaster"):
+    if model_type == "temporal_downscaler" and run_config.get("forecaster"):
         # run output depends on which forecaster RUN was used (not just the env)
         configs_to_hash.append(run_config["forecaster"].get("run_id"))
     return generate_json_hash(configs_to_hash)
+
+
+def baseline_hash(baseline_config: dict) -> str:
+    """Hash of fields that determine baseline identity (excludes display/legacy metadata)."""
+    cfg = {k: v for k, v in baseline_config.items() if k not in BASELINE_HASH_EXCLUDE}
+    return generate_json_hash(cfg)
 
 
 def master_hash() -> str:
@@ -287,9 +343,25 @@ def master_hash() -> str:
     return generate_json_hash(configs_to_hash)
 
 
+def truth_hash(truth_config: dict) -> str:
+    """Generate a short hash of the configs for the truth data."""
+    cfg = {k: v for k, v in truth_config.items() if k not in TRUTH_HASH_EXCLUDE}
+    return generate_json_hash(cfg)
+
+
+TRUTH_HASH = truth_hash(config["truth"])
 REGIONS = parse_regions()
+SHOWCASE_REGIONS = parse_showcase_regions()
+SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])
+EXPERIMENT_PARAMS = config.get("experiment", {}).get(
+    "params", ["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"]
+)
 REFTIMES = parse_reference_times()
 RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
+_scorecard = config.get("experiment", {}).get("scorecards") or {}
+SCORECARD_CONFIGS = (
+    _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
+)

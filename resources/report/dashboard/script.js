@@ -1,187 +1,346 @@
+// ---------------------------------------------------------------------------
 // Tab switching
-document.querySelectorAll(".tab-link").forEach(button => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll(".tab-link").forEach(btn => btn.classList.remove("active"));
-    document.querySelectorAll(".tab-content").forEach(tab => tab.classList.remove("active"));
-    button.classList.add("active");
-    document.getElementById(button.dataset.tab).classList.add("active");
+// ---------------------------------------------------------------------------
+document.querySelectorAll(".tab-link").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-link").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.tab).classList.add("active");
   });
 });
 
-
-// Initialize selection widgets
+// ---------------------------------------------------------------------------
+// Filter widgets (Choices.js)
+// ---------------------------------------------------------------------------
 const choicesInstances = {};
 
-choicesInstances["region-select"] = new Choices("#region-select", {
+const choicesConfig = {
   searchEnabled: false,
   removeItemButton: true,
   shouldSort: false,
   itemSelectText: "",
-  placeholder: false
-});
-document.getElementById("region-select").addEventListener("change", updateChart);
-
-choicesInstances["season-select"] = new Choices("#season-select", {
-  searchEnabled: false,
-  removeItemButton: true,
-  shouldSort: false,
-  itemSelectText: "",
-  placeholder: false
-});
-document.getElementById("season-select").addEventListener("change", updateChart);
-
-choicesInstances["init-select"] = new Choices("#init-select", {
-  searchEnabled: false,
-  removeItemButton: true,
-  shouldSort: false,
-  itemSelectText: "",
-  placeholder: false
-});
-document.getElementById("init-select").addEventListener("change", updateChart);
-
-choicesInstances["source-select"] = new Choices("#source-select", {
-  searchEnabled: false,
-  removeItemButton: true,
-  shouldSort: false,
-  itemSelectText: "",
-  placeholder: false
-});
-document.getElementById("source-select").addEventListener("change", updateChart);
-
-choicesInstances["metric-select"] = new Choices("#metric-select", {
-  searchEnabled: false,
-  removeItemButton: true,
-  shouldSort: false,
-  itemSelectText: "",
-  placeholder: false
-});
-document.getElementById("metric-select").addEventListener("change", updateChart);
-
-choicesInstances["param-select"] = new Choices("#param-select", {
-  searchEnabled: false,
-  removeItemButton: true,
-  shouldSort: false,
-  itemSelectText: "",
-  placeholder: false
-});
-document.getElementById("param-select").addEventListener("change", updateChart);
-
-// Get the data (embedded in the HTML)
-data = JSON.parse(document.getElementById("verif-data").textContent)
-header = document.getElementById("header-text").textContent.trim()
-
-// Define base spec
-var spec = {
-  "data": { "values": data },
-  "config": {
-    "scale": { "continuousPadding": 1 }
-  },
-  "facet": {
-    "row": { "field": "metric", "type": "nominal", "title": null },
-    "column": { "field": "param", "type": "nominal" , "title": null },
-  },
-  "resolve": {
-    "scale": {
-      "x": "shared",
-      "y": "independent"
-    },
-  },
-  "spec": {
-    "params": [
-      {
-        "name": "xZoom",
-        "select": {
-          "type": "interval",
-          "encodings": ["x"],
-          "zoom": "wheel![!event.shiftKey]"
-        },
-        "bind": "scales"
-      }
-    ],
-    "mark": {"type": "line", "point": { "size": 50 } },
-    "width": 300,
-    "height": 200,
-    "encoding": {
-      "x": {
-        "field": "lead_time",
-        "type": "quantitative"
-      },
-      "y": {
-        "field": "value",
-        "type": "quantitative" ,
-          "scale": { "zero": false }
-      },
-      "color": {
-        "field": "source",
-        "type": "nominal",
-        "legend": { "orient": "top", "title": "Data Source", "offset": 0, "padding": 10 }
-      },
-      "shape": {
-        "field": "region_season_init",
-        "type": "nominal",
-        "legend": { "orient": "top", "title": "Region, Season, Initialization", "offset": 0, "padding": 10 }
-      },
-      "strokeDash": {
-        "field": "region_season_init",
-        "type": "nominal",
-        "legend": { "orient": "top", "title": "Region, Season, Initialization", "offset": 0, "padding": 10 }
-      },
-      "tooltip": [
-        { "field": "region", "type": "nominal", "title": "Region" },
-        { "field": "source", "type": "nominal", "title": "Source" },
-        { "field": "param", "type": "nominal", "title": "Parameter" },
-        { "field": "metric", "type": "nominal", "title": "Metric" },
-        { "field": "lead_time", "type": "quantitative", "title": "Lead Time (h)" },
-        { "field": "value", "type": "quantitative", "title": "Value" }
-      ]
-    },
-  },
+  placeholder: false,
 };
 
-
-// Define functions
-
-function getSelectedValues(id) {
-  return choicesInstances[id].getValue(true)
+// Guard: region/season/init may be absent when stratification doesn't include them
+function initChoices(id) {
+  if (document.getElementById(id)) {
+    choicesInstances[id] = new Choices("#" + id, choicesConfig);
+    document.getElementById(id).addEventListener("change", scheduleUpdate);
+  }
 }
 
-function updateChart() {
-  const selectedRegions = getSelectedValues("region-select");
-  const selectedSeasons = getSelectedValues("season-select");
-  const selectedInits = getSelectedValues("init-select");
-  const selectedSources = getSelectedValues("source-select");
-  const selectedparams = getSelectedValues("param-select");
-  const selectedMetrics = getSelectedValues("metric-select");
+initChoices("region-select");
+initChoices("season-select");
+initChoices("init-select");
+initChoices("source-select");
+initChoices("metric-select");
+initChoices("param-select");
 
-  const newSpec = JSON.parse(JSON.stringify(spec));
-  const filters = [];
-
-  newSpec.title = header;
-  if (selectedRegions.length > 0) {
-    filters.push({ field: "region", oneOf: selectedRegions });
-  }
-  if (selectedSeasons.length > 0) {
-    filters.push({ field: "season", oneOf: selectedSeasons });
-  }
-  if (selectedInits.length > 0) {
-    filters.push({ field: "init_hour", oneOf: selectedInits });
-  }
-  if (selectedSources.length > 0) {
-    filters.push({ field: "source", oneOf: selectedSources });
-  }
-  if (selectedparams.length > 0) {
-    filters.push({ field: "param", oneOf: selectedparams });
-  }
-  if (selectedMetrics.length > 0) {
-    filters.push({ field: "metric", oneOf: selectedMetrics });
-  }
-
-  if (filters.length > 0) {
-    newSpec.transform = [{ filter: { and: filters } }];
-  }
-
-  vegaEmbed('#vis', newSpec, { actions: false });
+function getSelected(id) {
+  return choicesInstances[id] ? choicesInstances[id].getValue(true) : [];
 }
 
-// Initial chart
-updateChart()
+// ---------------------------------------------------------------------------
+// Data
+// ---------------------------------------------------------------------------
+(function () {
+  const raw = JSON.parse(document.getElementById("verif-data").textContent);
+  // Convert columnar format {columns, data} → array of objects, and add derived column
+  const cols = raw.columns;
+  window.DATA = raw.data.map(row => {
+    const obj = {};
+    for (let i = 0; i < cols.length; i++) obj[cols[i]] = row[i];
+    obj.region_season_init =
+      "Region: " + obj.region + ", Season: " + obj.season + ", Init: " + obj.init_hour;
+    return obj;
+  });
+})();
+const DATA = window.DATA;
+
+// ---------------------------------------------------------------------------
+// Shared color scale — pin all sources to consistent colors across all cells
+// ---------------------------------------------------------------------------
+const ALL_SOURCES = [...new Set(DATA.map(d => d.source))];
+
+// ---------------------------------------------------------------------------
+// Vega view lifecycle
+// ---------------------------------------------------------------------------
+const vegaViews = new Map();   // key → Vega view
+
+function disposeView(key) {
+  if (vegaViews.has(key)) {
+    try { vegaViews.get(key).finalize(); } catch (e) {}
+    vegaViews.delete(key);
+  }
+}
+
+function cellKey(metric, param) { return metric + "\x00" + param; }
+
+// ---------------------------------------------------------------------------
+// Cell spec
+// ---------------------------------------------------------------------------
+function makeCellSpec(cellData) {
+  return {
+    data: { values: cellData },
+    config: { scale: { continuousPadding: 1 } },
+    params: [{
+      name: "xZoom",
+      select: { type: "interval", encodings: ["x"], zoom: "wheel[!event.shiftKey]" },
+      bind: "scales",
+    }],
+    transform: [{ filter: { param: "xZoom" } }],
+    mark: { type: "line", point: { size: 40 } },
+    width: 280,
+    height: 160,
+    encoding: {
+      x: {
+        field: "step",
+        type: "quantitative",
+        title: "Lead time (h)",
+      },
+      y: {
+        field: "value",
+        type: "quantitative",
+        scale: { zero: false },
+        title: null,
+      },
+      color: {
+        field: "source",
+        type: "nominal",
+        scale: { domain: ALL_SOURCES },
+        legend: null,
+      },
+      shape: {
+        field: "region_season_init",
+        type: "nominal",
+        legend: null,
+      },
+      strokeDash: {
+        field: "region_season_init",
+        type: "nominal",
+        legend: null,
+      },
+      tooltip: [
+        { field: "source",            type: "nominal",      title: "Source" },
+        { field: "region_season_init",type: "nominal",      title: "Region/Season/Init" },
+        { field: "step",         type: "quantitative", title: "Lead time (h)" },
+        { field: "value",             type: "quantitative", title: "Value", format: ".4f" },
+      ],
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Legend — rendered as a zero-size chart above the table
+// ---------------------------------------------------------------------------
+let legendView = null;
+
+async function renderLegend(filteredData) {
+  const src = filteredData.length ? filteredData : DATA;
+  const spec = {
+    data: { values: src },
+    config: { view: { stroke: null } },
+    mark: { type: "point", filled: true, opacity: 0, size: 0 },
+    width: 1,
+    height: 1,
+    encoding: {
+      color: {
+        field: "source",
+        type: "nominal",
+        scale: { domain: ALL_SOURCES },
+        legend: {
+          orient: "left", title: "Source", offset: 8,
+          symbolType: "circle", symbolSize: 120,
+        },
+      },
+      shape: {
+        field: "region_season_init",
+        type: "nominal",
+        legend: {
+          orient: "right",
+          title: "Region / Season / Init",
+          offset: 8,
+          labelLimit: 400,
+          symbolType: "circle", symbolSize: 120,
+        },
+      },
+    },
+  };
+  try {
+    if (legendView) { try { legendView.finalize(); } catch (e) {} }
+    const result = await vegaEmbed(
+      document.getElementById("legend-chart"), spec, { actions: false }
+    );
+    legendView = result.view;
+  } catch (e) { console.warn("legend render error", e); }
+}
+
+// ---------------------------------------------------------------------------
+// Main update
+// ---------------------------------------------------------------------------
+
+// Debounce so rapid filter changes don't spawn N simultaneous re-renders
+let _updateTimer = null;
+function scheduleUpdate() {
+  clearTimeout(_updateTimer);
+  _updateTimer = setTimeout(updateChart, 250);
+}
+
+// Monotonic counter: each call to updateChart increments it.
+// Async cell renders check this to abort if they've been superseded.
+let _epoch = 0;
+
+async function updateChart() {
+  const epoch = ++_epoch;
+  console.log("[dashboard] updateChart epoch=" + epoch);
+
+  const selRegions = getSelected("region-select");
+  const selSeasons = getSelected("season-select");
+  const selInits   = getSelected("init-select");
+  const selSources = getSelected("source-select");
+  const selMetrics = getSelected("metric-select");
+  const selParams  = getSelected("param-select");
+
+  // Filter data by region / season / init / source
+  // (metric and param are handled per cell)
+  let filtered = DATA;
+  if (selRegions.length) filtered = filtered.filter(d => selRegions.includes(d.region));
+  if (selSeasons.length) filtered = filtered.filter(d => selSeasons.includes(d.season));
+  if (selInits.length)   filtered = filtered.filter(d => selInits.includes(d.init_hour));
+  if (selSources.length) filtered = filtered.filter(d => selSources.includes(d.source));
+
+  // Show / hide table columns (params)
+  document.querySelectorAll("#chart-table thead th[data-param]").forEach(th => {
+    th.style.display =
+      (!selParams.length || selParams.includes(th.dataset.param)) ? "" : "none";
+  });
+  document.querySelectorAll("#chart-table tbody td[data-param]").forEach(td => {
+    td.style.display =
+      (!selParams.length || selParams.includes(td.dataset.param)) ? "" : "none";
+  });
+
+  // Show / hide table rows (metrics)
+  document.querySelectorAll("#chart-table tbody tr[data-metric]").forEach(tr => {
+    tr.style.display =
+      (!selMetrics.length || selMetrics.includes(tr.dataset.metric)) ? "" : "none";
+  });
+
+  // Update legend (non-blocking)
+  renderLegend(filtered);
+
+  // Render each visible cell
+  const cells = document.querySelectorAll("#chart-table .chart-cell");
+  for (const el of cells) {
+    const { metric, param } = el.dataset;
+    const visible =
+      (!selMetrics.length || selMetrics.includes(metric)) &&
+      (!selParams.length  || selParams.includes(param));
+
+    const key = cellKey(metric, param);
+
+    if (!visible) {
+      disposeView(key);
+      el.innerHTML = "";
+      continue;
+    }
+
+    // Dispose previous view for this cell
+    disposeView(key);
+
+    const cellData = filtered.filter(d => d.metric === metric && d.param === param);
+    const spec = makeCellSpec(cellData);
+
+    // Capture epoch for staleness check after await
+    const myEpoch = epoch;
+    try {
+      const result = await vegaEmbed(el, spec, { actions: false });
+      // If a newer updateChart fired while we were awaiting, discard this view
+      if (_epoch !== myEpoch) {
+        try { result.view.finalize(); } catch (e) {}
+      } else {
+        vegaViews.set(key, result.view);
+      }
+    } catch (e) {
+      console.warn("cell render error", metric, param, e);
+      var eb = document.getElementById("js-error-box");
+      if (eb) { eb.style.display=""; eb.innerHTML += "<p>cell error [" + metric + "/" + param + "]: " + e + "</p>"; }
+    }
+  }
+
+  attachZoomSync();
+}
+
+// ---------------------------------------------------------------------------
+// Zoom synchronization across all chart cells
+// ---------------------------------------------------------------------------
+let _zoomSyncing = false;
+
+function attachZoomSync() {
+  vegaViews.forEach((view, key) => {
+    view.addSignalListener("xZoom_tuple", (_name, value) => {
+      if (_zoomSyncing) return;
+      _zoomSyncing = true;
+      vegaViews.forEach((otherView, otherKey) => {
+        if (otherKey !== key) {
+          try { otherView.signal("xZoom_tuple", value).run(); } catch (e) {}
+        }
+      });
+      _zoomSyncing = false;
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Collapsible filter panel
+// ---------------------------------------------------------------------------
+function resizeChartScroll() {
+  const scroll = document.getElementById("chart-scroll");
+  const top = scroll.getBoundingClientRect().top + window.scrollY;
+  scroll.style.maxHeight = `calc(100vh - ${top + 16}px)`;
+}
+
+(function () {
+  const toggle  = document.getElementById("controls-toggle");
+  const panel   = document.querySelector(".controls");
+  const summary = document.getElementById("controls-summary");
+
+  function updateSummary() {
+    const parts = [
+      getSelected("region-select"),
+      getSelected("season-select"),
+      getSelected("init-select"),
+      getSelected("source-select"),
+      getSelected("metric-select"),
+      getSelected("param-select"),
+    ].flatMap(v => v);
+    summary.textContent = parts.join(", ");
+  }
+
+  toggle.addEventListener("click", () => {
+    const collapsed = panel.classList.toggle("collapsed");
+    toggle.textContent    = collapsed ? "▼ Show filters" : "▲ Hide filters";
+    summary.style.display = collapsed ? "inline" : "none";
+    if (collapsed) updateSummary();
+    // Let the DOM reflow before measuring
+    requestAnimationFrame(resizeChartScroll);
+  });
+
+  // Keep summary current when selections change (guard: some selects may be absent)
+  ["region-select", "season-select", "init-select",
+   "source-select", "metric-select", "param-select"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("change", () => {
+      if (panel.classList.contains("collapsed")) updateSummary();
+    });
+  });
+
+  window.addEventListener("resize", resizeChartScroll);
+})();
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+updateChart();
+resizeChartScroll();

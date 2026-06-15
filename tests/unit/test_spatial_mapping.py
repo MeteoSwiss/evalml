@@ -27,7 +27,7 @@ def test_spherical_nearest_neighbor_indices_returns_expected_points():
 def test_nearest_grid_yx_indices_returns_grid_indices():
     lat = xr.DataArray([[46.0, 46.0], [47.0, 47.0]], dims=("y", "x"))
     lon = xr.DataArray([[7.0, 8.0], [7.0, 8.0]], dims=("y", "x"))
-    grid = xr.Dataset(coords={"lat": lat, "lon": lon})
+    grid = xr.Dataset(coords={"latitude": lat, "longitude": lon})
 
     y_idx, x_idx = nearest_grid_yx_indices(
         grid=grid,
@@ -64,8 +64,8 @@ def test_map_forecast_to_truth_maps_forecast_to_truth_locations():
             "time": fcst_time,
             "y": [0, 1],
             "x": [0, 1],
-            "lat": (("y", "x"), np.array([[46.0, 46.0], [47.0, 47.0]])),
-            "lon": (("y", "x"), np.array([[7.0, 8.0], [7.0, 8.0]])),
+            "latitude": (("y", "x"), np.array([[46.0, 46.0], [47.0, 47.0]])),
+            "longitude": (("y", "x"), np.array([[7.0, 8.0], [7.0, 8.0]])),
         },
     )
     truth = xr.Dataset(
@@ -73,8 +73,8 @@ def test_map_forecast_to_truth_maps_forecast_to_truth_locations():
         coords={
             "time": truth_time,
             "values": ["STA1", "STA2"],
-            "lat": ("values", np.array([46.1, 46.9])),
-            "lon": ("values", np.array([7.1, 7.9])),
+            "latitude": ("values", np.array([46.1, 46.9])),
+            "longitude": ("values", np.array([7.1, 7.9])),
         },
     )
 
@@ -83,8 +83,8 @@ def test_map_forecast_to_truth_maps_forecast_to_truth_locations():
     assert mapped_fcst["T_2M"].dims == ("time", "values")
     assert np.array_equal(mapped_fcst["time"].values, fcst_time)
     assert np.array_equal(mapped_fcst["values"].values, np.array(["STA1", "STA2"]))
-    assert np.allclose(mapped_fcst["lat"].values, np.array([46.1, 46.9]))
-    assert np.allclose(mapped_fcst["lon"].values, np.array([7.1, 7.9]))
+    assert np.allclose(mapped_fcst["latitude"].values, np.array([46.1, 46.9]))
+    assert np.allclose(mapped_fcst["longitude"].values, np.array([7.1, 7.9]))
     assert np.allclose(
         mapped_fcst["T_2M"].values,
         np.array([[1.0, 4.0], [10.0, 40.0]]),
@@ -214,8 +214,8 @@ def test_map_forecast_to_truth_restores_grid_when_truth_is_gridded():
             "time": fcst_time,
             "y": [0, 1],
             "x": [0, 1],
-            "lat": (("y", "x"), np.array([[46.0, 46.0], [47.0, 47.0]])),
-            "lon": (("y", "x"), np.array([[7.0, 8.0], [7.0, 8.0]])),
+            "latitude": (("y", "x"), np.array([[46.0, 46.0], [47.0, 47.0]])),
+            "longitude": (("y", "x"), np.array([[7.0, 8.0], [7.0, 8.0]])),
         },
     )
     truth = xr.Dataset(
@@ -224,8 +224,8 @@ def test_map_forecast_to_truth_restores_grid_when_truth_is_gridded():
             "time": fcst_time,
             "y": [0, 1],
             "x": [0, 1],
-            "lat": (("y", "x"), np.array([[46.1, 46.1], [46.9, 46.9]])),
-            "lon": (("y", "x"), np.array([[7.1, 7.9], [7.1, 7.9]])),
+            "latitude": (("y", "x"), np.array([[46.1, 46.1], [46.9, 46.9]])),
+            "longitude": (("y", "x"), np.array([[7.1, 7.9], [7.1, 7.9]])),
         },
     )
 
@@ -234,8 +234,8 @@ def test_map_forecast_to_truth_restores_grid_when_truth_is_gridded():
     assert mapped_fcst["T_2M"].dims == ("time", "y", "x")
     assert np.array_equal(mapped_fcst["y"].values, np.array([0, 1]))
     assert np.array_equal(mapped_fcst["x"].values, np.array([0, 1]))
-    assert np.allclose(mapped_fcst["lat"].values, truth["lat"].values)
-    assert np.allclose(mapped_fcst["lon"].values, truth["lon"].values)
+    assert np.allclose(mapped_fcst["latitude"].values, truth["latitude"].values)
+    assert np.allclose(mapped_fcst["longitude"].values, truth["longitude"].values)
     assert np.allclose(
         mapped_fcst["T_2M"].values,
         np.array([[[1.0, 2.0], [3.0, 4.0]]]),

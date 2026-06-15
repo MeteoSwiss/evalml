@@ -1,4 +1,6 @@
 import logging
+import os
+import re
 import time
 
 from pathlib import Path
@@ -11,6 +13,8 @@ from shapely import contains_xy
 from shapely.ops import transform
 import pyproj
 import xarray as xr
+import scores
+import operator as op
 
 import abc
 from shapely.geometry import Polygon
@@ -45,7 +49,7 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
         regions["all"] = [
             Polygon(list(zip([1.5, 16, 16, 1.5, 1.5], [43, 43, 49.5, 49.5, 43])))
         ]
-        if shp != []:
+        if shp and shp != [""]:
             shp = [shp] if isinstance(shp, str) else shp
             for shapefile in shp:
                 region_name = Path(shapefile).stem
@@ -72,6 +76,54 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
         return xr.DataArray(mask, coords=lon.coords, dims=lon.dims)
 
 
+def decode_metric(label: str) -> str:
+    OP_DICT = {
+        "_gt_": " > ",
+        "_ge_": " >= ",
+        "_lt_": " < ",
+        "_le_": " <= ",
+        "_eq_": " == ",
+        "_ne_": " != ",
+    }
+    for k, v in OP_DICT.items():
+        label = label.replace(k, v)
+    label = re.sub(r"(?<=\d)p(?=\d)", ".", label)
+    return label
+
+
+def _binary_confusion_matrix(
+    fcst: xr.DataArray,
+    obs: xr.DataArray,
+    thresholds: list[tuple],
+    dim: list[str],
+) -> xr.DataArray:
+    """
+    Compute counts of the confusion matrix (contingency table, e.g. hits, misses, ...)
+
+    Return an xarray.DataArray with the definition of the events in the dimension as given by
+    `labels` and the elements of the confusion matrix in the dimension `contingency`.
+    """
+    threshold_dim = xr.DataArray(
+        data=[f"{key}_{str(val).replace('.', 'p')}" for key, val in thresholds],
+        dims="threshold",
+    )
+    contingency_table = []
+    for op_txt, value in thresholds:
+        try:
+            op_fn = getattr(op, op_txt)
+        except AttributeError:
+            raise AttributeError(f"operator {op_txt} is not available")
+        event_operator = scores.categorical.ThresholdEventOperator(
+            default_event_threshold=value,
+            default_op_fn=op_fn,
+        )
+        contingency_manager = event_operator.make_contingency_manager(fcst, obs)
+        contingency_table.append(
+            contingency_manager.transform(reduce_dims=dim).get_table()
+        )
+    return xr.concat(contingency_table, dim=threshold_dim)
+
+
 def _compute_scores(
     fcst: xr.DataArray,
     obs: xr.DataArray,
@@ -79,24 +131,44 @@ def _compute_scores(
     prefix="",
     suffix="",
     source="",
+    thresholds: dict[str, list[float]] | None = None,
 ) -> xr.Dataset:
     """
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
     Returns a xarray Dataset with the computed metrics.
+    Computation of scores for continuous and categorical forecasts are supported.
+    Categorical forecasts are specified via a dict mapping operator keys (gt, ge, lt, le, eq, ne)
+    to lists of threshold values (e.g. {"gt": [10.0], "lt": [0.0]}).
     """
-    error = fcst - obs
-    scores = xr.Dataset(
+    LOG.info(f"Compute scores for {prefix} {suffix}")
+    result = xr.Dataset(
         {
-            f"{prefix}BIAS{suffix}": error.mean(dim=dim, skipna=True),
-            f"{prefix}MSE{suffix}": (error**2).mean(dim=dim, skipna=True),
-            f"{prefix}MAE{suffix}": abs(error).mean(dim=dim, skipna=True),
-            f"{prefix}VAR{suffix}": error.var(dim=dim, skipna=True),
-            f"{prefix}CORR{suffix}": xr.corr(fcst, obs, dim=dim),
-            f"{prefix}R2{suffix}": xr.corr(fcst, obs, dim=dim) ** 2,
+            f"{prefix}BIAS{suffix}": scores.continuous.additive_bias(
+                fcst, obs, reduce_dims=dim
+            ),
+            f"{prefix}MSE{suffix}": scores.continuous.mse(fcst, obs, reduce_dims=dim),
+            f"{prefix}MAE{suffix}": scores.continuous.mae(fcst, obs, reduce_dims=dim),
+            f"{prefix}CORR{suffix}": scores.continuous.correlation.pearsonr(
+                fcst,
+                obs,
+                reduce_dims=dim,
+            ),
         }
     )
-    scores = scores.expand_dims({"source": [source]})
-    return scores
+    if thresholds is not None:
+        LOG.info(f"compute thresholds for {thresholds}")
+        threshold_pairs = [
+            (key, val) for key, values in thresholds.items() for val in values
+        ]
+        confusion_matrix = (
+            _binary_confusion_matrix(fcst, obs, threshold_pairs, dim).rename(
+                {"threshold": f"{prefix}threshold{suffix}"}
+            )  # make threshold dimension unique
+        )
+        result[f"{prefix}contingency_table{suffix}"] = confusion_matrix
+
+    result = result.expand_dims({"source": [source]})
+    return result
 
 
 def _compute_statistics(
@@ -122,11 +194,13 @@ def _compute_statistics(
     return stats
 
 
-def _merge_metrics(ds: xr.Dataset) -> xr.Dataset:
+def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
     out = xr.merge(ds, compat="no_conflicts")
-    if "ref_time" not in out.dims:
-        out = out.expand_dims("ref_time").set_coords("ref_time")
-    out = out.compute(num_workers=4, scheduler="threads")
+    if "forecast_reference_time" not in out.dims:
+        out = out.expand_dims("forecast_reference_time").set_coords(
+            "forecast_reference_time"
+        )
+    out = out.compute(num_workers=num_workers, scheduler="threads")
     return out
 
 
@@ -147,12 +221,50 @@ def verify(
     obs_label: str,
     regions: list[str] | None = None,
     dim: list[str] | None = None,
+    threshold_dict: dict[str, dict[str, list[float]]] | None = None,
+    num_workers: int | None = None,
 ) -> xr.Dataset:
     """
-    Compare two xarray Datasets (fcst and obs) and return pandas DataFrame with
-    basic verification metrics and statistics for both fcst and obs.
+    Compute verification metrics and statistics comparing forecast and observation datasets.
+
+    This function aligns the forecast (fcst) and observation (obs) xarray Datasets, applies spatial region masks,
+    and computes standard verification metrics (e.g., BIAS, MSE, MAE, CORR) and basic statistics (mean, var, min, max)
+    for each parameter and region. Optionally, categorical metrics using thresholds can be computed.
+
+    Parameters
+    ----------
+    fcst : xr.Dataset
+        Forecast dataset with named data variables (parameters) and spatial/temporal coordinates.
+    obs : xr.Dataset
+        Observation (truth) dataset, aligned with fcst.
+    fcst_label : str
+        Label for the forecast source (used in output dataset).
+    obs_label : str
+        Label for the observation source (used in output dataset).
+    regions : list[str] or None, optional
+        List of shapefile paths or region names to use for spatial aggregation. If None, uses default region ('all').
+    dim : list[str] or None, optional
+        List of dimension names to reduce over when computing metrics/statistics. If None, tries to infer from fcst.
+    threshold_dict : dict[str, dict[str, list[float]]] or None, optional
+        Dictionary mapping parameter names to threshold dicts for categorical metrics.
+        Each threshold dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of values.
+        If None, no thresholds used.
+    num_workers : int or None, optional
+        Number of parallel workers for computation. If None, uses available CPU cores minus 2.
+
+    Returns
+    -------
+    xr.Dataset
+        Dataset containing computed verification metrics and statistics for each parameter, region, and source.
+        Dimensions typically include region, source, and any non-reduced dimensions from the input datasets.
     """
     start = time.time()
+
+    if num_workers is None:
+        try:
+            num_workers = len(os.sched_getaffinity(0))
+        except AttributeError:
+            num_workers = max((os.cpu_count() or 6) - 2, 1)
 
     if dim is None:
         if "x" in fcst.dims and "y" in fcst.dims:
@@ -168,7 +280,9 @@ def verify(
     # return the results as a xarray Dataset
     fcst_aligned, obs_aligned = xr.align(fcst, obs, join="inner", copy=False)
     region_polygons = ShapefileSpatialAggregationMasks(shp=regions)
-    masks = region_polygons.get_masks(lon=obs_aligned["lon"], lat=obs_aligned["lat"])
+    masks = region_polygons.get_masks(
+        lon=obs_aligned["longitude"], lat=obs_aligned["latitude"]
+    )
 
     scores = []
     statistics = []
@@ -179,6 +293,12 @@ def verify(
         score = []
         fcst_statistics = []
         obs_statistics = []
+        thresholds = (
+            threshold_dict.get(param, None)
+            if isinstance(threshold_dict, dict)
+            else None
+        )
+        LOG.info(f"Thresholds for {param}: {thresholds}")
         for region in masks.region.values:
             LOG.info("Verifying parameter %s for region %s", param, region)
             fcst_param = fcst_aligned[param].where(masks.sel(region=region))
@@ -192,6 +312,7 @@ def verify(
                     prefix=param + ".",
                     source=fcst_label,
                     dim=dim,
+                    thresholds=thresholds,
                 ).expand_dims(region=[region])
             )
 
@@ -216,12 +337,12 @@ def verify(
         score = xr.concat(score, dim="region")
         fcst_statistics = xr.concat(fcst_statistics, dim="region")
         obs_statistics = xr.concat(obs_statistics, dim="region")
-        statistics.append(xr.concat([fcst_statistics, obs_statistics], dim="source"))
-        scores.append(score)
+        param_statistics = xr.concat([fcst_statistics, obs_statistics], dim="source")
+        # Compute eagerly per parameter to prevent dask graph bloat
+        scores.append(_merge_metrics([score], num_workers=num_workers))
+        statistics.append(_merge_metrics([param_statistics], num_workers=num_workers))
 
-    scores = _merge_metrics(scores)
-    statistics = _merge_metrics(statistics)
-    out = xr.merge([scores, statistics], join="outer", compat="no_conflicts")
+    out = xr.merge(scores + statistics, join="outer", compat="no_conflicts")
     LOG.info("Computed metrics in %.2f seconds", time.time() - start)
     LOG.info("Metrics dataset: \n%s", out)
     return out
