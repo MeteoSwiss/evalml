@@ -132,8 +132,8 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
     if (
         fcst_lat.shape == truth_lat.shape
         and fcst_lon.shape == truth_lon.shape
-        and np.max(np.abs(fcst_lat - truth_lat)) < 1e-6
-        and np.max(np.abs(fcst_lon - truth_lon)) < 1e-6
+        and np.max(np.abs(fcst_lat - truth_lat)) < 0.0003
+        and np.max(np.abs(fcst_lon - truth_lon)) < 0.0003
     ):
         if np.array_equal(fcst_lat, truth_lat) and np.array_equal(fcst_lon, truth_lon):
             return fcst
