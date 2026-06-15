@@ -133,31 +133,45 @@ onerror:
 SCORE_MAPS_CONFIG = config["experiment"]["score_maps"]
 
 
+def _score_map_targets():
+    """Score-map plot targets, expanded per participant.
+
+    Lead times are resolved per (participant, param) via resolve_leadtimes, so
+    each run/baseline only contributes lead times its own forecast steps
+    produce — 'leadtimes: all' and explicit lists never schedule a job a
+    participant cannot satisfy.
+    """
+    requested = SCORE_MAPS_CONFIG["leadtimes"]
+    common = dict(
+        score=SCORE_MAPS_CONFIG["scores"],
+        region=SCORE_MAPS_CONFIG["regions"],
+        season=SCORE_MAPS_CONFIG["seasons"],
+        init_hour=SCORE_MAPS_CONFIG["init_hours"],
+        experiment=EXPERIMENT_NAME,
+    )
+    targets = []
+    for out_rule, participants in (
+        (rules.plot_score_maps.output, ("run_id", collect_all_candidates())),
+        (rules.plot_score_maps_baseline.output, ("baseline_id", BASELINE_CONFIGS)),
+    ):
+        wildcard, configs = participants
+        for participant_id, cfg in configs.items():
+            for param in SCORE_MAPS_CONFIG["params"]:
+                leadtimes = resolve_leadtimes(cfg["steps"], requested, param)
+                targets += expand(
+                    out_rule,
+                    param=param,
+                    leadtime=leadtimes,
+                    **{wildcard: participant_id},
+                    **common,
+                )
+    return targets
+
+
 rule score_maps_all:
     """Target rule for score maps (opt-in via experiment.score_maps.enabled)."""
     input:
-        expand(
-            rules.plot_score_maps.output,
-            run_id=collect_all_candidates(),
-            leadtime=resolve_leadtimes(SCORE_MAPS_CONFIG["leadtimes"]),
-            score=SCORE_MAPS_CONFIG["scores"],
-            param=SCORE_MAPS_CONFIG["params"],
-            region=SCORE_MAPS_CONFIG["regions"],
-            season=SCORE_MAPS_CONFIG["seasons"],
-            init_hour=SCORE_MAPS_CONFIG["init_hours"],
-            experiment=EXPERIMENT_NAME,
-        ),
-        expand(
-            rules.plot_score_maps_baseline.output,
-            baseline_id=list(BASELINE_CONFIGS),
-            leadtime=resolve_leadtimes(SCORE_MAPS_CONFIG["leadtimes"]),
-            score=SCORE_MAPS_CONFIG["scores"],
-            param=SCORE_MAPS_CONFIG["params"],
-            region=SCORE_MAPS_CONFIG["regions"],
-            season=SCORE_MAPS_CONFIG["seasons"],
-            init_hour=SCORE_MAPS_CONFIG["init_hours"],
-            experiment=EXPERIMENT_NAME,
-        ),
+        _score_map_targets(),
 
 
 rule experiment_all:

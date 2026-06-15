@@ -355,18 +355,37 @@ SCORECARD_CONFIGS = (
 )
 
 
-def resolve_leadtimes(spec):
-    """Resolve a lead-time specification from config.
+# Period-accumulated params verify a [lead - period, lead] window, so they have
+# no value at lead times shorter than one step spacing (e.g. no 0h precip map).
+# Short and canonical names both appear across the workflow (showcases vs maps).
+ACCUMULATED_PARAMS = {"TOT_PREC", "tp"}
 
-    Accepts:
-    - a list of ints — returned verbatim.
-    - the literal string "all" — expanded to the union of step lists
-      from all configured runs and baselines.
+
+def resolve_leadtimes(steps_spec, requested="all", param=None):
+    """Lead times to compute for a single participant.
+
+    A run or baseline produces only the lead times in its own ``steps`` spec
+    (``start/stop/step``, hours). This returns those of the ``requested``
+    selection that the participant actually produces — the literal ``"all"``
+    (every produced lead time) or an explicit list of ints — so a 36h lead is
+    never requested of an ICON-CH1 baseline (steps ``0/33/6``), nor a >120h
+    lead of ICON-CH2. Explicitly requested lead times the participant cannot
+    produce are skipped with a warning. For accumulated ``param``s, lead times
+    shorter than one step spacing are dropped (no accumulation window).
     """
-    if spec != "all":
-        return spec
-    all_steps = set()
-    for cfg in (*RUN_CONFIGS.values(), *BASELINE_CONFIGS.values()):
-        start, end, step = map(int, cfg["steps"].split("/"))
-        all_steps.update(range(start, end + 1, step))
-    return sorted(all_steps)
+    start, end, step = map(int, steps_spec.split("/"))
+    supported = set(range(start, end + 1, step))
+    wanted = supported if requested == "all" else set(requested)
+
+    unsupported = sorted(wanted - supported)
+    if unsupported:
+        logging.getLogger("snakemake").warning(
+            "Skipping lead time(s) %sh: not produced by forecast steps '%s'.",
+            unsupported,
+            steps_spec,
+        )
+
+    valid = wanted & supported
+    if param in ACCUMULATED_PARAMS:
+        valid = {lt for lt in valid if lt >= step}
+    return sorted(valid)
