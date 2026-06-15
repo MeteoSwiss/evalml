@@ -198,10 +198,12 @@ rule verification_score_maps:
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         truth_label=config["truth"]["label"],
         reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
+        run_root=lambda wc: (Path(OUT_ROOT) / f"data/runs/{wc.run_id}").resolve(),
     shell:
         """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
-            --run_root output/data/runs/{wildcards.run_id} \
+            --run_root {params.run_root} \
             --reftimes {params.reftimes} \
             --truth {input.truth} \
             --step {wildcards.leadtime} \
