@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet, Literal, Optional
+from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
 
 from pydantic import BaseModel, Field, RootModel, field_validator
 
@@ -233,13 +233,9 @@ class ScoreMapsConfig(BaseModel):
             "PS, PMSL, TOT_PREC (native), and SP_10M (derived wind speed from U_10M/V_10M)."
         ),
     )
-    leadtimes: List[int] | Literal["all"] = Field(
+    leadtimes: List[int] = Field(
         default=[6, 24],
-        description=(
-            "List of lead times (hours) to plot, or the literal string 'all' "
-            "to expand to the union of step lists from all configured runs "
-            "and baselines."
-        ),
+        description="List of lead times (hours) to plot.",
     )
     scores: List[str] = Field(
         default=["BIAS"],
