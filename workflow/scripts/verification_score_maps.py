@@ -365,16 +365,11 @@ def main(args: Namespace) -> None:
             # params request a single step. The target step is selected just
             # below.
             #
-            # NOTE: data_input._tot_prec_handling treats the FIRST loaded step
-            # positionally as the forecast initial condition and zero-fills it
-            # when it is present-but-all-NaN. For our window the first step is
-            # `step - period` (non-zero except at the first lead time); a
-            # corrupt/NaN field there would be silently zeroed, turning the diff
-            # into a cumulative-from-start value. A missing GRIB instead yields
-            # NaN and is skipped downstream. The principled fix belongs in
-            # _tot_prec_handling (gate the IC zero-fill on step 0 being
-            # requested) — see the port note. This applies to runs and ICON
-            # baselines alike.
+            # data_input._tot_prec_handling receives the requested steps and
+            # synthesises a zero initial condition when step 0 is requested but
+            # absent from the GRIB (anemoi-inference omits TOT_PREC at step 0),
+            # which makes the first-lead-time window [0, period] work for ML
+            # runs. Windows not containing step 0 are never zero-filled.
             src_root = args.baseline_root if args.baseline_root else grib_dir
             fcst = load_forecast_data(
                 src_root, reftime, req_steps, fct_params, member=args.member
