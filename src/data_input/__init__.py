@@ -354,12 +354,13 @@ def load_obs_data_from_jretrieve(
             stations=stations, params=short_names, seq_type=seq_type, stage=stage
         )
     )
+    step_hours = (steps[1] - steps[0]) if len(steps) > 1 else 1
     df = jr.fetch_data(
         stations=stations,
         params=short_names,
         start=start,
         end=end,
-        increment_minutes=60,
+        increment_minutes=step_hours * 60,
         seq_type=seq_type,
         stage=stage,
     )
