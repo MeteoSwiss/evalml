@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
 
-from pydantic import BaseModel, Field, RootModel, field_validator
+from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -534,6 +534,24 @@ class ConfigModel(BaseModel):
         default_factory=ShowcaseConfig,
         description="Settings for the showcase workflow.",
     )
+
+    @model_validator(mode="after")
+    def validate_score_map_leadtimes(self) -> "ConfigModel":
+        sm = self.experiment.score_maps
+        if not sm.enabled:
+            return self
+        requested = set(sm.leadtimes)
+        for item in self.runs:
+            steps = getattr(item, next(iter(item.model_fields))).steps
+            start, end, step = map(int, steps.split("/"))
+            producible = set(range(start, end + 1, step))
+            unsupported = requested - producible
+            if unsupported:
+                raise ValueError(
+                    f"score_maps.leadtimes contains {sorted(unsupported)} h which are not "
+                    f"produced by participant with steps '{steps}'."
+                )
+        return self
 
     model_config = {
         "extra": "forbid",  # fail on misspelled keys
