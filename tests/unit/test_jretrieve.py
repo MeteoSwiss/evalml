@@ -61,22 +61,23 @@ def test_check_prerequisites_ok(monkeypatch, tmp_path):
     jr.check_prerequisites("prod")  # should not raise
 
 
-def test_check_prerequisites_missing_binary(monkeypatch, tmp_path):
-    conf = tmp_path / ".jretrievedwh-conf.prod.py"
-    conf.write_text("# conf\n")
+def test_check_prerequisites_missing_binary(monkeypatch):
     monkeypatch.setattr(jr.shutil, "which", lambda name: None)
-    monkeypatch.setenv("OPR_HOME", str(tmp_path))
+    monkeypatch.setattr(jr.os.path, "isfile", lambda p: False)
     with pytest.raises(jr.JretrieveError, match=r"\$PATH"):
         jr.check_prerequisites("prod")
 
 
 def test_check_prerequisites_aggregates_all_problems(monkeypatch):
     monkeypatch.setattr(jr.shutil, "which", lambda name: None)
-    monkeypatch.delenv("OPR_HOME", raising=False)
+    monkeypatch.setattr(jr.os.path, "isfile", lambda p: False)
+    monkeypatch.setattr(Path, "is_file", lambda self: False)
     with pytest.raises(jr.JretrieveError) as exc:
         jr.check_prerequisites("prod")
     msg = str(exc.value)
-    assert "$PATH" in msg and "$OPR_HOME" in msg  # both reported, not just the first
+    assert (
+        "$PATH" in msg and "conf file not found" in msg
+    )  # both reported, not just the first
 
 
 def _sample_meta():
