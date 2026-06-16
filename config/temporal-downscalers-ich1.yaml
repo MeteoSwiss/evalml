@@ -1,8 +1,7 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Evaluate skill of new time-interpolator (trained on ICON-REA-L, fine-tuned on KENDA-ICON-CH1)
-  driven by ICON-CH1 stage_E forecaster with subgrid orography, using anemoi-inference patch from
-  issue #482.
+  Evaluate skill of temporal downscaler driven by ICON-CH1 Stage E forecaster with
+  subgrid orography.
 
 dates:
   start: 2025-03-01T00:00
@@ -10,33 +9,28 @@ dates:
   frequency: 24h
 
 runs:
-  - interpolator:
-      # for checkpoints trained on a different HPC, using mlflow doesn't work due to difference in
-      # paths, so we directly specify the checkpoint path here
-      checkpoint: /store_new/mch/msopr/ml/tmp/inference-last.ckpt
+  - temporal_downscaler:
+      checkpoint: /scratch/mch/miccatta/ICON_interpolator_checkpoints/checkpoint_stage-C-interpolator-n320-6hto1h-reduced-variables/f9279244ed6f4c458597bdcf335ab36f/inference-last.ckpt
       label: Varda-Single
       steps: 0/120/1
-      config: resources/inference/configs/sgm-interpolator-global_trimedge_multi.yaml
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
+      extra_requirements:
+        - anemoi-datasets==0.5.35
+        # - anemoi-inference==0.11.0
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/120/6
-        extra_requirements:
-          - git+https://github.com/ecmwf/anemoi-inference.git@e369b1a90313e9701db13f63364a467aa281cf36
-      extra_requirements:
-        - git+https://github.com/ecmwf/anemoi-inference.git@e369b1a90313e9701db13f63364a467aa281cf36
-        # pinned anemoi-datasets because of ecmwf/anemoi-utils#284, can be removed when fixed
-        - anemoi-datasets==0.5.35
   - baseline:
       label: INCA
       root: /store_new/mch/msclim/INCA
       steps: 0/6/1
   - baseline:
-      label: ICON-CH2-ctrl
+      label: ICON-CH2-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH2-EPS
       steps: 0/120/1
   - baseline:
-      label: ICON-CH1-ctrl
+      label: ICON-CH1-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
       steps: 0/33/1
 
@@ -58,7 +52,7 @@ experiment:
       - alpennordseite
       - alpensuedseite
       - jura
-    root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
   thresholds:
     TOT_PREC:
       gt: [0.0, 1, 5]
@@ -87,7 +81,7 @@ experiment:
           - "T_2M:RMSE,R2,ETS"
           - "TOT_PREC:RMSE,R2,ETS"
       short_range:
-        baseline: ICON-CH1-ctrl
+        baseline: ICON-CH1-CTRL
         lead_times: "6/33/6"
         stratification: region
         variables:
@@ -96,7 +90,7 @@ experiment:
           - "T_2M:RMSE,R2,ETS"
           - "TOT_PREC:RMSE,R2,ETS"
       medium_range:
-        baseline: ICON-CH2-ctrl
+        baseline: ICON-CH2-CTRL
         lead_times: "24/120/24"
         stratification: region
         variables:
@@ -116,11 +110,11 @@ showcase:
   animations:
     enabled: true
     domains:
+      # - globe
       - europe
+      # - alps
+      - icon-ch
       - switzerland
-      - name: alpine_arc
-        extent: [3.0, 17.0, 43.5, 48.5]
-        projection: orthographic
 
 locations:
   output_root: output/
@@ -135,6 +129,5 @@ profile:
     mem_mb_per_cpu: 1800
     runtime: "1h"
     gpus: 0
+    slurm_account: s83
   jobs: 50
-  batch_rules:
-    plot_forecast_frame: 8

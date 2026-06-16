@@ -57,7 +57,7 @@ rule report_scorecard:
         script="workflow/scripts/report_scorecard.py",
         verif_run=lambda wc: EXPERIMENT_PARTICIPANTS[f"{wc.env_id}/{wc.config_hash}"],
         verif_baseline=lambda wc: EXPERIMENT_PARTICIPANTS[
-            SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]
+            resolve_baseline_id(SCORECARD_CONFIGS[wc.scorecard_name]["baseline"])
         ],
     output:
         report(
@@ -79,9 +79,7 @@ rule report_scorecard:
         run_source=lambda wc: RUN_CONFIGS[f"{wc.env_id}/{wc.config_hash}"].get(
             "label", f"{wc.env_id}/{wc.config_hash}"
         ),
-        baseline_source=lambda wc: BASELINE_CONFIGS[
-            SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]
-        ].get("label", SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]),
+        baseline_source=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["baseline"],
     shell:
         """
         VAR_ARGS=()

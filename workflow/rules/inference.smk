@@ -206,8 +206,8 @@ def _get_forecaster_run_id(run_id):
     return RUN_CONFIGS[run_id]["forecaster"]["run_id"]
 
 
-# Prepare interpolator for a specific run ID
-rule inference_prepare_interpolator:
+# Prepare temporal downscaler for a specific run ID
+rule inference_prepare_temporal_downscaler:
     input:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
@@ -226,10 +226,11 @@ rule inference_prepare_interpolator:
         grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
         forecaster=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/forecaster"),
         okfile=touch(
-            OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.ok"
+            OUT_ROOT
+            / "logs/inference_prepare_temporal_downscaler/{run_id}-{init_time}.ok"
         ),
     log:
-        OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.log",
+        OUT_ROOT / "logs/inference_prepare_temporal_downscaler/{run_id}-{init_time}.log",
     localrule: True
     params:
         lead_time=lambda wc: get_leadtime(wc),
@@ -253,9 +254,9 @@ def _inference_routing_fn(wc):
 
     if run_config["model_type"] == "forecaster":
         input_path = f"logs/inference_prepare_forecaster/{wc.run_id}-{wc.init_time}.ok"
-    elif run_config["model_type"] == "interpolator":
+    elif run_config["model_type"] == "temporal_downscaler":
         input_path = (
-            f"logs/inference_prepare_interpolator/{wc.run_id}-{wc.init_time}.ok"
+            f"logs/inference_prepare_temporal_downscaler/{wc.run_id}-{wc.init_time}.ok"
         )
     else:
         raise ValueError(f"Unsupported model type: {run_config['model_type']}")

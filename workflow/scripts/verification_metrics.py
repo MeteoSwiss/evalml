@@ -51,7 +51,9 @@ def main(args: ScriptConfig):
     # get baseline forecast data
     now = datetime.now()
 
-    fcst = load_forecast_data(args.forecast, args.reftime, args.steps, args.params)
+    fcst = load_forecast_data(
+        args.forecast, args.reftime, args.steps, args.params, member=args.member
+    )
 
     LOG.info(
         "Loaded forecast data in %s seconds: \n%s",
@@ -146,6 +148,12 @@ if __name__ == "__main__":
         type=lambda x: eval(x),
         help="Dictionary of thresholds for each parameter in the format '{param: [threshold1, threshold2, ...]}' (default: None).",
         default=None,
+    )
+    parser.add_argument(
+        "--member",
+        type=str,
+        default="000",
+        help="Ensemble member to load: '000' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID.",
     )
     parser.add_argument(
         "--output",
