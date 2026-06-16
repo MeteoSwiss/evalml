@@ -149,6 +149,8 @@ def _(Path, df_all, mo, output_dir, sources):
         lambda x: np.sign(x) * np.abs(x) ** (1 / 0.7),
     ))
     _xticks = mticker.FixedLocator([0, 3, 6, 12, 24, 36, 48, 72, 96, 120])
+    _FS_axes = 8   # unified font size for all axis labels and tick labels
+    _FS_title = 12 # unified font size for axis titles and legends
 
     # Rows 0…N-1: one panel per (metric, param)
     for _row, _metric in enumerate(_METRICS):
@@ -162,10 +164,11 @@ def _(Path, df_all, mo, output_dir, sources):
                 _ax.plot(_grp["step"], _grp["value"], label=_src, **_line_style(_src))
             _ax.set_xscale("function", **_xscale_kw)
             _ax.xaxis.set_major_locator(_xticks)
+            _ax.tick_params(labelsize=_FS_axes)
             if _row == 0:
-                _ax.set_title(_param)
+                _ax.set_title(_param, fontsize=_FS_title)
             if _col == 0:
-                _ax.set_ylabel(_metric, fontsize=plt.rcParams["axes.titlesize"])
+                _ax.set_ylabel(_metric, fontsize=_FS_title)
 
     # Last row: three specific ETS panels
     _ets_row = len(_METRICS)
@@ -182,19 +185,55 @@ def _(Path, df_all, mo, output_dir, sources):
             _ax.plot(_grp["step"], _grp["value"], label=_src, **_line_style(_src))
         _ax.set_xscale("function", **_xscale_kw)
         _ax.xaxis.set_major_locator(_xticks)
+        _ax.tick_params(labelsize=_FS_axes)
         _panel_label = _ets_metric.replace("ETS", _ets_param) + f" {_ets_unit}"
         _ax.text(0.97, 0.97, _panel_label, transform=_ax.transAxes,
-                 ha="right", va="top", fontsize=plt.rcParams["axes.titlesize"])
-        _ax.set_xlabel("Lead time (h)")
+                 ha="right", va="top", fontsize=_FS_axes)
+        _ax.set_xlabel("Lead time (h)", fontsize=_FS_axes)
         if _col == 0:
-            _ax.set_ylabel("ETS", fontsize=plt.rcParams["axes.titlesize"])
+            _ax.set_ylabel("ETS", fontsize=_FS_title)
 
     _axes[0, 0].set_xlim(-1, 126)
 
     _handles, _labels = _axes[0, 0].get_legend_handles_labels()
     _fig.legend(_handles, _labels, loc="lower center", ncol=len(sources),
-                fontsize=8, frameon=False, bbox_to_anchor=(0.5, -0.02))
+                fontsize=_FS_title, frameon=False, bbox_to_anchor=(0.5, 0.06))
     _fig.tight_layout()
+    _fig.subplots_adjust(bottom=0.22)
+
+    # Extra gap between last metric row and ETS row
+    _extra_gap = 0.04
+    for _c in range(len(_PARAMS)):
+        _pos = _axes[_ets_row, _c].get_position()
+        _axes[_ets_row, _c].set_position([_pos.x0, _pos.y0 - _extra_gap, _pos.width, _pos.height])
+
+    # Light-grey background encompassing the four TOT_PREC panels and their labels.
+    # Axes keep a white background; the grey appears only in the margins around them.
+    _PREC_BG   = "#f0f0f0"
+    _pad_left  = 0.040  # horizontal padding beyond axes left edges
+    _pad_bleft = 0.025  # horizontal padding beyond axes for lower left
+    _pad_right = 0.010  # horizontal padding beyond axes right edges
+    _pad_top   = 0.040  # above row-0 axes to capture the column title
+    _pad_bot   = 0.050  # below ETS row to capture the x-axis label
+    _pad_mid   = 0.010
+
+    from matplotlib.patches import Polygon as _MplPolygon
+    _m0_pos = _axes[0, 1].get_position()                    # top of metric col 1
+    _m_pos  = _axes[len(_METRICS) - 1, 1].get_position()    # bottom of metric col 1
+    _e0_pos = _axes[_ets_row, 0].get_position()             # ETS col 0
+    _e1_pos = _axes[_ets_row, 1].get_position()             # ETS col 1
+    _trap = _MplPolygon([
+        (_m0_pos.x0 - _pad_left, _m0_pos.y1 + _pad_top),    # top-left (above col-1, row-0)
+        (_m0_pos.x1 + _pad_right, _m0_pos.y1 + _pad_top),   # top-right
+        (_m_pos.x1  + _pad_right, _m_pos.y0),               # bottom-right of metric area
+        (_e1_pos.x1 + _pad_right, _e0_pos.y1 - _pad_mid),   # top-right of ETS area
+        (_e1_pos.x1 + _pad_right, _e0_pos.y0 - _pad_bot),   # bottom-right (incl. x-label)
+        (_e0_pos.x0 - _pad_bleft, _e0_pos.y0 - _pad_bot),   # bottom-left
+        (_e0_pos.x0 - _pad_bleft, _e0_pos.y1 + _pad_mid),   # top-left of ETS area
+        (_m_pos.x0  - _pad_left, _m_pos.y0),                # bottom-left of metric area
+    ], closed=True, facecolor=_PREC_BG, edgecolor="none", zorder=-1)
+    _trap.set_transform(_fig.transFigure)
+    _fig.add_artist(_trap)
 
     _fname = _out / "publication_figures_leadtime.pdf"
     _fig.savefig(_fname, bbox_inches="tight")
