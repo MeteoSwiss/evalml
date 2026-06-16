@@ -183,9 +183,11 @@ rule verification_scoremaps:
         ),
         truth=config["truth"]["root"],
     output:
-        OUT_ROOT / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
+        OUT_ROOT
+        / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
     log:
-        OUT_ROOT / "logs/verification_scoremaps/{run_id}-{param}-{leadtime}.log",
+        OUT_ROOT
+        / f"logs/verification_scoremaps/{{run_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
     resources:
         cpus_per_task=2,
         mem_mb=50_000,
