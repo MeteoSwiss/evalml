@@ -3,22 +3,25 @@
 # ----------------------------------------------------- #
 rule publication_figures:
     input:
-        script="figures/publication_figures.py",
+        script="workflow/scripts/publication_figures.py",
         verif=EXPERIMENT_PARTICIPANTS.values(),
     output:
         report(
-            directory("figures/{experiment}"),
+            directory("figures"),
             htmlindex="publication_figures.html",
         ),
     log:
-        OUT_ROOT / "logs/figures/publication_figures_{experiment}.log",
+        OUT_ROOT / "logs/figures/publication_figures.log",
     localrule: True
     params:
-        sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
+        labels=",".join([
+            BASELINE_CONFIGS[k]["label"] if k in BASELINE_CONFIGS else RUN_CONFIGS[k]["label"]
+            for k in EXPERIMENT_PARTICIPANTS.keys()
+        ]),
     shell:
         """
         python {input.script} \
-            --verif_files {input.verif} \
-            --sources {params.sources} \
-            --output {output} >{log} 2>&1
+            --verif_files "{input.verif}" \
+            --sources "{params.labels}" \
+            --output {output} > {log} 2>&1
         """
