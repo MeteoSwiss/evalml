@@ -98,7 +98,7 @@ experiment:
           - "V_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2,ETS"
           - "TOT_PREC:RMSE,R2,ETS"
-  score_maps:
+  scoremaps:
     enabled: false
 
 showcase:

@@ -67,7 +67,7 @@ experiment:
       # - init_hour
       # - region
       - season
-  score_maps:
+  scoremaps:
     enabled: false
 
 locations:

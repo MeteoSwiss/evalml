@@ -130,7 +130,7 @@ onerror:
 # -----------------------------------------------------
 
 
-SCORE_MAPS_CONFIG = config["experiment"]["score_maps"]
+SCOREMAPS_CONFIGS = config.get("experiment", {}).get("scoremaps") or {}
 
 
 rule experiment_all:
@@ -165,30 +165,30 @@ rule experiment_all:
             expand(
                 rules.plot_score_maps.output,
                 run_id=list(CANDIDATES),
-                param=SCORE_MAPS_CONFIG["params"],
-                leadtime=SCORE_MAPS_CONFIG["leadtimes"],
-                score=SCORE_MAPS_CONFIG["scores"],
-                region=SCORE_MAPS_CONFIG["regions"],
-                season=SCORE_MAPS_CONFIG["seasons"],
-                init_hour=SCORE_MAPS_CONFIG["init_hours"],
+                param=SCOREMAPS_CONFIGS["params"],
+                leadtime=SCOREMAPS_CONFIGS["leadtimes"],
+                score=SCOREMAPS_CONFIGS["scores"],
+                region=SCOREMAPS_CONFIGS["regions"],
+                season=SCOREMAPS_CONFIGS["seasons"],
+                init_hour=SCOREMAPS_CONFIGS["init_hours"],
                 experiment=EXPERIMENT_NAME,
             )
-            if SCORE_MAPS_CONFIG["enabled"]
+            if SCOREMAPS_CONFIGS.get("enabled", False)
             else []
         ),
         (
             expand(
                 rules.plot_score_maps_baseline.output,
                 baseline_id=list(BASELINES),
-                param=SCORE_MAPS_CONFIG["params"],
-                leadtime=SCORE_MAPS_CONFIG["leadtimes"],
-                score=SCORE_MAPS_CONFIG["scores"],
-                region=SCORE_MAPS_CONFIG["regions"],
-                season=SCORE_MAPS_CONFIG["seasons"],
-                init_hour=SCORE_MAPS_CONFIG["init_hours"],
+                param=SCOREMAPS_CONFIGS["params"],
+                leadtime=SCOREMAPS_CONFIGS["leadtimes"],
+                score=SCOREMAPS_CONFIGS["scores"],
+                region=SCOREMAPS_CONFIGS["regions"],
+                season=SCOREMAPS_CONFIGS["seasons"],
+                init_hour=SCOREMAPS_CONFIGS["init_hours"],
                 experiment=EXPERIMENT_NAME,
             )
-            if SCORE_MAPS_CONFIG["enabled"]
+            if SCOREMAPS_CONFIGS.get("enabled", False)
             else []
         ),
 

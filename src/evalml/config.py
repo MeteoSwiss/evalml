@@ -419,9 +419,9 @@ class ExperimentConfig(BaseModel):
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
     )
-    score_maps: ScoreMapsConfig = Field(
-        default_factory=ScoreMapsConfig,
-        description="Score map plot configuration. Set enabled: true to produce score maps.",
+    scoremaps: Optional[ScoreMapsConfig] = Field(
+        default=None,
+        description="Score map plot configuration. Omit or set enabled: false to disable.",
     )
 
     @field_validator("thresholds")
@@ -537,8 +537,8 @@ class ConfigModel(BaseModel):
 
     @model_validator(mode="after")
     def validate_score_map_leadtimes(self) -> "ConfigModel":
-        sm = self.experiment.score_maps
-        if not sm.enabled:
+        sm = self.experiment.scoremaps
+        if sm is None or not sm.enabled:
             return self
         requested = set(sm.leadtimes)
         for item in self.runs:
@@ -548,7 +548,7 @@ class ConfigModel(BaseModel):
             unsupported = requested - producible
             if unsupported:
                 raise ValueError(
-                    f"score_maps.leadtimes contains {sorted(unsupported)} h which are not "
+                    f"scoremaps.leadtimes contains {sorted(unsupported)} h which are not "
                     f"produced by participant with steps '{steps}'."
                 )
         return self

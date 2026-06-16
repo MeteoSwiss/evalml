@@ -262,9 +262,17 @@
           "default": null,
           "description": "Scorecard generation configuration. Omit or set enabled: false to disable."
         },
-        "score_maps": {
-          "$ref": "#/$defs/ScoreMapsConfig",
-          "description": "Score map plot configuration. Set enabled: true to produce score maps."
+        "scoremaps": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScoreMapsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Score map plot configuration. Omit or set enabled: false to disable."
         }
       },
       "required": [
