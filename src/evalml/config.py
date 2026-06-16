@@ -326,6 +326,15 @@ class ShowcaseConfig(BaseModel):
     )
 
 
+class PublicationConfig(BaseModel):
+    """Configuration for the publication workflow."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate publication figures.",
+    )
+
+
 class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
 
@@ -408,8 +417,6 @@ class DefaultResources(BaseModel):
     gpus: int | None = Field(
         None, ge=0, description="Default GPU count per job (0 for non-GPU jobs)."
     )
-
-    model_config = {"extra": "forbid"}
 
     def parsable(self) -> list[str]:
         """Convert the default resources to a string of key=value pairs."""
