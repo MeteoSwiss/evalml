@@ -536,7 +536,7 @@ class ConfigModel(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_score_map_leadtimes(self) -> "ConfigModel":
+    def validate_scoremap_leadtimes(self) -> "ConfigModel":
         sm = self.experiment.scoremaps
         if sm is None or not sm.enabled:
             return self

@@ -171,11 +171,11 @@ rule verification_metrics_plot:
         """
 
 
-rule verification_score_maps:
+rule verification_scoremaps:
     input:
         "src/verification/__init__.py",
         "src/data_input/__init__.py",
-        script="workflow/scripts/verification_score_maps.py",
+        script="workflow/scripts/verification_scoremaps.py",
         inference_okfiles=lambda wc: expand(
             rules.inference_execute.output.okfile,
             init_time=_restrict_reftimes_to_hours(REFTIMES),
@@ -183,9 +183,9 @@ rule verification_score_maps:
         ),
         truth=config["truth"]["root"],
     output:
-        OUT_ROOT / "data/runs/{run_id}/score_maps/{param}_{leadtime}.nc",
+        OUT_ROOT / "data/runs/{run_id}/scoremaps/{param}_{leadtime}.nc",
     log:
-        OUT_ROOT / "logs/verification_score_maps/{run_id}-{param}-{leadtime}.log",
+        OUT_ROOT / "logs/verification_scoremaps/{run_id}-{param}-{leadtime}.log",
     resources:
         cpus_per_task=24,
         mem_mb=50_000,
@@ -213,20 +213,20 @@ rule verification_score_maps:
         """
 
 
-rule verification_score_maps_baseline:
+rule verification_scoremaps_baseline:
     input:
         "src/verification/__init__.py",
         "src/data_input/__init__.py",
-        script="workflow/scripts/verification_score_maps.py",
+        script="workflow/scripts/verification_scoremaps.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth=config["truth"]["root"],
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT
-        / f"data/baselines/{{baseline_id}}/{config['truth']['label']}/score_maps/{{param}}_{{leadtime}}.nc",
+        / f"data/baselines/{{baseline_id}}/{config['truth']['label']}/scoremaps/{{param}}_{{leadtime}}.nc",
     log:
         OUT_ROOT
-        / f"logs/verification_score_maps_baseline/{{baseline_id}}-{config['truth']['label']}-{{param}}-{{leadtime}}.log",
+        / f"logs/verification_scoremaps_baseline/{{baseline_id}}-{config['truth']['label']}-{{param}}-{{leadtime}}.log",
     resources:
         cpus_per_task=24,
         mem_mb=50_000,

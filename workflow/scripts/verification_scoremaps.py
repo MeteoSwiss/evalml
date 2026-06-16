@@ -23,7 +23,7 @@ the loader (data_input._tot_prec_handling) de-accumulates over the requested
 
 Usage
 -----
-    uv run workflow/scripts/verification_score_maps.py \\
+    uv run workflow/scripts/verification_scoremaps.py \\
         output/data/runs/<run_id> \\
         --truth /path/to/truth.zarr \\
         --step 24 \\

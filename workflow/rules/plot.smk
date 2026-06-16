@@ -163,17 +163,17 @@ rule make_forecast_animation:
         """
 
 
-rule plot_score_maps:
+rule plot_scoremaps:
     # localrule: True
     input:
-        script="workflow/scripts/plot_score_maps.mo.py",
-        verif_file=OUT_ROOT / "data/runs/{run_id}/score_maps/{param}_{leadtime}.nc",
+        script="workflow/scripts/plot_scoremaps.mo.py",
+        verif_file=OUT_ROOT / "data/runs/{run_id}/scoremaps/{param}_{leadtime}.nc",
     output:
         OUT_ROOT
-        / "results/{experiment}/score_maps/runs/{run_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",
+        / "results/{experiment}/scoremaps/runs/{run_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",
     log:
         OUT_ROOT
-        / "logs/plot_score_maps/{experiment}/{run_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",
+        / "logs/plot_scoremaps/{experiment}/{run_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",
     wildcard_constraints:
         leadtime=r"\d+",  # only digits
         init_hour=r"all|\d{1,2}",
@@ -196,14 +196,14 @@ rule plot_score_maps:
         """
 
 
-use rule plot_score_maps as plot_score_maps_baseline with:
+use rule plot_scoremaps as plot_scoremaps_baseline with:
     input:
-        script="workflow/scripts/plot_score_maps.mo.py",
+        script="workflow/scripts/plot_scoremaps.mo.py",
         verif_file=OUT_ROOT
-        / f"data/baselines/{{baseline_id}}/{config['truth']['label']}/score_maps/{{param}}_{{leadtime}}.nc",
+        / f"data/baselines/{{baseline_id}}/{config['truth']['label']}/scoremaps/{{param}}_{{leadtime}}.nc",
     output:
         OUT_ROOT
-        / "results/{experiment}/score_maps/baselines/{baseline_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",
+        / "results/{experiment}/scoremaps/baselines/{baseline_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",
     log:
         OUT_ROOT
-        / "logs/plot_score_maps/{experiment}/{baseline_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",
+        / "logs/plot_scoremaps/{experiment}/{baseline_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",
