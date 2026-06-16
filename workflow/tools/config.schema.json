@@ -593,6 +593,19 @@
       "title": "Profile",
       "type": "object"
     },
+    "PublicationConfig": {
+      "description": "Configuration for the publication workflow.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate publication figures.",
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "PublicationConfig",
+      "type": "object"
+    },
     "ScorecardConfig": {
       "additionalProperties": false,
       "description": "Configuration for a single named scorecard.",
@@ -874,6 +887,10 @@
     "showcase": {
       "$ref": "#/$defs/ShowcaseConfig",
       "description": "Settings for the showcase workflow."
+    },
+    "publication": {
+      "$ref": "#/$defs/PublicationConfig",
+      "description": "Settings for the publication workflow."
     }
   },
   "required": [

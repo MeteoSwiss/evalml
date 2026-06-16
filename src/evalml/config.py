@@ -508,6 +508,10 @@ class ConfigModel(BaseModel):
         default_factory=ShowcaseConfig,
         description="Settings for the showcase workflow.",
     )
+    publication: PublicationConfig = Field(
+        default_factory=PublicationConfig,
+        description="Settings for the publication workflow.",
+    )
 
     model_config = {
         "extra": "forbid",  # fail on misspelled keys
