@@ -187,7 +187,7 @@ rule verification_scoremaps:
     log:
         OUT_ROOT / "logs/verification_scoremaps/{run_id}-{param}-{leadtime}.log",
     resources:
-        cpus_per_task=24,
+        cpus_per_task=2,
         mem_mb=50_000,
         runtime="60m",
     # wildcard_constraints:
