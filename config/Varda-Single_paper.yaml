@@ -30,6 +30,16 @@ runs:
       root: /store_new/mch/msopr/osm/ICON-CH2-EPS
       steps: 0/120/1
       member: control
+  - baseline:
+      label: ICON-CH1-EPS mean
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/33/1
+      member: mean
+  - baseline:
+      label: ICON-CH2-EPS mean
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/1
+      member: mean
 
 truth:
   label: KENDA-CH1
