@@ -167,7 +167,8 @@ rule plot_scoremaps:
     # localrule: True
     input:
         script="workflow/scripts/plot_scoremaps.mo.py",
-        verif_file=OUT_ROOT / "data/runs/{run_id}/scoremaps/{param}_{leadtime}.nc",
+        verif_file=OUT_ROOT
+        / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
     output:
         OUT_ROOT
         / "results/{experiment}/scoremaps/runs/{run_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",
@@ -200,7 +201,7 @@ use rule plot_scoremaps as plot_scoremaps_baseline with:
     input:
         script="workflow/scripts/plot_scoremaps.mo.py",
         verif_file=OUT_ROOT
-        / f"data/baselines/{{baseline_id}}/{config['truth']['label']}/scoremaps/{{param}}_{{leadtime}}.nc",
+        / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
     output:
         OUT_ROOT
         / "results/{experiment}/scoremaps/baselines/{baseline_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",

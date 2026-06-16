@@ -183,7 +183,7 @@ rule verification_scoremaps:
         ),
         truth=config["truth"]["root"],
     output:
-        OUT_ROOT / "data/runs/{run_id}/scoremaps/{param}_{leadtime}.nc",
+        OUT_ROOT / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
     log:
         OUT_ROOT / "logs/verification_scoremaps/{run_id}-{param}-{leadtime}.log",
     resources:
@@ -223,10 +223,10 @@ rule verification_scoremaps_baseline:
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT
-        / f"data/baselines/{{baseline_id}}/{config['truth']['label']}/scoremaps/{{param}}_{{leadtime}}.nc",
+        / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
     log:
         OUT_ROOT
-        / f"logs/verification_scoremaps_baseline/{{baseline_id}}-{config['truth']['label']}-{{param}}-{{leadtime}}.log",
+        / f"logs/verification_scoremaps_baseline/{{baseline_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
     resources:
         cpus_per_task=24,
         mem_mb=50_000,
