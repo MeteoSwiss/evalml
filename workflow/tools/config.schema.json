@@ -136,6 +136,7 @@
       "type": "object"
     },
     "DefaultResources": {
+      "additionalProperties": false,
       "description": "Default resource settings for job execution.",
       "properties": {
         "slurm_partition": {
@@ -159,6 +160,33 @@
           "description": "Maximum runtime, e.g. '1h'.",
           "title": "Runtime",
           "type": "string"
+        },
+        "slurm_account": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "SLURM account to charge.",
+          "title": "Slurm Account"
+        },
+        "gpus": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Default GPU count per job (0 for non-GPU jobs).",
+          "title": "Gpus"
         }
       },
       "required": [

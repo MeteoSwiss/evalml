@@ -52,7 +52,7 @@ experiment:
       - alpennordseite
       - alpensuedseite
       - jura
-    root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
   thresholds:
     TOT_PREC:
       gt: [0.0, 1, 5]
@@ -131,5 +131,5 @@ profile:
     mem_mb_per_cpu: 1800
     runtime: "1h"
     gpus: 0
-    account: s83
+    slurm_account: s83
   jobs: 50
