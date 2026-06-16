@@ -1,7 +1,7 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
+from typing import Dict, List, Any, ClassVar, FrozenSet, Literal, Optional
 
-from pydantic import BaseModel, Field, RootModel, field_validator
+from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
@@ -309,6 +309,57 @@ class ExperimentScorecardConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class SpectraConfig(BaseModel):
+    """Configuration for power-spectra QC plots in the experiment pipeline."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to compute and plot power spectra.",
+    )
+    method: Literal["dct", "fft"] = Field(
+        default="dct",
+        description="Spectral method: 'dct' (default, recommended for LAM) or 'fft'.",
+    )
+    lead_times: List[int] = Field(
+        default_factory=list,
+        description="Representative lead times (hours) at which to compute spectra.",
+    )
+    variables: List[str] = Field(
+        default=["T_2M", "WIND_KE", "TOT_PREC"],
+        description="Spectra variables. Supported: T_2M, WIND_KE (from U/V_10M), TOT_PREC.",
+    )
+    init_hours: Optional[List[int]] = Field(
+        default=None,
+        description="Optional subset of init hours to average over. None = all.",
+    )
+
+    @field_validator("variables")
+    @classmethod
+    def validate_variables(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError(
+                "`variables` must list at least one variable when spectra is configured."
+            )
+        allowed = {"T_2M", "WIND_KE", "TOT_PREC"}
+        invalid = set(v) - allowed
+        if invalid:
+            raise ValueError(
+                f"Unsupported spectra variable(s) {invalid!r}. Must be subset of {allowed}."
+            )
+        return v
+
+    @model_validator(mode="after")
+    def check_enabled_requirements(self):
+        if self.enabled and not self.lead_times:
+            raise ValueError(
+                "experiment.spectra.enabled is true but `lead_times` is empty; "
+                "specify at least one lead time (hours)."
+            )
+        return self
+
+    model_config = {"extra": "forbid"}
+
+
 class ShowcaseConfig(BaseModel):
     """Configuration for the showcase workflow."""
 
@@ -379,6 +430,10 @@ class ExperimentConfig(BaseModel):
     scorecards: Optional[ExperimentScorecardConfig] = Field(
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
+    )
+    spectra: SpectraConfig = Field(
+        default_factory=SpectraConfig,
+        description="Power-spectra QC configuration. Disabled by default.",
     )
 
     @field_validator("thresholds")

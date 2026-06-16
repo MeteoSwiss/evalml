@@ -289,6 +289,10 @@
           ],
           "default": null,
           "description": "Scorecard generation configuration. Omit or set enabled: false to disable."
+        },
+        "spectra": {
+          "$ref": "#/$defs/SpectraConfig",
+          "description": "Power-spectra QC configuration. Disabled by default."
         }
       },
       "required": [
@@ -654,6 +658,67 @@
         }
       },
       "title": "ShowcaseConfig",
+      "type": "object"
+    },
+    "SpectraConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for power-spectra QC plots in the experiment pipeline.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to compute and plot power spectra.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "method": {
+          "default": "dct",
+          "description": "Spectral method: 'dct' (default, recommended for LAM) or 'fft'.",
+          "enum": [
+            "dct",
+            "fft"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "lead_times": {
+          "description": "Representative lead times (hours) at which to compute spectra.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Lead Times",
+          "type": "array"
+        },
+        "variables": {
+          "default": [
+            "T_2M",
+            "WIND_KE",
+            "TOT_PREC"
+          ],
+          "description": "Spectra variables. Supported: T_2M, WIND_KE (from U/V_10M), TOT_PREC.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Variables",
+          "type": "array"
+        },
+        "init_hours": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional subset of init hours to average over. None = all.",
+          "title": "Init Hours"
+        }
+      },
+      "title": "SpectraConfig",
       "type": "object"
     },
     "Stratification": {
