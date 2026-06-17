@@ -261,16 +261,16 @@ def _tot_prec_handling(
     # Disaggregate TOT_PREC from cumulative-from-start (expected when the
     # accumulate_from_start_of_forecast post-processor is enabled in
     # anemoi-inference) to per-step accumulations.
-    LOG.info(
-        "Disaggregating TOT_PREC from cumulative-from-start to per-step accumulations."
-    )
-    tp = tp.diff("step")
-    if tp.sizes["step"] == 0:
+    if tp.sizes["step"] < 2:
         raise ValueError(
             "Cannot de-accumulate TOT_PREC: only a single step was loaded and "
             "step 0 was not requested/synthesised, so no accumulation window "
             "can be formed. Request the preceding step as well."
         )
+    LOG.info(
+        "Disaggregating TOT_PREC from cumulative-from-start to per-step accumulations."
+    )
+    tp = tp.diff("step")
 
     # Sanity-check that the incoming data is actually cumulative. If
     # some values are significantly negative, it indicates that the data
