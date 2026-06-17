@@ -12,10 +12,10 @@ from scipy.spatial import cKDTree
 
 
 def spherical_nearest_neighbor_indices(
-    source_lat: np.ndarray,
-    source_lon: np.ndarray,
-    target_lat: np.ndarray,
-    target_lon: np.ndarray,
+    source_latitude: np.ndarray,
+    source_longitude: np.ndarray,
+    target_latitude: np.ndarray,
+    target_longitude: np.ndarray,
 ) -> np.ndarray:
     """Return indices of nearest source points for each target point.
 
@@ -25,9 +25,9 @@ def spherical_nearest_neighbor_indices(
 
     Parameters
     ----------
-    source_lat, source_lon
+    source_latitude, source_longitude
         Latitude and longitude of source points in degrees.
-    target_lat, target_lon
+    target_latitude, target_longitude
         Latitude and longitude of target points in degrees.
 
     Returns
@@ -36,25 +36,25 @@ def spherical_nearest_neighbor_indices(
         Integer indices into source points, one index per target point.
     """
 
-    source_lat = np.asarray(source_lat).ravel()
-    source_lon = np.asarray(source_lon).ravel()
-    target_lat = np.asarray(target_lat).ravel()
-    target_lon = np.asarray(target_lon).ravel()
+    source_latitude = np.asarray(source_latitude).ravel()
+    source_longitude = np.asarray(source_longitude).ravel()
+    target_latitude = np.asarray(target_latitude).ravel()
+    target_longitude = np.asarray(target_longitude).ravel()
 
-    source_lat_rad = np.deg2rad(source_lat)
-    source_lon_rad = np.deg2rad(source_lon)
-    target_lat_rad = np.deg2rad(target_lat)
-    target_lon_rad = np.deg2rad(target_lon)
+    source_latitude_rad = np.deg2rad(source_latitude)
+    source_longitude_rad = np.deg2rad(source_longitude)
+    target_latitude_rad = np.deg2rad(target_latitude)
+    target_longitude_rad = np.deg2rad(target_longitude)
 
     source_xyz = np.c_[
-        np.cos(source_lat_rad) * np.cos(source_lon_rad),
-        np.cos(source_lat_rad) * np.sin(source_lon_rad),
-        np.sin(source_lat_rad),
+        np.cos(source_latitude_rad) * np.cos(source_longitude_rad),
+        np.cos(source_latitude_rad) * np.sin(source_longitude_rad),
+        np.sin(source_latitude_rad),
     ]
     target_xyz = np.c_[
-        np.cos(target_lat_rad) * np.cos(target_lon_rad),
-        np.cos(target_lat_rad) * np.sin(target_lon_rad),
-        np.sin(target_lat_rad),
+        np.cos(target_latitude_rad) * np.cos(target_longitude_rad),
+        np.cos(target_latitude_rad) * np.sin(target_longitude_rad),
+        np.sin(target_latitude_rad),
     ]
 
     tree = cKDTree(source_xyz)
@@ -63,7 +63,9 @@ def spherical_nearest_neighbor_indices(
 
 
 def nearest_grid_yx_indices(
-    grid: xr.Dataset | xr.DataArray, target_lat: np.ndarray, target_lon: np.ndarray
+    grid: xr.Dataset | xr.DataArray,
+    target_latitude: np.ndarray,
+    target_longitude: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Find nearest `(y, x)` grid indices for target coordinates.
 
@@ -72,7 +74,7 @@ def nearest_grid_yx_indices(
     grid
         Dataset or DataArray with `lat` and `lon` coordinates defined on a
         `(y, x)` grid.
-    target_lat, target_lon
+    target_latitude, target_longitude
         Target coordinates in degrees.
 
     Returns
@@ -92,10 +94,10 @@ def nearest_grid_yx_indices(
         )
 
     flat_idx = spherical_nearest_neighbor_indices(
-        source_lat=lat2d.ravel(),
-        source_lon=lon2d.ravel(),
-        target_lat=target_lat,
-        target_lon=target_lon,
+        source_latitude=lat2d.ravel(),
+        source_longitude=lon2d.ravel(),
+        target_latitude=target_latitude,
+        target_longitude=target_longitude,
     )
     y_idx, x_idx = np.unravel_index(flat_idx, lat2d.shape)
     return np.asarray(y_idx, dtype=int), np.asarray(x_idx, dtype=int)
@@ -123,7 +125,25 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
     xr.Dataset
         Mapped forecast dataset.
     """
-    # TODO: return fcst unchanged when forecast and truth are already aligned
+    fcst_lat = fcst["latitude"].values
+    fcst_lon = fcst["longitude"].values
+    truth_lat = truth["latitude"].values
+    truth_lon = truth["longitude"].values
+    if (
+        fcst_lat.shape == truth_lat.shape
+        and fcst_lon.shape == truth_lon.shape
+        and np.max(np.abs(fcst_lat - truth_lat)) < 0.0003
+        and np.max(np.abs(fcst_lon - truth_lon)) < 0.0003
+    ):
+        if np.array_equal(fcst_lat, truth_lat) and np.array_equal(fcst_lon, truth_lon):
+            return fcst
+        coords = {
+            "latitude": (fcst["latitude"].dims, truth["latitude"].data),
+            "longitude": (fcst["longitude"].dims, truth["longitude"].data),
+        }
+        if "values" in fcst.dims and "values" in truth.dims:
+            coords["values"] = truth["values"].data
+        return fcst.assign_coords(coords)
 
     truth_is_grid = "y" in truth.dims and "x" in truth.dims
 
@@ -133,10 +153,10 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
         truth = truth.stack(values=("y", "x"))
 
     nearest_idx = spherical_nearest_neighbor_indices(
-        source_lat=fcst["latitude"].values,
-        source_lon=fcst["longitude"].values,
-        target_lat=truth["latitude"].values,
-        target_lon=truth["longitude"].values,
+        source_latitude=fcst["latitude"].values,
+        source_longitude=fcst["longitude"].values,
+        target_latitude=truth["latitude"].values,
+        target_longitude=truth["longitude"].values,
     )
 
     fcst = fcst.isel(values=nearest_idx)
