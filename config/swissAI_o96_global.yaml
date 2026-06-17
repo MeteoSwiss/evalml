@@ -4,8 +4,8 @@ description: |
 
 dates:
   start: 2024-01-01T06:00
-  end: 2024-02-01T00:00
-  frequency: 30h
+  end: 2024-03-01T00:00
+  frequency: 13h
   # - 2024-02-01T00:00
 
 runs:
@@ -23,6 +23,15 @@ runs:
   - forecaster:
       checkpoint: /scratch/mch/miccatta/SwissAI_checkpoints/checkpoint_resO96_fr1_st1_in2_out1/877cb9559f6c484d97b3733b7481c39a/inference-last.ckpt
       label: resO96_fr1_st1_in2_out1
+      steps: 0/120/1
+      config: resources/inference/configs/o96-global-multistep-forecaster.yaml
+      extra_requirements:
+        # - git+https://github.com/ecmwf/anemoi-inference.git@b9aaee5df86614cad9d8d08b76876a4be4e980db # TODO change
+        - git+https://github.com/ecmwf/anemoi-inference.git@2c249caa75af191ff3fd3b2a6a6297459d534a55
+      disable_local_eccodes_definitions: true
+  - forecaster:
+      checkpoint: /scratch/mch/miccatta/SwissAI_checkpoints/checkpoint_resO96_fr1_st1_in4_out3/70b8ec9d55144f968513b706415ffc04/inference-last.ckpt
+      label: resO96_fr1_st1_in4_out3
       steps: 0/120/1
       config: resources/inference/configs/o96-global-multistep-forecaster.yaml
       extra_requirements:
