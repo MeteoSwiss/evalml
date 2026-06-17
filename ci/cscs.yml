@@ -15,7 +15,7 @@ unit_test_job:
   extends: [.baremetal-runner-balfrin]
   before_script:
     - echo "Setting up environment for unit tests on $(hostname)"
-    - source /scratch/users/mmcgloho/evalml/.venv/bin/activate
+    - source /scratch/mch/mmcgloho/evalml/.venv/bin/activate
   script:
     - pytest tests/unit
 
@@ -24,6 +24,6 @@ integration_test_job:
   extends: [.baremetal-runner-balfrin]
   before_script:
     - echo "Setting up environment for integration tests on $(hostname)"
-    - source /scratch/users/mmcgloho/evalml/.venv/bin/activate
+    - source /scratch/mch/mmcgloho/evalml/.venv/bin/activate
   script:
     - pytest tests/integration
