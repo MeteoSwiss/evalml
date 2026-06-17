@@ -87,9 +87,14 @@ rule verification_metrics:
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
         threshold_dict=config["thresholds"],
+        disable_local_eccodes_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
+            "disable_local_eccodes_definitions", False
+        ),
     shell:
         """
-        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        if [ "{params.disable_local_eccodes_definitions}" = "False" ]; then
+            export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        fi
         uv run {input.script} \
             --forecast {params.grib_out_dir} \
             --truth {input.truth} \

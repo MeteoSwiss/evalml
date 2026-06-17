@@ -154,16 +154,16 @@ def load_fct_data_from_grib(
     _PREC_PARAMS = {"tp", "TOT_PREC"}
     prec_params = [p for p in params_sel if p in _PREC_PARAMS]
     other_params = [p for p in params_sel if p not in _PREC_PARAMS]
-    fieldlist = ekd.from_source("file", files)
+    fieldlist = ekd.from_source("file", files).to_fieldlist()
     datasets = []
     if other_params:
         datasets.append(
-            fieldlist.sel(param=other_params, step=steps).to_xarray(profile=profile)
+            fieldlist.sel(**{"metadata.param": other_params, "metadata.step": steps}).to_xarray(profile=profile)
         )
     if prec_params:
         prec_steps = [s for s in steps if s > 0]
         datasets.append(
-            fieldlist.sel(param=prec_params, step=prec_steps).to_xarray(profile=profile)
+            fieldlist.sel(**{"metadata.param": prec_params, "metadata.step": prec_steps}).to_xarray(profile=profile)
         )
     ds: xr.Dataset = (
         xr.merge(datasets, join="outer") if len(datasets) > 1 else datasets[0]
