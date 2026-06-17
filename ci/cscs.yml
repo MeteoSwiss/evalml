@@ -11,7 +11,17 @@ include:
     SLURM_JOB_NUM_NODES: 1
     SLURM_NTASKS: 1
 
-test_job:
+unit_test_job:
   extends: [.baremetal-runner-balfrin]
+  before_script:
+    - echo "Setting up environment for unit tests on $(hostname)"
   script:
-    - echo "Running on $(hostname)"
+    - python -m unittest discover -s tests/unit
+
+
+integration_test_job:
+  extends: [.baremetal-runner-balfrin]
+  before_script:
+    - echo "Setting up environment for integration tests on $(hostname)"
+  script:
+    - python -m unittest discover -s tests/integration
