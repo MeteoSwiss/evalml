@@ -21,6 +21,7 @@ unit_test_job:
       uv --version
       echo "will install evalml at: $VENV_DIR"
       UV_HOME="$VENV_DIR" uv sync
+      source "$VENV_DIR/bin/activate"
   script:
     - pytest tests/unit
 
