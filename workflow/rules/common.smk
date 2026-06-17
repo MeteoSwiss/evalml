@@ -146,7 +146,9 @@ def model_id(checkpoint_uri: str) -> str:
         fragment = checkpoint_uri.split("#")[-1]
         if "/models/" in fragment:
             parts = fragment.strip("/").split("/")
-            return f"{parts[1]}-v{parts[3]}"[:HASH_LENGTH]
+            if len(parts) >= 4 and parts[2] == "versions":
+                return f"{parts[1]}-v{parts[3]}"[:HASH_LENGTH]
+            return f"{parts[1]}-latest"[:HASH_LENGTH]
         return checkpoint_uri.split("/")[-1][:HASH_LENGTH]
     elif ckpt_type == "huggingface":
         return checkpoint_uri.split("/")[-1].split(".")[0]
