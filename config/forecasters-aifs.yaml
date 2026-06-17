@@ -24,8 +24,8 @@ runs:
         gpus: 1
 
 truth:
-  label: ERA5
-  root: /store_new/mch/msopr/ml/datasets/aifs-ea-an-oper-0001-mars-n320-1979-2024-6h-v1-for-single-v2.zarr
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
 
 experiment:
   params:
