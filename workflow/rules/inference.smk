@@ -269,7 +269,7 @@ rule inference_execute:
         okfile=_inference_routing_fn,
         env=lambda wc: (
             OUT_ROOT / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs"
-            if not RUN_CONFIGS[wc.run_id].get("skip_env_squashfs", False)
+            if RUN_CONFIGS[wc.run_id].get("squash_venv", True)
             else OUT_ROOT / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/.venv"
         ),
     output:
@@ -287,7 +287,7 @@ rule inference_execute:
         gpus=lambda wc: get_resource(wc, "gpu", 1),
     params:
         env_path=lambda wc, input: f"{Path(input.env).resolve()}",
-        skip_env_squashfs=lambda wc: RUN_CONFIGS[wc.run_id].get("skip_env_squashfs", False),
+        squash_venv=lambda wc: RUN_CONFIGS[wc.run_id].get("squash_venv", True),
         workdir=lambda wc: (
             OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
         ).resolve(),
@@ -302,11 +302,12 @@ rule inference_execute:
 
             cd {params.workdir}
 
-            if [ "{params.skip_env_squashfs}" = "True" ]; then
-                source {params.env_path}/bin/activate
+            _run_inference() {{
+                local VENV=$1
+                source "$VENV/bin/activate"
 
                 if [ "{params.disable_local_definitions}" = "False" ]; then
-                    export ECCODES_DEFINITION_PATH={params.env_path}/share/eccodes-cosmo-resources/definitions
+                    export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
                 fi
 
                 CMD_ARGS=()
@@ -325,31 +326,13 @@ rule inference_execute:
                     --gres={resources.gres} \
                     --ntasks={resources.ntasks} \
                     anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+            }}
+            export -f _run_inference
+
+            if [ "{params.squash_venv}" = "True" ]; then
+                squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
             else
-                squashfs-mount {params.env_path}:/user-environment -- bash -c '
-                    source /user-environment/bin/activate
-
-                    if [ "{params.disable_local_definitions}" = "False" ]; then
-                        export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
-                    fi
-
-                    CMD_ARGS=()
-
-                    # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
-                    if [ {resources.gpus} -gt 1 ]; then
-                        CMD_ARGS+=(runner.parallel.cluster=slurm)
-                    fi
-
-                    srun \
-                        --unbuffered \
-                        --partition={resources.slurm_partition} \
-                        --cpus-per-task={resources.cpus_per_task} \
-                        --mem-per-cpu={resources.mem_mb_per_cpu} \
-                        --time={resources.runtime} \
-                        --gres={resources.gres} \
-                        --ntasks={resources.ntasks} \
-                        anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
-                    '
+                _run_inference "{params.env_path}"
             fi
         ) >{log} 2>&1
         """
