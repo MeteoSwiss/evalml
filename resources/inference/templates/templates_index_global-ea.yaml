@@ -1,0 +1,11 @@
+
+# Global EA (IFS-based) templates using IFS/ECMWF shortNames (no COSMO definitions active during inference)
+- - {levtype: pl, param: [t, q, u, v, z, w]}
+  - resources/ifs-levtype=pl.grib
+
+- - {levtype: sfc, param: [10u, 10v, 2t, 2d, lsm, sp, z, msl, slor, sdor, skt, tcw, prmsl,
+                            100u, 100v, hcc, lcc, mcc, tcc, stl1, stl2, swvl1, swvl2]}
+  - resources/ifs-levtype=sfc.grib
+
+- - {levtype: sfc, param: [tp, cp, ro, sf, ssrd, strd]}
+  - resources/ifs-shortName=tp.grib

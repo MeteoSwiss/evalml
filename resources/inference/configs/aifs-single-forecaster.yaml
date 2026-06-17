@@ -1,8 +1,12 @@
-input:
-  test:
-    dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2025-6h-v1-combined-land.zarr
+input: test
 
 allow_nans: true
+
+patch_metadata:
+  config:
+    dataloader:
+      test:
+        dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2025-6h-v1-combined-land.zarr
 
 post_processors:
   - accumulate_from_start_of_forecast:
@@ -11,8 +15,8 @@ post_processors:
 
 output:
   grib:
-    path: grib/{dateTime}_{step:03}.grib
+    path: grib/{date}{time:04}_{step:03}.grib
     templates:
       samples: resources/templates_index_global-ea.yaml
 
-write_initial_state: true
+write_initial_state: false
