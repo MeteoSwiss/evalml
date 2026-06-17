@@ -257,6 +257,8 @@ class ScoreMapsConfig(BaseModel):
         ),
     )
 
+    model_config = {"extra": "forbid"}
+
 
 class DomainConfig(BaseModel):
     """A custom map domain defined by name, extent, and projection."""
