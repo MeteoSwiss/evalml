@@ -320,6 +320,7 @@ rule inference_execute:
                     --time={resources.runtime} \
                     --gres={resources.gres} \
                     --ntasks={resources.ntasks} \
+                    --exclude=nid002024,nid002025,nid002028,nid002029,nid002300,nid002793 \
                     anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
                 '
         ) >{log} 2>&1
