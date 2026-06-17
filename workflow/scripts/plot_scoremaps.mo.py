@@ -127,12 +127,17 @@ def _(CMAP_DEFAULTS, ekp):
         """
         from matplotlib import colors as mcolors
 
+        # Prefer a score-specific colormap; otherwise fall back to the generic
+        # per-parameter score colormap (shared by RMSE/MAE/STDE), and finally to
+        # the parameter's field colormap.
         score_key = f"{param}.{score}.map"
-        cfg = (
-            CMAP_DEFAULTS[score_key]
-            if score_key in CMAP_DEFAULTS
-            else CMAP_DEFAULTS.get(param, {})
-        )
+        generic_score_key = f"{param}.score.map"
+        if score_key in CMAP_DEFAULTS:
+            cfg = CMAP_DEFAULTS[score_key]
+        elif generic_score_key in CMAP_DEFAULTS:
+            cfg = CMAP_DEFAULTS[generic_score_key]
+        else:
+            cfg = CMAP_DEFAULTS.get(param, {})
         units = units_override if units_override is not None else cfg.get("units", "")
         levels = cfg.get("bounds", cfg.get("levels", None))
         colors = cfg.get("colors", None)

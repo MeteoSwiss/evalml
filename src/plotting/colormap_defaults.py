@@ -12,6 +12,19 @@ def _fallback():
     return {"cmap": plt.get_cmap("viridis"), "norm": None, "units": ""}
 
 
+# Sequential Reds shared by the error-magnitude scores (RMSE, MAE, STDE), which
+# are all non-negative. Defined once per parameter under the generic
+# "{param}.score.map" key; the score-map lookup falls back to it for any score
+# without a dedicated "{param}.{score}.map" entry. To give a single score its
+# own colours, add that explicit key — it takes precedence over this fallback.
+_SCORE_REDS = {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3]}
+_SCORE_REDS_PA = {
+    "cmap": plt.get_cmap("Reds", 7),
+    "levels": [0, 50, 100, 150, 200, 250, 300, 350],
+}
+_SCORE_REDS_PRECIP = {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 1, 1.5, 2, 3, 4]}
+
+
 _CMAP_DEFAULTS = {
     "SP": {
         "cmap": plt.get_cmap("coolwarm", 11),
@@ -130,92 +143,20 @@ _CMAP_DEFAULTS = {
             120.0,
         ],
     },
-    # Sequential Reds for RMSE and MAE: error is non-negative, larger ⇒ darker.
-    # Levels start at 0 so saturation maps directly to error magnitude;
-    # discrete levels make absolute values readable from the colour bar.
-    # RMSE:
-    "U_10M.RMSE.map": {
-        "cmap": plt.get_cmap("Reds", 6),
-        "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3],
-    }
-    | {"units": "m/s"},
-    "V_10M.RMSE.map": {
-        "cmap": plt.get_cmap("Reds", 6),
-        "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3],
-    }
-    | {"units": "m/s"},
-    "SP_10M.RMSE.map": {
-        "cmap": plt.get_cmap("Reds", 6),
-        "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3],
-    }
-    | {"units": "m/s"},
-    "TD_2M.RMSE.map": {
-        "cmap": plt.get_cmap("Reds", 6),
-        "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3],
-    }
-    | {"units": "°C"},
-    "T_2M.RMSE.map": {
-        "cmap": plt.get_cmap("Reds", 6),
-        "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3],
-    }
-    | {"units": "°C"},
-    "PMSL.RMSE.map": {
-        "cmap": plt.get_cmap("Reds", 7),
-        "levels": [0, 50, 100, 150, 200, 250, 300, 350],
-    }
-    | {"units": "Pa"},
-    "PS.RMSE.map": {
-        "cmap": plt.get_cmap("Reds", 7),
-        "levels": [0, 50, 100, 150, 200, 250, 300, 350],
-    }
-    | {"units": "Pa"},
-    "TOT_PREC.RMSE.map": {
-        "cmap": plt.get_cmap("Reds", 6),
-        "levels": [0, 1, 1.5, 2, 3, 4],
-    }
-    | {"units": "mm"},
-    # MAE:
-    "U_10M.MAE.map": {
-        "cmap": plt.get_cmap("Reds", 6),
-        "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3],
-    }
-    | {"units": "m/s"},
-    "V_10M.MAE.map": {
-        "cmap": plt.get_cmap("Reds", 6),
-        "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3],
-    }
-    | {"units": "m/s"},
-    "SP_10M.MAE.map": {
-        "cmap": plt.get_cmap("Reds", 6),
-        "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3],
-    }
-    | {"units": "m/s"},
-    "TD_2M.MAE.map": {
-        "cmap": plt.get_cmap("Reds", 6),
-        "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3],
-    }
-    | {"units": "°C"},
-    "T_2M.MAE.map": {
-        "cmap": plt.get_cmap("Reds", 6),
-        "levels": [0, 0.5, 1, 1.5, 2, 2.5, 3],
-    }
-    | {"units": "°C"},
-    "PMSL.MAE.map": {
-        "cmap": plt.get_cmap("Reds", 7),
-        "levels": [0, 50, 100, 150, 200, 250, 300, 350],
-    }
-    | {"units": "Pa"},
-    "PS.MAE.map": {
-        "cmap": plt.get_cmap("Reds", 7),
-        "levels": [0, 50, 100, 150, 200, 250, 300, 350],
-    }
-    | {"units": "Pa"},
-    "TOT_PREC.MAE.map": {
-        "cmap": plt.get_cmap("Reds", 6),
-        "levels": [0, 1, 1.5, 2, 3, 4],
-    }
-    | {"units": "mm"},
-    # the levels for precip are a bit on the bright side, but still worth keeping consistent with RMSE.
+    # Sequential Reds for error-magnitude scores (RMSE, MAE, STDE): error is
+    # non-negative, larger ⇒ darker. Levels start at 0 so saturation maps
+    # directly to error magnitude; discrete levels make absolute values readable
+    # from the colour bar. Defined once per parameter under "{param}.score.map";
+    # the lookup uses these for any score lacking a dedicated entry. The precip
+    # levels are a bit on the bright side, but kept consistent with the rest.
+    "U_10M.score.map": _SCORE_REDS | {"units": "m/s"},
+    "V_10M.score.map": _SCORE_REDS | {"units": "m/s"},
+    "SP_10M.score.map": _SCORE_REDS | {"units": "m/s"},
+    "TD_2M.score.map": _SCORE_REDS | {"units": "°C"},
+    "T_2M.score.map": _SCORE_REDS | {"units": "°C"},
+    "PMSL.score.map": _SCORE_REDS_PA | {"units": "Pa"},
+    "PS.score.map": _SCORE_REDS_PA | {"units": "Pa"},
+    "TOT_PREC.score.map": _SCORE_REDS_PRECIP | {"units": "mm"},
     # Bias:
     # diverging colour scheme for the Bias to reflect the nature of the data (can be positive or negative, symmetric).
     # Red-Blue colour scheme for all variables except precipitation, where a Brown-Green scheme is more suggestive.
