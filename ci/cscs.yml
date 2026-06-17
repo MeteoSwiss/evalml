@@ -14,8 +14,12 @@ include:
 unit_test_job:
   extends: [.baremetal-runner-balfrin]
   before_script:
-    - echo "Setting up environment for unit tests on $(hostname)"
-    - source /scratch/mch/mmcgloho/evalml/.venv/bin/activate
+    - |
+      echo "Setting up environment for unit tests on $(hostname)"
+      echo "uv installed at: $(which uv)"
+      uv --version
+      echo "will install devml at: $VENV_DIR"
+      UV_HOME="$VENV_DIR" uv sync --extra cu124
   script:
     - pytest tests/unit
 
