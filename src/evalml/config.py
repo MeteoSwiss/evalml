@@ -101,6 +101,11 @@ class RunConfig(BaseModel):
         False,
         description="If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
     )
+    skip_env_squashfs: bool = Field(
+        False,
+        description="If true, skip creating a squashfs image and activate the virtual environment directly. "
+        "Useful when squashfs creation is too slow and a quick iteration is preferred.",
+    )
 
     config: Dict[str, Any] | str
 
