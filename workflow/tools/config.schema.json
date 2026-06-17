@@ -607,6 +607,7 @@
       "type": "object"
     },
     "ScoreMapsConfig": {
+      "additionalProperties": false,
       "description": "Parameters controlling which score map plots are produced.",
       "properties": {
         "enabled": {
