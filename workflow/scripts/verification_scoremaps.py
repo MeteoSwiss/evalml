@@ -10,8 +10,10 @@ final BIAS / RMSE / MAE / STDE maps are written to a NetCDF file.
 Forecasts load through data_input.load_forecast_data, which routes by source:
 ML run directories (GRIB files), INCA (NetCDF archive), or otherwise the ICON
 operational GRIB archive. Baselines (--baseline_root) use the latter two paths;
-init times are not discovered from the archive but taken from --reftimes, with
-unavailable dates skipped at load time.
+init times are not discovered from the archive but taken from --reftimes. Every
+configured initialisation must be available across forecast and truth — a missing
+one is a hard error, never a silent skip — so that run and baseline maps are
+always computed over an identical sample.
 
 Design note: one Snakemake job per (run, param, lead time), each loading only the
 step(s) it needs. We deliberately do not load all lead times at once: per-job
@@ -294,9 +296,11 @@ def main(args: Namespace) -> None:
     LOG.info("Truth opened lazily: %s", truth_da)
 
     if args.baseline_root:
-        # The operational archive is too large to enumerate up front; the
-        # experiment's configured init times define the work list, and dates
-        # missing from the archive are skipped at load time below.
+        # The operational archive is too large to enumerate up front, so the
+        # experiment's configured init times define the work list. Every one of
+        # them must be available: a baseline init missing from the archive is a
+        # hard error at load time (in the loop below), not a silent skip, so the
+        # baseline map covers the same sample as the run maps.
         init_items = [
             (rt, None)
             for rt in sorted(datetime.strptime(s, DATETIME_FMT) for s in args.reftimes)
@@ -306,13 +310,43 @@ def main(args: Namespace) -> None:
         init_items = iter_init_dirs(args.run_root)
         LOG.info("Found %d init time directories", len(init_items))
 
-        # Restrict to the experiment's configured init times if provided.
+        # Restrict to the experiment's configured init times, and require that
+        # every configured init was actually discovered: a missing run output
+        # directory must fail rather than silently shrink the sample.
         if args.reftimes:
             wanted = {datetime.strptime(s, DATETIME_FMT) for s in args.reftimes}
+            discovered = {rt for rt, _ in init_items}
+            missing = sorted(wanted - discovered)
+            if missing:
+                raise ValueError(
+                    f"{len(missing)} configured initialisation(s) have no GRIB "
+                    f"output under {args.run_root}: "
+                    f"{[m.strftime(DATETIME_FMT) for m in missing]}. All configured "
+                    "initialisations must be available so that run and baseline "
+                    "score maps are computed over an identical sample; blacklist "
+                    "genuinely-absent dates in the experiment config."
+                )
             init_items = [(rt, d) for rt, d in init_items if rt in wanted]
-            LOG.info("Filtered to %d init times matching --reftimes", len(init_items))
+            LOG.info("Matched all %d configured init times", len(init_items))
 
     step_td = timedelta(hours=args.step)
+
+    # Every configured init must have a matching truth slice; a gap here would
+    # otherwise silently drop the init from the map. Check up front so the full
+    # set of missing valid times is reported at once rather than one per run.
+    required_valid_times = {
+        np.datetime64(rt + step_td).astype("datetime64[ns]") for rt, _ in init_items
+    }
+    missing_truth = sorted(required_valid_times - truth_times)
+    if missing_truth:
+        raise ValueError(
+            f"Truth is missing {len(missing_truth)} required valid time(s) for "
+            f"param={args.param}, step={args.step}h (e.g. "
+            f"{[str(t) for t in missing_truth[:5]]}). All configured "
+            "initialisations must be available so that run and baseline score "
+            "maps are computed over an identical sample; blacklist genuinely-"
+            "absent dates in the experiment config."
+        )
 
     # Running accumulators keyed by (season, init_hour) – initialised on the
     # first successfully processed sample so that we can infer the spatial
@@ -332,15 +366,9 @@ def main(args: Namespace) -> None:
     ref_truth_slice: xr.DataArray | None = None  # kept for output coordinates
 
     n_ok = 0
-    n_skip = 0
 
     for reftime, grib_dir in init_items:
         valid_time = np.datetime64(reftime + step_td).astype("datetime64[ns]")
-
-        if valid_time not in truth_times:
-            LOG.debug("Valid time %s not in truth, skipping %s", valid_time, reftime)
-            n_skip += 1
-            continue
 
         LOG.info(
             "Processing reftime=%s  valid=%s",
@@ -375,9 +403,14 @@ def main(args: Namespace) -> None:
                 src_root, reftime, req_steps, fct_params, member=args.member
             )
         except Exception as exc:
-            LOG.warning("Could not load forecast for %s: %s", reftime, exc)
-            n_skip += 1
-            continue
+            raise RuntimeError(
+                f"Could not load forecast for initialisation "
+                f"{reftime.strftime(DATETIME_FMT)} (lead time {args.step}h) from "
+                f"{src_root}: {exc}. All configured initialisations must be "
+                "available so that run and baseline score maps are computed over "
+                "an identical sample; blacklist genuinely-absent dates in the "
+                "experiment config."
+            ) from exc
 
         # Select the target step. The earthkit loader returns forecasts over the
         # requested steps with a `step` (timedelta64) dimension; for TOT_PREC the
@@ -439,9 +472,10 @@ def main(args: Namespace) -> None:
         try:
             fcst_mapped = map_forecast_to_truth(fcst, truth_ds)
         except Exception as exc:
-            LOG.warning("Spatial mapping failed for %s: %s", reftime, exc)
-            n_skip += 1
-            continue
+            raise RuntimeError(
+                f"Spatial mapping failed for initialisation "
+                f"{reftime.strftime(DATETIME_FMT)} (lead time {args.step}h): {exc}."
+            ) from exc
 
         fcst_param = fcst_mapped[args.param]
         # Squeeze size-1 non-spatial dims so the error array is purely spatial.
@@ -508,11 +542,13 @@ def main(args: Namespace) -> None:
                 accum_sum_ae[(s, h)][valid] += np.abs(error[valid])
         n_ok += 1
 
-    LOG.info("Finished: %d init times processed, %d skipped", n_ok, n_skip)
+    LOG.info("Finished: %d init times processed", n_ok)
 
     if n_ok == 0:
-        LOG.error("No data could be processed – no output written.")
-        return
+        raise ValueError(
+            "No initialisations were processed — nothing to write. Check that "
+            "--reftimes is non-empty."
+        )
 
     # --- compute aggregate maps per (season, init_hour), then stack ---
     spatial_coords = {
@@ -572,7 +608,6 @@ def main(args: Namespace) -> None:
             "member": args.member,
             "source": str(args.baseline_root if args.baseline_root else args.run_root),
             "n_processed": n_ok,
-            "n_skipped": n_skip,
         },
     )
 
