@@ -25,11 +25,16 @@ unit_test_job:
   script:
     - pytest tests/unit
 
-
 integration_test_job:
   extends: [.baremetal-runner-balfrin]
   before_script:
-    - echo "Setting up environment for integration tests on $(hostname)"
-    - source /scratch/mch/mmcgloho/evalml/.venv/bin/activate
+    - |
+      echo "Setting up environment for integration tests on $(hostname)"
+      VENV_DIR="$(pwd)/.venv"
+      echo "uv installed at: $(which uv)"
+      uv --version
+      echo "will install evalml at: $VENV_DIR"
+      UV_HOME="$VENV_DIR" uv sync
+      source "$VENV_DIR/bin/activate"
   script:
     - pytest tests/integration
