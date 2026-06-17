@@ -82,9 +82,11 @@ def parse_reference_times():
 def parse_regions():
     """Parse regions from the configuration."""
     cfg = config["experiment"]["stratification"]
-    regions = [f"{cfg['root']}/{region}.shp" for region in cfg["regions"]]
-    regions_txt = ",".join(regions)
-    return regions_txt
+    region_names = cfg.get("regions", [])
+    if not region_names:
+        return ""
+    regions = [f"{cfg['root']}/{region}.shp" for region in region_names]
+    return ",".join(regions)
 
 
 def parse_showcase_regions():

@@ -660,7 +660,7 @@
       "description": "Stratification settings for the analysis.",
       "properties": {
         "regions": {
-          "description": "List of region names for stratification.",
+          "description": "List of region names for stratification. Empty list means no spatial stratification.",
           "items": {
             "type": "string"
           },
@@ -668,15 +668,19 @@
           "type": "array"
         },
         "root": {
-          "description": "Root directory where the region shapefiles are stored.",
-          "title": "Root",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Root directory where the region shapefiles are stored. Required when regions is non-empty.",
+          "title": "Root"
         }
       },
-      "required": [
-        "regions",
-        "root"
-      ],
       "title": "Stratification",
       "type": "object"
     },

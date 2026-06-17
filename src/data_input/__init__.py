@@ -10,6 +10,20 @@ from pyproj import Transformer
 
 LOG = logging.getLogger(__name__)
 
+# IFS shortNames that differ from COSMO parameter names.
+# Used to load GRIB output from global models (e.g. AIFS-single) that write IFS names.
+_IFS_TO_COSMO = {
+    "tp": "TOT_PREC",
+    "msl": "PMSL",
+    "10u": "U_10M",
+    "10v": "V_10M",
+    "2t": "T_2M",
+    "2d": "TD_2M",
+    "sp": "PS",
+    "lsm": "FR_LAND",
+}
+_COSMO_TO_IFS = {v: k for k, v in _IFS_TO_COSMO.items()}
+
 XARRAY_ENGINE_PROFILE = {
     "ensure_dims": ["z", "number", "step", "forecast_reference_time"],
     "add_valid_time_coord": True,
@@ -69,7 +83,12 @@ def load_analysis_data_from_zarr(
     PARAMS_MAP_COSMO1 = {
         v: v.replace("TOT_PREC", tot_prec_string) for v in PARAMS_MAP_COSMO2.keys()
     }
-    PARAMS_MAP = PARAMS_MAP_COSMO2 if "co2" in root.name else PARAMS_MAP_COSMO1
+    USE_IFS_NAMES = {"-co2-", "-ea-"}
+    PARAMS_MAP = (
+        PARAMS_MAP_COSMO2
+        if any(tag in root.name for tag in USE_IFS_NAMES)
+        else PARAMS_MAP_COSMO1
+    )
 
     ds = xr.open_zarr(root, consolidated=False)
 
@@ -82,8 +101,8 @@ def load_analysis_data_from_zarr(
     # select variables and valid time, squeeze ensemble dimension
     ds = ds.sel(variable=[PARAMS_MAP[p] for p in params]).squeeze("ensemble", drop=True)
 
-    # recover original 2D shape
-    if len(ds.attrs["field_shape"]) == 2:
+    # recover original 2D shape (not present for global Gaussian grids)
+    if "field_shape" in ds.attrs and len(ds.attrs["field_shape"]) == 2:
         ny, nx = ds.attrs["field_shape"]
         y_idx, x_idx = np.unravel_index(np.arange(ny * nx), shape=(ny, nx))
         ds = ds.assign_coords({"y": ("cell", y_idx), "x": ("cell", x_idx)})
@@ -93,7 +112,8 @@ def load_analysis_data_from_zarr(
     # set lat lon as coords (optional)
     if "latitudes" in ds and "longitudes" in ds:
         ds = ds.rename({"latitudes": "latitude", "longitudes": "longitude"})
-    ds = ds.set_coords(["latitude", "longitude"])
+    if "latitude" in ds and "longitude" in ds:
+        ds = ds.set_coords(["latitude", "longitude"])
     ds = (
         ds["data"]
         .to_dataset("variable")
@@ -255,8 +275,24 @@ def _tot_prec_handling(tp: xr.DataArray) -> xr.DataArray:
 
 
 def load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
-    """Load forecast data from a list of GRIB files."""
-    ds = load_from_grib_file(files, {"parameter.variable": params})
+    """Load forecast data from a list of GRIB files.
+
+    Handles both COSMO-named and IFS-named GRIB output (e.g. from global models
+    like AIFS-single). IFS shortNames are translated back to COSMO names after loading.
+    """
+    # Extend param selection to include IFS aliases so that global-model GRIB files
+    # (which use IFS shortNames like "tp", "2t") are also matched.
+    params_extended = list(
+        {p for p in params} | {_COSMO_TO_IFS[p] for p in params if p in _COSMO_TO_IFS}
+    )
+    ds = load_from_grib_file(files, {"parameter.variable": params_extended})
+
+    # Rename any IFS shortNames back to COSMO names
+    ifs_rename = {
+        ifs: cosmo for ifs, cosmo in _IFS_TO_COSMO.items() if ifs in ds.data_vars
+    }
+    if ifs_rename:
+        ds = ds.rename(ifs_rename)
 
     if "TOT_PREC" in ds.data_vars:
         ds["TOT_PREC"] = _tot_prec_handling(ds["TOT_PREC"])
