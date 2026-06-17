@@ -296,11 +296,19 @@ def _tot_prec_handling(
 def load_forecast_data_from_grib(
     files: list[Path], params: list[str], steps: list[int] | None = None
 ) -> xr.Dataset:
-    """Load forecast data from a list of GRIB files.
+    """Load forecast data from a list of GRIB files (internal helper).
 
-    `steps` (lead times in hours, if known) is forwarded to the TOT_PREC
-    de-accumulation so a missing step-0 field can be synthesised as zero when
-    step 0 was requested.
+    External callers should use :func:`load_forecast_data`, which derives
+    `files` from `steps` and routes by source. This helper is the shared
+    low-level loader for the ML-grib and ICON-archive paths.
+
+    `files` and `steps` are complementary, not redundant:
+    - `files` are the GRIB files that exist on disk (one per lead time).
+    - `steps` are the *requested* lead times, forwarded to the TOT_PREC
+      de-accumulation. They cannot be inferred from `files` alone: when step 0
+      is requested, anemoi-inference omits the TOT_PREC step-0 field entirely
+      (no file exists), so it is synthesised as zero to form the first
+      accumulation window. `steps` carries that intent.
     """
     ds = load_from_grib_file(files, {"parameter.variable": params})
 
