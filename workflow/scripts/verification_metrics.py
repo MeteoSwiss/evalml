@@ -69,7 +69,9 @@ def main(args: ScriptConfig):
     )
 
     # align forecast and truth data spatially and temporally
-    fcst = map_forecast_to_truth(fcst, truth)
+    
+    # TODO commented out for the moment. Needs to be put back for verif. against obs
+    # fcst = map_forecast_to_truth(fcst, truth)  # TODO: skip when forecast and truth are on the same grid
     truth = truth.sel(time=fcst.time)
 
     # compute metrics and statistics
