@@ -601,9 +601,57 @@
           "description": "Whether to generate publication figures.",
           "title": "Enabled",
           "type": "boolean"
+        },
+        "meteogram": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicationMeteogramConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Publication meteogram case selection (omit to skip it)."
         }
       },
       "title": "PublicationConfig",
+      "type": "object"
+    },
+    "PublicationMeteogramConfig": {
+      "additionalProperties": false,
+      "description": "Case selection for the publication meteogram figure.",
+      "properties": {
+        "init_time": {
+          "description": "Initialisation time (YYYYMMDDHHMM) of the case to plot.",
+          "title": "Init Time",
+          "type": "string"
+        },
+        "station": {
+          "description": "PeakWeather station ID to plot (e.g. KLO, GVE, LUG).",
+          "title": "Station",
+          "type": "string"
+        },
+        "params": {
+          "default": [
+            "T_2M",
+            "TOT_PREC",
+            "SP_10M",
+            "DD_10M"
+          ],
+          "description": "Display parameters (one panel each); SP_10M/DD_10M are derived.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        }
+      },
+      "required": [
+        "init_time",
+        "station"
+      ],
+      "title": "PublicationMeteogramConfig",
       "type": "object"
     },
     "ScorecardConfig": {
