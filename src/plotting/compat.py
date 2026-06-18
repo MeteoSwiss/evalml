@@ -23,8 +23,7 @@ PARAMS_MAP_INV = {v: k for k, v in PARAMS_MAP.items()}
 def load_state_from_grib(
     file: Path, paramlist: list[str] | None = None
 ) -> dict[str, np.ndarray | dict[str, np.ndarray] | gpd.GeoSeries]:
-    # Also request IFS shortname aliases so AIFS GRIB files (which use IFS names
-    # like "10u"/"10v" instead of "U_10M"/"V_10M") are matched correctly.
+    # Also request IFS shortname aliases
     paramlist_extended = list(
         {p for p in (paramlist or [])}
         | {PARAMS_MAP[p] for p in (paramlist or []) if p in PARAMS_MAP}
