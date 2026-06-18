@@ -163,7 +163,6 @@ The `truth.root` value selects how the ground truth is loaded:
     root: jretrievedwh:1,2                          # stn_group_id (default)
     # root: jretrievedwh:locations=ARO,KLO,LUG      # explicit nat_abbr list
     # root: jretrievedwh:bbox=45.8,47.8,5.9,10.5    # minlat,maxlat,minlon,maxlon
-    # append ;stage=devt to target a non-prod DWH stage (prod|depl|devt)
   ```
 
   **Prerequisites:** `jretrievedwh.py` must be on `$PATH` (falls back to
