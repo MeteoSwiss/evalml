@@ -129,7 +129,7 @@ def _(
         p = Path(p)
         return p if p.is_absolute() else project_root / p
 
-    init_time = datetime.strptime(date, "%Y%m%d%H%M")
+    init_time = datetime.strptime(str(date), "%Y%m%d%H%M")
     base_params = expand_to_base_params(display_params)
 
     # Observations (already at stations) -> reuse one station as the mapping target.

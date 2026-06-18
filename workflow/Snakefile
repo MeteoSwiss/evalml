@@ -227,11 +227,3 @@ rule verification_metrics_plot_all:
         ),
 
 
-rule publication_all:
-    """Target rule for publication figures workflow."""
-    input:
-        (
-            rules.publication_figures.output
-            if config.get("publication", {}).get("enabled", False)
-            else []
-        ),
