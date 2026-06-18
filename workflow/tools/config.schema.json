@@ -274,6 +274,12 @@
           "title": "Thresholds",
           "type": "object"
         },
+        "lapse_rate_correction": {
+          "default": true,
+          "description": "Apply standard-atmosphere lapse-rate correction to T_2M.",
+          "title": "Lapse Rate Correction",
+          "type": "boolean"
+        },
         "dashboard": {
           "$ref": "#/$defs/Dashboard",
           "description": "Settings for the experiment dashboard."
