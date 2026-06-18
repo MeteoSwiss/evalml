@@ -19,6 +19,17 @@ XARRAY_ENGINE_PROFILE = {
 
 ZERO_KELVIN = -273.15  # °C
 
+GRAVITY = 9.80665  # m/s² — standard gravity used to convert FIS geopotential to metres
+
+ICON_CH1_GRID_NC = Path(
+    "/scratch/mch/jenkins/icon/pool/data/ICON/mch/grids/icon-1"
+    "/external_parameter_icon_grid_0001_R19B08_mch.nc"
+)
+ICON_CH2_GRID_NC = Path(
+    "/scratch/mch/jenkins/icon/pool/data/ICON/mch/grids/icon-2"
+    "/external_parameter_icon_grid_0002_R19B07_mch.nc"
+)
+
 
 def _select_valid_times(ds, times: np.datetime64, strict: bool = False):
     # (handle special case where some valid times are not in the dataset, e.g. at the end)
@@ -54,6 +65,35 @@ def parse_steps(steps: str) -> list[int]:
     return list(range(start, end + 1, step))
 
 
+def _load_icon_topography(grid_nc: Path) -> np.ndarray:
+    """Return topography_c [m] from an ICON external parameter file."""
+    with xr.open_dataset(grid_nc) as ds:
+        return ds["topography_c"].values.astype(np.float32)
+
+
+def _try_assign_model_elevation(ds: xr.Dataset) -> xr.Dataset:
+    """Attempt to attach model_elevation from a known ICON grid NC file.
+
+    Matches by comparing the size of the ``values`` dimension to the number of
+    cells in each candidate grid file.  Silently returns the dataset unchanged
+    when no match is found (e.g. non-ICON or custom grids).
+    """
+    if "values" not in ds.dims:
+        return ds
+    n = ds.sizes["values"]
+    for grid_nc in (ICON_CH1_GRID_NC, ICON_CH2_GRID_NC):
+        if not grid_nc.exists():
+            continue
+        topo = _load_icon_topography(grid_nc)
+        if len(topo) == n:
+            LOG.info("Assigned model_elevation from %s (%d cells)", grid_nc.name, n)
+            return ds.assign_coords(model_elevation=("values", topo))
+    LOG.warning(
+        "Could not assign model_elevation: no ICON grid NC file matches values=%d", n
+    )
+    return ds
+
+
 def load_analysis_data_from_zarr(
     root: Path, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
@@ -70,6 +110,7 @@ def load_analysis_data_from_zarr(
         "PS": "sp",
         "PMSL": "msl",
         "TOT_PREC": "tp",
+        "FIS": "FIS",
     }
     tot_prec_string = "TOT_PREC_6H" if min(np.diff(steps)) == 6 else "TOT_PREC_1H"
     PARAMS_MAP_COSMO1 = {
@@ -85,8 +126,12 @@ def load_analysis_data_from_zarr(
     # set 'variables' attr as dimension coordinate
     ds = ds.assign_coords({"variable": ds.attrs["variables"]})
 
+    # Always include FIS so we can derive an elevation coordinate below
+    load_params = list(dict.fromkeys(params + ["FIS"]))
     # select variables and valid time, squeeze ensemble dimension
-    ds = ds.sel(variable=[PARAMS_MAP[p] for p in params]).squeeze("ensemble", drop=True)
+    ds = ds.sel(variable=[PARAMS_MAP[p] for p in load_params]).squeeze(
+        "ensemble", drop=True
+    )
 
     # recover original 2D shape
     if len(ds.attrs["field_shape"]) == 2:
@@ -116,6 +161,14 @@ def load_analysis_data_from_zarr(
     # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
     if "cell" in ds.dims:
         ds = ds.rename({"cell": "values"})
+
+    # Derive elevation from FIS (surface geopotential, m²/s²) and assign as coordinate.
+    # FIS is constant in time, so drop the time dimension to get a purely spatial coord.
+    if "FIS" in ds:
+        elevation = ds["FIS"].isel(time=0, drop=True) / GRAVITY
+        ds = ds.assign_coords(elevation=elevation)
+        if "FIS" not in params:
+            ds = ds.drop_vars("FIS")
 
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
     return _select_valid_times(ds, times)
@@ -303,6 +356,7 @@ def _jretrieve_df_to_xarray(df, short_names, catalog) -> xr.Dataset:
         "values": ("values", catalog.nat_abbr),
         "latitude": ("values", catalog.latitude),
         "longitude": ("values", catalog.longitude),
+        "elevation": ("values", catalog.elevation),
     }
     data_vars: dict[str, tuple] = {}
     if df.empty:
@@ -794,12 +848,32 @@ def load_icon_baseline_from_grib(
                 f"No ensemble members could be loaded for {reftime} from {root}"
             )
         LOG.info("Ensemble mean computed over %d members.", n_loaded)
-        return acc / n_loaded
+        result = acc / n_loaded
     else:
-        return load_forecast_data_from_grib(
+        result = load_forecast_data_from_grib(
             files=_collect_icon_archive_files(root, reftime, steps, member_id=member),
             params=params,
         )
+
+    # Attach model orography as model_elevation coordinate
+    if "ICON-CH1-EPS" in root.parts:
+        grid_nc = ICON_CH1_GRID_NC
+    elif "ICON-CH2-EPS" in root.parts:
+        grid_nc = ICON_CH2_GRID_NC
+    else:
+        grid_nc = None
+    if grid_nc is not None and grid_nc.exists() and "values" in result.dims:
+        topo = _load_icon_topography(grid_nc)
+        if result.sizes["values"] == len(topo):
+            result = result.assign_coords(model_elevation=("values", topo))
+        else:
+            LOG.warning(
+                "model_elevation not assigned: values=%d but %s has %d cells",
+                result.sizes["values"],
+                grid_nc.name,
+                len(topo),
+            )
+    return result
 
 
 def load_forecast_data(
@@ -816,11 +890,12 @@ def load_forecast_data(
     root = Path(root)
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
-        return load_forecast_data_from_grib(
+        ds = load_forecast_data_from_grib(
             # NOTE: root is already for a specific reftime
             files=_collect_ml_grib_files(root, steps),
             params=params,
         )
+        return _try_assign_model_elevation(ds)
     if "INCA" in root.parts:
         LOG.info("Loading INCA baseline from NetCDF files...")
         return load_INCA_baseline_from_netcdf(root, reftime, steps, params)
