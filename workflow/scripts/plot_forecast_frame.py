@@ -139,6 +139,17 @@ def main():
     grib_file = list(grib_dir.glob(f"2*_{lead_time}.grib"))
     if not grib_file:
         grib_file = list(grib_dir.glob(f"2*_{lead_time:03}.grib"))
+    if not grib_file:
+        LOG.warning(
+            "No GRIB file found for lead_time=%s in %s (model may not write initial state)."
+            " Creating empty placeholder frames.",
+            lead_time,
+            grib_dir,
+        )
+        for region_name in regions:
+            outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
+            outfn.touch()
+        return
     grib_file = Path(grib_file[0])
     LOG.info("Loading grib file %s", grib_file)
     state = load_state_from_grib(grib_file, paramlist=paramlist)
@@ -187,12 +198,13 @@ def main():
         plotter.plot_field(
             subplot, field, **get_style(param, units_override, accu=accu)
         )
-        subplot.ax.add_geometries(
-            state["lam_envelope"],
-            edgecolor="black",
-            facecolor="none",
-            crs=ccrs.PlateCarree(),
-        )
+        if len(state["lam_envelope"]) > 0:
+            subplot.ax.add_geometries(
+                state["lam_envelope"],
+                edgecolor="black",
+                facecolor="none",
+                crs=ccrs.PlateCarree(),
+            )
         fig.title(f"{param}, time: {validtime}")
 
         outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
