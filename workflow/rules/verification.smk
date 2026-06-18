@@ -23,8 +23,8 @@ rule verification_metrics_baseline:
         OUT_ROOT / "logs/verification_metrics_baseline/{baseline_id}-{init_time}.log",
     resources:
         cpus_per_task=24,
-        mem_mb=50_000,
-        runtime="60m",
+        mem_mb=80_000,
+        runtime="120m",
     params:
         baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
@@ -73,7 +73,7 @@ rule verification_metrics:
         OUT_ROOT / "logs/verification_metrics/{run_id}-{init_time}.log",
     resources:
         cpus_per_task=24,
-        mem_mb=50_000,
+        mem_mb=80_000,
         runtime="60m",
     # wildcard_constraints:
     # run_id="^" # to avoid ambiguitiy with run_baseline_verif

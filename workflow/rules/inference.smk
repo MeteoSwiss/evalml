@@ -19,14 +19,21 @@ rule inference_get_checkpoint:
         checkpoint_type=lambda wc: _checkpoint_uri_type(
             ENV_CONFIGS[wc.env_id]["checkpoint"]
         ),
+        checkpoint_is_registry=lambda wc: "/models/"
+        in ENV_CONFIGS[wc.env_id]["checkpoint"],
     shell:
         r"""
         (
             mkdir -p $(dirname {output.checkpoint})
             if [ "{params.checkpoint_type}" = "mlflow" ]; then
-                ln -s $(python workflow/scripts/inference_get_checkpoint_mlflow.py {params.checkpoint}) {output.checkpoint}
-                echo "Located checkpoint from MLFlow log."
-                echo "Created symlink: {output.checkpoint} -> $(readlink {output.checkpoint})"
+                if [ "{params.checkpoint_is_registry}" = "True" ]; then
+                    python workflow/scripts/inference_get_checkpoint_mlflow.py {params.checkpoint} --output {output.checkpoint}
+                    echo "Downloaded checkpoint from MLFlow model registry: {output.checkpoint}"
+                else
+                    ln -s $(python workflow/scripts/inference_get_checkpoint_mlflow.py {params.checkpoint}) {output.checkpoint}
+                    echo "Located checkpoint from MLFlow log."
+                    echo "Created symlink: {output.checkpoint} -> $(readlink {output.checkpoint})"
+                fi
             elif [ "{params.checkpoint_type}" = "huggingface" ]; then
                 repo_id=$(python -c "import re; print(re.search(r'huggingface\.co/([^/]+/[^/]+)', '{params.checkpoint}').group(1))")
                 file_path=$(python -c "import re; print(re.search(r'huggingface\.co/[^/]+/[^/]+/blob/[^/]+/(.*)', '{params.checkpoint}').group(1))")
@@ -99,7 +106,7 @@ rule inference_create_venv:
             uv pip install -r {input.requirements}
 
             echo "[$(date)] Compiling Python bytecode..."
-            python -m compileall -j 8 -o 0 -o 1 -o 2 .venv/lib/python*/site-packages
+            python -m compileall -j 8 -o 0 -o 1 -o 2 {output.venv}/lib/python*/site-packages
             echo "[$(date)] Testing that eccodes is working..."
             if ! python -c "import eccodes" &>/dev/null; then
                 echo "[$(date)] ERROR: eccodes is not installed correctly in the virtual environment."
