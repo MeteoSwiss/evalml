@@ -180,6 +180,12 @@ def _discover_icon_member_ids(
 
 
 def load_from_grib_file(file: str | list[str], sel_kwargs):
+    # Coerce Path objects to str: earthkit-data unwraps a single-element list
+    # into one File source without converting, and then fails on non-str paths.
+    if isinstance(file, (list, tuple)):
+        file = [str(f) for f in file]
+    else:
+        file = str(file)
     fieldlist = ekd.from_source("file", file, lazily=True).to_fieldlist()
     return fieldlist_to_xarray(fieldlist.sel(**sel_kwargs))
 
@@ -212,13 +218,40 @@ def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
     return ds
 
 
-def _tot_prec_handling(tp: xr.DataArray) -> xr.DataArray:
+def _tot_prec_handling(
+    tp: xr.DataArray, requested_steps: list[int] | None = None
+) -> xr.DataArray:
     _full_step_coord = tp["step"]  # step coordinate before .diff()
 
     # anemoi-inference sometimes omits step 0 from the GRIB even with
-    # accumulate_from_start_of_forecast enabled. If missing, earthkit-data
-    # will fill it with NaNs following the `allow_holes=True` flag.
-    if tp[{"step": 0}].isnull().all():
+    # accumulate_from_start_of_forecast enabled: the field may be absent from
+    # the step coordinate entirely, or present but NaN-filled by earthkit-data
+    # (allow_holes=True). With cumulative-from-start data the accumulation at
+    # the initial condition is identically zero, so synthesise it — but only
+    # when step 0 was actually requested (`requested_steps`); for window loads
+    # like [18, 24] the first step is real data and must not be treated as an
+    # initial condition.
+    if requested_steps is not None:
+        if 0 in requested_steps:
+            step0_idx = np.where(tp["step"].values == np.timedelta64(0, "ns"))[0]
+            if step0_idx.size == 0:
+                LOG.warning(
+                    "Step 0 of TOT_PREC is missing from the GRIB, prepending "
+                    "zeroes assuming accumulate_from_start_of_forecast is "
+                    "enabled."
+                )
+                zero = xr.zeros_like(tp.isel(step=[0]))
+                zero = zero.assign_coords(step=[np.timedelta64(0, "ns")])
+                tp = xr.concat([zero, tp], dim="step")
+            elif tp[{"step": int(step0_idx[0])}].isnull().all():
+                LOG.warning(
+                    "Step 0 of TOT_PREC is all-NaN, filling with zeroes "
+                    "assuming accumulate_from_start_of_forecast is enabled."
+                )
+                tp[{"step": int(step0_idx[0])}] = 0.0
+    elif tp[{"step": 0}].isnull().all():
+        # Legacy path for callers that do not pass the requested steps: treat
+        # the first loaded step positionally as the initial condition.
         LOG.warning(
             "Step 0 of TOT_PREC is missing, filling with zeroes "
             "assuming accumulate_from_start_of_forecast is enabled."
@@ -228,6 +261,12 @@ def _tot_prec_handling(tp: xr.DataArray) -> xr.DataArray:
     # Disaggregate TOT_PREC from cumulative-from-start (expected when the
     # accumulate_from_start_of_forecast post-processor is enabled in
     # anemoi-inference) to per-step accumulations.
+    if tp.sizes["step"] < 2:
+        raise ValueError(
+            "Cannot de-accumulate TOT_PREC: only a single step was loaded and "
+            "step 0 was not requested/synthesised, so no accumulation window "
+            "can be formed. Request the preceding step as well."
+        )
     LOG.info(
         "Disaggregating TOT_PREC from cumulative-from-start to per-step accumulations."
     )
@@ -254,12 +293,27 @@ def _tot_prec_handling(tp: xr.DataArray) -> xr.DataArray:
     return tp
 
 
-def load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
-    """Load forecast data from a list of GRIB files."""
+def load_forecast_data_from_grib(
+    files: list[Path], params: list[str], steps: list[int] | None = None
+) -> xr.Dataset:
+    """Load forecast data from a list of GRIB files (internal helper).
+
+    External callers should use :func:`load_forecast_data`, which derives
+    `files` from `steps` and routes by source. This helper is the shared
+    low-level loader for the ML-grib and ICON-archive paths.
+
+    `files` and `steps` are complementary, not redundant:
+    - `files` are the GRIB files that exist on disk (one per lead time).
+    - `steps` are the *requested* lead times, forwarded to the TOT_PREC
+      de-accumulation. They cannot be inferred from `files` alone: when step 0
+      is requested, anemoi-inference omits the TOT_PREC step-0 field entirely
+      (no file exists), so it is synthesised as zero to form the first
+      accumulation window. `steps` carries that intent.
+    """
     ds = load_from_grib_file(files, {"parameter.variable": params})
 
     if "TOT_PREC" in ds.data_vars:
-        ds["TOT_PREC"] = _tot_prec_handling(ds["TOT_PREC"])
+        ds["TOT_PREC"] = _tot_prec_handling(ds["TOT_PREC"], requested_steps=steps)
 
     return ds
 
@@ -713,6 +767,7 @@ def load_icon_baseline_from_grib(
                         root, reftime, steps, member_id=mid
                     ),
                     params=params,
+                    steps=steps,
                 )
                 if "number" in ds.dims:
                     ds = ds.isel(number=0, drop=True)
@@ -730,6 +785,7 @@ def load_icon_baseline_from_grib(
         return load_forecast_data_from_grib(
             files=_collect_icon_archive_files(root, reftime, steps, member_id=member),
             params=params,
+            steps=steps,
         )
 
 
@@ -751,6 +807,7 @@ def load_forecast_data(
             # NOTE: root is already for a specific reftime
             files=_collect_ml_grib_files(root, steps),
             params=params,
+            steps=steps,
         )
     if "INCA" in root.parts:
         LOG.info("Loading INCA baseline from NetCDF files...")
