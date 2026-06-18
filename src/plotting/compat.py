@@ -23,7 +23,19 @@ PARAMS_MAP_INV = {v: k for k, v in PARAMS_MAP.items()}
 def load_state_from_grib(
     file: Path, paramlist: list[str] | None = None
 ) -> dict[str, np.ndarray | dict[str, np.ndarray] | gpd.GeoSeries]:
-    ds = load_from_grib_file(file, {"parameter.variable": paramlist})
+    # Also request IFS shortname aliases so AIFS GRIB files (which use IFS names
+    # like "10u"/"10v" instead of "U_10M"/"V_10M") are matched correctly.
+    paramlist_extended = list(
+        {p for p in (paramlist or [])}
+        | {PARAMS_MAP[p] for p in (paramlist or []) if p in PARAMS_MAP}
+    )
+    ds = load_from_grib_file(file, {"parameter.variable": paramlist_extended})
+    # Rename any IFS shortnames back to COSMO names
+    ifs_rename = {
+        ifs: cosmo for ifs, cosmo in PARAMS_MAP_INV.items() if ifs in ds.data_vars
+    }
+    if ifs_rename:
+        ds = ds.rename(ifs_rename)
     state = {}
     ref_param = next((p for p in (paramlist or []) if p in ds), None)
     if ref_param is None:
@@ -38,11 +50,16 @@ def load_state_from_grib(
     state["valid_time"] = datetime.fromtimestamp(ds["valid_time"].values.item() / 1e9)
     state["longitudes"] = ds["longitude"].values.flatten()
     state["latitudes"] = ds["latitude"].values.flatten()
-    # Add the limited-area model envelope polygon (convex hull) before global coords are added
-    lam_hull = MultiPoint(
-        list(zip(state["longitudes"].tolist(), state["latitudes"].tolist()))
-    ).convex_hull
-    state["lam_envelope"] = gpd.GeoSeries([lam_hull], crs="EPSG:4326")
+    # Add the limited-area model envelope polygon (convex hull) before global coords are added.
+    # Skip for global grids (lon range ~360°) — the hull would cover the whole globe.
+    lon_range = state["longitudes"].max() - state["longitudes"].min()
+    if lon_range > 350:
+        state["lam_envelope"] = gpd.GeoSeries([], crs="EPSG:4326")
+    else:
+        lam_hull = MultiPoint(
+            list(zip(state["longitudes"].tolist(), state["latitudes"].tolist()))
+        ).convex_hull
+        state["lam_envelope"] = gpd.GeoSeries([lam_hull], crs="EPSG:4326")
     state["fields"] = {}
     for param in paramlist or []:
         if param in ds:
