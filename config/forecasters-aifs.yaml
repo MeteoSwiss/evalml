@@ -1,17 +1,18 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Evaluate skill of ECMWF AIFS-single-1.1 (global model, EA domain).
+  Evaluate skill of ECMWF AIFS-single-1.1.
 
 dates:
-  start: 2024-01-01T00:00
-  end: 2024-01-01T00:00
-  frequency: 24h
+  # start: 2025-01-01T00:00
+  # end: 2025-01-30T00:00
+  # frequency: 24h
+  - 2025-01-01T00:00
 
 runs:
   - forecaster:
       checkpoint: https://huggingface.co/ecmwf/aifs-single-1.1/resolve/main/aifs-single-mse-1.1.ckpt
       label: AIFS-single-1.1
-      steps: 0/240/6
+      steps: 0/120/6
       config: resources/inference/configs/aifs-single-forecaster.yaml
       extra_requirements:
         - torch-geometric==2.4.0
@@ -22,7 +23,18 @@ runs:
       inference_resources:
         slurm_partition: preemptible
         gpus: 1
-
+  - forecaster:
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
+      label: Varda-single-1.0
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+      steps: 0/120/6
+      inference_resources:
+        slurm_partition: preemptible
+        gpus: 1
+  - baseline:
+      label: ICON-CH2-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/6
 truth:
   label: KENDA-CH1
   root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
@@ -30,6 +42,7 @@ truth:
 experiment:
   params:
     - T_2M
+    - TD_2M
     - U_10M
     - V_10M
     - TOT_PREC
