@@ -277,6 +277,7 @@ DWH_PARAM_MAP = {
     "PMSL": "pp0qffs0",
     "TOT_PREC": "rre150h0",
     "FF_10M": "fkl010z0",
+    "SP_10M": "fkl010z0",
     "DD_10M": "dkl010z0",
     "VMAX_10M": "fkl010z1",
 }
