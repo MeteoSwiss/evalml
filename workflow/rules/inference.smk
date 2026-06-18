@@ -19,7 +19,8 @@ rule inference_get_checkpoint:
         checkpoint_type=lambda wc: _checkpoint_uri_type(
             ENV_CONFIGS[wc.env_id]["checkpoint"]
         ),
-        checkpoint_is_registry=lambda wc: "/models/" in ENV_CONFIGS[wc.env_id]["checkpoint"],
+        checkpoint_is_registry=lambda wc: "/models/"
+        in ENV_CONFIGS[wc.env_id]["checkpoint"],
     shell:
         r"""
         (

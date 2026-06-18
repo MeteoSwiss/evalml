@@ -49,17 +49,27 @@ def main(args):
             else:
                 versions = client.search_model_versions(f"name='{model_name}'")
                 if not versions:
-                    raise ValueError(f"No versions found for model '{model_name}' in the registry")
+                    raise ValueError(
+                        f"No versions found for model '{model_name}' in the registry"
+                    )
                 model_version = max(versions, key=lambda v: int(v.version))
-            LOG.info("Found model version: %s (run ID: %s)", model_version.version, model_version.run_id)
+            LOG.info(
+                "Found model version: %s (run ID: %s)",
+                model_version.version,
+                model_version.run_id,
+            )
             output_path = Path(args.output)
-            artifact_path = _find_artifact_path(client, model_version.run_id, CHECKPOINT_FILENAME)
+            artifact_path = _find_artifact_path(
+                client, model_version.run_id, CHECKPOINT_FILENAME
+            )
             if artifact_path is None:
                 raise FileNotFoundError(
                     f"Could not find '{CHECKPOINT_FILENAME}' in MLflow artifacts for run {model_version.run_id}"
                 )
             local_path = Path(
-                client.download_artifacts(model_version.run_id, artifact_path, str(output_path.parent))
+                client.download_artifacts(
+                    model_version.run_id, artifact_path, str(output_path.parent)
+                )
             )
             if local_path != output_path:
                 shutil.move(str(local_path), str(output_path))
@@ -80,10 +90,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Get local checkpoint location.")
-    parser.add_argument("run_uri",
-        type=str,
-        help="MLFlow run URI"
-    )
+    parser.add_argument("run_uri", type=str, help="MLFlow run URI")
     parser.add_argument(
         "--output",
         type=str,
