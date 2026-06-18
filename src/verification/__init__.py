@@ -21,6 +21,39 @@ from shapely.geometry import Polygon
 
 LOG = logging.getLogger(__name__)
 
+_T_LAPSE_RATE = 0.0065  # K/m — ICAO standard atmosphere
+_LAPSE_RATE_PARAMS: dict[str, float] = {"T_2M": _T_LAPSE_RATE}
+
+
+def apply_lapse_rate_correction(
+    fcst: xr.Dataset,
+    obs: xr.Dataset,
+    params: list[str],
+) -> xr.Dataset:
+    """Correct T_2M and TD_2M in *fcst* to the elevation of *obs*.
+
+    Requires *fcst* to carry a ``model_elevation`` coordinate (metres, from the
+    ICON external parameter file) and *obs* to carry an ``elevation`` coordinate
+    (metres, from station metadata or FIS geopotential).  The function silently
+    returns *fcst* unchanged when either coordinate is absent so that pipelines
+    without elevation data are not broken.
+
+    Formula applied per parameter:
+        T_corrected = T_forecast − Γ × (elevation_obs − model_elevation_fcst)
+
+    A positive height difference (obs higher than forecast grid cell) lowers the
+    corrected value, consistent with the standard atmospheric lapse rate.
+    """
+    if "model_elevation" not in fcst.coords or "elevation" not in obs.coords:
+        LOG.debug("Skipping lapse-rate correction: elevation coordinates missing.")
+        return fcst
+    dz = obs["elevation"] - fcst["model_elevation"]
+    fcst = fcst.copy()
+    for param, rate in _LAPSE_RATE_PARAMS.items():
+        if param in params and param in fcst.data_vars:
+            fcst[param] = fcst[param] - rate * dz
+    return fcst
+
 
 class AggregationMasks(abc.ABC):
     @abc.abstractmethod
