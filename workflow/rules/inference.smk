@@ -99,7 +99,7 @@ rule inference_create_venv:
             uv pip install -r {input.requirements}
 
             echo "[$(date)] Compiling Python bytecode..."
-            python -m compileall -j 8 -o 0 -o 1 -o 2 .venv/lib/python*/site-packages
+            python -m compileall -j 8 -o 0 -o 1 -o 2 {output.venv}/lib/python*/site-packages
             echo "[$(date)] Testing that eccodes is working..."
             if ! python -c "import eccodes" &>/dev/null; then
                 echo "[$(date)] ERROR: eccodes is not installed correctly in the virtual environment."
