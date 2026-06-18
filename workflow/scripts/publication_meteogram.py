@@ -138,7 +138,10 @@ def _(
         _abs(peakweather), init_time, obs_steps, base_params
     )
     obs_station = add_derived(obs.sel(values=[station]), display_params)
-    station_target = obs.sel(values=[station])[[]]  # coords (lat/lon) only
+    # Mapping target: keep lat/lon coords, drop only the data variables
+    # (obs[[]] would also strip the non-dimension lat/lon coords).
+    _sel = obs.sel(values=[station])
+    station_target = _sel.drop_vars(list(_sel.data_vars))
 
     frames = [station_timeseries_to_long(obs_station, OBS_LABEL, display_params)]
 
