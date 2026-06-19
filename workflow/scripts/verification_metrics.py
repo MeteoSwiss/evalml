@@ -71,10 +71,21 @@ def main(args: ScriptConfig):
     )
 
     # align forecast and truth data spatially and temporally
+    now = datetime.now()
     fcst = map_forecast_to_truth(fcst, truth)
+    # map_forecast_to_truth uses fancy indexing which collapses the spatial
+    # dimension into one monolithic dask chunk; rechunk by step so that
+    # verify() can parallelise over time steps rather than materialising the
+    # full (regions × steps × values) array at once.
+    fcst = fcst.chunk({"step": 1})
     truth = truth.sel(time=fcst["valid_time"])
+    LOG.info(
+        "Aligned forecast and truth in %s seconds",
+        (datetime.now() - now).total_seconds(),
+    )
 
     # compute metrics and statistics
+    now = datetime.now()
     results = verify(
         fcst,
         truth,
@@ -83,11 +94,20 @@ def main(args: ScriptConfig):
         args.regions,
         threshold_dict=args.threshold_dict,
     )
+    LOG.info(
+        "Computed verification metrics in %s seconds",
+        (datetime.now() - now).total_seconds(),
+    )
 
     # save results to NetCDF
+    now = datetime.now()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     results.earthkit.to_netcdf(args.output)
-    LOG.info("Saved verification results to %s", args.output)
+    LOG.info(
+        "Saved verification results to %s in %s seconds",
+        args.output,
+        (datetime.now() - now).total_seconds(),
+    )
 
     LOG.info("Program completed successfully.")
 
