@@ -57,7 +57,7 @@ def _(mo, sys):
         forecast = _cli.get("forecast", default=_FORECAST_DEFAULT)
         forecast_steps = _cli.get("forecast_steps", default="0/120/1")
         forecast_label = _cli.get("forecast_label", default="Varda-Single")
-        baselines_raw = _cli.get("baselines", default=_BASELINES_DEFAULT)
+        baselines_raw = _cli.get("baseline", default=_BASELINES_DEFAULT)
         peakweather = _cli.get("peakweather", default=_PW_DEFAULT)
         date = _cli.get("date", default="202504010000")
         station = _cli.get("station", default="KLO")
@@ -172,14 +172,15 @@ def _(
 @app.cell
 def _(OBS_LABEL, Path, df, display_params, init_time, mo, output_dir, source_order, station):
     import matplotlib.pyplot as plt
+    import matplotlib.ticker as mticker
 
     _UNITS = {"T_2M": "K", "TOT_PREC": "mm", "SP_10M": "m/s", "DD_10M": "deg"}
-    _FS_axes = 8
-    _FS_title = 12
+    _FS_axes = 13
+    _FS_title = 16
 
     def _line_style(src):
         if src == OBS_LABEL:
-            return dict(color="black", linestyle="none", marker="o", markersize=3)
+            return dict(color="red", linestyle="none", marker="o", markersize=3)
         color = (
             "royalblue" if "CH1" in src else
             "seagreen" if "CH2" in src else
@@ -204,17 +205,32 @@ def _(OBS_LABEL, Path, df, display_params, init_time, mo, output_dir, source_ord
             _g = _sub[_sub["source"] == _src].sort_values("valid_time")
             if _g.empty:
                 continue
-            _ax.plot(_g["valid_time"], _g["value"], label=_src, **_line_style(_src))
+            _style = _line_style(_src)
+            # Wind direction is circular: draw as markers (no lines) so the
+            # 0<->360 wraparound doesn't create spurious vertical segments.
+            if _p == "DD_10M" and _src != OBS_LABEL:
+                _style = {**_style, "linestyle": "none", "marker": ".", "markersize": 5}
+            _lead = (_g["valid_time"] - init_time).dt.total_seconds() / 3600.0
+            _ax.plot(_lead, _g["value"], label=_src, **_style)
         _ax.set_ylabel(_UNITS.get(_p, _p), fontsize=_FS_title)
         _ax.tick_params(labelsize=_FS_axes)
         _ax.text(0.01, 0.97, _p, transform=_ax.transAxes,
                  ha="left", va="top", fontsize=_FS_axes)
+        if _p == "DD_10M":
+            _ax.set_ylim(0, 360)
+            _ax.set_yticks([0, 90, 180, 270, 360])
+        # Lead-time x-axis (hours since init): major every 24 h, minor every 6 h
+        _ax.xaxis.set_major_locator(mticker.MultipleLocator(24))
+        _ax.xaxis.set_minor_locator(mticker.MultipleLocator(6))
+        _ax.grid(True, axis="x", which="major", color="0.6", linewidth=0.8, linestyle="--")
+        _ax.grid(True, axis="x", which="minor", color="0.8", linewidth=0.6, linestyle=":")
 
-    _axes[-1].set_xlabel("Valid time", fontsize=_FS_axes)
+    _axes[-1].set_xlabel("Lead time (h)", fontsize=_FS_axes)
+    _axes[0].set_xlim(left=0)
     _handles, _labels = _axes[0].get_legend_handles_labels()
     _fig.legend(_handles, _labels, loc="lower center", ncol=len(source_order),
                 fontsize=_FS_title, frameon=False, bbox_to_anchor=(0.5, 0.0))
-    _fig.suptitle(f"{station} — init {init_time:%Y-%m-%d %H:%M}", fontsize=_FS_title)
+    _fig.suptitle(f"{station} — Init time {init_time:%Y-%m-%d %H:%M}", fontsize=_FS_title)
     _fig.tight_layout(rect=[0, 0.05, 1, 0.99])
 
     _out = Path(output_dir)

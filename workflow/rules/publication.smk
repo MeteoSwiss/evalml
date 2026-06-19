@@ -57,7 +57,11 @@ rule publication_meteogram:
         ),
     log:
         OUT_ROOT / "logs/figures/publication_meteogram.log",
-    localrule: True
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=8,
+        mem_mb=32000,
+        runtime="60m",
     params:
         grib=_meteogram_candidate_grib,
         forecast_steps=lambda wc: RUN_CONFIGS[list(CANDIDATES.keys())[0]]["steps"],
