@@ -19,4 +19,4 @@ output:
     templates:
       samples: resources/templates_index_global-ea.yaml
 
-write_initial_state: false
+write_initial_state: true
