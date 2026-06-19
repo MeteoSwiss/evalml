@@ -109,6 +109,8 @@ def _(Path, df_all, mo, output_dir, sources):
     import matplotlib.ticker as mticker
     import numpy as np
 
+    from publication_style import line_style, param_label, FS_AXES, FS_TITLE
+
     _PARAMS = ["T_2M", "TOT_PREC", "U_10M"]
     _METRICS = ["BIAS", "RMSE"]
     # ETS panels: TOT_PREC > 0, TOT_PREC > 5.0, U_10M at largest threshold
@@ -133,24 +135,11 @@ def _(Path, df_all, mo, output_dir, sources):
         sharex=True,
     )
 
-    def _line_style(src):
-        color = (
-            "royalblue"     if "CH1" in src else
-            "seagreen"      if "CH2" in src else
-            "darkslategrey" if "Varda" in src else
-            "gray"
-        )
-        linestyle = "--" if "EPS mean" in src else "-"
-        linewidth = 2.25 if "Varda" in src else 1.5
-        return dict(color=color, linestyle=linestyle, linewidth=linewidth)
-
     _xscale_kw = dict(functions=(
         lambda x: np.sign(x) * np.abs(x) ** 0.7,
         lambda x: np.sign(x) * np.abs(x) ** (1 / 0.7),
     ))
     _xticks = mticker.FixedLocator([0, 3, 6, 12, 24, 36, 48, 72, 96, 120])
-    _FS_axes = 8   # unified font size for all axis labels and tick labels
-    _FS_title = 12 # unified font size for axis titles and legends
 
     # Rows 0…N-1: one panel per (metric, param)
     for _row, _metric in enumerate(_METRICS):
@@ -161,14 +150,14 @@ def _(Path, df_all, mo, output_dir, sources):
                 _grp = _data[_data["source"] == _src].sort_values("step")
                 if _grp.empty:
                     continue
-                _ax.plot(_grp["step"], _grp["value"], label=_src, **_line_style(_src))
+                _ax.plot(_grp["step"], _grp["value"], label=_src, **line_style(_src))
             _ax.set_xscale("function", **_xscale_kw)
             _ax.xaxis.set_major_locator(_xticks)
-            _ax.tick_params(labelsize=_FS_axes)
+            _ax.tick_params(labelsize=FS_AXES)
             if _row == 0:
-                _ax.set_title(_param, fontsize=_FS_title)
+                _ax.set_title(param_label(_param), fontsize=FS_TITLE)
             if _col == 0:
-                _ax.set_ylabel(_metric, fontsize=_FS_title)
+                _ax.set_ylabel(_metric, fontsize=FS_TITLE)
 
     # Last row: three specific ETS panels
     _ets_row = len(_METRICS)
@@ -182,22 +171,22 @@ def _(Path, df_all, mo, output_dir, sources):
             _grp = _data[_data["source"] == _src].sort_values("step")
             if _grp.empty:
                 continue
-            _ax.plot(_grp["step"], _grp["value"], label=_src, **_line_style(_src))
+            _ax.plot(_grp["step"], _grp["value"], label=_src, **line_style(_src))
         _ax.set_xscale("function", **_xscale_kw)
         _ax.xaxis.set_major_locator(_xticks)
-        _ax.tick_params(labelsize=_FS_axes)
-        _panel_label = _ets_metric.replace("ETS", _ets_param) + f" {_ets_unit}"
+        _ax.tick_params(labelsize=FS_AXES)
+        _panel_label = _ets_metric.replace("ETS", param_label(_ets_param)) + f" {_ets_unit}"
         _ax.text(0.97, 0.97, _panel_label, transform=_ax.transAxes,
-                 ha="right", va="top", fontsize=_FS_axes)
-        _ax.set_xlabel("Lead time (h)", fontsize=_FS_axes)
+                 ha="right", va="top", fontsize=FS_AXES)
+        _ax.set_xlabel("Lead time (h)", fontsize=FS_AXES)
         if _col == 0:
-            _ax.set_ylabel("ETS", fontsize=_FS_title)
+            _ax.set_ylabel("ETS", fontsize=FS_TITLE)
 
     _axes[0, 0].set_xlim(-1, 126)
 
     _handles, _labels = _axes[0, 0].get_legend_handles_labels()
     _fig.legend(_handles, _labels, loc="lower center", ncol=len(sources),
-                fontsize=_FS_title, frameon=False, bbox_to_anchor=(0.5, 0.06))
+                fontsize=FS_TITLE, frameon=False, bbox_to_anchor=(0.5, 0.06))
     _fig.tight_layout()
     _fig.subplots_adjust(bottom=0.22)
 
@@ -207,33 +196,41 @@ def _(Path, df_all, mo, output_dir, sources):
         _pos = _axes[_ets_row, _c].get_position()
         _axes[_ets_row, _c].set_position([_pos.x0, _pos.y0 - _extra_gap, _pos.width, _pos.height])
 
-    # Light-grey background encompassing the four TOT_PREC panels and their labels.
-    # Axes keep a white background; the grey appears only in the margins around them.
-    _PREC_BG   = "#f0f0f0"
-    _pad_left  = 0.040  # horizontal padding beyond axes left edges
-    _pad_bleft = 0.025  # horizontal padding beyond axes for lower left
-    _pad_right = 0.010  # horizontal padding beyond axes right edges
-    _pad_top   = 0.040  # above row-0 axes to capture the column title
-    _pad_bot   = 0.050  # below ETS row to capture the x-axis label
-    _pad_mid   = 0.010
+    # Light-grey background behind the TOT_PREC panels (incl. their titles/labels).
+    # Derived from the axes' *tight* bounding boxes so it stays aligned at any
+    # font size. Two overlapping rectangles form the stepped shape: a narrow one
+    # over the TOT_PREC metric column (col 1) and a wider one under the two
+    # TOT_PREC ETS panels (cols 0-1). Axes keep white faces, so grey shows only
+    # in the margins around them.
+    from matplotlib.patches import Rectangle as _Rect
 
-    from matplotlib.patches import Polygon as _MplPolygon
-    _m0_pos = _axes[0, 1].get_position()                    # top of metric col 1
-    _m_pos  = _axes[len(_METRICS) - 1, 1].get_position()    # bottom of metric col 1
-    _e0_pos = _axes[_ets_row, 0].get_position()             # ETS col 0
-    _e1_pos = _axes[_ets_row, 1].get_position()             # ETS col 1
-    _trap = _MplPolygon([
-        (_m0_pos.x0 - _pad_left, _m0_pos.y1 + _pad_top),    # top-left (above col-1, row-0)
-        (_m0_pos.x1 + _pad_right, _m0_pos.y1 + _pad_top),   # top-right
-        (_m_pos.x1  + _pad_right, _m_pos.y0),               # bottom-right of metric area
-        (_e1_pos.x1 + _pad_right, _e0_pos.y1 - _pad_mid),   # top-right of ETS area
-        (_e1_pos.x1 + _pad_right, _e0_pos.y0 - _pad_bot),   # bottom-right (incl. x-label)
-        (_e0_pos.x0 - _pad_bleft, _e0_pos.y0 - _pad_bot),   # bottom-left
-        (_e0_pos.x0 - _pad_bleft, _e0_pos.y1 + _pad_mid),   # top-left of ETS area
-        (_m_pos.x0  - _pad_left, _m_pos.y0),                # bottom-left of metric area
-    ], closed=True, facecolor=_PREC_BG, edgecolor="none", zorder=-1)
-    _trap.set_transform(_fig.transFigure)
-    _fig.add_artist(_trap)
+    _PREC_BG = "#f0f0f0"
+    _pad = 0.008
+
+    _fig.canvas.draw()  # ensure renderer + final positions for tight bboxes
+    _rend = _fig.canvas.get_renderer()
+    _inv = _fig.transFigure.inverted()
+
+    def _union_bbox(_axs):
+        _pts = [_inv.transform(_a.get_tightbbox(_rend).get_points()) for _a in _axs]
+        return (
+            min(_p[0][0] for _p in _pts), min(_p[0][1] for _p in _pts),
+            max(_p[1][0] for _p in _pts), max(_p[1][1] for _p in _pts),
+        )
+
+    _ux0, _uy0, _ux1, _uy1 = _union_bbox([_axes[_r, 1] for _r in range(len(_METRICS))])
+    _lx0, _ly0, _lx1, _ly1 = _union_bbox([_axes[_ets_row, 0], _axes[_ets_row, 1]])
+    _mid = (_uy0 + _ly1) / 2  # split point in the gap between metric and ETS blocks
+    for _x0, _y0, _x1, _y1 in [
+        (_ux0, _mid, _ux1, _uy1),   # upper block (col 1)
+        (_lx0, _ly0, _lx1, _mid),   # lower block (cols 0-1), overlaps at _mid
+    ]:
+        _fig.add_artist(_Rect(
+            (_x0 - _pad, _y0 - _pad),
+            (_x1 - _x0) + 2 * _pad, (_y1 - _y0) + 2 * _pad,
+            facecolor=_PREC_BG, edgecolor="none", zorder=-1,
+            transform=_fig.transFigure,
+        ))
 
     _fname = _out / "publication_figures_leadtime.pdf"
     _fig.savefig(_fname, bbox_inches="tight")

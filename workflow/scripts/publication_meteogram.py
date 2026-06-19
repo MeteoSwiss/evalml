@@ -123,7 +123,7 @@ def _(
 
     import pandas as pd
 
-    OBS_LABEL = "Observations"
+    from publication_style import OBS_LABEL
 
     def _abs(p):
         p = Path(p)
@@ -174,22 +174,9 @@ def _(OBS_LABEL, Path, df, display_params, init_time, mo, output_dir, source_ord
     import matplotlib.pyplot as plt
     import matplotlib.ticker as mticker
 
-    _UNITS = {"T_2M": "K", "TOT_PREC": "mm", "SP_10M": "m/s", "DD_10M": "deg"}
-    _FS_axes = 13
-    _FS_title = 16
+    from publication_style import line_style, param_label, FS_AXES, FS_TITLE
 
-    def _line_style(src):
-        if src == OBS_LABEL:
-            return dict(color="red", linestyle="none", marker="o", markersize=3)
-        color = (
-            "royalblue" if "CH1" in src else
-            "seagreen" if "CH2" in src else
-            "darkslategrey" if "Varda" in src else
-            "gray"
-        )
-        linestyle = "--" if "EPS mean" in src else "-"
-        linewidth = 2.25 if "Varda" in src else 1.5
-        return dict(color=color, linestyle=linestyle, linewidth=linewidth)
+    _UNITS = {"T_2M": "K", "TOT_PREC": "mm", "SP_10M": "m/s", "DD_10M": "deg"}
 
     _fig, _axes = plt.subplots(
         len(display_params), 1,
@@ -205,17 +192,17 @@ def _(OBS_LABEL, Path, df, display_params, init_time, mo, output_dir, source_ord
             _g = _sub[_sub["source"] == _src].sort_values("valid_time")
             if _g.empty:
                 continue
-            _style = _line_style(_src)
+            _style = line_style(_src)
             # Wind direction is circular: draw as markers (no lines) so the
             # 0<->360 wraparound doesn't create spurious vertical segments.
             if _p == "DD_10M" and _src != OBS_LABEL:
                 _style = {**_style, "linestyle": "none", "marker": ".", "markersize": 5}
             _lead = (_g["valid_time"] - init_time).dt.total_seconds() / 3600.0
             _ax.plot(_lead, _g["value"], label=_src, **_style)
-        _ax.set_ylabel(_UNITS.get(_p, _p), fontsize=_FS_title)
-        _ax.tick_params(labelsize=_FS_axes)
-        _ax.text(0.01, 0.97, _p, transform=_ax.transAxes,
-                 ha="left", va="top", fontsize=_FS_axes)
+        _ax.set_ylabel(_UNITS.get(_p, _p), fontsize=FS_TITLE)
+        _ax.tick_params(labelsize=FS_AXES)
+        _ax.text(0.01, 0.97, param_label(_p), transform=_ax.transAxes,
+                 ha="left", va="top", fontsize=FS_AXES)
         if _p == "DD_10M":
             _ax.set_ylim(0, 360)
             _ax.set_yticks([0, 90, 180, 270, 360])
@@ -225,12 +212,12 @@ def _(OBS_LABEL, Path, df, display_params, init_time, mo, output_dir, source_ord
         _ax.grid(True, axis="x", which="major", color="0.6", linewidth=0.8, linestyle="--")
         _ax.grid(True, axis="x", which="minor", color="0.8", linewidth=0.6, linestyle=":")
 
-    _axes[-1].set_xlabel("Lead time (h)", fontsize=_FS_axes)
+    _axes[-1].set_xlabel("Lead time (h)", fontsize=FS_AXES)
     _axes[0].set_xlim(left=0)
     _handles, _labels = _axes[0].get_legend_handles_labels()
     _fig.legend(_handles, _labels, loc="lower center", ncol=len(source_order),
-                fontsize=_FS_title, frameon=False, bbox_to_anchor=(0.5, 0.0))
-    _fig.suptitle(f"{station} — Init time {init_time:%Y-%m-%d %H:%M}", fontsize=_FS_title)
+                fontsize=FS_TITLE, frameon=False, bbox_to_anchor=(0.5, 0.0))
+    _fig.suptitle(f"{station} — Init time {init_time:%Y-%m-%d %H:%M}", fontsize=FS_TITLE)
     _fig.tight_layout(rect=[0, 0.05, 1, 0.99])
 
     _out = Path(output_dir)
