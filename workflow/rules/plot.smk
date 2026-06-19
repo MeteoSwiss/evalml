@@ -49,6 +49,20 @@ rule plot_meteogram:
         ).resolve(),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id]["label"],
+        forecaster_support=lambda wc: (
+            str(
+                (
+                    Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/forecaster"
+                ).resolve()
+            )
+            if config["showcase"]["meteograms"].get("forecaster_support", False)
+            and RUN_CONFIGS[wc.run_id].get("forecaster")
+            else ""
+        ),
+        forecaster_support_label=lambda wc: (
+            (RUN_CONFIGS[wc.run_id].get("forecaster") or {}).get("label")
+            or "forecaster support"
+        ),
         baseline_roots=lambda wc: [x["root"] for x in _get_available_baselines(wc)],
         baseline_steps=lambda wc: [x["steps"] for x in _get_available_baselines(wc)],
         baseline_labels=lambda wc: [x["label"] for x in _get_available_baselines(wc)],
@@ -85,6 +99,12 @@ rule plot_meteogram:
             CMD_ARGS+=(--baseline_steps "${{BASELINE_STEPS[$i]}}")
             CMD_ARGS+=(--baseline_label "${{BASELINE_LABELS[$i]}}")
         done
+
+        FORECASTER_SUPPORT={params.forecaster_support:q}
+        if [ -n "$FORECASTER_SUPPORT" ]; then
+            CMD_ARGS+=(--forecaster_support "$FORECASTER_SUPPORT")
+            CMD_ARGS+=(--forecaster_support_label {params.forecaster_support_label:q})
+        fi
 
         python {input.script} "${{CMD_ARGS[@]}}" >{log} 2>&1
         """

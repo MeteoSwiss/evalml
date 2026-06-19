@@ -562,6 +562,12 @@
           },
           "title": "Stations",
           "type": "array"
+        },
+        "forecaster_support": {
+          "default": false,
+          "description": "Whether to overlay the forecaster support points as dots.",
+          "title": "Forecaster Support",
+          "type": "boolean"
         }
       },
       "title": "MeteogramConfig",
