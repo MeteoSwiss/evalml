@@ -131,6 +131,9 @@ onerror:
 # -----------------------------------------------------
 
 
+SCOREMAPS_CONFIGS = config.get("experiment", {}).get("scoremaps") or {}
+
+
 rule experiment_all:
     """Target rule for experiment workflow."""
     input:
@@ -157,6 +160,36 @@ rule experiment_all:
             if (config.get("experiment", {}).get("scorecards") or {}).get(
                 "enabled", True
             )
+            else []
+        ),
+        (
+            expand(
+                rules.plot_scoremaps.output,
+                run_id=list(CANDIDATES),
+                param=SCOREMAPS_CONFIGS["params"],
+                leadtime=SCOREMAPS_CONFIGS["leadtimes"],
+                score=SCOREMAPS_CONFIGS["scores"],
+                region=SCOREMAPS_CONFIGS["regions"],
+                season=SCOREMAPS_CONFIGS["seasons"],
+                init_hour=SCOREMAPS_CONFIGS["init_hours"],
+                experiment=EXPERIMENT_NAME,
+            )
+            if SCOREMAPS_CONFIGS.get("enabled", False)
+            else []
+        ),
+        (
+            expand(
+                rules.plot_scoremaps_baseline.output,
+                baseline_id=list(BASELINES),
+                param=SCOREMAPS_CONFIGS["params"],
+                leadtime=SCOREMAPS_CONFIGS["leadtimes"],
+                score=SCOREMAPS_CONFIGS["scores"],
+                region=SCOREMAPS_CONFIGS["regions"],
+                season=SCOREMAPS_CONFIGS["seasons"],
+                init_hour=SCOREMAPS_CONFIGS["init_hours"],
+                experiment=EXPERIMENT_NAME,
+            )
+            if SCOREMAPS_CONFIGS.get("enabled", False)
             else []
         ),
 
