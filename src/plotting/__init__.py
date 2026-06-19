@@ -39,7 +39,7 @@ DOMAINS = {
         "projection": _PROJECTIONS["orthographic"],
     },
     "centraleurope": {
-        "extent": [-2.6, 19.5, 40.2, 52.3],
+        "extent": [-1.5, 18, 41.5, 51],
         "projection": _PROJECTIONS["orthographic"],
     },
     "icon-ch": {

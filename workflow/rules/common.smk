@@ -145,6 +145,12 @@ def model_id(checkpoint_uri: str) -> str:
     """Generate a model ID based on the checkpoint URI."""
     ckpt_type = _checkpoint_uri_type(checkpoint_uri)
     if ckpt_type == "mlflow":
+        fragment = checkpoint_uri.split("#")[-1]
+        if "/models/" in fragment:
+            parts = fragment.strip("/").split("/")
+            if len(parts) >= 4 and parts[2] == "versions":
+                return f"{parts[1]}-v{parts[3]}"[:HASH_LENGTH]
+            return f"{parts[1]}-latest"[:HASH_LENGTH]
         return checkpoint_uri.split("/")[-1][:HASH_LENGTH]
     elif ckpt_type == "huggingface":
         return checkpoint_uri.split("/")[-1].split(".")[0]
@@ -367,3 +373,39 @@ _scorecard = config.get("experiment", {}).get("scorecards") or {}
 SCORECARD_CONFIGS = (
     _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
 )
+
+
+# Period-accumulated params verify a [lead - period, lead] window, so they have
+# no value at lead times shorter than one step spacing (e.g. no 0h precip map).
+# Short and canonical names both appear across the workflow (showcases vs maps).
+ACCUMULATED_PARAMS = {"TOT_PREC", "tp"}
+
+
+def resolve_leadtimes(steps_spec, requested="all", param=None):
+    """Lead times to compute for a single participant.
+
+    A run or baseline produces only the lead times in its own ``steps`` spec
+    (``start/stop/step``, hours). This returns those of the ``requested``
+    selection that the participant actually produces — the literal ``"all"``
+    (every produced lead time) or an explicit list of ints — so a 36h lead is
+    never requested of an ICON-CH1 baseline (steps ``0/33/6``), nor a >120h
+    lead of ICON-CH2. Explicitly requested lead times the participant cannot
+    produce are skipped with a warning. For accumulated ``param``s, lead times
+    shorter than one step spacing are dropped (no accumulation window).
+    """
+    start, end, step = map(int, steps_spec.split("/"))
+    supported = set(range(start, end + 1, step))
+    wanted = supported if requested == "all" else set(requested)
+
+    unsupported = sorted(wanted - supported)
+    if unsupported:
+        logging.getLogger("snakemake").warning(
+            "Skipping lead time(s) %sh: not produced by forecast steps '%s'.",
+            unsupported,
+            steps_spec,
+        )
+
+    valid = wanted & supported
+    if param in ACCUMULATED_PARAMS:
+        valid = {lt for lt in valid if lt >= step}
+    return sorted(valid)

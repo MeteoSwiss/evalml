@@ -132,12 +132,9 @@ rule plot_forecast_frame:
 
 
 def get_leadtimes(wc):
-    """Get all lead times from the run config."""
-    start, end, step = map(int, RUN_CONFIGS[wc.run_id]["steps"].split("/"))
-    # skip lead time 0 for diagnostic variables
-    if wc.param in ["tp", "TOT_PREC"] and start == 0:
-        start += step
-    return [f"{i}" for i in range(start, end + 1, step)]
+    """Get all lead times the run produces (accumulated params skip lead 0)."""
+    leadtimes = resolve_leadtimes(RUN_CONFIGS[wc.run_id]["steps"], param=wc.param)
+    return [str(lt) for lt in leadtimes]
 
 
 rule make_forecast_animation:
@@ -165,3 +162,50 @@ rule make_forecast_animation:
         FRAMES=$(for f in {input}; do [ -s "$f" ] && echo "$f"; done | tr '\\n' ' ')
         convert -delay {params.delay} -loop 0 $FRAMES {output}
         """
+
+
+rule plot_scoremaps:
+    # localrule: True
+    input:
+        script="workflow/scripts/plot_scoremaps.mo.py",
+        verif_file=OUT_ROOT
+        / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
+    output:
+        OUT_ROOT
+        / "results/{experiment}/scoremaps/runs/{run_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",
+    log:
+        OUT_ROOT
+        / "logs/plot_scoremaps/{experiment}/{run_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",
+    wildcard_constraints:
+        leadtime=r"\d+",  # only digits
+        init_hour=r"all|\d{1,2}",
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=1,
+        runtime="10m",
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run python {input.script} \
+            --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
+            --param {wildcards.param} --leadtime {wildcards.leadtime} --score {wildcards.score} \
+            --season {wildcards.season} --init_hour {wildcards.init_hour} >{log} 2>&1
+        # interactive editing (needs to set localrule: True and use only one core)
+        # marimo edit {input.script} -- \
+        #     --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
+        #     --param {wildcards.param} --leadtime {wildcards.leadtime} --score {wildcards.score} \
+        #     --season {wildcards.season} --init_hour {wildcards.init_hour}
+        """
+
+
+use rule plot_scoremaps as plot_scoremaps_baseline with:
+    input:
+        script="workflow/scripts/plot_scoremaps.mo.py",
+        verif_file=OUT_ROOT
+        / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
+    output:
+        OUT_ROOT
+        / "results/{experiment}/scoremaps/baselines/{baseline_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",
+    log:
+        OUT_ROOT
+        / "logs/plot_scoremaps/{experiment}/{baseline_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",
