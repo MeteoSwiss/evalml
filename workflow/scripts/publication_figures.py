@@ -165,6 +165,8 @@ def _(Path, df_all, mo, output_dir, sources):
             _ax.set_xscale("function", **_xscale_kw)
             _ax.xaxis.set_major_locator(_xticks)
             _ax.tick_params(labelsize=_FS_axes)
+            if _metric == "BIAS":
+                _ax.axhline(0, color="black", linestyle="dashed", linewidth=0.7, zorder=0)
             if _row == 0:
                 _ax.set_title(_param, fontsize=_FS_title)
             if _col == 0:
@@ -199,13 +201,13 @@ def _(Path, df_all, mo, output_dir, sources):
     _fig.legend(_handles, _labels, loc="lower center", ncol=len(sources),
                 fontsize=_FS_title, frameon=False, bbox_to_anchor=(0.5, 0.06))
     _fig.tight_layout()
-    _fig.subplots_adjust(bottom=0.22)
+    _fig.subplots_adjust(bottom=0.18)
 
     # Extra gap between last metric row and ETS row
-    _extra_gap = 0.04
-    for _c in range(len(_PARAMS)):
-        _pos = _axes[_ets_row, _c].get_position()
-        _axes[_ets_row, _c].set_position([_pos.x0, _pos.y0 - _extra_gap, _pos.width, _pos.height])
+    # _extra_gap = 0.04
+    # for _c in range(len(_PARAMS)):
+    #     _pos = _axes[_ets_row, _c].get_position()
+    #     _axes[_ets_row, _c].set_position([_pos.x0, _pos.y0 - _extra_gap, _pos.width, _pos.height])
 
     # Light-grey background encompassing the four TOT_PREC panels and their labels.
     # Axes keep a white background; the grey appears only in the margins around them.
@@ -215,22 +217,23 @@ def _(Path, df_all, mo, output_dir, sources):
     _pad_right = 0.010  # horizontal padding beyond axes right edges
     _pad_top   = 0.040  # above row-0 axes to capture the column title
     _pad_bot   = 0.050  # below ETS row to capture the x-axis label
-    _pad_mid   = 0.010
+
 
     from matplotlib.patches import Polygon as _MplPolygon
     _m0_pos = _axes[0, 1].get_position()                    # top of metric col 1
     _m_pos  = _axes[len(_METRICS) - 1, 1].get_position()    # bottom of metric col 1
     _e0_pos = _axes[_ets_row, 0].get_position()             # ETS col 0
     _e1_pos = _axes[_ets_row, 1].get_position()             # ETS col 1
+    _pad_mid = (_m_pos.y0 - _e0_pos.y1) / 2
     _trap = _MplPolygon([
         (_m0_pos.x0 - _pad_left, _m0_pos.y1 + _pad_top),    # top-left (above col-1, row-0)
         (_m0_pos.x1 + _pad_right, _m0_pos.y1 + _pad_top),   # top-right
         (_m_pos.x1  + _pad_right, _m_pos.y0),               # bottom-right of metric area
-        (_e1_pos.x1 + _pad_right, _e0_pos.y1 - _pad_mid),   # top-right of ETS area
+        (_e1_pos.x1 + _pad_right, _e0_pos.y1),              # top-right of ETS area
         (_e1_pos.x1 + _pad_right, _e0_pos.y0 - _pad_bot),   # bottom-right (incl. x-label)
         (_e0_pos.x0 - _pad_bleft, _e0_pos.y0 - _pad_bot),   # bottom-left
         (_e0_pos.x0 - _pad_bleft, _e0_pos.y1 + _pad_mid),   # top-left of ETS area
-        (_m_pos.x0  - _pad_left, _m_pos.y0),                # bottom-left of metric area
+        (_m_pos.x0  - _pad_left, _m_pos.y0 - _pad_mid),     # bottom-left of metric area
     ], closed=True, facecolor=_PREC_BG, edgecolor="none", zorder=-1)
     _trap.set_transform(_fig.transFigure)
     _fig.add_artist(_trap)
@@ -247,12 +250,6 @@ def _(Path, df_all, mo, output_dir, sources):
     )
 
     mo.image(str(_fname.with_suffix(".png")))
-    return
-
-
-@app.cell
-def _(df_all):
-    df_all
     return
 
 
