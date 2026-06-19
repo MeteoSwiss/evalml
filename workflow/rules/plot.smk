@@ -52,8 +52,7 @@ rule plot_meteogram:
         forecaster_support=lambda wc: (
             str(
                 (
-                    Path(OUT_ROOT)
-                    / f"data/runs/{wc.run_id}/{wc.init_time}/forecaster"
+                    Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/forecaster"
                 ).resolve()
             )
             if config["showcase"]["meteograms"].get("forecaster_support", False)
