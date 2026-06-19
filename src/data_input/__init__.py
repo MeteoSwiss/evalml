@@ -335,7 +335,7 @@ def load_forecast_data_from_grib(
     params_extended = list(
         {p for p in params} | {_COSMO_TO_IFS[p] for p in params if p in _COSMO_TO_IFS}
     )
-    ds = load_from_grib_file(files, {"parameter.variable": params})
+    ds = load_from_grib_file(files, {"parameter.variable": params_extended})
 
     # Rename any IFS shortNames back to COSMO names
     ifs_rename = {
