@@ -136,7 +136,6 @@
       "type": "object"
     },
     "DefaultResources": {
-      "additionalProperties": false,
       "description": "Default resource settings for job execution.",
       "properties": {
         "slurm_partition": {

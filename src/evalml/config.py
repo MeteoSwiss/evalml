@@ -454,8 +454,6 @@ class DefaultResources(BaseModel):
         None, ge=0, description="Default GPU count per job (0 for non-GPU jobs)."
     )
 
-    model_config = {"extra": "forbid"}
-
     def parsable(self) -> list[str]:
         """Convert the default resources to a string of key=value pairs."""
         return [
