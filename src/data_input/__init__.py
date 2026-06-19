@@ -83,7 +83,7 @@ def load_analysis_data_from_zarr(
     PARAMS_MAP_COSMO1 = {
         v: v.replace("TOT_PREC", tot_prec_string) for v in PARAMS_MAP_COSMO2.keys()
     }
-    USE_IFS_NAMES = {"-co2-", "-ea-"}
+    USE_IFS_NAMES = {"-co2-", "-ea-", "ifsnames"}
     PARAMS_MAP = (
         PARAMS_MAP_COSMO2
         if any(tag in root.name for tag in USE_IFS_NAMES)
