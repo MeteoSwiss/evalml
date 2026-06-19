@@ -372,6 +372,12 @@ SCORECARD_CONFIGS = (
     _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
 )
 
+def validate_scorecard_baselines():
+    for name, sc in SCORECARD_CONFIGS.items():
+        resolve_baseline_id(sc["baseline"])
+
+validate_scorecard_baselines()
+
 
 # Period-accumulated params verify a [lead - period, lead] window, so they have
 # no value at lead times shorter than one step spacing (e.g. no 0h precip map).
