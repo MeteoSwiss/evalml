@@ -85,9 +85,6 @@ ffv2:
     U10M: [5.0, 10.0]
     V10M: [5.0, 10.0]
     PS: [100000.0, 101000.0]
-    FF: [10.0, 15.0]
-    DD: [180.0, 270.0]
-    GUST_6h: [5.0, 15.0]
     RR_6h: [5.0, 10.0]
   pecthresholds:
     T2M:
@@ -108,15 +105,6 @@ ffv2:
     PS:
       lower: 100000.0
       upper: 101000.0
-    FF:
-      lower: 10.0
-      upper: 15.0
-    DD:
-      lower: 0.0
-      upper: 45.0
-    GUST_6h:
-      lower: 20.0
-      upper: 25.0
     RR_6h:
       lower: 10.0
       upper: 50.0
