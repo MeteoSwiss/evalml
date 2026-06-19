@@ -196,19 +196,19 @@ rule run_mec:
             abs_mod_root=$(realpath "$run_dir/../..") # two levels up (so that all links are mounted to the container)
 
             # run container
-            #sarus run \
-            #    --mount=type=bind,source=$abs_run_dir,destination=/src/bin2 \
-            #    --mount=type=bind,source=$abs_mod_root,destination=$abs_mod_root,readonly \
-            #    --mount=type=bind,source=/oprusers/osm/opr.inn/data/,destination=/oprusers/osm/opr.inn/data/ \
-            #    container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
+            sarus run \
+                --mount=type=bind,source=$abs_run_dir,destination=/src/bin2 \
+                --mount=type=bind,source=$abs_mod_root,destination=$abs_mod_root,readonly \
+                --mount=type=bind,source=/oprusers/osm/opr.inn/data/,destination=/oprusers/osm/opr.inn/data/ \
+                container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
 
             # Run MEC using local executable (Alternative to sarus container)
-            cd "$run_dir"
-            export LM_HOST=balfrinew-ln002
-            source /oprusers/osm/opr.inn/abs/mec.env
-            cp /oprusers/osm/opr.inn/abs/mec .
-            ./mec > ./mec_out.log 2>&1
-            cd -
+            #cd "$run_dir"
+            #export LM_HOST=balfrinew-ln002
+            #source /oprusers/osm/opr.inn/abs/mec.env
+            #cp /oprusers/osm/opr.inn/abs/mec .
+            #./mec > ./mec_out.log 2>&1
+            #cd -
 
             # copy the output file to the final location for the Feedback files
             # and rename to match NWP conventions
