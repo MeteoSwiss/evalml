@@ -392,9 +392,9 @@ def load_truth_data(
             params=params,
         )
         truth = truth.compute().chunk(
-            {"y": -1, "x": -1}
+            {"time": 1, "y": -1, "x": -1}
             if "y" in truth.dims and "x" in truth.dims
-            else {"values": -1}
+            else {"time": 1, "values": -1}
         )
     elif "peakweather" in str(root):
         LOG.info("Loading ground truth from PeakWeather observations...")
