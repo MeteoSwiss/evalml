@@ -36,8 +36,8 @@ rule inference_get_checkpoint:
                 fi
             elif [ "{params.checkpoint_type}" = "huggingface" ]; then
                 repo_id=$(python -c "import re; print(re.search(r'huggingface\.co/([^/]+/[^/]+)', '{params.checkpoint}').group(1))")
-                file_path=$(python -c "import re; print(re.search(r'huggingface\.co/[^/]+/[^/]+/blob/[^/]+/(.*)', '{params.checkpoint}').group(1))")
-                cp $(uvx hf download $repo_id $file_path) {output.checkpoint}
+                file_path=$(python -c "import re; print(re.search(r'huggingface\.co/[^/]+/[^/]+/(?:blob|resolve)/[^/]+/(.*)', '{params.checkpoint}').group(1))")
+                cp $(uvx hf download --quiet $repo_id $file_path) {output.checkpoint}
                 echo "Copied checkpoint from HuggingFace: {output.checkpoint}"
             elif [ "{params.checkpoint_type}" = "local" ]; then
                 ln -s {params.checkpoint} {output.checkpoint}
