@@ -6,7 +6,7 @@
 #   13 pt  — tick values, in-panel annotations      (reads specific numbers)
 font.size           : 13    # base size for text() / annotate()
 axes.titlesize      : 16    # ax.set_title()
-axes.labelsize      : 16    # ax.set_xlabel() / ax.set_ylabel()
+axes.labelsize      : 13    # ax.set_xlabel() / ax.set_ylabel()
 xtick.labelsize     : 13
 ytick.labelsize     : 13
 legend.fontsize     : 13    # fig.legend() / ax.legend()
