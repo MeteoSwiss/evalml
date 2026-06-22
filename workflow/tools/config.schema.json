@@ -288,6 +288,18 @@
           ],
           "default": null,
           "description": "Scorecard generation configuration. Omit or set enabled: false to disable."
+        },
+        "scoremaps": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScoreMapsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Score map plot configuration. Omit or set enabled: false to disable."
         }
       },
       "required": [
@@ -654,6 +666,87 @@
       "title": "PublicationMeteogramConfig",
       "type": "object"
     },
+    "ScoreMapsConfig": {
+      "additionalProperties": false,
+      "description": "Parameters controlling which score map plots are produced.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to produce score maps (computationally intensive).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "params": {
+          "default": [
+            "T_2M"
+          ],
+          "description": "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, PS, PMSL, TOT_PREC (native), and SP_10M (derived wind speed from U_10M/V_10M).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "leadtimes": {
+          "default": [
+            6,
+            24
+          ],
+          "description": "List of lead times (hours) to plot.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Leadtimes",
+          "type": "array"
+        },
+        "scores": {
+          "default": [
+            "BIAS"
+          ],
+          "description": "List of verification scores to plot. Supported: BIAS, RMSE, MAE.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Scores",
+          "type": "array"
+        },
+        "regions": {
+          "default": [
+            "switzerland"
+          ],
+          "description": "List of regions to plot (e.g. switzerland, centraleurope).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Regions",
+          "type": "array"
+        },
+        "seasons": {
+          "default": [
+            "all"
+          ],
+          "description": "List of seasons to plot ('all', 'DJF', 'MAM', 'JJA', 'SON').",
+          "items": {
+            "type": "string"
+          },
+          "title": "Seasons",
+          "type": "array"
+        },
+        "init_hours": {
+          "default": [
+            "all"
+          ],
+          "description": "List of initialization hours to plot. Use 'all' for the unstratified view, or zero-padded hour strings like '00', '06', '12', '18'.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Init Hours",
+          "type": "array"
+        }
+      },
+      "title": "ScoreMapsConfig",
+      "type": "object"
+    },
     "ScorecardConfig": {
       "additionalProperties": false,
       "description": "Configuration for a single named scorecard.",
@@ -720,7 +813,7 @@
       "description": "Stratification settings for the analysis.",
       "properties": {
         "regions": {
-          "description": "List of region names for stratification.",
+          "description": "List of region names for stratification. Empty list means no spatial stratification.",
           "items": {
             "type": "string"
           },
@@ -728,15 +821,19 @@
           "type": "array"
         },
         "root": {
-          "description": "Root directory where the region shapefiles are stored.",
-          "title": "Root",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Root directory where the region shapefiles are stored. Required when regions is non-empty.",
+          "title": "Root"
         }
       },
-      "required": [
-        "regions",
-        "root"
-      ],
       "title": "Stratification",
       "type": "object"
     },

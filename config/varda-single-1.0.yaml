@@ -1,7 +1,8 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Evaluate skill of temporal downscaler driven by ICON-CH1 Stage E forecaster with
-  subgrid orography.
+  Evaluate skill of Varda-single-1.0 against ground observations.
+
+config_label: varda-single-1.0
 
 dates:
   start: 2025-03-01T00:00
@@ -10,15 +11,15 @@ dates:
 
 runs:
   - temporal_downscaler:
-      checkpoint: /scratch/mch/miccatta/ICON_interpolator_checkpoints/checkpoint_stage-C-interpolator-n320-6hto1h-reduced-variables/f9279244ed6f4c458597bdcf335ab36f/inference-last.ckpt
-      label: Varda-Single
+      checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
+      label: Varda-single-1.0
       steps: 0/120/1
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
         # - anemoi-inference==0.11.0
       forecaster:
-        checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
+        checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/120/6
   - baseline:
@@ -36,7 +37,12 @@ runs:
 
 truth:
   label: SwissMetNet
-  root: output/data/observations/peakweather
+  root: jretrievedwh:1,2
+  # To verify against SwissMetNet observations from the DWH via jretrievedwh,
+  # set instead (requires jretrievedwh.py on $PATH and $OPR_HOME set):
+  # Other selectors: root: jretrievedwh:locations=ARO,KLO,LUG
+  #                  root: jretrievedwh:bbox=45.8,47.8,5.9,10.5
+  #                  append ;stage=devt to target a non-prod DWH stage
 
 experiment:
   params:
@@ -98,6 +104,8 @@ experiment:
           - "V_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2,ETS"
           - "TOT_PREC:RMSE,R2,ETS"
+  scoremaps:
+    enabled: false
 
 showcase:
   params:

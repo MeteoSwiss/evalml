@@ -15,7 +15,7 @@ rule verification_metrics_baseline:
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_metrics.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
-        truth=config["truth"]["root"],
+        truth_dep=truth_file_dep,
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT / f"data/baselines/{{baseline_id}}/{{init_time}}/verif_{TRUTH_HASH}.nc",
@@ -23,12 +23,13 @@ rule verification_metrics_baseline:
         OUT_ROOT / "logs/verification_metrics_baseline/{baseline_id}-{init_time}.log",
     resources:
         cpus_per_task=24,
-        mem_mb=50_000,
-        runtime="60m",
+        mem_mb=80_000,
+        runtime="120m",
     params:
         baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
+        truth=config["truth"]["root"],
         truth_label=config["truth"]["label"],
         regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
@@ -38,7 +39,7 @@ rule verification_metrics_baseline:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {input.forecast} \
-            --truth {input.truth} \
+            --truth {params.truth} \
             --reftime {wildcards.init_time} \
             --steps "{params.baseline_steps}" \
             --label "{params.baseline_label}" \
@@ -64,7 +65,7 @@ rule verification_metrics:
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_metrics.py",
         inference_okfile=rules.inference_execute.output.okfile,
-        truth=config["truth"]["root"],
+        truth_dep=truth_file_dep,
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/verif_{TRUTH_HASH}.nc",
@@ -72,7 +73,7 @@ rule verification_metrics:
         OUT_ROOT / "logs/verification_metrics/{run_id}-{init_time}.log",
     resources:
         cpus_per_task=24,
-        mem_mb=50_000,
+        mem_mb=80_000,
         runtime="60m",
     # wildcard_constraints:
     # run_id="^" # to avoid ambiguitiy with run_baseline_verif
@@ -80,6 +81,7 @@ rule verification_metrics:
     params:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
+        truth=config["truth"]["root"],
         truth_label=config["truth"]["label"],
         regions=REGIONS,
         grib_out_dir=lambda wc: (
@@ -92,7 +94,7 @@ rule verification_metrics:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {params.grib_out_dir} \
-            --truth {input.truth} \
+            --truth {params.truth} \
             --reftime {wildcards.init_time} \
             --steps "{params.fcst_steps}" \
             --label "{params.fcst_label}" \
@@ -168,4 +170,85 @@ rule verification_metrics_plot:
     shell:
         """
         uv run {input.script} {input.verif} --output_dir {output} >{log} 2>&1
+        """
+
+
+rule verification_scoremaps:
+    input:
+        "src/verification/__init__.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/verification_scoremaps.py",
+        inference_okfiles=lambda wc: expand(
+            rules.inference_execute.output.okfile,
+            init_time=_restrict_reftimes_to_hours(REFTIMES),
+            allow_missing=True,
+        ),
+        truth=config["truth"]["root"],
+    output:
+        OUT_ROOT
+        / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
+    log:
+        OUT_ROOT
+        / f"logs/verification_scoremaps/{{run_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
+    resources:
+        cpus_per_task=2,
+        mem_mb=50_000,
+        runtime="60m",
+    # wildcard_constraints:
+    # run_id="^" # to avoid ambiguitiy with run_baseline_verif
+    # TODO: implement logic to use experiment name instead of run_id as wildcard
+    params:
+        fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
+        fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
+        truth_label=config["truth"]["label"],
+        reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
+        run_root=lambda wc: (Path(OUT_ROOT) / f"data/runs/{wc.run_id}").resolve(),
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run {input.script} \
+            --run_root {params.run_root} \
+            --reftimes {params.reftimes} \
+            --truth {input.truth} \
+            --step {wildcards.leadtime} \
+            --steps "{params.fcst_steps}" \
+            --param {wildcards.param} \
+            --output {output} >{log} 2>&1
+        """
+
+
+rule verification_scoremaps_baseline:
+    input:
+        "src/verification/__init__.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/verification_scoremaps.py",
+        forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
+        truth=config["truth"]["root"],
+        eckit_grids=rules.data_download_eckit_geo_grids.output,
+    output:
+        OUT_ROOT
+        / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
+    log:
+        OUT_ROOT
+        / f"logs/verification_scoremaps_baseline/{{baseline_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
+    resources:
+        cpus_per_task=24,
+        mem_mb=50_000,
+        runtime="60m",
+    params:
+        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
+        member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
+        reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run {input.script} \
+            --baseline_root {input.forecast} \
+            --reftimes {params.reftimes} \
+            --truth {input.truth} \
+            --step {wildcards.leadtime} \
+            --steps "{params.baseline_steps}" \
+            --param {wildcards.param} \
+            --member "{params.member}" \
+            --output {output} >{log} 2>&1
         """

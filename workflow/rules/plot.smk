@@ -27,8 +27,7 @@ rule plot_meteogram:
     input:
         script="workflow/scripts/plot_meteogram.py",
         inference_okfile=rules.inference_execute.output.okfile,
-        truth=config["truth"]["root"],
-        peakweather_dir=rules.data_download_obs_from_peakweather.output.root,
+        truth_dep=truth_file_dep,
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         expand(
@@ -44,6 +43,7 @@ rule plot_meteogram:
         runtime="60m",
     params:
         ana_label=lambda wc: config["truth"]["label"],
+        truth_root=config["truth"]["root"],
         fcst_grib=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
@@ -71,9 +71,8 @@ rule plot_meteogram:
             --forecast {params.fcst_grib:q}
             --forecast_steps {params.fcst_steps:q}
             --forecast_label {params.fcst_label:q}
-            --analysis {input.truth:q}
+            --analysis {params.truth_root:q}
             --analysis_label {params.ana_label:q}
-            --peakweather {input.peakweather_dir:q}
             --date {wildcards.init_time:q}
             --outdir {params.outdir:q}
             --param {wildcards.param:q}
@@ -132,12 +131,9 @@ rule plot_forecast_frame:
 
 
 def get_leadtimes(wc):
-    """Get all lead times from the run config."""
-    start, end, step = map(int, RUN_CONFIGS[wc.run_id]["steps"].split("/"))
-    # skip lead time 0 for diagnostic variables
-    if wc.param in ["tp", "TOT_PREC"] and start == 0:
-        start += step
-    return [f"{i}" for i in range(start, end + 1, step)]
+    """Get all lead times the run produces (accumulated params skip lead 0)."""
+    leadtimes = resolve_leadtimes(RUN_CONFIGS[wc.run_id]["steps"], param=wc.param)
+    return [str(lt) for lt in leadtimes]
 
 
 rule make_forecast_animation:
@@ -162,5 +158,53 @@ rule make_forecast_animation:
         delay=lambda wc: 10 * int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
     shell:
         """
-        convert -delay {params.delay} -loop 0 {input} {output}
+        FRAMES=$(for f in {input}; do [ -s "$f" ] && echo "$f"; done | tr '\\n' ' ')
+        convert -delay {params.delay} -loop 0 $FRAMES {output}
         """
+
+
+rule plot_scoremaps:
+    # localrule: True
+    input:
+        script="workflow/scripts/plot_scoremaps.mo.py",
+        verif_file=OUT_ROOT
+        / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
+    output:
+        OUT_ROOT
+        / "results/{experiment}/scoremaps/runs/{run_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",
+    log:
+        OUT_ROOT
+        / "logs/plot_scoremaps/{experiment}/{run_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",
+    wildcard_constraints:
+        leadtime=r"\d+",  # only digits
+        init_hour=r"all|\d{1,2}",
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=1,
+        runtime="10m",
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run python {input.script} \
+            --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
+            --param {wildcards.param} --leadtime {wildcards.leadtime} --score {wildcards.score} \
+            --season {wildcards.season} --init_hour {wildcards.init_hour} >{log} 2>&1
+        # interactive editing (needs to set localrule: True and use only one core)
+        # marimo edit {input.script} -- \
+        #     --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
+        #     --param {wildcards.param} --leadtime {wildcards.leadtime} --score {wildcards.score} \
+        #     --season {wildcards.season} --init_hour {wildcards.init_hour}
+        """
+
+
+use rule plot_scoremaps as plot_scoremaps_baseline with:
+    input:
+        script="workflow/scripts/plot_scoremaps.mo.py",
+        verif_file=OUT_ROOT
+        / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
+    output:
+        OUT_ROOT
+        / "results/{experiment}/scoremaps/baselines/{baseline_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",
+    log:
+        OUT_ROOT
+        / "logs/plot_scoremaps/{experiment}/{baseline_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",

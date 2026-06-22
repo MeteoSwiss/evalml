@@ -26,7 +26,7 @@ def _(mo, sys):
         "/store_new/mch/msopr/osm/ICON-CH1-EPS|0/33/1|mean|ICON-CH1-EPS mean;"
         "/store_new/mch/msopr/osm/ICON-CH2-EPS|0/120/1|mean|ICON-CH2-EPS mean"
     )
-    _PW_DEFAULT = "output/data/observations/peakweather"
+    _OBS_DEFAULT = "jretrievedwh:locations=KLO"
 
     _cli = mo.cli_args()
     if not _cli and len(sys.argv) > 1:
@@ -37,7 +37,7 @@ def _(mo, sys):
         _p.add_argument("--forecast_steps", default="0/120/1")
         _p.add_argument("--forecast_label", default="Varda-Single")
         _p.add_argument("--baseline", action="append", default=None)
-        _p.add_argument("--peakweather", default=_PW_DEFAULT)
+        _p.add_argument("--obs", default=_OBS_DEFAULT)
         _p.add_argument("--date", default="202504010000")
         _p.add_argument("--station", default="KLO")
         _p.add_argument("--params", default="T_2M,TOT_PREC,SP_10M,DD_10M")
@@ -47,7 +47,7 @@ def _(mo, sys):
         forecast_steps = _a.forecast_steps
         forecast_label = _a.forecast_label
         baselines_raw = ";".join(_a.baseline) if _a.baseline else _BASELINES_DEFAULT
-        peakweather = _a.peakweather
+        obs_source = _a.obs
         date = _a.date
         station = _a.station
         params_raw = _a.params
@@ -58,7 +58,7 @@ def _(mo, sys):
         forecast_steps = _cli.get("forecast_steps", default="0/120/1")
         forecast_label = _cli.get("forecast_label", default="Varda-Single")
         baselines_raw = _cli.get("baseline", default=_BASELINES_DEFAULT)
-        peakweather = _cli.get("peakweather", default=_PW_DEFAULT)
+        obs_source = _cli.get("obs", default=_OBS_DEFAULT)
         date = _cli.get("date", default="202504010000")
         station = _cli.get("station", default="KLO")
         params_raw = _cli.get("params", default="T_2M,TOT_PREC,SP_10M,DD_10M")
@@ -72,7 +72,7 @@ def _(mo, sys):
         forecast_steps,
         output_dir,
         params_raw,
-        peakweather,
+        obs_source,
         station,
     )
 
@@ -101,7 +101,7 @@ def _(
     forecast,
     forecast_label,
     forecast_steps,
-    peakweather,
+    obs_source,
     project_root,
     station,
 ):
@@ -109,7 +109,7 @@ def _(
 
     from data_input import (
         load_forecast_data,
-        load_obs_data_from_peakweather,
+        load_obs_data_from_jretrieve,
         parse_steps,
     )
     from meteogram_derivations import (
@@ -130,10 +130,12 @@ def _(
     init_time = datetime.strptime(str(date), "%Y%m%d%H%M")
     base_params = expand_to_base_params(display_params)
 
-    # Observations (already at stations) -> reuse one station as the mapping target.
+    # Observations from the MeteoSwiss DWH (jretrievedwh marker, e.g.
+    # "jretrievedwh:locations=KLO"). Returns dims (time, values) with lat/lon
+    # coords, same shape as the gridded->station mapping target.
     obs_steps = parse_steps(forecast_steps)
-    obs = load_obs_data_from_peakweather(
-        _abs(peakweather), init_time, obs_steps, base_params
+    obs = load_obs_data_from_jretrieve(
+        obs_source, init_time, obs_steps, base_params
     )
     obs_station = add_derived(obs.sel(values=[station]), display_params)
     # Mapping target: keep lat/lon coords, drop only the data variables

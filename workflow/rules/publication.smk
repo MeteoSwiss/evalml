@@ -48,7 +48,6 @@ def _meteogram_baselines():
 rule publication_meteogram:
     input:
         script="workflow/scripts/publication_meteogram.py",
-        peakweather_dir=rules.data_download_obs_from_peakweather.output.root,
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         report(
@@ -69,6 +68,7 @@ rule publication_meteogram:
         baselines=_meteogram_baselines(),
         date=config["publication"]["meteogram"]["init_time"],
         station=config["publication"]["meteogram"]["station"],
+        obs=lambda wc: f"jretrievedwh:locations={config['publication']['meteogram']['station']}",
         params=",".join(config["publication"]["meteogram"]["params"]),
     shell:
         """
@@ -79,7 +79,7 @@ rule publication_meteogram:
             --forecast_steps {params.forecast_steps:q} \
             --forecast_label {params.forecast_label:q} \
             --baseline {params.baselines:q} \
-            --peakweather {input.peakweather_dir:q} \
+            --obs {params.obs:q} \
             --date {params.date:q} \
             --station {params.station:q} \
             --params {params.params:q} \
