@@ -167,6 +167,10 @@ def _(Path, df_all, mo, output_dir, sources):
                 if _grp.empty:
                     continue
                 _ax.plot(_grp["step"], _grp["value"], label=_src, **line_style(_src))
+                if _src == "Varda-Single":
+                    _m6 = _grp[_grp["step"] % 6 == 0]
+                    _ax.plot(_m6["step"], _m6["value"], linestyle="none",
+                             marker="o", markersize=4, color=line_style(_src)["color"])
             _ax.set_xscale("function", **_xscale_kw)
             _ax.xaxis.set_major_locator(_xticks)
             if _row == 0:
@@ -189,6 +193,10 @@ def _(Path, df_all, mo, output_dir, sources):
             if _grp.empty:
                 continue
             _ax.plot(_grp["step"], _grp["value"], label=_src, **line_style(_src))
+            if "Varda" in _src and "Single" in _src:
+                _m6 = _grp[_grp["step"] % 6 == 0]
+                _ax.plot(_m6["step"], _m6["value"], linestyle="none",
+                         marker="o", markersize=4, color=line_style(_src)["color"])
         _ax.set_xscale("function", **_xscale_kw)
         _ax.xaxis.set_major_locator(_xticks)
         _panel_label = (
