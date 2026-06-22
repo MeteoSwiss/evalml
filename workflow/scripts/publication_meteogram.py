@@ -18,6 +18,19 @@ def _():
 
 
 @app.cell
+def _():
+    import logging
+    import time
+
+    LOG = logging.getLogger(__name__)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    return (LOG,)
+
+
+@app.cell
 def _(mo, sys):
     # Interactive defaults point at the copied dataset so the notebook runs as-is.
     _RUN = "output/data/runs/temporal_downscaler-f927-1ee3-on-forecaster-c304-23e7/495c"
@@ -94,6 +107,7 @@ def _(baselines_raw, params_raw):
 
 @app.cell
 def _(
+    LOG,
     Path,
     baselines,
     date,
@@ -130,30 +144,33 @@ def _(
     init_time = datetime.strptime(str(date), "%Y%m%d%H%M")
     base_params = expand_to_base_params(display_params)
 
-    # Observations from the MeteoSwiss DWH (jretrievedwh marker, e.g.
-    # "jretrievedwh:locations=KLO"). Returns dims (time, values) with lat/lon
-    # coords, same shape as the gridded->station mapping target.
+    LOG.info("meteogram: loading observations from %s", obs_source)
+    _t0 = time.perf_counter()
     obs_steps = parse_steps(forecast_steps)
     obs = load_obs_data_from_jretrieve(
         obs_source, init_time, obs_steps, base_params
     )
     obs_station = add_derived(obs.sel(values=[station]), display_params)
-    # Mapping target: keep lat/lon coords, drop only the data variables
-    # (obs[[]] would also strip the non-dimension lat/lon coords).
     _sel = obs.sel(values=[station])
     station_target = _sel.drop_vars(list(_sel.data_vars))
+    LOG.info("meteogram: observations loaded in %.1fs", time.perf_counter() - _t0)
 
     frames = [station_timeseries_to_long(obs_station, OBS_LABEL, display_params)]
 
-    # Candidate (ML GRIB) -> map to station -> derive.
+    LOG.info("meteogram: loading candidate forecast from %s", forecast)
+    _t0 = time.perf_counter()
     cand = load_forecast_data(
         _abs(forecast), init_time, parse_steps(forecast_steps), base_params
     )
+    LOG.info("meteogram: candidate GRIB loaded in %.1fs", time.perf_counter() - _t0)
+    _t0 = time.perf_counter()
     cand_st = add_derived(map_forecast_to_truth(cand, station_target), display_params)
+    LOG.info("meteogram: candidate remapped to station in %.1fs", time.perf_counter() - _t0)
     frames.append(station_timeseries_to_long(cand_st, forecast_label, display_params))
 
-    # EPS-mean baselines -> map -> derive.
     for b in baselines:
+        LOG.info("meteogram: loading baseline %s from %s", b["label"], b["root"])
+        _t0 = time.perf_counter()
         bds = load_forecast_data(
             Path(b["root"]),
             init_time,
@@ -161,7 +178,10 @@ def _(
             base_params,
             member=b["member"],
         )
+        LOG.info("meteogram: baseline %s loaded in %.1fs", b["label"], time.perf_counter() - _t0)
+        _t0 = time.perf_counter()
         bst = add_derived(map_forecast_to_truth(bds, station_target), display_params)
+        LOG.info("meteogram: baseline %s remapped in %.1fs", b["label"], time.perf_counter() - _t0)
         frames.append(station_timeseries_to_long(bst, b["label"], display_params))
 
     df = pd.concat(frames, ignore_index=True)
@@ -171,6 +191,7 @@ def _(
 
 @app.cell
 def _(
+    LOG,
     OBS_LABEL,
     Path,
     df,
@@ -186,6 +207,8 @@ def _(
 
     from publication_style import line_style, param_label
 
+    LOG.info("meteogram: rendering plot")
+    _t0 = time.perf_counter()
     plt.style.use(Path(__file__).resolve().parent / "publication.mplstyle")
 
     _UNITS = {"T_2M": "K", "TOT_PREC": "mm", "SP_10M": "m/s", "DD_10M": "deg"}
@@ -242,12 +265,17 @@ def _(
     _fig.suptitle(f"{station} — Init time {init_time:%Y-%m-%d %H:%M}")
     _fig.tight_layout(rect=[0, 0.05, 1, 0.99])
 
+    LOG.info("meteogram: plot rendered in %.1fs", time.perf_counter() - _t0)
+
     _out = Path(output_dir)
     _out.mkdir(parents=True, exist_ok=True)
     _fname = _out / "publication_meteogram.pdf"
+    LOG.info("meteogram: saving figures to %s", _out)
+    _t0 = time.perf_counter()
     _fig.savefig(_fname, bbox_inches="tight")
     _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
     plt.close(_fig)
+    LOG.info("meteogram: figures saved in %.1fs", time.perf_counter() - _t0)
     (_out / "publication_meteogram.html").write_text(
         "<!doctype html><html><body>"
         '<img src="publication_meteogram.png" style="max-width:100%">'
