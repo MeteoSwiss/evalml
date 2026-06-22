@@ -99,6 +99,10 @@ experiment:
 
 publication:
   enabled: true
+  meteogram:
+    init_time: "202504010000"
+    station: "KLO"
+    params: [T_2M, TOT_PREC, SP_10M, DD_10M]
 
 locations:
   output_root: output/

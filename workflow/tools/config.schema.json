@@ -613,9 +613,57 @@
           "description": "Whether to generate publication figures.",
           "title": "Enabled",
           "type": "boolean"
+        },
+        "meteogram": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicationMeteogramConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Publication meteogram case selection (omit to skip it)."
         }
       },
       "title": "PublicationConfig",
+      "type": "object"
+    },
+    "PublicationMeteogramConfig": {
+      "additionalProperties": false,
+      "description": "Case selection for the publication meteogram figure.",
+      "properties": {
+        "init_time": {
+          "description": "Initialisation time (YYYYMMDDHHMM) of the case to plot.",
+          "title": "Init Time",
+          "type": "string"
+        },
+        "station": {
+          "description": "PeakWeather station ID to plot (e.g. KLO, GVE, LUG).",
+          "title": "Station",
+          "type": "string"
+        },
+        "params": {
+          "default": [
+            "T_2M",
+            "TOT_PREC",
+            "SP_10M",
+            "DD_10M"
+          ],
+          "description": "Display parameters (one panel each); SP_10M/DD_10M are derived.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        }
+      },
+      "required": [
+        "init_time",
+        "station"
+      ],
+      "title": "PublicationMeteogramConfig",
       "type": "object"
     },
     "ScoreMapsConfig": {
@@ -765,7 +813,7 @@
       "description": "Stratification settings for the analysis.",
       "properties": {
         "regions": {
-          "description": "List of region names for stratification.",
+          "description": "List of region names for stratification. Empty list means no spatial stratification.",
           "items": {
             "type": "string"
           },
@@ -773,15 +821,19 @@
           "type": "array"
         },
         "root": {
-          "description": "Root directory where the region shapefiles are stored.",
-          "title": "Root",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Root directory where the region shapefiles are stored. Required when regions is non-empty.",
+          "title": "Root"
         }
       },
-      "required": [
-        "regions",
-        "root"
-      ],
       "title": "Stratification",
       "type": "object"
     },

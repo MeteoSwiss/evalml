@@ -13,3 +13,17 @@ def test_example_config(example_config):
     del example_config["runs"]
     with pytest.raises(ValueError, match="Field required"):
         _ = ConfigModel.model_validate(example_config)
+
+
+def test_publication_meteogram_block_validates():
+    from evalml.config import ConfigModel
+
+    import yaml
+    from pathlib import Path
+
+    cfg = yaml.safe_load(
+        Path("config/Varda-Single_paper.yaml").read_text()
+    )
+    model = ConfigModel.model_validate(cfg)
+    assert model.publication.meteogram.init_time == "202504010000"
+    assert "DD_10M" in model.publication.meteogram.params

@@ -367,12 +367,35 @@ class ShowcaseConfig(BaseModel):
     )
 
 
+class PublicationMeteogramConfig(BaseModel):
+    """Case selection for the publication meteogram figure."""
+
+    init_time: str = Field(
+        ...,
+        description="Initialisation time (YYYYMMDDHHMM) of the case to plot.",
+    )
+    station: str = Field(
+        ...,
+        description="PeakWeather station ID to plot (e.g. KLO, GVE, LUG).",
+    )
+    params: List[str] = Field(
+        default=["T_2M", "TOT_PREC", "SP_10M", "DD_10M"],
+        description="Display parameters (one panel each); SP_10M/DD_10M are derived.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class PublicationConfig(BaseModel):
     """Configuration for the publication workflow."""
 
     enabled: bool = Field(
         default=False,
         description="Whether to generate publication figures.",
+    )
+    meteogram: Optional[PublicationMeteogramConfig] = Field(
+        default=None,
+        description="Publication meteogram case selection (omit to skip it).",
     )
 
 
@@ -386,12 +409,12 @@ class Stratification(BaseModel):
     """Stratification settings for the analysis."""
 
     regions: List[str] = Field(
-        ...,
-        description="List of region names for stratification.",
+        default_factory=list,
+        description="List of region names for stratification. Empty list means no spatial stratification.",
     )
-    root: str = Field(
-        ...,
-        description="Root directory where the region shapefiles are stored.",
+    root: Optional[str] = Field(
+        None,
+        description="Root directory where the region shapefiles are stored. Required when regions is non-empty.",
     )
 
 

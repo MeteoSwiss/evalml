@@ -12,7 +12,7 @@ def _():
 
     _script_dir = Path(__file__).resolve().parent  # workflow/scripts/
     sys.path.append(str(_script_dir))
-    project_root = _script_dir.parent.parent        # repo root
+    project_root = _script_dir.parent.parent  # repo root
     return Path, mo, project_root, sys
 
 
@@ -25,11 +25,14 @@ def _(mo, sys):
         " output/data/baselines/baseline-e0f0/verif_aggregated_2b83.nc"
         " output/data/runs/temporal_downscaler-f927-1ee3-on-forecaster-c304-23e7/495c/verif_aggregated_2b83.nc"
     )
-    _SOURCE_DEFAULT = "ICON-CH1-CTRL,ICON-CH2-CTRL,ICON-CH1-EPS mean,ICON-CH2-EPS mean,Varda-Single"
+    _SOURCE_DEFAULT = (
+        "ICON-CH1-CTRL,ICON-CH2-CTRL,ICON-CH1-EPS mean,ICON-CH2-EPS mean,Varda-Single"
+    )
 
     _cli = mo.cli_args()
     if not _cli and len(sys.argv) > 1:
         import argparse
+
         _p = argparse.ArgumentParser()
         _p.add_argument("--verif_files", default=_VERIF_DEFAULT)
         _p.add_argument("--sources", default=_SOURCE_DEFAULT)
@@ -45,8 +48,12 @@ def _(mo, sys):
         _default_output = _cli.get("output", default="figures/debug")
         _is_script = bool(_cli)
 
-    verif_input = mo.ui.text(value=_default_verif, label="Verification files (space-separated)")
-    sources_input = mo.ui.text(value=_default_sources, label="Sources (comma-separated)")
+    verif_input = mo.ui.text(
+        value=_default_verif, label="Verification files (space-separated)"
+    )
+    sources_input = mo.ui.text(
+        value=_default_sources, label="Sources (comma-separated)"
+    )
     output_input = mo.ui.text(value=_default_output, label="Output directory")
 
     mo.vstack([verif_input, sources_input, output_input]) if not _is_script else None
@@ -96,9 +103,7 @@ def _(Path, project_root, verif_files):
 def _(df):
     # Filter to aggregated-over-all-strata slice for overview plots
     df_all = df[
-        (df["region"] == "all") &
-        (df["season"] == "all") &
-        (df["init_hour"] == "all")
+        (df["region"] == "all") & (df["season"] == "all") & (df["init_hour"] == "all")
     ].copy()
     return (df_all,)
 
@@ -109,48 +114,48 @@ def _(Path, df_all, mo, output_dir, sources):
     import matplotlib.ticker as mticker
     import numpy as np
 
+    from publication_style import line_style, param_label
+
+    plt.style.use(Path(__file__).resolve().parent / "publication.mplstyle")
+
     _PARAMS = ["T_2M", "TOT_PREC", "U_10M"]
     _METRICS = ["BIAS", "RMSE"]
     # ETS panels: TOT_PREC > 0, TOT_PREC > 5.0, U_10M at largest threshold
-    _prec_ets = sorted(m for m in df_all[df_all["param"] == "TOT_PREC"]["metric"].unique() if "ETS" in m)
-    _wind_ets = sorted(m for m in df_all[df_all["param"] == "U_10M"]["metric"].unique() if "ETS" in m)
+    _prec_ets = sorted(
+        m
+        for m in df_all[df_all["param"] == "TOT_PREC"]["metric"].unique()
+        if "ETS" in m
+    )
+    _wind_ets = sorted(
+        m for m in df_all[df_all["param"] == "U_10M"]["metric"].unique() if "ETS" in m
+    )
 
     def _find_ets(metrics, threshold):
         return next((m for m in metrics if m.endswith(f"> {threshold}")), None)
 
     _ets_panels = [
-        ("TOT_PREC", _find_ets(_prec_ets, "0.0"),   "mm"),
+        ("TOT_PREC", _find_ets(_prec_ets, "0.0"), "mm"),
         ("TOT_PREC", _find_ets(_prec_ets, "5.0"), "mm"),
-        ("U_10M",    _wind_ets[-1] if _wind_ets else None, "m/s"),
+        ("U_10M", _wind_ets[-1] if _wind_ets else None, "m/s"),
     ]
 
     _out = Path(output_dir)
     _out.mkdir(parents=True, exist_ok=True)
 
     _fig, _axes = plt.subplots(
-        len(_METRICS) + 1, len(_PARAMS),
+        len(_METRICS) + 1,
+        len(_PARAMS),
         figsize=(4 * len(_PARAMS), 3 * (len(_METRICS) + 1)),
         sharex=True,
     )
 
-    def _line_style(src):
-        color = (
-            "royalblue"     if "CH1" in src else
-            "seagreen"      if "CH2" in src else
-            "darkslategrey" if "Varda" in src else
-            "gray"
+    _xscale_kw = dict(
+        functions=(
+            lambda x: np.sign(x) * np.abs(x) ** 0.7,
+            lambda x: np.sign(x) * np.abs(x) ** (1 / 0.7),
         )
-        linestyle = "--" if "EPS mean" in src else "-"
-        linewidth = 2.25 if "Varda" in src else 1.5
-        return dict(color=color, linestyle=linestyle, linewidth=linewidth)
-
-    _xscale_kw = dict(functions=(
-        lambda x: np.sign(x) * np.abs(x) ** 0.7,
-        lambda x: np.sign(x) * np.abs(x) ** (1 / 0.7),
-    ))
+    )
     _xticks = mticker.FixedLocator([0, 3, 6, 12, 24, 36, 48, 72, 96, 120])
-    _FS_axes = 8   # unified font size for all axis labels and tick labels
-    _FS_title = 12 # unified font size for axis titles and legends
 
     # Rows 0…N-1: one panel per (metric, param)
     for _row, _metric in enumerate(_METRICS):
@@ -161,16 +166,19 @@ def _(Path, df_all, mo, output_dir, sources):
                 _grp = _data[_data["source"] == _src].sort_values("step")
                 if _grp.empty:
                     continue
-                _ax.plot(_grp["step"], _grp["value"], label=_src, **_line_style(_src))
+                _ax.plot(_grp["step"], _grp["value"], label=_src, **line_style(_src))
+                if _src == "Varda-Single":
+                    _m6 = _grp[_grp["step"] % 6 == 0]
+                    _ax.plot(_m6["step"], _m6["value"], linestyle="none",
+                             marker="o", markersize=4, color=line_style(_src)["color"])
             _ax.set_xscale("function", **_xscale_kw)
             _ax.xaxis.set_major_locator(_xticks)
-            _ax.tick_params(labelsize=_FS_axes)
             if _metric == "BIAS":
                 _ax.axhline(0, color="black", linestyle="dashed", linewidth=0.7, zorder=0)
             if _row == 0:
-                _ax.set_title(_param, fontsize=_FS_title)
+                _ax.set_title(param_label(_param))
             if _col == 0:
-                _ax.set_ylabel(_metric, fontsize=_FS_title)
+                _ax.set_ylabel(_metric)
 
     # Last row: three specific ETS panels
     _ets_row = len(_METRICS)
@@ -179,27 +187,40 @@ def _(Path, df_all, mo, output_dir, sources):
         if _ets_metric is None:
             _ax.set_visible(False)
             continue
-        _data = df_all[(df_all["param"] == _ets_param) & (df_all["metric"] == _ets_metric)]
+        _data = df_all[
+            (df_all["param"] == _ets_param) & (df_all["metric"] == _ets_metric)
+        ]
         for _src in sources:
             _grp = _data[_data["source"] == _src].sort_values("step")
             if _grp.empty:
                 continue
-            _ax.plot(_grp["step"], _grp["value"], label=_src, **_line_style(_src))
+            _ax.plot(_grp["step"], _grp["value"], label=_src, **line_style(_src))
+            if "Varda" in _src and "Single" in _src:
+                _m6 = _grp[_grp["step"] % 6 == 0]
+                _ax.plot(_m6["step"], _m6["value"], linestyle="none",
+                         marker="o", markersize=4, color=line_style(_src)["color"])
         _ax.set_xscale("function", **_xscale_kw)
         _ax.xaxis.set_major_locator(_xticks)
-        _ax.tick_params(labelsize=_FS_axes)
-        _panel_label = _ets_metric.replace("ETS", _ets_param) + f" {_ets_unit}"
-        _ax.text(0.97, 0.97, _panel_label, transform=_ax.transAxes,
-                 ha="right", va="top", fontsize=_FS_axes)
-        _ax.set_xlabel("Lead time (h)", fontsize=_FS_axes)
+        _panel_label = (
+            _ets_metric.replace("ETS", param_label(_ets_param)) + f" {_ets_unit}"
+        )
+        _ax.text(
+            0.97, 0.97, _panel_label, transform=_ax.transAxes, ha="right", va="top"
+        )
+        _ax.set_xlabel("Lead time (h)")
         if _col == 0:
-            _ax.set_ylabel("ETS", fontsize=_FS_title)
+            _ax.set_ylabel("ETS")
 
     _axes[0, 0].set_xlim(-1, 126)
 
     _handles, _labels = _axes[0, 0].get_legend_handles_labels()
-    _fig.legend(_handles, _labels, loc="lower center", ncol=len(sources),
-                fontsize=_FS_title, frameon=False, bbox_to_anchor=(0.5, 0.06))
+    _fig.legend(
+        _handles,
+        _labels,
+        loc="lower center",
+        ncol=len(sources),
+        bbox_to_anchor=(0.5, 0.06),
+    )
     _fig.tight_layout()
     _fig.subplots_adjust(bottom=0.18)
 
@@ -244,9 +265,9 @@ def _(Path, df_all, mo, output_dir, sources):
     plt.close(_fig)
 
     (_out / "publication_figures.html").write_text(
-        f'<!doctype html><html><body>'
-        f'<img src="publication_figures_leadtime.png" style="max-width:100%">'
-        f'</body></html>'
+        "<!doctype html><html><body>"
+        '<img src="publication_figures_leadtime.png" style="max-width:100%">'
+        "</body></html>"
     )
 
     mo.image(str(_fname.with_suffix(".png")))
