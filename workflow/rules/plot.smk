@@ -158,7 +158,8 @@ rule make_forecast_animation:
         delay=lambda wc: 10 * int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
     shell:
         """
-        convert -delay {params.delay} -loop 0 {input} {output}
+        FRAMES=$(for f in {input}; do [ -s "$f" ] && echo "$f"; done | tr '\\n' ' ')
+        convert -delay {params.delay} -loop 0 $FRAMES {output}
         """
 
 

@@ -377,12 +377,12 @@ class Stratification(BaseModel):
     """Stratification settings for the analysis."""
 
     regions: List[str] = Field(
-        ...,
-        description="List of region names for stratification.",
+        default_factory=list,
+        description="List of region names for stratification. Empty list means no spatial stratification.",
     )
-    root: str = Field(
-        ...,
-        description="Root directory where the region shapefiles are stored.",
+    root: Optional[str] = Field(
+        None,
+        description="Root directory where the region shapefiles are stored. Required when regions is non-empty.",
     )
 
 
