@@ -84,9 +84,7 @@ def _(baselines_raw, params_raw):
         out = []
         for spec in [s for s in raw.split(";") if s.strip()]:
             root, steps, member, label = spec.split("|")
-            out.append(
-                {"root": root, "steps": steps, "member": member, "label": label}
-            )
+            out.append({"root": root, "steps": steps, "member": member, "label": label})
         return out
 
     baselines = _parse_baselines(baselines_raw)
@@ -170,16 +168,29 @@ def _(
 
 
 @app.cell
-def _(OBS_LABEL, Path, df, display_params, init_time, mo, output_dir, source_order, station):
+def _(
+    OBS_LABEL,
+    Path,
+    df,
+    display_params,
+    init_time,
+    mo,
+    output_dir,
+    source_order,
+    station,
+):
     import matplotlib.pyplot as plt
     import matplotlib.ticker as mticker
 
-    from publication_style import line_style, param_label, FS_AXES, FS_TITLE
+    from publication_style import line_style, param_label
+
+    plt.style.use(Path(__file__).resolve().parent / "publication.mplstyle")
 
     _UNITS = {"T_2M": "K", "TOT_PREC": "mm", "SP_10M": "m/s", "DD_10M": "deg"}
 
     _fig, _axes = plt.subplots(
-        len(display_params), 1,
+        len(display_params),
+        1,
         figsize=(8, 2.6 * len(display_params)),
         sharex=True,
     )
@@ -199,25 +210,34 @@ def _(OBS_LABEL, Path, df, display_params, init_time, mo, output_dir, source_ord
                 _style = {**_style, "linestyle": "none", "marker": ".", "markersize": 5}
             _lead = (_g["valid_time"] - init_time).dt.total_seconds() / 3600.0
             _ax.plot(_lead, _g["value"], label=_src, **_style)
-        _ax.set_ylabel(_UNITS.get(_p, _p), fontsize=FS_TITLE)
-        _ax.tick_params(labelsize=FS_AXES)
-        _ax.text(0.01, 0.97, param_label(_p), transform=_ax.transAxes,
-                 ha="left", va="top", fontsize=FS_AXES)
+        _ax.set_ylabel(_UNITS.get(_p, _p))
+        _ax.text(
+            0.01, 0.97, param_label(_p), transform=_ax.transAxes, ha="left", va="top"
+        )
         if _p == "DD_10M":
             _ax.set_ylim(0, 360)
             _ax.set_yticks([0, 90, 180, 270, 360])
         # Lead-time x-axis (hours since init): major every 24 h, minor every 6 h
         _ax.xaxis.set_major_locator(mticker.MultipleLocator(24))
         _ax.xaxis.set_minor_locator(mticker.MultipleLocator(6))
-        _ax.grid(True, axis="x", which="major", color="0.6", linewidth=0.8, linestyle="--")
-        _ax.grid(True, axis="x", which="minor", color="0.8", linewidth=0.6, linestyle=":")
+        _ax.grid(
+            True, axis="x", which="major", color="0.6", linewidth=0.8, linestyle="--"
+        )
+        _ax.grid(
+            True, axis="x", which="minor", color="0.8", linewidth=0.6, linestyle=":"
+        )
 
-    _axes[-1].set_xlabel("Lead time (h)", fontsize=FS_AXES)
+    _axes[-1].set_xlabel("Lead time (h)")
     _axes[0].set_xlim(left=0)
     _handles, _labels = _axes[0].get_legend_handles_labels()
-    _fig.legend(_handles, _labels, loc="lower center", ncol=len(source_order),
-                fontsize=FS_TITLE, frameon=False, bbox_to_anchor=(0.5, 0.0))
-    _fig.suptitle(f"{station} — Init time {init_time:%Y-%m-%d %H:%M}", fontsize=FS_TITLE)
+    _fig.legend(
+        _handles,
+        _labels,
+        loc="lower center",
+        ncol=len(source_order),
+        bbox_to_anchor=(0.5, 0.0),
+    )
+    _fig.suptitle(f"{station} — Init time {init_time:%Y-%m-%d %H:%M}")
     _fig.tight_layout(rect=[0, 0.05, 1, 0.99])
 
     _out = Path(output_dir)
@@ -227,9 +247,9 @@ def _(OBS_LABEL, Path, df, display_params, init_time, mo, output_dir, source_ord
     _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
     plt.close(_fig)
     (_out / "publication_meteogram.html").write_text(
-        '<!doctype html><html><body>'
+        "<!doctype html><html><body>"
         '<img src="publication_meteogram.png" style="max-width:100%">'
-        '</body></html>'
+        "</body></html>"
     )
 
     mo.image(str(_fname.with_suffix(".png")))

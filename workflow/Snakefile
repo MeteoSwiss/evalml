@@ -225,5 +225,3 @@ rule verification_metrics_plot_all:
             rules.verification_metrics_plot.output,
             experiment=EXPERIMENT_NAME,
         ),
-
-

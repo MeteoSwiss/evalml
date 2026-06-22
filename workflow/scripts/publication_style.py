@@ -1,14 +1,14 @@
 """Shared visual style for the publication figures.
 
-Single source of truth for colors, markers, line styles, font sizes, and the
-human-readable parameter labels used by both ``publication_figures.py``
-(lead-time figure) and ``publication_meteogram.py``. Tweak the look of the
-paper figures here.
-"""
+Source of truth for colors, markers, line styles, and human-readable parameter
+labels used by both ``publication_figures.py`` (lead-time figure) and
+``publication_meteogram.py``.  Font sizes and layout defaults live in
+``publication.mplstyle``; apply it with::
 
-# Font sizes (points)
-FS_AXES = 13   # tick labels, axis labels, in-panel annotations
-FS_TITLE = 16  # panel titles, y-axis labels, legend, suptitle
+    plt.style.use(Path(__file__).parent / "publication.mplstyle")
+
+Tweak the look of the paper figures here.
+"""
 
 # Label used for the station-observations source (overlaid in the meteogram).
 OBS_LABEL = "Observations"
@@ -26,8 +26,8 @@ PARAM_LABELS = {
     "TOT_PREC": "total precipitation",
     "SP_10M": "wind speed",
     "DD_10M": "wind direction",
-    "U_10M": "10m u-component of wind",
-    "V_10M": "10m v-component of wind",
+    "U_10M": "u-component of wind",
+    "V_10M": "v-component of wind",
 }
 
 
@@ -49,10 +49,13 @@ def line_style(src: str) -> dict:
             markersize=3.5,
         )
     color = (
-        COLOR_CH1 if "CH1" in src else
-        COLOR_CH2 if "CH2" in src else
-        COLOR_VARDA if "Varda" in src else
-        "gray"
+        COLOR_CH1
+        if "CH1" in src
+        else COLOR_CH2
+        if "CH2" in src
+        else COLOR_VARDA
+        if "Varda" in src
+        else "gray"
     )
     linestyle = "--" if "EPS mean" in src else "-"
     linewidth = 2.25 if "Varda" in src else 1.5
