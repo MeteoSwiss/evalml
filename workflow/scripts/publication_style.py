@@ -21,13 +21,13 @@ COLOR_VARDA = "#d83034"
 
 # Human-readable variable names (used for panel titles / labels).
 PARAM_LABELS = {
-    "T_2M": "2m temperature",
-    "TD_2M": "2m dew point temperature",
-    "TOT_PREC": "total precipitation",
-    "SP_10M": "wind speed",
-    "DD_10M": "wind direction",
-    "U_10M": "u-component of wind",
-    "V_10M": "v-component of wind",
+    "T_2M": "2m Temperature",
+    "TD_2M": "2m Dew Point Temperature",
+    "TOT_PREC": "Total Precipitation",
+    "SP_10M": "Wind Speed",
+    "DD_10M": "Wind Direction",
+    "U_10M": "Eastward Wind",
+    "V_10M": "Northward Wind",
 }
 
 
