@@ -55,3 +55,5 @@ uv.lock
 
 # evalml
 .evalml_snakemake_cmd.txt
+rulegraph.svg
+dag.svg
