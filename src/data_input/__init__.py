@@ -71,8 +71,8 @@ def _load_icon_topography(grid_nc: Path) -> np.ndarray:
         return ds["topography_c"].values.astype(np.float32)
 
 
-def _try_assign_model_elevation(ds: xr.Dataset) -> xr.Dataset:
-    """Attempt to attach model_elevation from a known ICON grid NC file.
+def _try_assign_elevation(ds: xr.Dataset) -> xr.Dataset:
+    """Attempt to attach elevation from a known ICON grid NC file.
 
     Matches by comparing the size of the ``values`` dimension to the number of
     cells in each candidate grid file.  Silently returns the dataset unchanged
@@ -86,11 +86,9 @@ def _try_assign_model_elevation(ds: xr.Dataset) -> xr.Dataset:
             continue
         topo = _load_icon_topography(grid_nc)
         if len(topo) == n:
-            LOG.info("Assigned model_elevation from %s (%d cells)", grid_nc.name, n)
-            return ds.assign_coords(model_elevation=("values", topo))
-    LOG.warning(
-        "Could not assign model_elevation: no ICON grid NC file matches values=%d", n
-    )
+            LOG.info("Assigned elevation from %s (%d cells)", grid_nc.name, n)
+            return ds.assign_coords(elevation=("values", topo))
+    LOG.warning("Could not assign elevation: no ICON grid NC file matches values=%d", n)
     return ds
 
 
@@ -855,7 +853,7 @@ def load_icon_baseline_from_grib(
             params=params,
         )
 
-    # Attach model orography as model_elevation coordinate
+    # Attach model orography as elevation coordinate
     if "ICON-CH1-EPS" in root.parts:
         grid_nc = ICON_CH1_GRID_NC
     elif "ICON-CH2-EPS" in root.parts:
@@ -865,10 +863,10 @@ def load_icon_baseline_from_grib(
     if grid_nc is not None and grid_nc.exists() and "values" in result.dims:
         topo = _load_icon_topography(grid_nc)
         if result.sizes["values"] == len(topo):
-            result = result.assign_coords(model_elevation=("values", topo))
+            result = result.assign_coords(elevation=("values", topo))
         else:
             LOG.warning(
-                "model_elevation not assigned: values=%d but %s has %d cells",
+                "elevation not assigned: values=%d but %s has %d cells",
                 result.sizes["values"],
                 grid_nc.name,
                 len(topo),
@@ -895,7 +893,7 @@ def load_forecast_data(
             files=_collect_ml_grib_files(root, steps),
             params=params,
         )
-        return _try_assign_model_elevation(ds)
+        return _try_assign_elevation(ds)
     if "INCA" in root.parts:
         LOG.info("Loading INCA baseline from NetCDF files...")
         return load_INCA_baseline_from_netcdf(root, reftime, steps, params)

@@ -112,7 +112,7 @@ def _make_lapse_rate_datasets(fcst_elev, obs_elev, t2m=280.0, td2m=270.0):
             "T_2M": (["step", "values"], np.full((3, n), t2m, dtype=np.float32)),
             "TD_2M": (["step", "values"], np.full((3, n), td2m, dtype=np.float32)),
         },
-        coords={"model_elevation": ("values", np.array(fcst_elev, dtype=np.float32))},
+        coords={"elevation": ("values", np.array(fcst_elev, dtype=np.float32))},
     )
     obs = xr.Dataset(
         coords={"elevation": ("values", np.array(obs_elev, dtype=np.float32))}
@@ -141,9 +141,9 @@ def test_lapse_rate_correction_station_below_grid():
     np.testing.assert_allclose(result["T_2M"].values, 280.0 + 0.0065 * 300.0, atol=1e-4)
 
 
-def test_lapse_rate_correction_skipped_without_model_elevation():
+def test_lapse_rate_correction_skipped_without_elevation():
     fcst, obs = _make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
-    fcst_no_elev = fcst.drop_vars("model_elevation")
+    fcst_no_elev = fcst.drop_vars("elevation")
     result = apply_lapse_rate_correction(fcst_no_elev, obs, ["T_2M", "TD_2M"])
     np.testing.assert_array_equal(result["T_2M"].values, fcst_no_elev["T_2M"].values)
 
