@@ -14,22 +14,16 @@ rule publication_figures:
         OUT_ROOT / "logs/figures/publication_figures.log",
     localrule: True
     params:
-        labels=",".join(
-            [
-                (
-                    BASELINE_CONFIGS[k]["label"]
-                    if k in BASELINE_CONFIGS
-                    else RUN_CONFIGS[k]["label"]
-                )
-                for k in EXPERIMENT_PARTICIPANTS.keys()
-            ]
-        ),
+        labels=",".join([
+            BASELINE_CONFIGS[k]["label"] if k in BASELINE_CONFIGS else RUN_CONFIGS[k]["label"]
+            for k in EXPERIMENT_PARTICIPANTS.keys()
+        ]),
     shell:
         """
         python {input.script} \
             --verif_files "{input.verif}" \
             --sources "{params.labels}" \
-            --output {output} >{log} 2>&1
+            --output {output} > {log} 2>&1
         """
 
 
@@ -45,7 +39,9 @@ def _meteogram_baselines():
     specs = []
     for cfg in BASELINE_CONFIGS.values():
         if cfg.get("member") == "mean":
-            specs.append(f"{cfg['root']}|{cfg['steps']}|{cfg['member']}|{cfg['label']}")
+            specs.append(
+                f"{cfg['root']}|{cfg['steps']}|{cfg['member']}|{cfg['label']}"
+            )
     return ";".join(specs)
 
 
@@ -87,7 +83,7 @@ rule publication_meteogram:
             --date {params.date:q} \
             --station {params.station:q} \
             --params {params.params:q} \
-            --output {output:q} >{log} 2>&1
+            --output {output:q} > {log} 2>&1
         """
 
 
