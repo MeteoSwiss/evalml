@@ -14,14 +14,20 @@ rule publication_figures:
         OUT_ROOT / "logs/figures/publication_figures.log",
     localrule: True
     params:
-        labels=",".join([
-            BASELINE_CONFIGS[k]["label"] if k in BASELINE_CONFIGS else RUN_CONFIGS[k]["label"]
-            for k in EXPERIMENT_PARTICIPANTS.keys()
-        ]),
+        labels=",".join(
+            [
+                (
+                    BASELINE_CONFIGS[k]["label"]
+                    if k in BASELINE_CONFIGS
+                    else RUN_CONFIGS[k]["label"]
+                )
+                for k in EXPERIMENT_PARTICIPANTS.keys()
+            ]
+        ),
     shell:
         """
         python {input.script} \
             --verif_files "{input.verif}" \
             --sources "{params.labels}" \
-            --output {output} > {log} 2>&1
+            --output {output} >{log} 2>&1
         """

@@ -615,7 +615,8 @@
           "type": "boolean"
         }
       },
-      "title": "PublicationConfig"
+      "title": "PublicationConfig",
+      "type": "object"
     },
     "ScoreMapsConfig": {
       "additionalProperties": false,
