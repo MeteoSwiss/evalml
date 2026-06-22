@@ -10,9 +10,9 @@ from pyproj import Transformer
 
 LOG = logging.getLogger(__name__)
 
-# IFS shortNames that differ from COSMO parameter names.
-# Used to load GRIB output from global models (e.g. AIFS-single) that write IFS names.
-_IFS_TO_COSMO = {
+# IFS shortNames that differ from ICON parameter names.
+# Used when loading GRIB output from global models (e.g. AIFS-single) that write IFS names.
+_IFS_TO_ICON = {
     "tp": "TOT_PREC",
     "msl": "PMSL",
     "10u": "U_10M",
@@ -22,7 +22,7 @@ _IFS_TO_COSMO = {
     "sp": "PS",
     "lsm": "FR_LAND",
 }
-_COSMO_TO_IFS = {v: k for k, v in _IFS_TO_COSMO.items()}
+_ICON_TO_IFS = {v: k for k, v in _IFS_TO_ICON.items()}
 
 XARRAY_ENGINE_PROFILE = {
     "ensure_dims": ["z", "number", "step", "forecast_reference_time"],
@@ -70,25 +70,14 @@ def load_analysis_data_from_zarr(
     This function loads analysis data from a Zarr dataset, processing it to make it more
     xarray-friendly. It renames variables, sets the time index, and pivots the dataset.
     """
-    PARAMS_MAP_COSMO2 = {
-        "T_2M": "2t",
-        "TD_2M": "2d",
-        "U_10M": "10u",
-        "V_10M": "10v",
-        "PS": "sp",
-        "PMSL": "msl",
-        "TOT_PREC": "tp",
-    }
-    tot_prec_string = "TOT_PREC_6H" if min(np.diff(steps)) == 6 else "TOT_PREC_1H"
-    PARAMS_MAP_COSMO1 = {
-        v: v.replace("TOT_PREC", tot_prec_string) for v in PARAMS_MAP_COSMO2.keys()
-    }
     USE_IFS_NAMES = {"-co2-", "-ea-", "ifsnames"}
-    PARAMS_MAP = (
-        PARAMS_MAP_COSMO2
-        if any(tag in root.name for tag in USE_IFS_NAMES)
-        else PARAMS_MAP_COSMO1
-    )
+    if any(tag in root.name for tag in USE_IFS_NAMES):
+        # Zarr stores IFS shortNames; map ICON param names to IFS for selection
+        zarr_names = {p: _ICON_TO_IFS.get(p, p) for p in params}
+    else:
+        # Zarr stores ICON param names; TOT_PREC has a time-resolution suffix
+        tot_prec_key = "TOT_PREC_6H" if min(np.diff(steps)) == 6 else "TOT_PREC_1H"
+        zarr_names = {p: p.replace("TOT_PREC", tot_prec_key) for p in params}
 
     ds = xr.open_zarr(root, consolidated=False)
 
@@ -99,7 +88,7 @@ def load_analysis_data_from_zarr(
     ds = ds.assign_coords({"variable": ds.attrs["variables"]})
 
     # select variables and valid time, squeeze ensemble dimension
-    ds = ds.sel(variable=[PARAMS_MAP[p] for p in params]).squeeze("ensemble", drop=True)
+    ds = ds.sel(variable=[zarr_names[p] for p in params]).squeeze("ensemble", drop=True)
 
     # recover original 2D shape (not present for global Gaussian grids)
     if "field_shape" in ds.attrs and len(ds.attrs["field_shape"]) == 2:
@@ -117,7 +106,7 @@ def load_analysis_data_from_zarr(
     ds = (
         ds["data"]
         .to_dataset("variable")
-        .rename({v: k for k, v in PARAMS_MAP.items() if v in ds["variable"].values})
+        .rename({v: k for k, v in zarr_names.items() if v in ds["variable"].values})
     )
 
     # change precipitation units from m to kg m-2
@@ -333,13 +322,13 @@ def load_forecast_data_from_grib(
     # Extend param selection to include IFS aliases so that global-model GRIB files
     # (which use IFS shortNames like "tp", "2t") are also matched.
     params_extended = list(
-        {p for p in params} | {_COSMO_TO_IFS[p] for p in params if p in _COSMO_TO_IFS}
+        {p for p in params} | {_ICON_TO_IFS[p] for p in params if p in _ICON_TO_IFS}
     )
     ds = load_from_grib_file(files, {"parameter.variable": params_extended})
 
-    # Rename any IFS shortNames back to COSMO names
+    # Rename any IFS shortNames back to ICON names
     ifs_rename = {
-        ifs: cosmo for ifs, cosmo in _IFS_TO_COSMO.items() if ifs in ds.data_vars
+        ifs: icon for ifs, icon in _IFS_TO_ICON.items() if ifs in ds.data_vars
     }
     if ifs_rename:
         ds = ds.rename(ifs_rename)
