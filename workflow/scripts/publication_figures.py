@@ -173,6 +173,8 @@ def _(Path, df_all, mo, output_dir, sources):
                              marker="o", markersize=4, color=line_style(_src)["color"])
             _ax.set_xscale("function", **_xscale_kw)
             _ax.xaxis.set_major_locator(_xticks)
+            if _metric == "BIAS":
+                _ax.axhline(0, color="black", linestyle="dashed", linewidth=0.7, zorder=0)
             if _row == 0:
                 _ax.set_title(param_label(_param))
             if _col == 0:
@@ -220,58 +222,42 @@ def _(Path, df_all, mo, output_dir, sources):
         bbox_to_anchor=(0.5, 0.06),
     )
     _fig.tight_layout()
-    _fig.subplots_adjust(bottom=0.22)
+    _fig.subplots_adjust(bottom=0.18)
 
     # Extra gap between last metric row and ETS row
-    _extra_gap = 0.04
-    for _c in range(len(_PARAMS)):
-        _pos = _axes[_ets_row, _c].get_position()
-        _axes[_ets_row, _c].set_position(
-            [_pos.x0, _pos.y0 - _extra_gap, _pos.width, _pos.height]
-        )
+    # _extra_gap = 0.04
+    # for _c in range(len(_PARAMS)):
+    #     _pos = _axes[_ets_row, _c].get_position()
+    #     _axes[_ets_row, _c].set_position([_pos.x0, _pos.y0 - _extra_gap, _pos.width, _pos.height])
 
-    # Light-grey background behind the TOT_PREC panels (incl. their titles/labels).
-    # Derived from the axes' *tight* bounding boxes so it stays aligned at any
-    # font size. Two overlapping rectangles form the stepped shape: a narrow one
-    # over the TOT_PREC metric column (col 1) and a wider one under the two
-    # TOT_PREC ETS panels (cols 0-1). Axes keep white faces, so grey shows only
-    # in the margins around them.
-    from matplotlib.patches import Rectangle as _Rect
+    # Light-grey background encompassing the four TOT_PREC panels and their labels.
+    # Axes keep a white background; the grey appears only in the margins around them.
+    _PREC_BG   = "#f0f0f0"
+    _pad_left  = 0.040  # horizontal padding beyond axes left edges
+    _pad_bleft = 0.025  # horizontal padding beyond axes for lower left
+    _pad_right = 0.010  # horizontal padding beyond axes right edges
+    _pad_top   = 0.040  # above row-0 axes to capture the column title
+    _pad_bot   = 0.050  # below ETS row to capture the x-axis label
 
-    _PREC_BG = "#f0f0f0"
-    _pad = 0.008
 
-    _fig.canvas.draw()  # ensure renderer + final positions for tight bboxes
-    _rend = _fig.canvas.get_renderer()
-    _inv = _fig.transFigure.inverted()
-
-    def _union_bbox(_axs):
-        _pts = [_inv.transform(_a.get_tightbbox(_rend).get_points()) for _a in _axs]
-        return (
-            min(_p[0][0] for _p in _pts),
-            min(_p[0][1] for _p in _pts),
-            max(_p[1][0] for _p in _pts),
-            max(_p[1][1] for _p in _pts),
-        )
-
-    _ux0, _uy0, _ux1, _uy1 = _union_bbox([_axes[_r, 1] for _r in range(len(_METRICS))])
-    _lx0, _ly0, _lx1, _ly1 = _union_bbox([_axes[_ets_row, 0], _axes[_ets_row, 1]])
-    _mid = (_uy0 + _ly1) / 2  # split point in the gap between metric and ETS blocks
-    for _x0, _y0, _x1, _y1 in [
-        (_ux0, _mid, _ux1, _uy1),  # upper block (col 1)
-        (_lx0, _ly0, _lx1, _mid),  # lower block (cols 0-1), overlaps at _mid
-    ]:
-        _fig.add_artist(
-            _Rect(
-                (_x0 - _pad, _y0 - _pad),
-                (_x1 - _x0) + 2 * _pad,
-                (_y1 - _y0) + 2 * _pad,
-                facecolor=_PREC_BG,
-                edgecolor="none",
-                zorder=-1,
-                transform=_fig.transFigure,
-            )
-        )
+    from matplotlib.patches import Polygon as _MplPolygon
+    _m0_pos = _axes[0, 1].get_position()                    # top of metric col 1
+    _m_pos  = _axes[len(_METRICS) - 1, 1].get_position()    # bottom of metric col 1
+    _e0_pos = _axes[_ets_row, 0].get_position()             # ETS col 0
+    _e1_pos = _axes[_ets_row, 1].get_position()             # ETS col 1
+    _pad_mid = (_m_pos.y0 - _e0_pos.y1) / 2
+    _trap = _MplPolygon([
+        (_m0_pos.x0 - _pad_left, _m0_pos.y1 + _pad_top),    # top-left (above col-1, row-0)
+        (_m0_pos.x1 + _pad_right, _m0_pos.y1 + _pad_top),   # top-right
+        (_m_pos.x1  + _pad_right, _m_pos.y0),               # bottom-right of metric area
+        (_e1_pos.x1 + _pad_right, _e0_pos.y1),              # top-right of ETS area
+        (_e1_pos.x1 + _pad_right, _e0_pos.y0 - _pad_bot),   # bottom-right (incl. x-label)
+        (_e0_pos.x0 - _pad_bleft, _e0_pos.y0 - _pad_bot),   # bottom-left
+        (_e0_pos.x0 - _pad_bleft, _e0_pos.y1 + _pad_mid),   # top-left of ETS area
+        (_m_pos.x0  - _pad_left, _m_pos.y0 - _pad_mid),     # bottom-left of metric area
+    ], closed=True, facecolor=_PREC_BG, edgecolor="none", zorder=-1)
+    _trap.set_transform(_fig.transFigure)
+    _fig.add_artist(_trap)
 
     _fname = _out / "publication_figures_leadtime.pdf"
     _fig.savefig(_fname, bbox_inches="tight")
@@ -285,12 +271,6 @@ def _(Path, df_all, mo, output_dir, sources):
     )
 
     mo.image(str(_fname.with_suffix(".png")))
-    return
-
-
-@app.cell
-def _(df_all):
-    df_all
     return
 
 
