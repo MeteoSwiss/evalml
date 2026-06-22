@@ -3,6 +3,8 @@
 # ----------------------------------------------------- #
 rule publication_figures:
     input:
+        "workflow/scripts/publication_style.py",
+        "workflow/scripts/publication.mlpstyle",
         script="workflow/scripts/publication_figures.py",
         verif=EXPERIMENT_PARTICIPANTS.values(),
     output:
@@ -47,6 +49,8 @@ def _meteogram_baselines():
 
 rule publication_meteogram:
     input:
+        "workflow/scripts/publication_style.py",
+        "workflow/scripts/publication.mlpstyle",
         script="workflow/scripts/publication_meteogram.py",
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
