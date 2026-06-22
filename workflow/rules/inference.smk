@@ -274,8 +274,11 @@ def _inference_routing_fn(wc):
 rule inference_execute:
     input:
         okfile=_inference_routing_fn,
-        image=lambda wc: OUT_ROOT
-        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
+        env=lambda wc: (
+            OUT_ROOT / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs"
+            if RUN_CONFIGS[wc.run_id].get("squash_venv", True)
+            else OUT_ROOT / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/.venv"
+        ),
     output:
         okfile=touch(OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok"),
     log:
@@ -290,7 +293,8 @@ rule inference_execute:
         ntasks=lambda wc: get_resource(wc, "tasks", 1),
         gpus=lambda wc: get_resource(wc, "gpu", 1),
     params:
-        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
+        env_path=lambda wc, input: f"{Path(input.env).resolve()}",
+        squash_venv=lambda wc: RUN_CONFIGS[wc.run_id].get("squash_venv", True),
         workdir=lambda wc: (
             OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
         ).resolve(),
@@ -305,11 +309,12 @@ rule inference_execute:
 
             cd {params.workdir}
 
-            squashfs-mount {params.image_path}:/user-environment -- bash -c '
-                source /user-environment/bin/activate
+            _run_inference() {{
+                local VENV=$1
+                source "$VENV/bin/activate"
 
                 if [ "{params.disable_local_definitions}" = "False" ]; then
-                    export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
+                    export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
                 fi
 
                 CMD_ARGS=()
@@ -328,7 +333,14 @@ rule inference_execute:
                     --gres={resources.gres} \
                     --ntasks={resources.ntasks} \
                     anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
-                '
+            }}
+            export -f _run_inference
+
+            if [ "{params.squash_venv}" = "True" ]; then
+                squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
+            else
+                _run_inference "{params.env_path}"
+            fi
         ) >{log} 2>&1
         """
 # fmt: on

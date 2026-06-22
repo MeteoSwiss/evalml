@@ -392,6 +392,12 @@
           "title": "Disable Local Eccodes Definitions",
           "type": "boolean"
         },
+        "squash_venv": {
+          "default": true,
+          "description": "If true (default), package the virtual environment as a squashfs image before running inference. Set to false to activate the virtual environment directly and skip the squashfs build step.",
+          "title": "Squash Venv",
+          "type": "boolean"
+        },
         "config": {
           "anyOf": [
             {
@@ -827,6 +833,12 @@
           "default": false,
           "description": "If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
           "title": "Disable Local Eccodes Definitions",
+          "type": "boolean"
+        },
+        "squash_venv": {
+          "default": true,
+          "description": "If true (default), package the virtual environment as a squashfs image before running inference. Set to false to activate the virtual environment directly and skip the squashfs build step.",
+          "title": "Squash Venv",
           "type": "boolean"
         },
         "config": {
