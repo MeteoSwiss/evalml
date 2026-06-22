@@ -167,30 +167,52 @@ def _binary_confusion_matrix(
     dim: list[str],
 ) -> xr.DataArray:
     """
-    Compute counts of the confusion matrix (contingency table, e.g. hits, misses, ...)
+    Compute confusion matrix counts (tp, fp, fn, tn, total) for all thresholds at once.
 
-    Return an xarray.DataArray with the definition of the events in the dimension as given by
-    `labels` and the elements of the confusion matrix in the dimension `contingency`.
+    Thresholds sharing the same operator are broadcast as a single extra dimension so
+    the spatial reduction happens in one dask pass instead of one pass per threshold.
     """
-    threshold_dim = xr.DataArray(
-        data=[f"{key}_{str(val).replace('.', 'p')}" for key, val in thresholds],
-        dims="threshold",
+    from collections import defaultdict
+
+    op_groups: dict[str, list[float]] = defaultdict(list)
+    for op_txt, val in thresholds:
+        op_groups[op_txt].append(val)
+
+    # Points where both fcst and obs carry valid (non-masked) data
+    valid = fcst.notnull() & obs.notnull()
+    # Fill NaN so comparisons return False rather than NaN for masked points
+    fcst_filled = fcst.where(valid, 0)
+    obs_filled = obs.where(valid, 0)
+
+    contingency_dim = xr.DataArray(
+        ["tp_count", "fp_count", "fn_count", "tn_count", "total_count"],
+        dims="contingency",
     )
-    contingency_table = []
-    for op_txt, value in thresholds:
+
+    tables = []
+    for op_txt, values in op_groups.items():
         try:
             op_fn = getattr(op, op_txt)
         except AttributeError:
             raise AttributeError(f"operator {op_txt} is not available")
-        event_operator = scores.categorical.ThresholdEventOperator(
-            default_event_threshold=value,
-            default_op_fn=op_fn,
+
+        threshold_labels = [f"{op_txt}_{str(v).replace('.', 'p')}" for v in values]
+        # Broadcast comparison across all threshold values simultaneously
+        vals_da = xr.DataArray(
+            values, dims="threshold", coords={"threshold": threshold_labels}
         )
-        contingency_manager = event_operator.make_contingency_manager(fcst, obs)
-        contingency_table.append(
-            contingency_manager.transform(reduce_dims=dim).get_table()
-        )
-    return xr.concat(contingency_table, dim=threshold_dim)
+        fcst_ev = op_fn(fcst_filled, vals_da)  # (...spatial/time..., threshold) bool
+        obs_ev = op_fn(obs_filled, vals_da)
+
+        tp = (fcst_ev & obs_ev & valid).sum(dim)
+        fp = (fcst_ev & ~obs_ev & valid).sum(dim)
+        fn = (~fcst_ev & obs_ev & valid).sum(dim)
+        tn = (~fcst_ev & ~obs_ev & valid).sum(dim)
+        total = valid.sum(dim).broadcast_like(tp)
+
+        tables.append(xr.concat([tp, fp, fn, tn, total], dim=contingency_dim))
+
+    return xr.concat(tables, dim="threshold")
 
 
 def _compute_scores(
@@ -273,16 +295,6 @@ def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
     return out
 
 
-def _compute_masks(ds: xr.Dataset) -> xr.Dataset:
-    # extract first data_var from ds and only retain x and y dimensions
-    darr = ds[list(ds.data_vars)[0]].isel(
-        **{dim: 0 for dim in ds[list(ds.data_vars)[0]].dims if dim not in ["x", "y"]}
-    )
-    # compile list of masks to use with data arrays in ds
-    mask = xr.ones_like(darr, dtype=bool).expand_dims(region=["all"])
-    return mask
-
-
 def verify(
     fcst: xr.Dataset,
     obs: xr.Dataset,
@@ -343,10 +355,6 @@ def verify(
         else:
             dim = ["values"]
 
-    # rewrite the verification to use dask and xarray
-    # chunk the data to avoid memory issues
-    # compute the metrics in parallel
-    # return the results as a xarray Dataset
     fcst_aligned, obs_aligned = xr.align(fcst, obs, join="inner", copy=False)
     region_polygons = ShapefileSpatialAggregationMasks(shp=regions)
     masks = region_polygons.get_masks(
@@ -359,54 +367,43 @@ def verify(
         if param not in obs_aligned.data_vars:
             LOG.warning("Parameter %s not in obs, skipping", param)
             continue
-        score = []
-        fcst_statistics = []
-        obs_statistics = []
         thresholds = (
             threshold_dict.get(param, None)
             if isinstance(threshold_dict, dict)
             else None
         )
-        LOG.info(f"Thresholds for {param}: {thresholds}")
-        for region in masks.region.values:
-            LOG.info("Verifying parameter %s for region %s", param, region)
-            fcst_param = fcst_aligned[param].where(masks.sel(region=region))
-            obs_param = obs_aligned[param].where(masks.sel(region=region))
+        LOG.info(
+            "Verifying parameter %s for %d regions, thresholds: %s",
+            param,
+            len(masks.region),
+            thresholds,
+        )
 
-            # scores vs time (reduce spatially)
-            score.append(
-                _compute_scores(
-                    fcst_param,
-                    obs_param,
-                    prefix=param + ".",
-                    source=fcst_label,
-                    dim=dim,
-                    thresholds=thresholds,
-                ).expand_dims(region=[region])
-            )
+        # Apply all region masks at once via broadcast — adds "region" as leading dim
+        fcst_param = fcst_aligned[param].where(masks)
+        obs_param = obs_aligned[param].where(masks)
 
-            # statistics vs time (reduce spatially)
-            fcst_statistics.append(
-                _compute_statistics(
-                    fcst_param,
-                    prefix=param + ".",
-                    source=fcst_label,
-                    dim=dim,
-                ).expand_dims(region=[region])
-            )
-            obs_statistics.append(
-                _compute_statistics(
-                    obs_param,
-                    prefix=param + ".",
-                    source=obs_label,
-                    dim=dim,
-                ).expand_dims(region=[region])
-            )
-
-        score = xr.concat(score, dim="region")
-        fcst_statistics = xr.concat(fcst_statistics, dim="region")
-        obs_statistics = xr.concat(obs_statistics, dim="region")
-        param_statistics = xr.concat([fcst_statistics, obs_statistics], dim="source")
+        score = _compute_scores(
+            fcst_param,
+            obs_param,
+            prefix=param + ".",
+            source=fcst_label,
+            dim=dim,
+            thresholds=thresholds,
+        )
+        fcst_stats = _compute_statistics(
+            fcst_param,
+            prefix=param + ".",
+            source=fcst_label,
+            dim=dim,
+        )
+        obs_stats = _compute_statistics(
+            obs_param,
+            prefix=param + ".",
+            source=obs_label,
+            dim=dim,
+        )
+        param_statistics = xr.concat([fcst_stats, obs_stats], dim="source")
         # Compute eagerly per parameter to prevent dask graph bloat
         scores.append(_merge_metrics([score], num_workers=num_workers))
         statistics.append(_merge_metrics([param_statistics], num_workers=num_workers))
