@@ -270,23 +270,6 @@ def load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Dat
     return ds
 
 
-DWH_PARAM_MAP = {
-    "T_2M": "tre200s0",
-    "TD_2M": "tde200s0",
-    "PS": "prestas0",
-    "PMSL": "pp0qffs0",
-    "TOT_PREC": "rre150h0",
-    "FF_10M": "fkl010z0",
-    "SP_10M": "fkl010z0",
-    "DD_10M": "dkl010z0",
-    "VMAX_10M": "fkl010z1",
-}
-DWH_WIND_SPEED = "fkl010z0"
-DWH_WIND_DIR = "dkl010z0"
-DWH_CELSIUS_TO_KELVIN = {"tre200s0", "tde200s0"}
-DWH_HPA_TO_PA = {"prestas0", "pp0qffs0"}
-
-
 def _jretrieve_df_to_xarray(df, short_names, catalog) -> xr.Dataset:
     """Pivot long-form jretrieve obs into a (time, values) cube aligned to the
     catalog, NaN-filled for missing cells."""
@@ -337,6 +320,22 @@ def load_obs_data_from_jretrieve(
     variables renamed to ICON names in SI units (T/TD in Kelvin, pressure in Pa).
     Only the requested hourly valid times are kept.
     """
+    DWH_PARAM_MAP = {
+        "T_2M": "tre200s0",
+        "TD_2M": "tde200s0",
+        "PS": "prestas0",
+        "PMSL": "pp0qffs0",
+        "TOT_PREC": "rre150h0",
+        "FF_10M": "fkl010z0",
+        "SP_10M": "fkl010z0",
+        "DD_10M": "dkl010z0",
+        "VMAX_10M": "fkl010z1",
+    }
+    DWH_WIND_SPEED = "fkl010z0"
+    DWH_WIND_DIR = "dkl010z0"
+    DWH_CELSIUS_TO_KELVIN = {"tre200s0", "tde200s0"}
+    DWH_HPA_TO_PA = {"prestas0", "pp0qffs0"}
+
     from data_input import jretrieve as jr
 
     stations, stage, seq_type = jr.parse_selection(root)
