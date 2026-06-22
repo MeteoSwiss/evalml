@@ -4,12 +4,12 @@
 rule publication_figures:
     input:
         "workflow/scripts/publication_style.py",
-        "workflow/scripts/publication.mlpstyle",
+        "workflow/scripts/publication.mplstyle",
         script="workflow/scripts/publication_figures.py",
         verif=EXPERIMENT_PARTICIPANTS.values(),
     output:
         report(
-            directory("figures/leadtime"),
+            directory(OUT_ROOT / "figures/leadtime"),
             htmlindex="publication_figures.html",
         ),
     log:
@@ -50,12 +50,12 @@ def _meteogram_baselines():
 rule publication_meteogram:
     input:
         "workflow/scripts/publication_style.py",
-        "workflow/scripts/publication.mlpstyle",
+        "workflow/scripts/publication.mplstyle",
         script="workflow/scripts/publication_meteogram.py",
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         report(
-            directory("figures/meteogram"),
+            directory(OUT_ROOT / "figures/meteogram"),
             htmlindex="publication_meteogram.html",
         ),
     log:
