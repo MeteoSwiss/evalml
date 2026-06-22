@@ -145,6 +145,31 @@ You can then run it with:
 evalml experiment path/to/experiment/config.yaml --report
 ```
 
+### Truth sources
+
+The `truth.root` value selects how the ground truth is loaded:
+
+- **Analysis Zarr** — a path ending in `.zarr` (anemoi analysis dataset).
+- **DWH / jretrievedwh** — a `jretrievedwh:` marker string fetching surface observations
+  (e.g. SMN) live from the MeteoSwiss data warehouse. Variables are mapped to
+  ICON names in SI units (temperatures in K, pressure in Pa, precipitation as the hourly
+  sum); wind `U_10M`/`V_10M` are derived from speed + direction.
+
+  Marker syntax (station selection is required; pick one of group/locations/bbox):
+
+  ```yaml
+  truth:
+    label: SwissMetNet
+    root: jretrievedwh:1,2                          # stn_group_id (default)
+    # root: jretrievedwh:locations=ARO,KLO,LUG      # explicit nat_abbr list
+    # root: jretrievedwh:bbox=45.8,47.8,5.9,10.5    # minlat,maxlat,minlon,maxlon
+  ```
+
+  **Prerequisites:** `jretrievedwh.py` must be on `$PATH` (falls back to
+  `/oprusers/osm/opr.inn/bin/jretrievedwh.py`) and DWH credentials must be
+  available — see [Credentials setup](#credentials-setup). No data is
+  pre-downloaded — the obs are queried at verification time.
+
 
 ## Installation
 
@@ -174,6 +199,25 @@ After this step, your token is stored locally and used for subsequent runs. Toke
 valid for 30 days. Every training or evaluation run within this period automatically
 extends the token by another 30 days. It’s good practice to run the login command before
 executing the workflow to ensure your token is still valid.
+
+### DWH / jretrieve credentials
+
+To use `jretrievedwh:` as a truth source, provide a client ID and secret for
+the MeteoSwiss service account. Set them as environment variables:
+
+```bash
+export JRETRIEVE_CLIENT_ID=your-client-id
+export JRETRIEVE_CLIENT_SECRET=your-client-secret
+```
+
+or place them in a `.env` file at the project root (next to `.jretrievedwh-conf.prod.py`):
+
+```
+JRETRIEVE_CLIENT_ID=your-client-id
+JRETRIEVE_CLIENT_SECRET=your-client-secret
+```
+
+The `.env` file is listed in `.gitignore` and is never committed.
 
 ## Workspace setup
 

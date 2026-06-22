@@ -22,7 +22,6 @@ dependencies = [
     "pyproj>=3.7.2",
     "marimo>=0.23.3",
     "geopandas>=0.14.0",
-    "peakweather",
     "pyzmq>=27.1.0",
     "scores>=2.0.0",
     "eccodes>=2.44,<2.48",
@@ -60,5 +59,4 @@ packages = [
 ]
 
 [tool.uv.sources]
-peakweather = { git = "https://github.com/MeteoSwiss/PeakWeather.git" }
 eccodes-cosmo-resources-python = { git = "https://github.com/MeteoSwiss/eccodes-cosmo-resources-python" }
