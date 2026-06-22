@@ -85,13 +85,3 @@ rule publication_meteogram:
             --params {params.params:q} \
             --output {output:q} > {log} 2>&1
         """
-
-
-rule publication_all:
-    """Target rule for publication figures workflow."""
-    input:
-        (
-            [rules.publication_figures.output, rules.publication_meteogram.output]
-            if config.get("publication", {}).get("enabled", False)
-            else []
-        ),

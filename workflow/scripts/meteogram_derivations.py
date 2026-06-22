@@ -40,12 +40,21 @@ def wind_direction_deg(u, v):
 
 def add_derived(ds: xr.Dataset, display_params: list[str]) -> xr.Dataset:
     """Add requested derived variables (SP_10M, DD_10M) to a dataset that holds
-    U_10M/V_10M. Base params are left untouched."""
+    U_10M/V_10M. Base params are left untouched.
+
+    Raises ValueError if a derived wind parameter is requested but U_10M/V_10M
+    are not present to compute it (fail loudly rather than silently skipping).
+    """
     ds = ds.copy()
-    have_uv = "U_10M" in ds and "V_10M" in ds
-    if "SP_10M" in display_params and have_uv:
+    wanted = [p for p in ("SP_10M", "DD_10M") if p in display_params]
+    if wanted and not ("U_10M" in ds and "V_10M" in ds):
+        raise ValueError(
+            f"Cannot derive {wanted} without U_10M and V_10M "
+            f"(dataset has: {list(ds.data_vars)})."
+        )
+    if "SP_10M" in display_params:
         ds["SP_10M"] = wind_speed(ds["U_10M"], ds["V_10M"])
-    if "DD_10M" in display_params and have_uv:
+    if "DD_10M" in display_params:
         ds["DD_10M"] = wind_direction_deg(ds["U_10M"], ds["V_10M"])
     return ds
 
@@ -56,13 +65,28 @@ def station_timeseries_to_long(
     """Flatten a single-station dataset to long form.
 
     Returns columns [source, valid_time, param, value]. The time coordinate is
-    `valid_time` if present, else `time`. Params absent from `ds` are skipped.
+    `valid_time` if present, else `time`.
+
+    Raises KeyError if the dataset has no time coordinate, or if any requested
+    parameter is absent (fail loudly rather than silently skipping).
     """
-    tcoord = "valid_time" if "valid_time" in ds.coords or "valid_time" in ds.dims else "time"
+    if "valid_time" in ds.coords or "valid_time" in ds.dims:
+        tcoord = "valid_time"
+    elif "time" in ds.coords or "time" in ds.dims:
+        tcoord = "time"
+    else:
+        raise KeyError(
+            f"{source}: dataset has no 'valid_time' or 'time' coordinate "
+            f"(coords: {list(ds.coords)})."
+        )
+    missing = [p for p in display_params if p not in ds]
+    if missing:
+        raise KeyError(
+            f"{source}: requested parameters absent from dataset: {missing} "
+            f"(available: {list(ds.data_vars)})."
+        )
     frames: list[pd.DataFrame] = []
     for p in display_params:
-        if p not in ds:
-            continue
         da = ds[p].squeeze()
         times = np.asarray(ds[tcoord].squeeze().values).reshape(-1)
         values = np.asarray(da.values).reshape(-1)

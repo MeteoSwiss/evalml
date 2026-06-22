@@ -260,3 +260,13 @@ rule verification_metrics_plot_all:
         ),
 
 
+rule publication_all:
+    """Target rule for publication figures workflow."""
+    input:
+        (
+            [rules.publication_figures.output, rules.publication_meteogram.output]
+            if config.get("publication", {}).get("enabled", False)
+            else []
+        ),
+
+
