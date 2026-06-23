@@ -29,7 +29,7 @@ rule verification_metrics_baseline:
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
         truth=config["truth"]["root"],
-        truth_source_id=f"truth_{TRUTH_HASH}",
+        truth_source_id=f"truth-{TRUTH_HASH}",
         regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
@@ -80,7 +80,7 @@ rule verification_metrics:
     params:
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         truth=config["truth"]["root"],
-        truth_source_id=f"truth_{TRUTH_HASH}",
+        truth_source_id=f"truth-{TRUTH_HASH}",
         regions=REGIONS,
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
@@ -175,7 +175,7 @@ rule verification_metrics_plot:
             )
             for sid in EXPERIMENT_PARTICIPANTS
         )
-        + ",truth_{}:{}".format(TRUTH_HASH, config["truth"]["label"]),
+        + ",truth-{}:{}".format(TRUTH_HASH, config["truth"]["label"]),
     shell:
         """
         uv run {input.script} {input.verif} --output_dir {output} --labels "{params.label_map}" >{log} 2>&1

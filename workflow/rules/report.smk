@@ -50,7 +50,7 @@ rule report_experiment_dashboard:
             )
             for sid in EXPERIMENT_PARTICIPANTS
         )
-        + ",truth_{}:{}".format(TRUTH_HASH, config["truth"]["label"]),
+        + ",truth-{}:{}".format(TRUTH_HASH, config["truth"]["label"]),
     shell:
         """
         python {input.script} \
