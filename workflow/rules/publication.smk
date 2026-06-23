@@ -31,7 +31,7 @@ rule publication_figures:
         python {input.script} \
             --verif_files "{input.verif}" \
             --sources "{params.labels}" \
-            --output {output} > {log} 2>&1
+            --output {output} >{log} 2>&1
         """
 
 
@@ -47,9 +47,7 @@ def _meteogram_baselines():
     specs = []
     for cfg in BASELINE_CONFIGS.values():
         if cfg.get("member") == "mean":
-            specs.append(
-                f"{cfg['root']}|{cfg['steps']}|{cfg['member']}|{cfg['label']}"
-            )
+            specs.append(f"{cfg['root']}|{cfg['steps']}|{cfg['member']}|{cfg['label']}")
     return ";".join(specs)
 
 
@@ -80,13 +78,19 @@ def _pub_scoremap_inputs(wc):
     leadtime = _PUB_SCOREMAP_CFG.get("leadtime", 24)
     return {
         "cand_files": expand(
-            str(OUT_ROOT / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc"),
+            str(
+                OUT_ROOT
+                / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc"
+            ),
             run_id=_pub_scoremap_candidate_id(),
             param=params,
             leadtime=leadtime,
         ),
         "base_files": expand(
-            str(OUT_ROOT / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc"),
+            str(
+                OUT_ROOT
+                / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc"
+            ),
             baseline_id=_pub_scoremap_baseline_id(),
             param=params,
             leadtime=leadtime,
@@ -120,15 +124,15 @@ rule publication_scoremaps:
         """
         python {input.script} \
             --candidate_files {input.cand_files} \
-            --baseline_files  {input.base_files} \
-            --params          {params.params_str} \
-            --scores          {params.scores_str} \
+            --baseline_files {input.base_files} \
+            --params {params.params_str} \
+            --scores {params.scores_str} \
             --candidate_label "{params.candidate_label}" \
-            --baseline_label  "{params.baseline_label}" \
-            --leadtime        {params.leadtime} \
-            --season          {params.season} \
-            --region          {params.region} \
-            --output          {output} > {log} 2>&1
+            --baseline_label "{params.baseline_label}" \
+            --leadtime {params.leadtime} \
+            --season {params.season} \
+            --region {params.region} \
+            --output {output} >{log} 2>&1
         """
 
 
@@ -172,5 +176,5 @@ rule publication_meteogram:
             --date {params.date:q} \
             --station {params.station:q} \
             --params {params.params:q} \
-            --output {output:q} > {log} 2>&1
+            --output {output:q} >{log} 2>&1
         """

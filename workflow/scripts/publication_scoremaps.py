@@ -94,12 +94,16 @@ def _build_skill_artifacts():
     return style, cmap, norm
 
 
-def _load_raw(nc_file: Path, param: str, score: str, season: str, init_hour: int) -> np.ndarray:
+def _load_raw(
+    nc_file: Path, param: str, score: str, season: str, init_hour: int
+) -> np.ndarray:
     """Load one raw score variable and return as a flat 1-D array."""
     ds = xr.open_dataset(nc_file)
     var = f"{param}.{score}"
     if var not in ds:
-        raise KeyError(f"Variable {var!r} not found in {nc_file}. Available: {list(ds.data_vars)}")
+        raise KeyError(
+            f"Variable {var!r} not found in {nc_file}. Available: {list(ds.data_vars)}"
+        )
     return ds[var].sel(season=season, init_hour=init_hour).values.ravel()
 
 
@@ -160,25 +164,33 @@ def _remove_latlon_labels(ax) -> None:
 def main() -> None:
     parser = ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--candidate_files", nargs="+", required=True,
+        "--candidate_files",
+        nargs="+",
+        required=True,
         help="Scoremap NC files for the candidate, one per param (same order as --params).",
     )
     parser.add_argument(
-        "--baseline_files", nargs="+", required=True,
+        "--baseline_files",
+        nargs="+",
+        required=True,
         help="Scoremap NC files for the baseline, one per param (same order as --params).",
     )
     parser.add_argument(
-        "--params", default="T_2M,SP_10M",
+        "--params",
+        default="T_2M,SP_10M",
         help="Comma-separated parameter names matching the order of the NC files.",
     )
     parser.add_argument(
-        "--scores", default="MSE_SKILL,BIAS_CONTRIB",
+        "--scores",
+        default="MSE_SKILL,BIAS_CONTRIB",
         help="Comma-separated metric names (columns of the 2×2 panel). "
-             "Supports MSE_SKILL, BIAS_CONTRIB, or any raw score (RMSE, STDE, …).",
+        "Supports MSE_SKILL, BIAS_CONTRIB, or any raw score (RMSE, STDE, …).",
     )
     parser.add_argument("--candidate_label", default="Varda-Single")
     parser.add_argument("--baseline_label", default="ICON-CH1-CTRL")
-    parser.add_argument("--leadtime", type=int, default=24, help="Lead time in hours (title only).")
+    parser.add_argument(
+        "--leadtime", type=int, default=24, help="Lead time in hours (title only)."
+    )
     parser.add_argument("--season", default="all")
     parser.add_argument("--region", default="switzerland")
     parser.add_argument("--output", type=Path, required=True, help="Output directory.")
@@ -191,9 +203,13 @@ def main() -> None:
     init_hour = -999  # "all" sentinel
 
     if len(candidate_files) != len(params):
-        parser.error(f"Got {len(candidate_files)} candidate files but {len(params)} params.")
+        parser.error(
+            f"Got {len(candidate_files)} candidate files but {len(params)} params."
+        )
     if len(baseline_files) != len(params):
-        parser.error(f"Got {len(baseline_files)} baseline files but {len(params)} params.")
+        parser.error(
+            f"Got {len(baseline_files)} baseline files but {len(params)} params."
+        )
 
     nrows = len(params)
     ncols = len(scores)
@@ -201,8 +217,14 @@ def main() -> None:
     ds0 = xr.open_dataset(candidate_files[0])
     lons = ds0["longitude"].values
     lats = ds0["latitude"].values
-    LOG.info("Grid: %d points, lon [%.2f, %.2f], lat [%.2f, %.2f]",
-             len(lons), lons.min(), lons.max(), lats.min(), lats.max())
+    LOG.info(
+        "Grid: %d points, lon [%.2f, %.2f], lat [%.2f, %.2f]",
+        len(lons),
+        lons.min(),
+        lons.max(),
+        lats.min(),
+        lats.max(),
+    )
 
     args.output.mkdir(parents=True, exist_ok=True)
     plotter = StatePlotter(lons, lats, args.output)
@@ -227,13 +249,18 @@ def main() -> None:
         zip(params, candidate_files, baseline_files)
     ):
         for col, score in enumerate(scores):
-            skill_vals = _compute_panel(score, cand_file, base_file, param, args.season, init_hour)
+            skill_vals = _compute_panel(
+                score, cand_file, base_file, param, args.season, init_hour
+            )
 
             LOG.info(
                 "%s %s: skill min=%.3f  max=%.3f  n_nan=%d / %d",
-                param, score,
-                np.nanmin(skill_vals), np.nanmax(skill_vals),
-                int(np.isnan(skill_vals).sum()), skill_vals.size,
+                param,
+                score,
+                np.nanmin(skill_vals),
+                np.nanmax(skill_vals),
+                int(np.isnan(skill_vals).sum()),
+                skill_vals.size,
             )
 
             subplot = fig.add_map(row=row, column=col)
@@ -260,8 +287,14 @@ def main() -> None:
     sm = plt.cm.ScalarMappable(cmap=skill_cmap, norm=skill_norm)
     sm.set_array([])
     cbar = mpl_fig.colorbar(
-        sm, ax=mpl_axes, orientation="horizontal", location="bottom",
-        fraction=0.04, pad=0.05, aspect=50, extend="both",
+        sm,
+        ax=mpl_axes,
+        orientation="horizontal",
+        location="bottom",
+        fraction=0.04,
+        pad=0.05,
+        aspect=50,
+        extend="both",
     )
     cbar.set_ticks(SKILL_LEVELS)
     cbar.set_ticklabels([f"{v:g}" for v in SKILL_LEVELS])
@@ -277,13 +310,21 @@ def main() -> None:
 
     cb_pos = cbar.ax.get_position()
     mpl_fig.text(
-        cb_pos.x0, y_fig, f"{args.baseline_label} better",
-        ha="left", va="top", color=COLOR_SKILL_BASELINE_BETTER,
+        cb_pos.x0,
+        y_fig,
+        f"{args.baseline_label} better",
+        ha="left",
+        va="top",
+        color=COLOR_SKILL_BASELINE_BETTER,
         fontsize=plt.rcParams["font.size"],
     )
     mpl_fig.text(
-        cb_pos.x1, y_fig, f"{args.candidate_label} better",
-        ha="right", va="top", color=COLOR_SKILL_MODEL_BETTER,
+        cb_pos.x1,
+        y_fig,
+        f"{args.candidate_label} better",
+        ha="right",
+        va="top",
+        color=COLOR_SKILL_MODEL_BETTER,
         fontsize=plt.rcParams["font.size"],
     )
 

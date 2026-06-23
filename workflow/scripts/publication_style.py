@@ -23,8 +23,8 @@ COLOR_VARDA = "#d83034"
 
 # Skill score colormap: blue = model better, red = baseline better.
 # Matches the scorecard dot palette in report_scorecard.py.
-COLOR_SKILL_MODEL_BETTER = "#4878d0"      # seaborn muted blue
-COLOR_SKILL_BASELINE_BETTER = "#d65f5f"   # seaborn muted red
+COLOR_SKILL_MODEL_BETTER = "#4878d0"  # seaborn muted blue
+COLOR_SKILL_BASELINE_BETTER = "#d65f5f"  # seaborn muted red
 
 SKILL_CMAP = LinearSegmentedColormap.from_list(
     "skill",

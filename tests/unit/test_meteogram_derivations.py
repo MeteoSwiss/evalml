@@ -30,7 +30,7 @@ def test_wind_speed_pythagoras():
 
 def test_wind_direction_cardinals():
     # meteorological: direction wind comes FROM
-    assert np.isclose(wind_direction_deg(0.0, -1.0), 0.0)   # from north
+    assert np.isclose(wind_direction_deg(0.0, -1.0), 0.0)  # from north
     assert np.isclose(wind_direction_deg(-1.0, 0.0), 90.0)  # from east
     assert np.isclose(wind_direction_deg(0.0, 1.0), 180.0)  # from south
     assert np.isclose(wind_direction_deg(1.0, 0.0), 270.0)  # from west
@@ -59,8 +59,10 @@ def test_add_derived_raises_without_uv():
 def test_station_timeseries_to_long_shape_and_columns():
     times = np.array(["2025-04-01T00", "2025-04-01T01"], dtype="datetime64[h]")
     ds = xr.Dataset(
-        {"T_2M": ("valid_time", [280.0, 281.0]),
-         "TOT_PREC": ("valid_time", [0.0, 0.1])},
+        {
+            "T_2M": ("valid_time", [280.0, 281.0]),
+            "TOT_PREC": ("valid_time", [0.0, 0.1]),
+        },
         coords={"valid_time": times},
     )
     df = station_timeseries_to_long(ds, "Varda-Single", ["T_2M", "TOT_PREC"])

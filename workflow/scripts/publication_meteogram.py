@@ -20,7 +20,6 @@ def _():
 @app.cell
 def _():
     import logging
-    import time
 
     LOG = logging.getLogger(__name__)
     logging.basicConfig(
@@ -147,9 +146,7 @@ def _(
     LOG.info("meteogram: loading observations from %s", obs_source)
     _t0 = time.perf_counter()
     obs_steps = parse_steps(forecast_steps)
-    obs = load_obs_data_from_jretrieve(
-        obs_source, init_time, obs_steps, base_params
-    )
+    obs = load_obs_data_from_jretrieve(obs_source, init_time, obs_steps, base_params)
     obs_station = add_derived(obs.sel(values=[station]), display_params)
     _sel = obs.sel(values=[station])
     station_target = _sel.drop_vars(list(_sel.data_vars))
@@ -165,7 +162,9 @@ def _(
     LOG.info("meteogram: candidate GRIB loaded in %.1fs", time.perf_counter() - _t0)
     _t0 = time.perf_counter()
     cand_st = add_derived(map_forecast_to_truth(cand, station_target), display_params)
-    LOG.info("meteogram: candidate remapped to station in %.1fs", time.perf_counter() - _t0)
+    LOG.info(
+        "meteogram: candidate remapped to station in %.1fs", time.perf_counter() - _t0
+    )
     frames.append(station_timeseries_to_long(cand_st, forecast_label, display_params))
 
     for b in baselines:
@@ -178,10 +177,18 @@ def _(
             base_params,
             member=b["member"],
         )
-        LOG.info("meteogram: baseline %s loaded in %.1fs", b["label"], time.perf_counter() - _t0)
+        LOG.info(
+            "meteogram: baseline %s loaded in %.1fs",
+            b["label"],
+            time.perf_counter() - _t0,
+        )
         _t0 = time.perf_counter()
         bst = add_derived(map_forecast_to_truth(bds, station_target), display_params)
-        LOG.info("meteogram: baseline %s remapped in %.1fs", b["label"], time.perf_counter() - _t0)
+        LOG.info(
+            "meteogram: baseline %s remapped in %.1fs",
+            b["label"],
+            time.perf_counter() - _t0,
+        )
         frames.append(station_timeseries_to_long(bst, b["label"], display_params))
 
     df = pd.concat(frames, ignore_index=True)

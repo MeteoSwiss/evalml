@@ -169,12 +169,20 @@ def _(Path, df_all, mo, output_dir, sources):
                 _ax.plot(_grp["step"], _grp["value"], label=_src, **line_style(_src))
                 if _src == "Varda-Single":
                     _m6 = _grp[_grp["step"] % 6 == 0]
-                    _ax.plot(_m6["step"], _m6["value"], linestyle="none",
-                             marker="o", markersize=4, color=line_style(_src)["color"])
+                    _ax.plot(
+                        _m6["step"],
+                        _m6["value"],
+                        linestyle="none",
+                        marker="o",
+                        markersize=4,
+                        color=line_style(_src)["color"],
+                    )
             _ax.set_xscale("function", **_xscale_kw)
             _ax.xaxis.set_major_locator(_xticks)
             if _metric == "BIAS":
-                _ax.axhline(0, color="black", linestyle="dashed", linewidth=0.7, zorder=0)
+                _ax.axhline(
+                    0, color="black", linestyle="dashed", linewidth=0.7, zorder=0
+                )
             if _row == 0:
                 _ax.set_title(param_label(_param))
             if _col == 0:
@@ -197,8 +205,14 @@ def _(Path, df_all, mo, output_dir, sources):
             _ax.plot(_grp["step"], _grp["value"], label=_src, **line_style(_src))
             if "Varda" in _src and "Single" in _src:
                 _m6 = _grp[_grp["step"] % 6 == 0]
-                _ax.plot(_m6["step"], _m6["value"], linestyle="none",
-                         marker="o", markersize=4, color=line_style(_src)["color"])
+                _ax.plot(
+                    _m6["step"],
+                    _m6["value"],
+                    linestyle="none",
+                    marker="o",
+                    markersize=4,
+                    color=line_style(_src)["color"],
+                )
         _ax.set_xscale("function", **_xscale_kw)
         _ax.xaxis.set_major_locator(_xticks)
         _panel_label = (
@@ -232,30 +246,42 @@ def _(Path, df_all, mo, output_dir, sources):
 
     # Light-grey background encompassing the four TOT_PREC panels and their labels.
     # Axes keep a white background; the grey appears only in the margins around them.
-    _PREC_BG   = "#f0f0f0"
-    _pad_left  = 0.040  # horizontal padding beyond axes left edges
+    _PREC_BG = "#f0f0f0"
+    _pad_left = 0.040  # horizontal padding beyond axes left edges
     _pad_bleft = 0.025  # horizontal padding beyond axes for lower left
     _pad_right = 0.010  # horizontal padding beyond axes right edges
-    _pad_top   = 0.040  # above row-0 axes to capture the column title
-    _pad_bot   = 0.050  # below ETS row to capture the x-axis label
-
+    _pad_top = 0.040  # above row-0 axes to capture the column title
+    _pad_bot = 0.050  # below ETS row to capture the x-axis label
 
     from matplotlib.patches import Polygon as _MplPolygon
-    _m0_pos = _axes[0, 1].get_position()                    # top of metric col 1
-    _m_pos  = _axes[len(_METRICS) - 1, 1].get_position()    # bottom of metric col 1
-    _e0_pos = _axes[_ets_row, 0].get_position()             # ETS col 0
-    _e1_pos = _axes[_ets_row, 1].get_position()             # ETS col 1
+
+    _m0_pos = _axes[0, 1].get_position()  # top of metric col 1
+    _m_pos = _axes[len(_METRICS) - 1, 1].get_position()  # bottom of metric col 1
+    _e0_pos = _axes[_ets_row, 0].get_position()  # ETS col 0
+    _e1_pos = _axes[_ets_row, 1].get_position()  # ETS col 1
     _pad_mid = (_m_pos.y0 - _e0_pos.y1) / 2
-    _trap = _MplPolygon([
-        (_m0_pos.x0 - _pad_left, _m0_pos.y1 + _pad_top),    # top-left (above col-1, row-0)
-        (_m0_pos.x1 + _pad_right, _m0_pos.y1 + _pad_top),   # top-right
-        (_m_pos.x1  + _pad_right, _m_pos.y0),               # bottom-right of metric area
-        (_e1_pos.x1 + _pad_right, _e0_pos.y1),              # top-right of ETS area
-        (_e1_pos.x1 + _pad_right, _e0_pos.y0 - _pad_bot),   # bottom-right (incl. x-label)
-        (_e0_pos.x0 - _pad_bleft, _e0_pos.y0 - _pad_bot),   # bottom-left
-        (_e0_pos.x0 - _pad_bleft, _e0_pos.y1 + _pad_mid),   # top-left of ETS area
-        (_m_pos.x0  - _pad_left, _m_pos.y0 - _pad_mid),     # bottom-left of metric area
-    ], closed=True, facecolor=_PREC_BG, edgecolor="none", zorder=-1)
+    _trap = _MplPolygon(
+        [
+            (
+                _m0_pos.x0 - _pad_left,
+                _m0_pos.y1 + _pad_top,
+            ),  # top-left (above col-1, row-0)
+            (_m0_pos.x1 + _pad_right, _m0_pos.y1 + _pad_top),  # top-right
+            (_m_pos.x1 + _pad_right, _m_pos.y0),  # bottom-right of metric area
+            (_e1_pos.x1 + _pad_right, _e0_pos.y1),  # top-right of ETS area
+            (
+                _e1_pos.x1 + _pad_right,
+                _e0_pos.y0 - _pad_bot,
+            ),  # bottom-right (incl. x-label)
+            (_e0_pos.x0 - _pad_bleft, _e0_pos.y0 - _pad_bot),  # bottom-left
+            (_e0_pos.x0 - _pad_bleft, _e0_pos.y1 + _pad_mid),  # top-left of ETS area
+            (_m_pos.x0 - _pad_left, _m_pos.y0 - _pad_mid),  # bottom-left of metric area
+        ],
+        closed=True,
+        facecolor=_PREC_BG,
+        edgecolor="none",
+        zorder=-1,
+    )
     _trap.set_transform(_fig.transFigure)
     _fig.add_artist(_trap)
 
