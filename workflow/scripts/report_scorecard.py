@@ -215,13 +215,32 @@ def _load_relative_diff(cfg: dict) -> xr.Dataset:
         if dim != strat_dim:
             sel_coords[dim] = all_value
 
-    model_ds = (
-        xr.open_dataset(cfg["model"]["path"]).sel(**sel_coords).squeeze(drop=True)
-    )
-    baseline_ds = (
-        xr.open_dataset(cfg["baseline"]["path"])
-        .sel(**{**sel_coords, "source": baseline_source})
-        .squeeze(drop=True)
+    model_ds = xr.open_dataset(cfg["model"]["path"])
+    baseline_ds = xr.open_dataset(cfg["baseline"]["path"])
+
+    for label, ds in [("model", model_ds), ("baseline", baseline_ds)]:
+        if "n_samples" not in ds.data_vars:
+            raise ValueError(
+                f"'n_samples' is missing from the {label} dataset '{cfg[label]['path']}'.\n"
+                f"This file was likely produced before n_samples tracking was introduced.\n"
+                f"Fix: delete '{cfg[label]['path']}' and rerun the pipeline."
+            )
+    model_n = int(model_ds["n_samples"].sel(season="all", init_hour=-999).item())
+    baseline_n = int(baseline_ds["n_samples"].sel(season="all", init_hour=-999).item())
+    if model_n != baseline_n:
+        fewer = (
+            cfg["model"]["path"] if model_n < baseline_n else cfg["baseline"]["path"]
+        )
+        raise ValueError(
+            f"n_samples mismatch: model has {model_n} and baseline has {baseline_n} "
+            f"forecast dates.\n"
+            f"Both runs must cover the same set of dates for a valid scorecard.\n"
+            f"Fix: delete '{fewer}' and rerun the pipeline."
+        )
+
+    model_ds = model_ds.sel(**sel_coords).squeeze(drop=True)
+    baseline_ds = baseline_ds.sel(**{**sel_coords, "source": baseline_source}).squeeze(
+        drop=True
     )
 
     common_vars = [v for v in model_ds.data_vars if v in baseline_ds.data_vars]

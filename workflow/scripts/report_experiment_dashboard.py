@@ -18,6 +18,32 @@ logging.basicConfig(
 )
 
 
+def _check_n_samples_consistency(datasets: list[xr.Dataset], paths: list[Path]) -> None:
+    """Raise ValueError if n_samples differ across loaded verification datasets."""
+    for ds, p in zip(datasets, paths):
+        if "n_samples" not in ds.data_vars:
+            raise ValueError(
+                f"'n_samples' is missing from '{p}'.\n"
+                f"This file was likely produced before n_samples tracking was introduced.\n"
+                f"Fix: delete '{p}' and rerun the pipeline."
+            )
+    counts = {
+        str(p): int(ds["n_samples"].sel(season="all", init_hour=-999).item())
+        for ds, p in zip(datasets, paths)
+    }
+    if len(set(counts.values())) <= 1:
+        return
+    max_n = max(counts.values())
+    summary = "\n".join(f"  {p}: {n}" for p, n in counts.items())
+    to_delete = "\n".join(f"  {p}" for p, n in counts.items() if n < max_n)
+    raise ValueError(
+        f"Inconsistent n_samples across verification files:\n{summary}\n\n"
+        f"All runs must cover the same set of forecast dates for a valid dashboard.\n"
+        f"Fix: delete the following file(s) with fewer samples and rerun the pipeline:\n"
+        f"{to_delete}"
+    )
+
+
 def program_summary_log(args):
     """Log a welcome message with the script and template information."""
     LOG.info("=" * 80)
@@ -35,6 +61,7 @@ def main(args):
 
     # Load, de-duplicate lead_time, and keep best provider per source (same logic as verif_plot_metrics)
     dfs = [xr.open_dataset(f) for f in args.verif_files]
+    _check_n_samples_consistency(dfs, args.verif_files)
     dfs = [_ensure_unique_lead_time(d) for d in dfs]
     dfs = _select_best_sources(dfs)
     ds = xr.concat(dfs, dim="source", join="outer")
