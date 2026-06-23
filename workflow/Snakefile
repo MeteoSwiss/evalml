@@ -265,6 +265,11 @@ rule publication_all:
     input:
         (
             [rules.publication_figures.output, rules.publication_meteogram.output]
+            + (
+                [rules.publication_scoremaps.output]
+                if config.get("publication", {}).get("scoremaps", {}).get("enabled", False)
+                else []
+            )
             if config.get("publication", {}).get("enabled", False)
             else []
         ),

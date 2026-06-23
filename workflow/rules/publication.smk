@@ -53,6 +53,85 @@ def _meteogram_baselines():
     return ";".join(specs)
 
 
+_PUB_SCOREMAP_CFG = config.get("publication", {}).get("scoremaps", {})
+
+
+def _pub_scoremap_candidate_id():
+    # RUN_CONFIGS is available at include time (defined in common.smk).
+    # CANDIDATES (defined in Snakefile after all includes) filters to runs
+    # with _is_candidate=True; replicate that filter here.
+    for run_id, cfg in RUN_CONFIGS.items():
+        if cfg.get("_is_candidate", False):
+            return run_id
+    raise ValueError("No candidate run found in RUN_CONFIGS")
+
+
+def _pub_scoremap_baseline_id():
+    label = _PUB_SCOREMAP_CFG.get("baseline_label", "ICON-CH1-CTRL")
+    for bid, cfg in BASELINE_CONFIGS.items():
+        if cfg.get("label") == label:
+            return bid
+    raise ValueError(f"No baseline found with label {label!r}")
+
+
+def _pub_scoremap_inputs(wc):
+    """Return named input files for publication_scoremaps (deferred via lambda)."""
+    params = _PUB_SCOREMAP_CFG.get("params", ["T_2M", "SP_10M"])
+    leadtime = _PUB_SCOREMAP_CFG.get("leadtime", 24)
+    return {
+        "cand_files": expand(
+            str(OUT_ROOT / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc"),
+            run_id=_pub_scoremap_candidate_id(),
+            param=params,
+            leadtime=leadtime,
+        ),
+        "base_files": expand(
+            str(OUT_ROOT / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc"),
+            baseline_id=_pub_scoremap_baseline_id(),
+            param=params,
+            leadtime=leadtime,
+        ),
+    }
+
+
+rule publication_scoremaps:
+    input:
+        unpack(_pub_scoremap_inputs),
+        script="workflow/scripts/publication_scoremaps.py",
+    output:
+        report(
+            directory(OUT_ROOT / "figures/scoremaps"),
+            htmlindex="publication_scoremaps.html",
+        ),
+    log:
+        OUT_ROOT / "logs/figures/publication_scoremaps.log",
+    localrule: True
+    params:
+        candidate_label=lambda wc: RUN_CONFIGS[_pub_scoremap_candidate_id()].get(
+            "label", "Varda-Single"
+        ),
+        baseline_label=_PUB_SCOREMAP_CFG.get("baseline_label", "ICON-CH1-CTRL"),
+        leadtime=_PUB_SCOREMAP_CFG.get("leadtime", 24),
+        season=_PUB_SCOREMAP_CFG.get("season", "all"),
+        region=_PUB_SCOREMAP_CFG.get("region", "switzerland"),
+        params_str=",".join(_PUB_SCOREMAP_CFG.get("params", ["T_2M", "SP_10M"])),
+        scores_str=",".join(_PUB_SCOREMAP_CFG.get("scores", ["RMSE", "STDE"])),
+    shell:
+        """
+        python {input.script} \
+            --candidate_files {input.cand_files} \
+            --baseline_files  {input.base_files} \
+            --params          {params.params_str} \
+            --scores          {params.scores_str} \
+            --candidate_label "{params.candidate_label}" \
+            --baseline_label  "{params.baseline_label}" \
+            --leadtime        {params.leadtime} \
+            --season          {params.season} \
+            --region          {params.region} \
+            --output          {output} > {log} 2>&1
+        """
+
+
 rule publication_meteogram:
     input:
         "workflow/scripts/publication_style.py",
