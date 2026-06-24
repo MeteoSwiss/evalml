@@ -2,6 +2,7 @@
 Diagnostic script to investigate 6-hourly variability in Varda-Single bias.
 Stratifies by init_hour and season to find the source of oscillation.
 """
+
 from pathlib import Path
 import numpy as np
 import xarray as xr
@@ -13,8 +14,12 @@ VARDA_FILE = Path(
     "/495c/verif_aggregated_2b83.nc"
 )
 BASELINE_FILES = {
-    "ICON-CH1-CTRL": Path("output/data/baselines/baseline-7e02/verif_aggregated_2b83.nc"),
-    "ICON-CH2-CTRL": Path("output/data/baselines/baseline-ce47/verif_aggregated_2b83.nc"),
+    "ICON-CH1-CTRL": Path(
+        "output/data/baselines/baseline-7e02/verif_aggregated_2b83.nc"
+    ),
+    "ICON-CH2-CTRL": Path(
+        "output/data/baselines/baseline-ce47/verif_aggregated_2b83.nc"
+    ),
 }
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "output/figures/diagnostics"
@@ -71,20 +76,46 @@ def plot_stratified(param, fig_suffix):
     # "all" aggregation (what the paper plot shows)
     v_all = varda.sel(season="all", init_hour=-999, region="all")
     mask = v_all.step <= STEPS_MAX
-    ax.plot(v_all.step[mask], v_all.values[mask], color="black", lw=1.5,
-            label="Varda-Single (all)", zorder=5)
+    ax.plot(
+        v_all.step[mask],
+        v_all.values[mask],
+        color="black",
+        lw=1.5,
+        label="Varda-Single (all)",
+        zorder=5,
+    )
     for ih in INIT_HOURS:
         v_ih = varda.sel(season="all", init_hour=ih, region="all")
-        ax.plot(v_ih.step[mask], v_ih.values[mask], color=COLORS_INIT[ih],
-                lw=0.9, alpha=0.85, label=f"init {ih:02d}Z")
+        ax.plot(
+            v_ih.step[mask],
+            v_ih.values[mask],
+            color=COLORS_INIT[ih],
+            lw=0.9,
+            alpha=0.85,
+            label=f"init {ih:02d}Z",
+        )
     if ch1_all is not None:
         m = ch1_all.step <= STEPS_MAX
-        ax.plot(ch1_all.step[m], ch1_all.values[m], color="#008dff",
-                lw=1.0, ls="--", label="ICON-CH1-CTRL", alpha=0.7)
+        ax.plot(
+            ch1_all.step[m],
+            ch1_all.values[m],
+            color="#008dff",
+            lw=1.0,
+            ls="--",
+            label="ICON-CH1-CTRL",
+            alpha=0.7,
+        )
     if ch2_all is not None:
         m = ch2_all.step <= STEPS_MAX
-        ax.plot(ch2_all.step[m], ch2_all.values[m], color="#003a7d",
-                lw=1.0, ls="--", label="ICON-CH2-CTRL", alpha=0.7)
+        ax.plot(
+            ch2_all.step[m],
+            ch2_all.values[m],
+            color="#003a7d",
+            lw=1.0,
+            ls="--",
+            label="ICON-CH2-CTRL",
+            alpha=0.7,
+        )
     ax.axhline(0, color="k", ls=":", lw=0.7)
     ax.set_xscale("function", **xscale_kw)
     ax.xaxis.set_major_locator(xticks)
@@ -95,12 +126,24 @@ def plot_stratified(param, fig_suffix):
 
     # ---- Panel B: stratify by season ----
     ax = axes[1]
-    ax.plot(v_all.step[mask], v_all.values[mask], color="black", lw=1.5,
-            label="Varda-Single (all)", zorder=5)
+    ax.plot(
+        v_all.step[mask],
+        v_all.values[mask],
+        color="black",
+        lw=1.5,
+        label="Varda-Single (all)",
+        zorder=5,
+    )
     for s in SEASONS:
         v_s = varda.sel(season=s, init_hour=-999, region="all")
-        ax.plot(v_s.step[mask], v_s.values[mask], color=COLORS_SEASON[s],
-                lw=0.9, alpha=0.85, label=s)
+        ax.plot(
+            v_s.step[mask],
+            v_s.values[mask],
+            color=COLORS_SEASON[s],
+            lw=0.9,
+            alpha=0.85,
+            label=s,
+        )
     ax.axhline(0, color="k", ls=":", lw=0.7)
     ax.set_xscale("function", **xscale_kw)
     ax.xaxis.set_major_locator(xticks)
@@ -120,10 +163,10 @@ def plot_stratified(param, fig_suffix):
 def plot_amplitude_analysis(param):
     """Compute 6-hourly oscillation amplitude per (init_hour, season) stratum."""
     varda = load_bias(VARDA_FILE, param, source="Varda-Single")
-    mask = (varda.step >= 6) & (varda.step <= STEPS_MAX)
 
-    fig, axes = plt.subplots(len(SEASONS), len(INIT_HOURS),
-                             figsize=(14, 10), sharey=True, sharex=True)
+    fig, axes = plt.subplots(
+        len(SEASONS), len(INIT_HOURS), figsize=(14, 10), sharey=True, sharex=True
+    )
 
     for si, s in enumerate(SEASONS):
         for ii, ih in enumerate(INIT_HOURS):
@@ -145,7 +188,10 @@ def plot_amplitude_analysis(param):
             ax.xaxis.set_major_locator(mticker.FixedLocator([0, 6, 12, 24, 36, 48]))
             ax.tick_params(labelsize=7)
 
-    fig.suptitle(f"{param} BIAS by season × init_hour (red dots = 6h-multiple steps)", fontsize=11)
+    fig.suptitle(
+        f"{param} BIAS by season × init_hour (red dots = 6h-multiple steps)",
+        fontsize=11,
+    )
     fig.tight_layout()
     fname = OUT / f"diagnose_6h_{param}_grid.png"
     fig.savefig(fname, dpi=150, bbox_inches="tight")
@@ -158,29 +204,33 @@ def print_oscillation_stats(param):
     """Print the amplitude of 6h oscillation at each step for each stratum."""
     varda = load_bias(VARDA_FILE, param, source="Varda-Single")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  {param}: 6h-oscillation amplitude analysis")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # For each init_hour, compute std of bias at 6h-anchor steps vs non-anchor steps
-    print(f"\n{'init_hour':>12} {'season':>8} {'std_anchor':>12} {'std_inter':>12} {'ratio':>8}")
+    print(
+        f"\n{'init_hour':>12} {'season':>8} {'std_anchor':>12} {'std_inter':>12} {'ratio':>8}"
+    )
     print("-" * 58)
 
     for s in ["all"] + SEASONS:
         for ih in [-999] + INIT_HOURS:
             v = varda.sel(season=s, init_hour=ih, region="all")
             steps = v.step.values
-            anchor = v.sel(step=[x for x in steps if x % 6 == 0 and 6 <= x <= STEPS_MAX])
+            anchor = v.sel(
+                step=[x for x in steps if x % 6 == 0 and 6 <= x <= STEPS_MAX]
+            )
             inter = v.sel(step=[x for x in steps if x % 6 != 0 and x <= STEPS_MAX])
             # oscillation as std of difference between consecutive anchor and inter steps
             if len(anchor) > 2 and len(inter) > 2:
                 # simple proxy: std across steps (how much it wiggles)
-                all_vals = v.sel(step=[x for x in steps if x <= STEPS_MAX]).values
                 anchor_vals = anchor.values
                 inter_vals = inter.values
-                osc = np.std(all_vals)
                 ih_label = "all" if ih == -999 else f"{ih:02d}Z"
-                print(f"{ih_label:>12} {s:>8} {np.std(anchor_vals):12.4f} {np.std(inter_vals):12.4f} {np.std(anchor_vals)/max(np.std(inter_vals), 1e-9):8.2f}")
+                print(
+                    f"{ih_label:>12} {s:>8} {np.std(anchor_vals):12.4f} {np.std(inter_vals):12.4f} {np.std(anchor_vals) / max(np.std(inter_vals), 1e-9):8.2f}"
+                )
 
 
 if __name__ == "__main__":

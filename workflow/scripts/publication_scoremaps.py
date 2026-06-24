@@ -32,8 +32,8 @@ sys.path.append(str(_script_dir.parent.parent / "src"))
 
 plt.style.use(_script_dir / "publication.mplstyle")
 
-from plotting import DOMAINS, StatePlotter
-from publication_style import (
+from plotting import DOMAINS, StatePlotter  # noqa: E402
+from publication_style import (  # noqa: E402
     COLOR_SKILL_BASELINE_BETTER,
     COLOR_SKILL_MODEL_BETTER,
     PARAM_LABELS,
