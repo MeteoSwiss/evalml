@@ -385,6 +385,17 @@ if "jretrieve" in str(config["truth"]["root"]):
     check_prerequisites(_jretrieve_stage)
 
 
+def parse_region_meteograms():
+    """Map region name -> shapefile path for areal-mean region meteograms.
+
+    Region name is the shapefile stem (e.g. 'valais' for valais.shp).
+    """
+    shapefiles = (
+        config.get("showcase", {}).get("meteograms", {}).get("region_shapefiles", [])
+    )
+    return {Path(p).stem: p for p in shapefiles}
+
+
 TRUTH_HASH = truth_hash(config["truth"])
 VERIF_HASH = verif_hash(config)
 REGIONS = parse_regions()
@@ -394,6 +405,7 @@ SHOWCASE_CONFIG = {
     "params": _showcase.get("params", ["T_2M", "SP_10M"]),
     "fps": _showcase.get("animations", {}).get("frames_per_second", 2.0),
 }
+REGION_METEOGRAM_SHP = parse_region_meteograms()
 EXPERIMENT_PARAMS = config.get("experiment", {}).get(
     "params", ["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"]
 )
