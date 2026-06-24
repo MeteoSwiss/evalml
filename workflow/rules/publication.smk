@@ -161,7 +161,6 @@ rule publication_meteogram:
         baselines=_meteogram_baselines(),
         date=config["publication"]["meteogram"]["init_time"],
         station=config["publication"]["meteogram"]["station"],
-        obs=lambda wc: f"jretrievedwh:locations={config['publication']['meteogram']['station']}",
         params=",".join(config["publication"]["meteogram"]["params"]),
     shell:
         """
@@ -172,7 +171,6 @@ rule publication_meteogram:
             --forecast_steps {params.forecast_steps:q} \
             --forecast_label {params.forecast_label:q} \
             --baseline {params.baselines:q} \
-            --obs {params.obs:q} \
             --date {params.date:q} \
             --station {params.station:q} \
             --params {params.params:q} \
