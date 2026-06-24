@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Areal-mean precipitation meteogram over Valais (Wallis) from the ICON-CH1
+  analysis.
+
+  Single-curve meteogram: TOT_PREC (TOT_PREC_1H, the 1-hour total per grid cell)
+  from the ICON-CH1 analysis, aggregated by spatial mean across the grid cells
+  inside the Valais canton polygon, hourly. Used to inspect
+  the precipitation around SIO in the days following 2025-06-27.
+
+  Build it with:
+    evalml make config/valais-precip-meteogram.yaml meteogram_region_all
+
+config_label: valais-precip-meteogram
+
+dates:
+  - 2025-06-27T18:00
+
+# `runs` is required by the config schema but is not used by the
+# `meteogram_region_all` target; a single baseline entry is kept only to satisfy
+# validation.
+runs:
+  - baseline:
+      label: ICON-CH1-EPS mean
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/33/1
+      member: mean
+
+truth:
+  label: ICON-CH1 analysis
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
+experiment:
+  params:
+    - TOT_PREC
+  stratification:
+    regions: []
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
+  dashboard:
+    stratification:
+      - season
+
+showcase:
+  params:
+    - TOT_PREC
+  meteograms:
+    enabled: false              # station meteograms off
+    stations: []
+    region_shapefiles:
+      - resources/regions/valais.shp
+  animations:
+    enabled: false
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+    slurm_account: msclim
+  jobs: 50

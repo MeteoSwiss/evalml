@@ -222,6 +222,18 @@ rule showcase_all:
         ),
 
 
+rule meteogram_region_all:
+    """Target rule: areal-mean TOT_PREC meteograms over the configured regions."""
+    input:
+        expand(
+            rules.plot_meteogram_region.output,
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+            param=["TOT_PREC"],
+            region=list(REGION_METEOGRAM_SHP.keys()),
+            showcase=EXPERIMENT_NAME,
+        ),
+
+
 rule sandbox_all:
     """Target rule for creating a sandbox for inference."""
     input:

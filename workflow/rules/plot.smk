@@ -89,6 +89,42 @@ rule plot_meteogram:
         """
 
 
+rule plot_meteogram_region:
+    """Areal-mean TOT_PREC meteogram over a region polygon."""
+    input:
+        script="workflow/scripts/plot_meteogram_region.py",
+        shapefile=lambda wc: REGION_METEOGRAM_SHP[wc.region],
+    output:
+        OUT_ROOT
+        / "results/{showcase}/meteograms_region/{init_time}/{init_time}_{param}_{region}.png",
+    log:
+        OUT_ROOT
+        / "logs/{showcase}/meteograms_region/{init_time}/plot_meteogram_region_{param}_{region}.log",
+    wildcard_constraints:
+        init_time=r"\d{12}",
+        param="TOT_PREC",
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=1,
+        runtime="30m",
+    params:
+        truth_root=config["truth"]["root"],
+        truth_label=lambda wc: config["truth"]["label"],
+        steps="0/120/1",
+    shell:
+        """
+        set -euo pipefail
+        python {input.script} \
+            --truth {params.truth_root:q} \
+            --truth_label {params.truth_label:q} \
+            --shapefile {input.shapefile:q} \
+            --date {wildcards.init_time:q} \
+            --steps {params.steps:q} \
+            --param {wildcards.param:q} \
+            --outfn {output:q} >{log} 2>&1
+        """
+
+
 rule plot_forecast_frame:
     input:
         script="workflow/scripts/plot_forecast_frame.py",
