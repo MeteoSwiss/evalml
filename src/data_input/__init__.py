@@ -85,6 +85,24 @@ def _load_icon_topography(grid_nc: Path) -> np.ndarray:
         return ds["topography_c"].values.astype(np.float32)
 
 
+def _load_inca_dem(
+    topo_nc: Path, x_target: np.ndarray, y_target: np.ndarray
+) -> np.ndarray:
+    """Return DEM [m] from INCA topography file, interpolated to the target (y, x) grid."""
+    with xr.open_dataset(topo_nc) as ds:
+        dem = (
+            ds["DEM"]
+            .assign_coords(
+                p_j=("p_j", ds["x"].values.astype(np.float64)),
+                p_i=("p_i", ds["y"].values.astype(np.float64)),
+            )
+            .rename({"p_j": "x", "p_i": "y"})
+        )
+        return dem.interp(x=x_target, y=y_target, method="linear").values.astype(
+            np.float32
+        )
+
+
 def _try_assign_elevation(ds: xr.Dataset) -> xr.Dataset:
     """Attempt to attach elevation from a known ICON grid NC file.
 
@@ -134,7 +152,9 @@ def load_analysis_data_from_zarr(
     # Always include FIS so we can derive an elevation coordinate below
     params_with_altitude = list(dict.fromkeys(params + ["FIS"]))
     # select variables and valid time, squeeze ensemble dimension
-    ds = ds.sel(variable=[zarr_names[p] for p in params_with_altitude]).squeeze("ensemble", drop=True)
+    ds = ds.sel(variable=[zarr_names[p] for p in params_with_altitude]).squeeze(
+        "ensemble", drop=True
+    )
 
     # recover original 2D shape (not present for global Gaussian grids)
     if "field_shape" in ds.attrs and len(ds.attrs["field_shape"]) == 2:
@@ -604,6 +624,8 @@ def load_INCA_baseline_from_netcdf(
           x, y                     – Swiss CH1903 (EPSG:21781) easting/northing [m]
           latitude, longitude      – WGS84 latitude/longitude [°], shape (y, x),
                                      derived from CH1903 via pyproj
+          elevation                – surface altitude [m], shape (y, x), from
+                                     INCA1km_topography_parameters.nc (DEM variable)
           step                     – forecast lead time (timedelta64[ns])
           valid_time               – absolute timestamps (datetime64[ns])
           forecast_reference_time  – scalar reference time (datetime64[ns])
@@ -870,6 +892,13 @@ def load_INCA_baseline_from_netcdf(
     merged = merged.assign_coords(step=("valid_time", lead_times))
     merged = merged.swap_dims({"valid_time": "step"})
     merged = merged.assign_coords(forecast_reference_time=ref_time_np)
+
+    topo_nc = root / "INCA1km_topography_parameters.nc"
+    if not topo_nc.exists():
+        raise FileNotFoundError(f"INCA topography file not found: {topo_nc}")
+    dem = _load_inca_dem(topo_nc, merged.x.values, merged.y.values)
+    merged = merged.assign_coords(elevation=(("y", "x"), dem))
+    LOG.info("Assigned elevation from %s", topo_nc.name)
 
     return merged[list(params)]
 
