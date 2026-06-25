@@ -166,14 +166,27 @@ def main() -> None:
     parser.add_argument(
         "--candidate_files",
         nargs="+",
-        required=True,
-        help="Scoremap NC files for the candidate, one per param (same order as --params).",
+        default=None,
+        help="Scoremap NC files for the candidate, one per param (same order as --params). "
+        "Resolved from the manifest when omitted.",
     )
     parser.add_argument(
         "--baseline_files",
         nargs="+",
-        required=True,
-        help="Scoremap NC files for the baseline, one per param (same order as --params).",
+        default=None,
+        help="Scoremap NC files for the baseline, one per param (same order as --params). "
+        "Resolved from the manifest when omitted.",
+    )
+    parser.add_argument(
+        "--manifest",
+        default=None,
+        help="Manifest path (used to resolve files when --candidate_files/--baseline_files "
+        "are omitted). Defaults to $EVALML_MANIFEST or output/publication/manifest.json.",
+    )
+    parser.add_argument(
+        "--candidate",
+        default=None,
+        help="Candidate label for manifest resolution (required if several candidates).",
     )
     parser.add_argument(
         "--params",
@@ -198,6 +211,30 @@ def main() -> None:
 
     params = [p.strip() for p in args.params.split(",")]
     scores = [s.strip() for s in args.scores.split(",")]
+
+    # Resolve input files from the manifest when not given explicitly. The
+    # Snakemake wrappers always pass them; this is for direct interactive use.
+    if args.candidate_files is None or args.baseline_files is None:
+        from evalml.publication.manifest import load_manifest
+
+        manifest = load_manifest(args.manifest)
+        manifest.validate_request(
+            "scoremaps",
+            candidate=args.candidate,
+            baseline=args.baseline_label,
+            leadtime=args.leadtime,
+        )
+        cand = manifest.get_candidate(args.candidate)
+        base = manifest.resolve_baseline(args.baseline_label)
+        if args.candidate_files is None:
+            args.candidate_files = [
+                manifest.scoremap_path(cand, p, args.leadtime) for p in params
+            ]
+        if args.baseline_files is None:
+            args.baseline_files = [
+                manifest.scoremap_path(base, p, args.leadtime) for p in params
+            ]
+
     candidate_files = [Path(f) for f in args.candidate_files]
     baseline_files = [Path(f) for f in args.baseline_files]
     init_hour = -999  # "all" sentinel

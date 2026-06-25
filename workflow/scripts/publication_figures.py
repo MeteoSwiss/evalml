@@ -18,16 +18,29 @@ def _():
 
 @app.cell
 def _(mo, sys):
-    _VERIF_DEFAULT = (
+    # Defaults come from the publication manifest when available (no stale hashes);
+    # otherwise fall back to built-in demo strings with a visible warning.
+    import os
+
+    _DEMO_VERIF = (
         "output/data/baselines/baseline-7e02/verif_aggregated_2b83.nc"
-        " output/data/baselines/baseline-ce47/verif_aggregated_2b83.nc"
-        " output/data/baselines/baseline-7342/verif_aggregated_2b83.nc"
-        " output/data/baselines/baseline-e0f0/verif_aggregated_2b83.nc"
         " output/data/runs/temporal_downscaler-f927-1ee3-on-forecaster-c304-23e7/495c/verif_aggregated_2b83.nc"
     )
-    _SOURCE_DEFAULT = (
-        "ICON-CH1-CTRL,ICON-CH2-CTRL,ICON-CH1-EPS mean,ICON-CH2-EPS mean,Varda-Single"
-    )
+    _DEMO_SOURCES = "ICON-CH1-CTRL,Varda-Single"
+    try:
+        from evalml.publication.manifest import load_manifest
+
+        _m = load_manifest(os.environ.get("EVALML_MANIFEST"))
+        _pairs = _m.verif_paths()
+        _VERIF_DEFAULT = " ".join(p for p, _ in _pairs)
+        _SOURCE_DEFAULT = ",".join(label for _, label in _pairs)
+    except Exception as _exc:  # noqa: BLE001
+        print(
+            f"[publication_figures] no manifest ({_exc}); using built-in demo "
+            "defaults which may not match your config."
+        )
+        _VERIF_DEFAULT = _DEMO_VERIF
+        _SOURCE_DEFAULT = _DEMO_SOURCES
 
     _cli = mo.cli_args()
     if not _cli and len(sys.argv) > 1:

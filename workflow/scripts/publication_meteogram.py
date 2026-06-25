@@ -32,13 +32,40 @@ def _():
 
 @app.cell
 def _(mo, sys):
-    # Interactive defaults point at the copied dataset so the notebook runs as-is.
+    # Interactive defaults come from the publication manifest when available (no
+    # stale hashes); otherwise fall back to built-in demo strings with a warning.
+    import os
+
     _RUN = "output/data/runs/temporal_downscaler-f927-1ee3-on-forecaster-c304-23e7/495c"
     _FORECAST_DEFAULT = f"{_RUN}/202504010000/grib"
     _BASELINES_DEFAULT = (
         "/store_new/mch/msopr/osm/ICON-CH1-EPS|0/33/1|mean|ICON-CH1-EPS mean;"
         "/store_new/mch/msopr/osm/ICON-CH2-EPS|0/120/1|mean|ICON-CH2-EPS mean"
     )
+    _STEPS_DEFAULT = "0/120/1"
+    _LABEL_DEFAULT = "Varda-Single"
+    _DATE_DEFAULT = "202504010000"
+    _STATION_DEFAULT = "KLO"
+    _PARAMS_DEFAULT = "T_2M,TOT_PREC,SP_10M,DD_10M"
+    try:
+        from evalml.publication.manifest import load_manifest
+
+        _m = load_manifest(os.environ.get("EVALML_MANIFEST"))
+        _mg = _m.publication.get("meteogram") or {}
+        _DATE_DEFAULT = _mg.get("init_time", _DATE_DEFAULT)
+        _STATION_DEFAULT = _mg.get("station", _STATION_DEFAULT)
+        if _mg.get("params"):
+            _PARAMS_DEFAULT = ",".join(_mg["params"])
+        _cand = _m.get_candidate()
+        _FORECAST_DEFAULT = _m.grib_dir(_cand, _DATE_DEFAULT)
+        _STEPS_DEFAULT = _cand.steps
+        _LABEL_DEFAULT = _cand.label
+        _BASELINES_DEFAULT = _m.meteogram_baseline_specs() or _BASELINES_DEFAULT
+    except Exception as _exc:  # noqa: BLE001
+        print(
+            f"[publication_meteogram] no manifest ({_exc}); using built-in demo "
+            "defaults which may not match your config."
+        )
 
     _cli = mo.cli_args()
     if not _cli and len(sys.argv) > 1:
@@ -46,12 +73,12 @@ def _(mo, sys):
 
         _p = argparse.ArgumentParser()
         _p.add_argument("--forecast", default=_FORECAST_DEFAULT)
-        _p.add_argument("--forecast_steps", default="0/120/1")
-        _p.add_argument("--forecast_label", default="Varda-Single")
+        _p.add_argument("--forecast_steps", default=_STEPS_DEFAULT)
+        _p.add_argument("--forecast_label", default=_LABEL_DEFAULT)
         _p.add_argument("--baseline", action="append", default=None)
-        _p.add_argument("--date", default="202504010000")
-        _p.add_argument("--station", default="KLO")
-        _p.add_argument("--params", default="T_2M,TOT_PREC,SP_10M,DD_10M")
+        _p.add_argument("--date", default=_DATE_DEFAULT)
+        _p.add_argument("--station", default=_STATION_DEFAULT)
+        _p.add_argument("--params", default=_PARAMS_DEFAULT)
         _p.add_argument("--output", default="figures/meteogram")
         _a, _ = _p.parse_known_args()
         forecast = _a.forecast
@@ -65,12 +92,12 @@ def _(mo, sys):
         _is_script = True
     else:
         forecast = _cli.get("forecast", default=_FORECAST_DEFAULT)
-        forecast_steps = _cli.get("forecast_steps", default="0/120/1")
-        forecast_label = _cli.get("forecast_label", default="Varda-Single")
+        forecast_steps = _cli.get("forecast_steps", default=_STEPS_DEFAULT)
+        forecast_label = _cli.get("forecast_label", default=_LABEL_DEFAULT)
         baselines_raw = _cli.get("baseline", default=_BASELINES_DEFAULT)
-        date = _cli.get("date", default="202504010000")
-        station = _cli.get("station", default="KLO")
-        params_raw = _cli.get("params", default="T_2M,TOT_PREC,SP_10M,DD_10M")
+        date = _cli.get("date", default=_DATE_DEFAULT)
+        station = _cli.get("station", default=_STATION_DEFAULT)
+        params_raw = _cli.get("params", default=_PARAMS_DEFAULT)
         output_dir = _cli.get("output", default="figures/meteogram")
         _is_script = bool(_cli)
     return (
