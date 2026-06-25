@@ -264,12 +264,16 @@ rule publication_all:
     """Target rule for publication figures workflow."""
     input:
         (
-            [rules.publication_figures.output, rules.publication_meteogram.output]
+            [
+                rules.publication_manifest.output,
+                rules.publication_figures.output,
+                rules.publication_meteogram.output,
+            ]
             + (
                 [rules.publication_scoremaps.output]
-                if config.get("publication", {})
-                .get("scoremaps", {})
-                .get("enabled", False)
+                if (config.get("publication", {}).get("scoremaps") or {}).get(
+                    "enabled", False
+                )
                 else []
             )
             if config.get("publication", {}).get("enabled", False)
