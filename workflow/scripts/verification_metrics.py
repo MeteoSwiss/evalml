@@ -89,8 +89,8 @@ def main(args: ScriptConfig):
     results = verify(
         fcst,
         truth,
-        args.label,
-        args.truth_label,
+        args.source_id,
+        args.truth_source_id,
         args.regions,
         threshold_dict=args.threshold_dict,
     )
@@ -146,16 +146,16 @@ if __name__ == "__main__":
         help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
     )
     parser.add_argument(
-        "--label",
+        "--source_id",
         type=str,
-        default="COSMO-E",
-        help="Label for the forecast or baseline data (default: COSMO-E).",
+        required=True,
+        help="Stable identifier for the forecast or baseline source (e.g. run_id or baseline_id).",
     )
     parser.add_argument(
-        "--truth_label",
+        "--truth_source_id",
         type=str,
-        default="COSMO KENDA",
-        help="Label for the truth data (default: COSMO KENDA).",
+        required=True,
+        help="Stable identifier for the truth source (e.g. truth_<TRUTH_HASH>).",
     )
     parser.add_argument(
         "--regions",

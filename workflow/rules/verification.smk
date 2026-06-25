@@ -26,11 +26,10 @@ rule verification_metrics_baseline:
         mem_mb=80_000,
         runtime="120m",
     params:
-        baseline_label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label"),
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
         truth=config["truth"]["root"],
-        truth_label=config["truth"]["label"],
+        truth_source_id=f"truth-{TRUTH_HASH}",
         regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
@@ -42,8 +41,8 @@ rule verification_metrics_baseline:
             --truth {params.truth} \
             --reftime {wildcards.init_time} \
             --steps "{params.baseline_steps}" \
-            --label "{params.baseline_label}" \
-            --truth_label "{params.truth_label}" \
+            --source_id "{wildcards.baseline_id}" \
+            --truth_source_id "{params.truth_source_id}" \
             --regions "{params.regions}" \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
@@ -79,10 +78,9 @@ rule verification_metrics:
     # run_id="^" # to avoid ambiguitiy with run_baseline_verif
     # TODO: implement logic to use experiment name instead of run_id as wildcard
     params:
-        fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         truth=config["truth"]["root"],
-        truth_label=config["truth"]["label"],
+        truth_source_id=f"truth-{TRUTH_HASH}",
         regions=REGIONS,
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
@@ -97,8 +95,8 @@ rule verification_metrics:
             --truth {params.truth} \
             --reftime {wildcards.init_time} \
             --steps "{params.fcst_steps}" \
-            --label "{params.fcst_label}" \
-            --truth_label "{params.truth_label}" \
+            --source_id "{wildcards.run_id}" \
+            --truth_source_id "{params.truth_source_id}" \
             --regions "{params.regions}" \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
@@ -166,10 +164,21 @@ rule verification_metrics_plot:
         mem_mb=50_000,
         runtime="20m",
     params:
-        labels=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
+        label_map=",".join(
+            "{}:{}".format(
+                sid,
+                (
+                    BASELINE_CONFIGS[sid].get("label", sid)
+                    if sid in BASELINE_CONFIGS
+                    else RUN_CONFIGS[sid].get("label", sid)
+                ),
+            )
+            for sid in EXPERIMENT_PARTICIPANTS
+        )
+        + ",truth-{}:{}".format(TRUTH_HASH, config["truth"]["label"]),
     shell:
         """
-        uv run {input.script} {input.verif} --output_dir {output} >{log} 2>&1
+        uv run {input.script} {input.verif} --output_dir {output} --labels "{params.label_map}" >{log} 2>&1
         """
 
 

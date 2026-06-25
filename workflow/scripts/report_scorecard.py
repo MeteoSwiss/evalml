@@ -182,8 +182,18 @@ def _build_config(args) -> dict:
         }
 
     return {
-        "model": {"path": args.verif_run, "source": args.run_source},
-        "baseline": {"path": args.verif_baseline, "source": args.baseline_source},
+        "model": {
+            "path": args.verif_run,
+            "source": args.run_source,
+            "label": args.run_label if args.run_label is not None else args.run_source,
+        },
+        "baseline": {
+            "path": args.verif_baseline,
+            "source": args.baseline_source,
+            "label": args.baseline_label
+            if args.baseline_label is not None
+            else args.baseline_source,
+        },
         "stratification": args.stratification,
         "lead_times": args.lead_times,
         # All recognised metrics — every entry must also appear in metric_directions.
@@ -605,8 +615,8 @@ def _render_scorecard(diff: xr.Dataset, cfg: dict, outfn: Path):
     legend = plot["legend"]
     dots = plot["dots"]
     fonts = plot["fonts"]
-    model_source = cfg["model"]["source"]
-    baseline_source = cfg["baseline"]["source"]
+    model_source = cfg["model"]["label"]
+    baseline_source = cfg["baseline"]["label"]
     strat_dim = cfg.get("stratification", "region")
 
     plt.rcParams["font.family"] = plot["rcparams"]["font_family"]
@@ -801,6 +811,18 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Value of the 'source' dim to select inside --verif_baseline.",
+    )
+    parser.add_argument(
+        "--run_label",
+        type=str,
+        default=None,
+        help="Human-readable label for the model run (used in plot titles/legend). Defaults to --run_source.",
+    )
+    parser.add_argument(
+        "--baseline_label",
+        type=str,
+        default=None,
+        help="Human-readable label for the baseline (used in plot titles/legend). Defaults to --baseline_source.",
     )
     parser.add_argument(
         "--lead_times",

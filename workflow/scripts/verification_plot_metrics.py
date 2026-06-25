@@ -127,6 +127,7 @@ def main(args: Namespace) -> None:
         title = f"{metric} - {param} - {region}"
         title += f"- {season} - {init_hour}" if args.stratify else ""
         for source, df in sub_df.groupby("source"):
+            display_label = args.label_map.get(source, source)
             df.plot(
                 x="step",
                 y="value",
@@ -135,7 +136,7 @@ def main(args: Namespace) -> None:
                 title=title,
                 xlabel="Lead Time [h]",
                 ylabel=decode_metric(metric),
-                label=source,
+                label=display_label,
                 color="black" if "analysis" in source else None,
                 ax=ax,
             )
@@ -168,5 +169,16 @@ if __name__ == "__main__":
         default="plots",
         help="Path to save the aggregated results.",
     )
+    parser.add_argument(
+        "--labels",
+        type=str,
+        default="",
+        help="Comma-separated source_id:display_label pairs for legend text.",
+    )
     args = parser.parse_args()
+    args.label_map = {}
+    for pair in args.labels.split(","):
+        if ":" in pair:
+            sid, _, lbl = pair.partition(":")
+            args.label_map[sid.strip()] = lbl.strip()
     main(args)
