@@ -12,13 +12,14 @@ rule publication_manifest:
 
     Cheap localrule: dumps the in-memory workflow globals to JSON, so paths can be
     resolved (interactively or by the figure rules) without recomputing any hash.
-    The active config file is an explicit input so the manifest is regenerated
-    whenever the config changes.
+    The master hash (a digest of the whole config) is a rule param, so Snakemake's
+    `params` rerun-trigger regenerates the manifest whenever the config content
+    changes — without re-running on a no-op file touch.
     """
-    input:
-        workflow.configfiles[0] if workflow.configfiles else [],
     output:
         OUT_ROOT / "publication/manifest.json",
+    params:
+        master_hash=master_hash(),
     localrule: True
     run:
         from evalml.publication.manifest import build_manifest, write_manifest
@@ -31,7 +32,7 @@ rule publication_manifest:
             reftimes=REFTIMES,
             output_root=str(OUT_ROOT),
             publication_cfg=config.get("publication", {}),
-            master_hash=master_hash(),
+            master_hash=params.master_hash,
         )
         write_manifest(output[0], manifest)
 
@@ -70,11 +71,16 @@ def _pub_candidate_run_id():
     return candidates[0]
 
 
-def _meteogram_candidate_grib(wc):
-    """GRIB dir of the candidate run for the configured init_time (DAG dependency)."""
+def _meteogram_data_dep(wc):
+    """Aggregated verification file of the candidate run (DAG dependency).
+
+    Depending on this regular file (rather than the candidate's GRIB *directory*,
+    which two inference_prepare rules ambiguously declare) guarantees inference has
+    run for every reftime — including the meteogram's init_time — so the GRIB the
+    CLI resolves from the manifest is present, with correct ordering.
+    """
     run_id = _pub_candidate_run_id()
-    init_time = config["publication"]["meteogram"]["init_time"]
-    return str((Path(OUT_ROOT) / f"data/runs/{run_id}/{init_time}/grib").resolve())
+    return str(OUT_ROOT / f"data/runs/{run_id}/verif_aggregated_{TRUTH_HASH}.nc")
 
 
 rule publication_meteogram:
@@ -83,7 +89,7 @@ rule publication_meteogram:
         "workflow/scripts/publication.mplstyle",
         "workflow/scripts/publication_meteogram.py",
         manifest=rules.publication_manifest.output,
-        grib=_meteogram_candidate_grib,
+        verif=_meteogram_data_dep,
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         report(
