@@ -606,6 +606,7 @@
       "type": "object"
     },
     "PublicationConfig": {
+      "additionalProperties": false,
       "description": "Configuration for the publication workflow.",
       "properties": {
         "enabled": {
@@ -625,6 +626,18 @@
           ],
           "default": null,
           "description": "Publication meteogram case selection (omit to skip it)."
+        },
+        "scoremaps": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicationScoreMapsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Publication scoremap case selection (omit to skip it). Requires a gridded (zarr) truth source."
         }
       },
       "title": "PublicationConfig",
@@ -636,11 +649,13 @@
       "properties": {
         "init_time": {
           "description": "Initialisation time (YYYYMMDDHHMM) of the case to plot.",
+          "pattern": "^\\d{12}$",
           "title": "Init Time",
           "type": "string"
         },
         "station": {
           "description": "PeakWeather station ID to plot (e.g. KLO, GVE, LUG).",
+          "minLength": 1,
           "title": "Station",
           "type": "string"
         },
@@ -655,6 +670,7 @@
           "items": {
             "type": "string"
           },
+          "minItems": 1,
           "title": "Params",
           "type": "array"
         }
@@ -664,6 +680,71 @@
         "station"
       ],
       "title": "PublicationMeteogramConfig",
+      "type": "object"
+    },
+    "PublicationScoreMapsConfig": {
+      "additionalProperties": false,
+      "description": "Case selection for the publication skill-score map figure.\n\nSingular (one leadtime, one baseline, one season/region) \u2014 unlike the plural\n``experiment.scoremaps`` config \u2014 matching the single 2x2 publication panel.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate the publication scoremap figure.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "baseline_label": {
+          "default": "ICON-CH1-CTRL",
+          "description": "Label of the baseline to compare the candidate against (must match the `label` of a baseline entry in `runs`).",
+          "title": "Baseline Label",
+          "type": "string"
+        },
+        "params": {
+          "default": [
+            "T_2M",
+            "SP_10M"
+          ],
+          "description": "Parameters to plot (one panel row each).",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Params",
+          "type": "array"
+        },
+        "leadtime": {
+          "default": 24,
+          "description": "Lead time (hours) to plot. Must be produced by both the candidate and the chosen baseline.",
+          "exclusiveMinimum": 0,
+          "title": "Leadtime",
+          "type": "integer"
+        },
+        "scores": {
+          "default": [
+            "MSE_SKILL",
+            "BIAS_CONTRIB"
+          ],
+          "description": "Derived skill metrics to plot (e.g. MSE_SKILL, BIAS_CONTRIB).",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Scores",
+          "type": "array"
+        },
+        "season": {
+          "default": "all",
+          "description": "Season to plot ('all', 'DJF', 'MAM', 'JJA', 'SON').",
+          "title": "Season",
+          "type": "string"
+        },
+        "region": {
+          "default": "switzerland",
+          "description": "Region to plot (e.g. switzerland, centraleurope).",
+          "title": "Region",
+          "type": "string"
+        }
+      },
+      "title": "PublicationScoreMapsConfig",
       "type": "object"
     },
     "ScoreMapsConfig": {
