@@ -20,7 +20,7 @@ runs:
       extra_requirements:
         - earthkit-utils<0.2.0
         - earthkit-data<0.19.0
-        - git+https://github.com/ecmwf/anemoi-inference.git@de4cc0decd47dd593d2bb04cf9247e57a216d3cd
+        - anemoi-inference==0.11.1
 
   - baseline:
       label: ICON-CH1-ctrl

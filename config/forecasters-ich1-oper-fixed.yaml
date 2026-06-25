@@ -18,8 +18,7 @@ runs:
       steps: 0/120/6
       config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
       extra_requirements:
-        - git+https://github.com/ecmwf/anemoi-inference.git@de4cc0decd47dd593d2bb04cf9247e57a216d3cd
-
+        - anemoi-inference==0.11.1
   # - forecaster:
   #     checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/233b1274e79b4bfea98378d196a8aba0
   #     label: stage_C_realch1
