@@ -262,10 +262,14 @@ def _(
             if _g.empty:
                 continue
             _style = line_style(_src)
-            # Wind direction is circular: draw as markers (no lines) so the
-            # 0<->360 wraparound doesn't create spurious vertical segments.
-            if _p == "DD_10M" and _src != OBS_LABEL:
+            if _p == "DD_10M":
+                # Wind direction is circular: draw everything (incl. observations)
+                # as markers so the 0<->360 wraparound doesn't create spurious
+                # vertical segments.
                 _style = {**_style, "linestyle": "none", "marker": ".", "markersize": 5}
+            elif _src == OBS_LABEL:
+                # Observations as a continuous line (no markers) in all other panels.
+                _style = {**_style, "linestyle": "-", "marker": "none", "linewidth": 1.5}
             _lead = (_g["valid_time"] - init_time).dt.total_seconds() / 3600.0
             _ax.plot(_lead, _g["value"], label=_src, **_style)
         _ax.set_ylabel(_UNITS.get(_p, _p))
