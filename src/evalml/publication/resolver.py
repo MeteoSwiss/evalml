@@ -151,14 +151,16 @@ class Manifest:
         return template.format(param=param, leadtime=leadtime)
 
     def meteogram_baseline_specs(self) -> str:
-        """Rebuild the ``root|steps|member|label;...`` spec for EPS-mean baselines.
+        """Rebuild the ``root|steps|member|label;...`` spec for the meteogram overlay.
 
-        Mirrors the historical ``_meteogram_baselines`` helper: only ensemble-mean
-        baselines are overlaid on the publication meteogram.
+        Every configured baseline is overlaid, read according to its ``member``:
+        ``control`` (or a numbered member) reads that single member — fast — while
+        ``mean`` averages the whole ensemble at plot time (slow). Choose per
+        baseline via the ``member`` field in the config.
         """
         specs = []
         for p in self.participants(role="baseline"):
-            if p.member == "mean" and p.source_root:
+            if p.source_root:
                 specs.append(f"{p.source_root}|{p.steps}|{p.member}|{p.label}")
         return ";".join(specs)
 

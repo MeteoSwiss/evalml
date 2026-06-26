@@ -93,11 +93,14 @@ def test_resolver_resolve_baseline_and_paths():
     assert grib.endswith("495c/202504010000/grib")
 
 
-def test_resolver_meteogram_baseline_specs_mean_only():
+def test_resolver_meteogram_baseline_specs_includes_all():
     m = Manifest(_build())
     specs = m.meteogram_baseline_specs()
+    # Every configured baseline is overlaid; member is carried in the spec so the
+    # script reads control as a single member and mean as the ensemble average.
     assert "ICON-CH1-EPS mean" in specs
-    assert "ICON-CH1-CTRL" not in specs  # control members excluded
+    assert "ICON-CH1-CTRL" in specs
+    assert "|control|" in specs and "|mean|" in specs
 
 
 def test_resolver_verif_paths_all_participants():
