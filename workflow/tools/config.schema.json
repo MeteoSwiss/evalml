@@ -606,13 +606,20 @@
       "type": "object"
     },
     "PublicationConfig": {
+      "additionalProperties": false,
       "description": "Configuration for the publication workflow.",
       "properties": {
-        "enabled": {
-          "default": false,
-          "description": "Whether to generate publication figures.",
-          "title": "Enabled",
-          "type": "boolean"
+        "leadtimes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicationLeadtimesConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Lead-time score figure settings (omit to skip)."
         },
         "meteogram": {
           "anyOf": [
@@ -624,16 +631,48 @@
             }
           ],
           "default": null,
-          "description": "Publication meteogram case selection (omit to skip it)."
+          "description": "Publication meteogram case selection (omit to skip)."
+        },
+        "scoremaps": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicationScoremapsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Publication scoremap figure settings (omit to skip)."
         }
       },
       "title": "PublicationConfig",
+      "type": "object"
+    },
+    "PublicationLeadtimesConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for the publication lead-time figure.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate the lead-time score figures.",
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "PublicationLeadtimesConfig",
       "type": "object"
     },
     "PublicationMeteogramConfig": {
       "additionalProperties": false,
       "description": "Case selection for the publication meteogram figure.",
       "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate the publication meteogram figure.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
         "init_time": {
           "description": "Initialisation time (YYYYMMDDHHMM) of the case to plot.",
           "title": "Init Time",
@@ -664,6 +703,78 @@
         "station"
       ],
       "title": "PublicationMeteogramConfig",
+      "type": "object"
+    },
+    "PublicationScoremapsConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for the publication scoremap figures.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate the publication scoremap figures.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "steps": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Lead times in hours to produce one scoremap figure each. Defaults to experiment.scoremaps.leadtimes when omitted.",
+          "title": "Steps"
+        },
+        "params": {
+          "default": [
+            "T_2M",
+            "SP_10M"
+          ],
+          "description": "Parameters to show as rows in the scoremap panel.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "scores": {
+          "default": [
+            "MSE_SKILL",
+            "BIAS_CONTRIB"
+          ],
+          "description": "Score columns to show in the scoremap panel.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Scores",
+          "type": "array"
+        },
+        "baseline_label": {
+          "default": "ICON-CH1-CTRL",
+          "description": "Label of the baseline run to compare against.",
+          "title": "Baseline Label",
+          "type": "string"
+        },
+        "season": {
+          "default": "all",
+          "description": "Season filter passed to the scoremap script.",
+          "title": "Season",
+          "type": "string"
+        },
+        "region": {
+          "default": "switzerland",
+          "description": "Geographic region for the scoremap plot.",
+          "title": "Region",
+          "type": "string"
+        }
+      },
+      "title": "PublicationScoremapsConfig",
       "type": "object"
     },
     "ScoreMapsConfig": {

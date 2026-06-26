@@ -73,12 +73,15 @@ def _pub_scoremap_baseline_id():
 
 
 def _pub_scoremap_leadtimes():
-    """Return the list of lead times to plot, from config."""
-    cfg = _PUB_SCOREMAP_CFG
-    if "leadtimes" in cfg:
-        return list(cfg["leadtimes"])
-    # Backward compat: single `leadtime` key
-    return [cfg.get("leadtime", 24)]
+    """Return the lead times (hours) to plot.
+
+    Uses publication.scoremaps.steps when set, otherwise falls back to
+    experiment.scoremaps.leadtimes.
+    """
+    steps = _PUB_SCOREMAP_CFG.get("steps")
+    if steps is not None:
+        return [int(s) for s in steps]
+    return list(config.get("experiment", {}).get("scoremaps", {}).get("leadtimes", [6, 24]))
 
 
 def _pub_scoremap_inputs(wc):

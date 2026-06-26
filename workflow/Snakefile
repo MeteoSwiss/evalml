@@ -264,14 +264,17 @@ rule publication_all:
     """Target rule for publication figures workflow."""
     input:
         (
-            [rules.publication_figures.output, rules.publication_meteogram.output]
-            + (
-                [rules.publication_scoremaps.output]
-                if config.get("publication", {})
-                .get("scoremaps", {})
-                .get("enabled", False)
-                else []
-            )
-            if config.get("publication", {}).get("enabled", False)
+            [rules.publication_figures.output]
+            if config.get("publication", {}).get("leadtimes", {}).get("enabled", False)
+            else []
+        )
+        + (
+            [rules.publication_scoremaps.output]
+            if config.get("publication", {}).get("scoremaps", {}).get("enabled", False)
+            else []
+        )
+        + (
+            [rules.publication_meteogram.output]
+            if config.get("publication", {}).get("meteogram", {}).get("enabled", False)
             else []
         ),

@@ -367,9 +367,24 @@ class ShowcaseConfig(BaseModel):
     )
 
 
+class PublicationLeadtimesConfig(BaseModel):
+    """Configuration for the publication lead-time figure."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate the lead-time score figures.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class PublicationMeteogramConfig(BaseModel):
     """Case selection for the publication meteogram figure."""
 
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate the publication meteogram figure.",
+    )
     init_time: str = Field(
         ...,
         description="Initialisation time (YYYYMMDDHHMM) of the case to plot.",
@@ -386,17 +401,61 @@ class PublicationMeteogramConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
-class PublicationConfig(BaseModel):
-    """Configuration for the publication workflow."""
+class PublicationScoremapsConfig(BaseModel):
+    """Configuration for the publication scoremap figures."""
 
     enabled: bool = Field(
         default=False,
-        description="Whether to generate publication figures.",
+        description="Whether to generate the publication scoremap figures.",
+    )
+    steps: Optional[List[int]] = Field(
+        default=None,
+        description=(
+            "Lead times in hours to produce one scoremap figure each. "
+            "Defaults to experiment.scoremaps.leadtimes when omitted."
+        ),
+    )
+    params: List[str] = Field(
+        default=["T_2M", "SP_10M"],
+        description="Parameters to show as rows in the scoremap panel.",
+    )
+    scores: List[str] = Field(
+        default=["MSE_SKILL", "BIAS_CONTRIB"],
+        description="Score columns to show in the scoremap panel.",
+    )
+    baseline_label: str = Field(
+        default="ICON-CH1-CTRL",
+        description="Label of the baseline run to compare against.",
+    )
+    season: str = Field(
+        default="all",
+        description="Season filter passed to the scoremap script.",
+    )
+    region: str = Field(
+        default="switzerland",
+        description="Geographic region for the scoremap plot.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class PublicationConfig(BaseModel):
+    """Configuration for the publication workflow."""
+
+    leadtimes: Optional[PublicationLeadtimesConfig] = Field(
+        default=None,
+        description="Lead-time score figure settings (omit to skip).",
     )
     meteogram: Optional[PublicationMeteogramConfig] = Field(
         default=None,
-        description="Publication meteogram case selection (omit to skip it).",
+        description="Publication meteogram case selection (omit to skip).",
     )
+    scoremaps: Optional[PublicationScoremapsConfig] = Field(
+        default=None,
+        description="Publication scoremap figure settings (omit to skip).",
+    )
+
+    model_config = {"extra": "forbid"}
 
 
 class Locations(BaseModel):
@@ -588,7 +647,7 @@ class ConfigModel(BaseModel):
             return self
         requested = set(sm.leadtimes)
         for item in self.runs:
-            steps = getattr(item, next(iter(item.model_fields))).steps
+            steps = getattr(item, next(iter(type(item).model_fields))).steps
             start, end, step = map(int, steps.split("/"))
             producible = set(range(start, end + 1, step))
             unsupported = requested - producible
