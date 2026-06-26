@@ -44,9 +44,16 @@ def apply_lapse_rate_correction(
     A positive height difference (obs higher than forecast grid cell) lowers the
     corrected value, consistent with the standard atmospheric lapse rate.
     """
-    if "elevation" not in fcst.coords or "elevation" not in obs.coords:
-        LOG.debug("Skipping lapse-rate correction: elevation coordinates missing.")
-        return fcst
+    missing = [
+        name
+        for name, ds in (("forecast", fcst), ("observations", obs))
+        if "elevation" not in ds.coords
+    ]
+    if missing:
+        raise ValueError(
+            f"Lapse-rate correction requested but elevation coordinate is missing "
+            f"from: {', '.join(missing)}."
+        )
     dz = obs["elevation"] - fcst["elevation"]
 
     dz_vals = np.asarray(dz).ravel()

@@ -368,9 +368,7 @@ def verif_hash(full_config: dict) -> str:
         k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE
     }
     experiment_verif_cfg = {
-        "lapse_rate_correction": full_config.get("experiment", {}).get(
-            "lapse_rate_correction", True
-        ),
+        "lapse_rate_correction": full_config.get("lapse_rate_correction", True),
     }
     return generate_json_hash({"truth": truth_cfg, "verif": experiment_verif_cfg})
 

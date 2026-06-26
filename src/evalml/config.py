@@ -413,10 +413,6 @@ class ExperimentConfig(BaseModel):
             "Each dict maps operator keys (gt, ge, lt, le, eq, ne) to lists of threshold values."
         ),
     )
-    lapse_rate_correction: bool = Field(
-        default=True,
-        description=("Apply standard-atmosphere lapse-rate correction to T_2M."),
-    )
     dashboard: Dashboard = Field(
         ...,
         description="Settings for the experiment dashboard.",
@@ -538,6 +534,10 @@ class ConfigModel(BaseModel):
         description="List of experiment participants, including forecaster/temporal downscaler ML runs and baselines.",
     )
     truth: TruthConfig | None
+    lapse_rate_correction: bool = Field(
+        default=True,
+        description="Apply standard-atmosphere lapse-rate correction to T_2M.",
+    )
     experiment: ExperimentConfig = Field(
         ...,
         description="Settings for the experiment workflow outputs.",

@@ -35,7 +35,7 @@ rule verification_metrics_baseline:
         threshold_dict=config["experiment"]["thresholds"],
         lapse_rate_flag=(
             "--lapse_rate_correction"
-            if config["experiment"].get("lapse_rate_correction", True)
+            if config.get("lapse_rate_correction", True)
             else ""
         ),
     shell:
@@ -95,7 +95,7 @@ rule verification_metrics:
         threshold_dict=config["experiment"]["thresholds"],
         lapse_rate_flag=(
             "--lapse_rate_correction"
-            if config["experiment"].get("lapse_rate_correction", True)
+            if config.get("lapse_rate_correction", True)
             else ""
         ),
     shell:

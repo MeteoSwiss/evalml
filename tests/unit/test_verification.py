@@ -141,18 +141,18 @@ def test_lapse_rate_correction_station_below_grid():
     np.testing.assert_allclose(result["T_2M"].values, 280.0 + 0.0065 * 300.0, atol=1e-4)
 
 
-def test_lapse_rate_correction_skipped_without_elevation():
+def test_lapse_rate_correction_raises_without_forecast_elevation():
     fcst, obs = _make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
     fcst_no_elev = fcst.drop_vars("elevation")
-    result = apply_lapse_rate_correction(fcst_no_elev, obs, ["T_2M", "TD_2M"])
-    np.testing.assert_array_equal(result["T_2M"].values, fcst_no_elev["T_2M"].values)
+    with pytest.raises(ValueError, match="forecast"):
+        apply_lapse_rate_correction(fcst_no_elev, obs, ["T_2M", "TD_2M"])
 
 
-def test_lapse_rate_correction_skipped_without_obs_elevation():
+def test_lapse_rate_correction_raises_without_obs_elevation():
     fcst, obs = _make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
     obs_no_elev = obs.drop_vars("elevation")
-    result = apply_lapse_rate_correction(fcst, obs_no_elev, ["T_2M", "TD_2M"])
-    np.testing.assert_array_equal(result["T_2M"].values, fcst["T_2M"].values)
+    with pytest.raises(ValueError, match="observations"):
+        apply_lapse_rate_correction(fcst, obs_no_elev, ["T_2M", "TD_2M"])
 
 
 def test_lapse_rate_correction_only_requested_params():

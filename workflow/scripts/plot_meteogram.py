@@ -12,6 +12,7 @@ from data_input import (
     load_truth_data,
 )
 from data_input import jretrieve as jr
+from verification import apply_lapse_rate_correction
 from verification.spatial import map_forecast_to_truth
 
 LOG = logging.getLogger(__name__)
@@ -101,6 +102,12 @@ def main():
     parser.add_argument("--outdir", type=str, help="output directory")
     parser.add_argument("--param", type=str, help="parameter")
     parser.add_argument("--stations", nargs="+", type=str, help="station IDs")
+    parser.add_argument(
+        "--lapse_rate_correction",
+        action="store_true",
+        default=False,
+        help="Apply standard-atmosphere lapse-rate correction to T_2M.",
+    )
 
     args = parser.parse_args()
 
@@ -154,9 +161,9 @@ def main():
         )
     )
     catalog_lookup = {
-        abbr: (lat, lon)
-        for abbr, lat, lon in zip(
-            _catalog.nat_abbr, _catalog.latitude, _catalog.longitude
+        abbr: (lat, lon, elev)
+        for abbr, lat, lon, elev in zip(
+            _catalog.nat_abbr, _catalog.latitude, _catalog.longitude, _catalog.elevation
         )
     }
 
@@ -191,12 +198,13 @@ def main():
             stations.index(station) + 1,
             len(stations),
         )
-        lat, lon = catalog_lookup[station]
+        lat, lon, elev = catalog_lookup[station]
         station_ds = xr.Dataset(
             coords={
                 "values": [station],
                 "latitude": ("values", [lat]),
                 "longitude": ("values", [lon]),
+                "elevation": ("values", [elev]),
             }
         )
 
@@ -205,6 +213,15 @@ def main():
         baseline_station_ds_list = [
             map_forecast_to_truth(ds, station_ds) for ds in baseline_ds_list
         ]
+
+        if args.lapse_rate_correction:
+            forecast_station_ds = apply_lapse_rate_correction(
+                forecast_station_ds, station_ds, paramlist
+            )
+            baseline_station_ds_list = [
+                apply_lapse_rate_correction(ds, station_ds, paramlist)
+                for ds in baseline_station_ds_list
+            ]
 
         fig, ax = plt.subplots()
 
