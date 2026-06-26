@@ -19,6 +19,7 @@ include: "rules/inference.smk"
 include: "rules/verification.smk"
 include: "rules/report.smk"
 include: "rules/plot.smk"
+include: "rules/publication.smk"
 
 
 # about workflow
@@ -256,4 +257,24 @@ rule verification_metrics_plot_all:
         expand(
             rules.verification_metrics_plot.output,
             experiment=EXPERIMENT_NAME,
+        ),
+
+
+rule publication_all:
+    """Target rule for publication figures workflow."""
+    input:
+        (
+            [rules.publication_figures.output]
+            if config.get("publication", {}).get("leadtimes", {}).get("enabled", False)
+            else []
+        )
+        + (
+            [rules.publication_scoremaps.output]
+            if config.get("publication", {}).get("scoremaps", {}).get("enabled", False)
+            else []
+        )
+        + (
+            [rules.publication_meteogram.output]
+            if config.get("publication", {}).get("meteogram", {}).get("enabled", False)
+            else []
         ),
