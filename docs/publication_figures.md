@@ -181,7 +181,9 @@ publication:
   scoremaps:                          # optional; REQUIRES gridded (zarr) truth
     enabled: true
     baseline_label: ICON-CH1-CTRL     # must match a baseline `label` in `runs`
-    leadtime: 24                      # must be produced by candidate AND baseline
+    leadtimes: [6, 24]                # one figure per lead time; each must be
+                                      # produced by candidate AND baseline
+    # leadtime: 24                    # backward-compat shortcut for leadtimes: [24]
     params: [T_2M, SP_10M]
     scores: [MSE_SKILL, BIAS_CONTRIB]
     region: switzerland
@@ -193,7 +195,7 @@ publication:
 | Rule | Rejected when | Message |
 |------|---------------|---------|
 | scoremaps need gridded truth | `scoremaps.enabled` but `truth` is jretrieve/obs | "requires a gridded (zarr) truth source" |
-| leadtime producible | `scoremaps.leadtime` not in candidate **and** baseline `steps` | "leadtime Nh is not produced by …" |
+| leadtime producible | any `scoremaps` lead time (`leadtimes`/`leadtime`) not in candidate **and** baseline `steps` | "leadtime Nh is not produced by …" |
 | baseline exists | `scoremaps.baseline_label` not among baselines | "not found. Available baseline labels: […]" |
 | meteogram init time | `meteogram.init_time` outside `dates` | "not in the configured initialisation times" |
 
@@ -252,6 +254,7 @@ Ad-hoc overrides (anything not given falls back to the manifest's configured cas
 ```bash
 python -m evalml.publication meteogram --station GVE --init-time 202504030600
 python -m evalml.publication scoremaps --baseline ICON-CH2-CTRL --leadtime 48 --params T_2M,SP_10M
+python -m evalml.publication scoremaps --leadtime 6 --leadtime 24   # repeat for one figure per lead time
 python -m evalml.publication figures   --manifest /other/output/publication/manifest.json
 ```
 
