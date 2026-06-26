@@ -100,8 +100,8 @@ experiment:
 publication:
   enabled: true
   meteogram:
-    init_time: "202504010000"
-    station: "KLO"
+    init_time: "202506271800"
+    station: "SIO"
     params: [T_2M, TOT_PREC, SP_10M, DD_10M]
 
 locations:
