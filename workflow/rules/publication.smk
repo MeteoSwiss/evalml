@@ -117,36 +117,43 @@ def _pub_scoremap_cfg():
     return (config.get("publication", {}) or {}).get("scoremaps") or {}
 
 
+def _pub_scoremap_leadtimes(cfg):
+    """Lead times to plot: the `leadtimes` list, or the singular `leadtime`."""
+    if cfg.get("leadtimes"):
+        return list(cfg["leadtimes"])
+    if cfg.get("leadtime") is not None:
+        return [cfg["leadtime"]]
+    return [24]
+
+
 def _pub_scoremap_inputs(wc):
     """Scoremap NC files for the candidate and baseline (DAG dependency).
 
     Computed from the in-memory globals (not the manifest file, which a sibling
     rule produces) using the same path template the CLI resolves from the manifest,
-    so the declared inputs always match what the CLI plots.
+    so the declared inputs always match what the CLI plots. Files are ordered
+    leadtime-major (all params for leadtimes[0], then leadtimes[1], …) to match
+    how the scoremaps script slices them.
     """
     cfg = _pub_scoremap_cfg()
     params = cfg.get("params", ["T_2M", "SP_10M"])
-    leadtime = cfg.get("leadtime", 24)
-    baseline_id = resolve_baseline_id(cfg.get("baseline_label", "ICON-CH1-CTRL"))
+    leadtimes = _pub_scoremap_leadtimes(cfg)
+    cand_id = _pub_candidate_run_id()
+    base_id = resolve_baseline_id(cfg.get("baseline_label", "ICON-CH1-CTRL"))
     return {
-        "cand_files": expand(
+        "cand_files": [
+            str(OUT_ROOT / f"data/runs/{cand_id}/scoremaps/{p}_{lt}_{TRUTH_HASH}.nc")
+            for lt in leadtimes
+            for p in params
+        ],
+        "base_files": [
             str(
                 OUT_ROOT
-                / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc"
-            ),
-            run_id=_pub_candidate_run_id(),
-            param=params,
-            leadtime=leadtime,
-        ),
-        "base_files": expand(
-            str(
-                OUT_ROOT
-                / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc"
-            ),
-            baseline_id=baseline_id,
-            param=params,
-            leadtime=leadtime,
-        ),
+                / f"data/baselines/{base_id}/scoremaps/{p}_{lt}_{TRUTH_HASH}.nc"
+            )
+            for lt in leadtimes
+            for p in params
+        ],
     }
 
 

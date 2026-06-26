@@ -393,8 +393,8 @@ class PublicationMeteogramConfig(BaseModel):
 class PublicationScoreMapsConfig(BaseModel):
     """Case selection for the publication skill-score map figure.
 
-    Singular (one leadtime, one baseline, one season/region) — unlike the plural
-    ``experiment.scoremaps`` config — matching the single 2x2 publication panel.
+    One baseline / season / region, but one or more lead times (one figure per
+    lead time) — unlike the plural ``experiment.scoremaps`` config.
     """
 
     enabled: bool = Field(
@@ -411,11 +411,16 @@ class PublicationScoreMapsConfig(BaseModel):
         min_length=1,
         description="Parameters to plot (one panel row each).",
     )
-    leadtime: int = Field(
-        default=24,
+    leadtime: Optional[int] = Field(
+        default=None,
         gt=0,
-        description="Lead time (hours) to plot. Must be produced by both the "
-        "candidate and the chosen baseline.",
+        description="Single lead time (hours). Backward-compat shortcut for "
+        "`leadtimes: [leadtime]`. Ignored when `leadtimes` is set.",
+    )
+    leadtimes: Optional[List[int]] = Field(
+        default=None,
+        description="Lead times (hours) to plot — one figure per lead time. Each "
+        "must be produced by both the candidate and the chosen baseline.",
     )
     scores: List[str] = Field(
         default=["MSE_SKILL", "BIAS_CONTRIB"],
@@ -432,6 +437,14 @@ class PublicationScoreMapsConfig(BaseModel):
     )
 
     model_config = {"extra": "forbid"}
+
+    def effective_leadtimes(self) -> List[int]:
+        """Lead times to plot: ``leadtimes`` if set, else the single ``leadtime``."""
+        if self.leadtimes:
+            return list(self.leadtimes)
+        if self.leadtime is not None:
+            return [self.leadtime]
+        return [24]
 
 
 class PublicationConfig(BaseModel):
@@ -726,19 +739,20 @@ class ConfigModel(BaseModel):
                     f"publication.scoremaps.baseline_label {sm.baseline_label!r} not found. "
                     f"Available baseline labels: {list(baseline_steps)}."
                 )
-            # (b) the lead time must be produced by every candidate AND the baseline.
-            for steps in candidate_steps:
-                if not leadtime_producible(steps, sm.leadtime):
-                    raise ValueError(
-                        f"publication.scoremaps.leadtime {sm.leadtime}h is not produced "
-                        f"by candidate run with steps '{steps}'."
-                    )
+            # (b) each lead time must be produced by every candidate AND the baseline.
             base_steps = baseline_steps[sm.baseline_label]
-            if not leadtime_producible(base_steps, sm.leadtime):
-                raise ValueError(
-                    f"publication.scoremaps.leadtime {sm.leadtime}h is not produced by "
-                    f"baseline {sm.baseline_label!r} (steps '{base_steps}')."
-                )
+            for leadtime in sm.effective_leadtimes():
+                for steps in candidate_steps:
+                    if not leadtime_producible(steps, leadtime):
+                        raise ValueError(
+                            f"publication.scoremaps leadtime {leadtime}h is not produced "
+                            f"by candidate run with steps '{steps}'."
+                        )
+                if not leadtime_producible(base_steps, leadtime):
+                    raise ValueError(
+                        f"publication.scoremaps leadtime {leadtime}h is not produced by "
+                        f"baseline {sm.baseline_label!r} (steps '{base_steps}')."
+                    )
         return self
 
     model_config = {

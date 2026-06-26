@@ -92,9 +92,11 @@ def list_(manifest):
     sm = pub.get("scoremaps")
     if sm and sm.get("enabled"):
         ok = "ok" if t.get("type") == "zarr" else "INVALID (needs zarr truth)"
+        lts = sm.get("leadtimes") or (
+            [sm["leadtime"]] if sm.get("leadtime") is not None else [24]
+        )
         click.echo(
-            f"Scoremaps: baseline={sm.get('baseline_label')} "
-            f"leadtime={sm.get('leadtime')}h [{ok}]"
+            f"Scoremaps: baseline={sm.get('baseline_label')} leadtimes={lts}h [{ok}]"
         )
 
 
@@ -176,19 +178,32 @@ def meteogram(manifest, candidate, init_time, station, params, output):
 @click.option("--baseline", "baseline", default=None, help="Baseline label.")
 @click.option("--params", default=None, help="Comma-separated params (one row each).")
 @click.option("--scores", default=None, help="Comma-separated derived metrics.")
-@click.option("--leadtime", type=int, default=None, help="Lead time in hours.")
+@click.option(
+    "--leadtime",
+    "leadtimes",
+    type=int,
+    multiple=True,
+    help="Lead time in hours (repeat for several; one figure each).",
+)
 @click.option("--season", default=None)
 @click.option("--region", default=None)
 @click.option("--output", default="figures/scoremaps", help="Output directory.")
 @_friendly_errors
 def scoremaps(
-    manifest, candidate, baseline, params, scores, leadtime, season, region, output
+    manifest, candidate, baseline, params, scores, leadtimes, season, region, output
 ):
     """Spatial skill-score map panel (candidate vs baseline)."""
     m = _load(manifest)
     cfg = m.publication.get("scoremaps") or {}
     baseline = baseline or cfg.get("baseline_label", "ICON-CH1-CTRL")
-    leadtime = leadtime if leadtime is not None else cfg.get("leadtime", 24)
+    if leadtimes:
+        leadtime_list = list(leadtimes)
+    elif cfg.get("leadtimes"):
+        leadtime_list = list(cfg["leadtimes"])
+    elif cfg.get("leadtime") is not None:
+        leadtime_list = [cfg["leadtime"]]
+    else:
+        leadtime_list = [24]
     season = season or cfg.get("season", "all")
     region = region or cfg.get("region", "switzerland")
     param_list = (
@@ -198,13 +213,19 @@ def scoremaps(
     )
     score_str = scores or ",".join(cfg.get("scores", ["MSE_SKILL", "BIAS_CONTRIB"]))
 
-    m.validate_request(
-        "scoremaps", candidate=candidate, baseline=baseline, leadtime=leadtime
-    )
     cand = m.get_candidate(candidate)
     base = m.resolve_baseline(baseline)
-    cand_files = [m.scoremap_path(cand, p, leadtime) for p in param_list]
-    base_files = [m.scoremap_path(base, p, leadtime) for p in param_list]
+    for lt in leadtime_list:
+        m.validate_request(
+            "scoremaps", candidate=candidate, baseline=baseline, leadtime=lt
+        )
+    # Files ordered leadtime-major so the script slices them by n_params.
+    cand_files = [
+        m.scoremap_path(cand, p, lt) for lt in leadtime_list for p in param_list
+    ]
+    base_files = [
+        m.scoremap_path(base, p, lt) for lt in leadtime_list for p in param_list
+    ]
     _run(
         [
             sys.executable,
@@ -221,8 +242,8 @@ def scoremaps(
             cand.label,
             "--baseline_label",
             base.label,
-            "--leadtime",
-            str(leadtime),
+            "--leadtimes",
+            *[str(lt) for lt in leadtime_list],
             "--season",
             season,
             "--region",

@@ -684,7 +684,7 @@
     },
     "PublicationScoreMapsConfig": {
       "additionalProperties": false,
-      "description": "Case selection for the publication skill-score map figure.\n\nSingular (one leadtime, one baseline, one season/region) \u2014 unlike the plural\n``experiment.scoremaps`` config \u2014 matching the single 2x2 publication panel.",
+      "description": "Case selection for the publication skill-score map figure.\n\nOne baseline / season / region, but one or more lead times (one figure per\nlead time) \u2014 unlike the plural ``experiment.scoremaps`` config.",
       "properties": {
         "enabled": {
           "default": false,
@@ -712,11 +712,34 @@
           "type": "array"
         },
         "leadtime": {
-          "default": 24,
-          "description": "Lead time (hours) to plot. Must be produced by both the candidate and the chosen baseline.",
-          "exclusiveMinimum": 0,
-          "title": "Leadtime",
-          "type": "integer"
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Single lead time (hours). Backward-compat shortcut for `leadtimes: [leadtime]`. Ignored when `leadtimes` is set.",
+          "title": "Leadtime"
+        },
+        "leadtimes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Lead times (hours) to plot \u2014 one figure per lead time. Each must be produced by both the candidate and the chosen baseline.",
+          "title": "Leadtimes"
         },
         "scores": {
           "default": [
