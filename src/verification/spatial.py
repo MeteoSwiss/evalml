@@ -163,7 +163,8 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
     fcst = fcst.drop_vars(["x", "y", "values"], errors="ignore")
     fcst = fcst.assign_coords(longitude=("values", truth["longitude"].data))
     fcst = fcst.assign_coords(latitude=("values", truth["latitude"].data))
-    fcst = fcst.assign_coords(values=truth["values"])
+    # only pull in values to avoid overwriting elevation coordinate data
+    fcst = fcst.assign_coords(values=truth["values"].data)
 
     if truth_is_grid:
         fcst = fcst.unstack("values")
