@@ -10,17 +10,17 @@
 rule publication_manifest:
     """Persist the run/baseline -> hash -> data-path mapping for the CLI/notebooks.
 
-    Cheap localrule: dumps the in-memory workflow globals to JSON, so paths can be
-    resolved (interactively or by the figure rules) without recomputing any hash.
-    The master hash (a digest of the whole config) is a rule param, so Snakemake's
-    `params` rerun-trigger regenerates the manifest whenever the config content
-    changes — without re-running on a no-op file touch.
-    """
+Cheap localrule: dumps the in-memory workflow globals to JSON, so paths can be
+resolved (interactively or by the figure rules) without recomputing any hash.
+The master hash (a digest of the whole config) is a rule param, so Snakemake's
+`params` rerun-trigger regenerates the manifest whenever the config content
+changes — without re-running on a no-op file touch.
+"""
     output:
         OUT_ROOT / "publication/manifest.json",
+    localrule: True
     params:
         master_hash=master_hash(),
-    localrule: True
     run:
         from evalml.publication.manifest import build_manifest, write_manifest
 

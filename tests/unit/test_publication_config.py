@@ -1,7 +1,5 @@
 """Coherence-validation tests for the publication config block."""
 
-import copy
-
 import pytest
 import yaml
 from pathlib import Path
@@ -13,9 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def paper_config():
-    cfg = yaml.safe_load(
-        (PROJECT_ROOT / "config/varda-single_paper.yaml").read_text()
-    )
+    cfg = yaml.safe_load((PROJECT_ROOT / "config/varda-single_paper.yaml").read_text())
     return cfg
 
 
@@ -23,7 +19,12 @@ def test_paper_config_validates(paper_config):
     """The shipped publication config must still validate unchanged."""
     model = ConfigModel.model_validate(paper_config)
     assert model.publication.enabled
-    assert model.publication.meteogram.init_time == "202504010000"
+    # Structural check against the config (not a fixed case) so the plotted
+    # meteogram case can change without breaking this test.
+    assert (
+        model.publication.meteogram.init_time
+        == paper_config["publication"]["meteogram"]["init_time"]
+    )
     assert model.publication.scoremaps is None
 
 

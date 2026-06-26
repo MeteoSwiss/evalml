@@ -666,9 +666,7 @@ class ConfigModel(BaseModel):
         end = datetime.strptime(self.dates.end, fmt_in)
         magnitude, unit = int(self.dates.frequency[:-1]), self.dates.frequency[-1]
         freq = timedelta(days=magnitude) if unit == "d" else timedelta(hours=magnitude)
-        blacklist = {
-            datetime.strptime(t, fmt_in) for t in self.dates.blacklist
-        }
+        blacklist = {datetime.strptime(t, fmt_in) for t in self.dates.blacklist}
         out: set[str] = set()
         t = start
         while t <= end:

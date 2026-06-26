@@ -117,9 +117,7 @@ class Manifest:
         )
 
     # -- path resolution --------------------------------------------------
-    def verif_paths(
-        self, include=("candidate", "baseline")
-    ) -> list[tuple[str, str]]:
+    def verif_paths(self, include=("candidate", "baseline")) -> list[tuple[str, str]]:
         """(path, label) for the aggregated verification files of participants.
 
         ``publication_figures`` includes every participant (candidates +
@@ -140,9 +138,7 @@ class Manifest:
             )
         return template.format(init_time=init_time)
 
-    def scoremap_path(
-        self, participant: Participant, param: str, leadtime: int
-    ) -> str:
+    def scoremap_path(self, participant: Participant, param: str, leadtime: int) -> str:
         template = participant.paths.get("scoremap_template")
         if template is None:
             raise ResolutionError(

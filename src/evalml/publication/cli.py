@@ -181,7 +181,9 @@ def meteogram(manifest, candidate, init_time, station, params, output):
 @click.option("--region", default=None)
 @click.option("--output", default="figures/scoremaps", help="Output directory.")
 @_friendly_errors
-def scoremaps(manifest, candidate, baseline, params, scores, leadtime, season, region, output):
+def scoremaps(
+    manifest, candidate, baseline, params, scores, leadtime, season, region, output
+):
     """Spatial skill-score map panel (candidate vs baseline)."""
     m = _load(manifest)
     cfg = m.publication.get("scoremaps") or {}

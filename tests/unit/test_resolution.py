@@ -35,7 +35,10 @@ def test_steps_to_leadtimes():
 
 
 def test_resolve_baseline_id_found():
-    cfgs = {"baseline-7342": {"label": "ICON-CH1-CTRL"}, "baseline-ce47": {"label": "ICON-CH2-CTRL"}}
+    cfgs = {
+        "baseline-7342": {"label": "ICON-CH1-CTRL"},
+        "baseline-ce47": {"label": "ICON-CH2-CTRL"},
+    }
     assert resolve_baseline_id("ICON-CH2-CTRL", cfgs) == "baseline-ce47"
 
 

@@ -65,7 +65,9 @@ def resolve_baseline_id(label: str, baseline_configs: dict) -> str:
     )
 
 
-def leadtime_producible(steps_spec: str, leadtime: int, param: str | None = None) -> bool:
+def leadtime_producible(
+    steps_spec: str, leadtime: int, param: str | None = None
+) -> bool:
     """Whether a single ``leadtime`` (hours) is produced by ``steps_spec``.
 
     Thin convenience wrapper over :func:`resolve_leadtimes` for the common

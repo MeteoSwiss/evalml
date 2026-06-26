@@ -112,9 +112,7 @@ def test_resolver_verif_paths_all_participants():
 def test_validate_scoremaps_requires_zarr():
     m = Manifest(_build(truth_root="jretrieve:1,2"))
     with pytest.raises(ResolutionError, match="gridded"):
-        m.validate_request(
-            "scoremaps", baseline="ICON-CH1-CTRL", leadtime=24
-        )
+        m.validate_request("scoremaps", baseline="ICON-CH1-CTRL", leadtime=24)
 
 
 def test_validate_scoremaps_leadtime_not_producible():
