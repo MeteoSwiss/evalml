@@ -161,19 +161,146 @@ def _remove_latlon_labels(ax) -> None:
     ax.set_ylabel("")
 
 
+def _make_figure(
+    params,
+    scores,
+    candidate_files,
+    baseline_files,
+    plotter,
+    domain,
+    region,
+    style,
+    skill_cmap,
+    skill_norm,
+    season,
+    candidate_label,
+    baseline_label,
+    leadtime,
+):
+    """Generate and save one scoremap figure for a single lead time.
+
+    Returns the output PNG path.
+    """
+    nrows = len(params)
+    ncols = len(scores)
+    init_hour = -999  # "all" sentinel
+
+    fig = plotter.init_geoaxes(
+        projection=domain["projection"],
+        bbox=domain["extent"],
+        nrows=nrows,
+        ncols=ncols,
+        name=region,
+        size=(6 * ncols, 5 * nrows),
+    )
+
+    mpl_axes = []
+    for row, (param, cand_file, base_file) in enumerate(
+        zip(params, candidate_files, baseline_files)
+    ):
+        for col, score in enumerate(scores):
+            skill_vals = _compute_panel(
+                score, cand_file, base_file, param, season, init_hour
+            )
+
+            LOG.info(
+                "%s %s lt=%dh: skill min=%.3f  max=%.3f  n_nan=%d / %d",
+                param,
+                score,
+                leadtime,
+                np.nanmin(skill_vals),
+                np.nanmax(skill_vals),
+                int(np.isnan(skill_vals).sum()),
+                skill_vals.size,
+            )
+
+            subplot = fig.add_map(row=row, column=col)
+
+            if np.all(np.isnan(skill_vals)):
+                LOG.warning(
+                    "All-NaN for %s %s lt=%dh — plotting empty panel.",
+                    param,
+                    score,
+                    leadtime,
+                )
+                subplot.ax.set_facecolor("#cccccc")
+                subplot.standard_layers()
+            else:
+                plotter.plot_field(subplot, skill_vals, style=style, colorbar=False)
+
+            subplot.coastlines(edgecolor="black", linewidth=1.0, zorder=5)
+            subplot.borders(edgecolor="black", linewidth=0.5, zorder=5)
+
+            _remove_latlon_labels(subplot.ax)
+            mpl_axes.append(subplot.ax)
+
+            param_lbl = PARAM_LABELS.get(param, param)
+            score_lbl = SCORE_LABELS.get(score, score)
+            subplot.title(f"{param_lbl} — {score_lbl}, +{leadtime}h")
+
+    # Single shared horizontal colorbar below all panels
+    mpl_fig = fig.fig
+    sm = plt.cm.ScalarMappable(cmap=skill_cmap, norm=skill_norm)
+    sm.set_array([])
+    cbar = mpl_fig.colorbar(
+        sm,
+        ax=mpl_axes,
+        orientation="horizontal",
+        location="bottom",
+        fraction=0.04,
+        pad=0.05,
+        aspect=50,
+        extend="both",
+    )
+    cbar.set_ticks(SKILL_LEVELS)
+    cbar.set_ticklabels([f"{v:g}" for v in SKILL_LEVELS])
+    cbar.set_label("Skill  (1 − model / baseline)", labelpad=4)
+
+    mpl_fig.canvas.draw()
+    renderer = mpl_fig.canvas.get_renderer()
+    label_bbox = cbar.ax.xaxis.label.get_window_extent(renderer)
+    fig_height_px = mpl_fig.get_figheight() * mpl_fig.dpi
+    y_fig = label_bbox.y0 / fig_height_px
+
+    cb_pos = cbar.ax.get_position()
+    mpl_fig.text(
+        cb_pos.x0,
+        y_fig,
+        f"{baseline_label} better",
+        ha="left",
+        va="top",
+        color=COLOR_SKILL_BASELINE_BETTER,
+        fontsize=plt.rcParams["font.size"],
+    )
+    mpl_fig.text(
+        cb_pos.x1,
+        y_fig,
+        f"{candidate_label} better",
+        ha="right",
+        va="top",
+        color=COLOR_SKILL_MODEL_BETTER,
+        fontsize=plt.rcParams["font.size"],
+    )
+
+    return fig
+
+
 def main() -> None:
     parser = ArgumentParser(description=__doc__)
     parser.add_argument(
         "--candidate_files",
         nargs="+",
         required=True,
-        help="Scoremap NC files for the candidate, one per param (same order as --params).",
+        help=(
+            "Scoremap NC files for the candidate. "
+            "Ordered as: all params for leadtime[0], then all params for leadtime[1], …"
+        ),
     )
     parser.add_argument(
         "--baseline_files",
         nargs="+",
         required=True,
-        help="Scoremap NC files for the baseline, one per param (same order as --params).",
+        help="Scoremap NC files for the baseline (same order as --candidate_files).",
     )
     parser.add_argument(
         "--params",
@@ -183,13 +310,17 @@ def main() -> None:
     parser.add_argument(
         "--scores",
         default="MSE_SKILL,BIAS_CONTRIB",
-        help="Comma-separated metric names (columns of the 2×2 panel). "
+        help="Comma-separated metric names (columns of the panel). "
         "Supports MSE_SKILL, BIAS_CONTRIB, or any raw score (RMSE, STDE, …).",
     )
     parser.add_argument("--candidate_label", default="Varda-Single")
     parser.add_argument("--baseline_label", default="ICON-CH1-CTRL")
     parser.add_argument(
-        "--leadtime", type=int, default=24, help="Lead time in hours (title only)."
+        "--leadtimes",
+        nargs="+",
+        type=int,
+        default=[24],
+        help="Lead times in hours. One figure is produced per lead time.",
     )
     parser.add_argument("--season", default="all")
     parser.add_argument("--region", default="switzerland")
@@ -200,19 +331,19 @@ def main() -> None:
     scores = [s.strip() for s in args.scores.split(",")]
     candidate_files = [Path(f) for f in args.candidate_files]
     baseline_files = [Path(f) for f in args.baseline_files]
-    init_hour = -999  # "all" sentinel
+    n_params = len(params)
+    n_lt = len(args.leadtimes)
 
-    if len(candidate_files) != len(params):
+    if len(candidate_files) != n_params * n_lt:
         parser.error(
-            f"Got {len(candidate_files)} candidate files but {len(params)} params."
+            f"Got {len(candidate_files)} candidate files but "
+            f"{n_params} params × {n_lt} lead times = {n_params * n_lt} expected."
         )
-    if len(baseline_files) != len(params):
+    if len(baseline_files) != n_params * n_lt:
         parser.error(
-            f"Got {len(baseline_files)} baseline files but {len(params)} params."
+            f"Got {len(baseline_files)} baseline files but "
+            f"{n_params} params × {n_lt} lead times = {n_params * n_lt} expected."
         )
-
-    nrows = len(params)
-    ncols = len(scores)
 
     ds0 = xr.open_dataset(candidate_files[0])
     lons = ds0["longitude"].values
@@ -233,111 +364,44 @@ def main() -> None:
     if args.region in _PUB_EXTENTS:
         domain = {**domain, "extent": _PUB_EXTENTS[args.region]}
 
-    fig = plotter.init_geoaxes(
-        projection=domain["projection"],
-        bbox=domain["extent"],
-        nrows=nrows,
-        ncols=ncols,
-        name=args.region,
-        size=(6 * ncols, 5 * nrows),
-    )
-
     style, skill_cmap, skill_norm = _build_skill_artifacts()
-    mpl_axes = []
 
-    for row, (param, cand_file, base_file) in enumerate(
-        zip(params, candidate_files, baseline_files)
-    ):
-        for col, score in enumerate(scores):
-            skill_vals = _compute_panel(
-                score, cand_file, base_file, param, args.season, init_hour
-            )
+    out_pngs = []
+    for i, lt in enumerate(args.leadtimes):
+        cand_files_lt = candidate_files[i * n_params : (i + 1) * n_params]
+        base_files_lt = baseline_files[i * n_params : (i + 1) * n_params]
 
-            LOG.info(
-                "%s %s: skill min=%.3f  max=%.3f  n_nan=%d / %d",
-                param,
-                score,
-                np.nanmin(skill_vals),
-                np.nanmax(skill_vals),
-                int(np.isnan(skill_vals).sum()),
-                skill_vals.size,
-            )
+        fig = _make_figure(
+            params=params,
+            scores=scores,
+            candidate_files=cand_files_lt,
+            baseline_files=base_files_lt,
+            plotter=plotter,
+            domain=domain,
+            region=args.region,
+            style=style,
+            skill_cmap=skill_cmap,
+            skill_norm=skill_norm,
+            season=args.season,
+            candidate_label=args.candidate_label,
+            baseline_label=args.baseline_label,
+            leadtime=lt,
+        )
 
-            subplot = fig.add_map(row=row, column=col)
+        out_png = args.output / f"publication_scoremaps_{lt}h.png"
+        out_pdf = args.output / f"publication_scoremaps_{lt}h.pdf"
+        fig.save(out_pdf, bbox_inches="tight", dpi=200)
+        fig.save(out_png, bbox_inches="tight", dpi=200)
+        out_pngs.append(out_png)
+        LOG.info("Saved %s", out_png)
 
-            if np.all(np.isnan(skill_vals)):
-                LOG.warning("All-NaN for %s %s — plotting empty panel.", param, score)
-                subplot.ax.set_facecolor("#cccccc")
-                subplot.standard_layers()
-            else:
-                plotter.plot_field(subplot, skill_vals, style=style, colorbar=False)
-
-            subplot.coastlines(edgecolor="black", linewidth=1.0, zorder=5)
-            subplot.borders(edgecolor="black", linewidth=0.5, zorder=5)
-
-            _remove_latlon_labels(subplot.ax)
-            mpl_axes.append(subplot.ax)
-
-            param_lbl = PARAM_LABELS.get(param, param)
-            score_lbl = SCORE_LABELS.get(score, score)
-            subplot.title(f"{param_lbl} — {score_lbl}")
-
-    # Single shared horizontal colorbar below all panels
-    mpl_fig = fig.fig
-    sm = plt.cm.ScalarMappable(cmap=skill_cmap, norm=skill_norm)
-    sm.set_array([])
-    cbar = mpl_fig.colorbar(
-        sm,
-        ax=mpl_axes,
-        orientation="horizontal",
-        location="bottom",
-        fraction=0.04,
-        pad=0.05,
-        aspect=50,
-        extend="both",
+    img_tags = "".join(
+        f'<img src="{p.name}" style="max-width:100%"><br>' for p in out_pngs
     )
-    cbar.set_ticks(SKILL_LEVELS)
-    cbar.set_ticklabels([f"{v:g}" for v in SKILL_LEVELS])
-    cbar.set_label("Skill  (1 − model / baseline)", labelpad=4)
-
-    # Draw the figure so text positions are finalised, then query the label position
-    # to align the coloured "better/worse" texts on the same horizontal line.
-    mpl_fig.canvas.draw()
-    renderer = mpl_fig.canvas.get_renderer()
-    label_bbox = cbar.ax.xaxis.label.get_window_extent(renderer)
-    fig_height_px = mpl_fig.get_figheight() * mpl_fig.dpi
-    y_fig = label_bbox.y0 / fig_height_px  # figure fraction at top of label text
-
-    cb_pos = cbar.ax.get_position()
-    mpl_fig.text(
-        cb_pos.x0,
-        y_fig,
-        f"{args.baseline_label} better",
-        ha="left",
-        va="top",
-        color=COLOR_SKILL_BASELINE_BETTER,
-        fontsize=plt.rcParams["font.size"],
-    )
-    mpl_fig.text(
-        cb_pos.x1,
-        y_fig,
-        f"{args.candidate_label} better",
-        ha="right",
-        va="top",
-        color=COLOR_SKILL_MODEL_BETTER,
-        fontsize=plt.rcParams["font.size"],
-    )
-
-    out_png = args.output / "publication_scoremaps.png"
-    out_pdf = args.output / "publication_scoremaps.pdf"
-    fig.save(out_pdf, bbox_inches="tight", dpi=200)
-    fig.save(out_png, bbox_inches="tight", dpi=200)
     (args.output / "publication_scoremaps.html").write_text(
-        "<!doctype html><html><body>"
-        '<img src="publication_scoremaps.png" style="max-width:100%">'
-        "</body></html>"
+        f"<!doctype html><html><body>{img_tags}</body></html>"
     )
-    LOG.info("Saved %s", out_png)
+    LOG.info("Saved HTML index")
 
 
 if __name__ == "__main__":

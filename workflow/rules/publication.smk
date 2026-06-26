@@ -72,29 +72,39 @@ def _pub_scoremap_baseline_id():
     raise ValueError(f"No baseline found with label {label!r}")
 
 
+def _pub_scoremap_leadtimes():
+    """Return the list of lead times to plot, from config."""
+    cfg = _PUB_SCOREMAP_CFG
+    if "leadtimes" in cfg:
+        return list(cfg["leadtimes"])
+    # Backward compat: single `leadtime` key
+    return [cfg.get("leadtime", 24)]
+
+
 def _pub_scoremap_inputs(wc):
-    """Return named input files for publication_scoremaps (deferred via lambda)."""
+    """Return named input files for publication_scoremaps (deferred via lambda).
+
+    Files are ordered: all params for leadtime[0], then all params for leadtime[1], …
+    so the script can slice them by n_params.
+    """
     params = _PUB_SCOREMAP_CFG.get("params", ["T_2M", "SP_10M"])
-    leadtime = _PUB_SCOREMAP_CFG.get("leadtime", 24)
+    leadtimes = _pub_scoremap_leadtimes()
+    cand_id = _pub_scoremap_candidate_id()
+    base_id = _pub_scoremap_baseline_id()
     return {
-        "cand_files": expand(
+        "cand_files": [
+            str(OUT_ROOT / f"data/runs/{cand_id}/scoremaps/{p}_{lt}_{TRUTH_HASH}.nc")
+            for lt in leadtimes
+            for p in params
+        ],
+        "base_files": [
             str(
                 OUT_ROOT
-                / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc"
-            ),
-            run_id=_pub_scoremap_candidate_id(),
-            param=params,
-            leadtime=leadtime,
-        ),
-        "base_files": expand(
-            str(
-                OUT_ROOT
-                / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc"
-            ),
-            baseline_id=_pub_scoremap_baseline_id(),
-            param=params,
-            leadtime=leadtime,
-        ),
+                / f"data/baselines/{base_id}/scoremaps/{p}_{lt}_{TRUTH_HASH}.nc"
+            )
+            for lt in leadtimes
+            for p in params
+        ],
     }
 
 
@@ -115,7 +125,7 @@ rule publication_scoremaps:
             "label", "Varda-Single"
         ),
         baseline_label=_PUB_SCOREMAP_CFG.get("baseline_label", "ICON-CH1-CTRL"),
-        leadtime=_PUB_SCOREMAP_CFG.get("leadtime", 24),
+        leadtimes_str=" ".join(str(lt) for lt in _pub_scoremap_leadtimes()),
         season=_PUB_SCOREMAP_CFG.get("season", "all"),
         region=_PUB_SCOREMAP_CFG.get("region", "switzerland"),
         params_str=",".join(_PUB_SCOREMAP_CFG.get("params", ["T_2M", "SP_10M"])),
@@ -129,7 +139,7 @@ rule publication_scoremaps:
             --scores {params.scores_str} \
             --candidate_label "{params.candidate_label}" \
             --baseline_label "{params.baseline_label}" \
-            --leadtime {params.leadtime} \
+            --leadtimes {params.leadtimes_str} \
             --season {params.season} \
             --region {params.region} \
             --output {output} >{log} 2>&1
