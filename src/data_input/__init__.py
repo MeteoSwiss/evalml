@@ -22,6 +22,7 @@ _IFS_TO_ICON = {
     "2d": "TD_2M",
     "sp": "PS",
     "lsm": "FR_LAND",
+    "z": "FSI",
 }
 _ICON_TO_IFS = {v: k for k, v in _IFS_TO_ICON.items()}
 
@@ -132,14 +133,20 @@ def load_analysis_data_from_zarr(
     This function loads analysis data from a Zarr dataset, processing it to make it more
     xarray-friendly. It renames variables, sets the time index, and pivots the dataset.
     """
+
+    # Always include FIS so we can derive an elevation coordinate below
+    params_with_altitude = list(dict.fromkeys(params + ["FIS"]))
+
     USE_IFS_NAMES = {"-co2-", "-ea-", "ifsnames"}
     if any(tag in root.name for tag in USE_IFS_NAMES):
         # Zarr stores IFS shortNames; map ICON param names to IFS for selection
-        zarr_names = {p: _ICON_TO_IFS.get(p, p) for p in params}
+        zarr_names = {p: _ICON_TO_IFS.get(p, p) for p in params_with_altitude}
     else:
         # Zarr stores ICON param names; TOT_PREC has a time-resolution suffix
         tot_prec_key = "TOT_PREC_6H" if min(np.diff(steps)) == 6 else "TOT_PREC_1H"
-        zarr_names = {p: p.replace("TOT_PREC", tot_prec_key) for p in params}
+        zarr_names = {
+            p: p.replace("TOT_PREC", tot_prec_key) for p in params_with_altitude
+        }
 
     ds = xr.open_zarr(root, consolidated=False)
 
@@ -149,8 +156,6 @@ def load_analysis_data_from_zarr(
     # set 'variables' attr as dimension coordinate
     ds = ds.assign_coords({"variable": ds.attrs["variables"]})
 
-    # Always include FIS so we can derive an elevation coordinate below
-    params_with_altitude = list(dict.fromkeys(params + ["FIS"]))
     # select variables and valid time, squeeze ensemble dimension
     ds = ds.sel(variable=[zarr_names[p] for p in params_with_altitude]).squeeze(
         "ensemble", drop=True
