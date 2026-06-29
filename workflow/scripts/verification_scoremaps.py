@@ -16,12 +16,10 @@ one is a hard error, never a silent skip — so that run and baseline maps are
 always computed over an identical sample.
 
 Design note: one Snakemake job per (run, param, lead time), each loading only the
-step(s) it needs. We deliberately do not load all lead times at once: per-job
-memory and output disk scale with N_leadtimes x grid size, which is infeasible at
-interpolator (1 h) and nowcasting (10 min) resolutions; that cost is independent
-of GRIB read speed, so it does not improve as loading gets faster. For TOT_PREC
-the loader (data_input._tot_prec_handling) de-accumulates over the requested
-[step - period, step] window, so we just select the target step.
+step(s) it needs. Derived and aggregated params (e.g. SP_10M, TOT_PREC6) are
+handled transparently by load_forecast_data and load_truth_data; the accumulation
+period is encoded in the param name (TOT_PREC6 = 6h) rather than inferred from
+step spacing.
 
 Usage
 -----
@@ -40,7 +38,7 @@ from pathlib import Path
 import numpy as np
 import xarray as xr
 
-from data_input import load_forecast_data, parse_steps
+from data_input import load_forecast_data, load_truth_data, parse_aggregated_param
 from verification.spatial import map_forecast_to_truth
 
 LOG = logging.getLogger(__name__)
@@ -65,136 +63,6 @@ def _season_of(dt: datetime) -> str:
     if month in (6, 7, 8):
         return "JJA"
     return "SON"
-
-
-# Maps from standard parameter names to zarr variable names.
-# COSMO-2e zarrs use short CF names; COSMO-1e zarrs keep the COSMO names.
-_PARAMS_MAP_CO2 = {
-    "T_2M": "2t",
-    "TD_2M": "2d",
-    "U_10M": "10u",
-    "V_10M": "10v",
-    "PS": "sp",
-    "PMSL": "msl",
-    "TOT_PREC": "tp",
-}
-# Derived variables and the components they require.
-_DERIVED = {
-    "SP_10M": ("U_10M", "V_10M"),
-}
-
-# Params whose GRIB/zarr values are cumulative-from-start accumulations and must
-# be de-accumulated over a [step - period, step] window before verification.
-_ACCUMULATED_PARAMS = {"TOT_PREC"}
-
-
-def _params_map(truth_root: Path, accum_h: int | None = None) -> dict[str, str]:
-    """Map canonical parameter names to truth-zarr variable names.
-
-    COSMO-2e zarrs use short CF names. COSMO-1e / ICON zarrs store precip as
-    period accumulations named ``TOT_PREC_<N>H``, where N is the accumulation
-    length in hours (matching the verification step spacing); pass it via
-    ``accum_h``.
-    """
-    if "co2" in truth_root.name:
-        return _PARAMS_MAP_CO2
-    suffix = f"TOT_PREC_{accum_h}H" if accum_h else "TOT_PREC_6H"
-    return {k: k.replace("TOT_PREC", suffix) for k in _PARAMS_MAP_CO2}
-
-
-def _compute_derived(ds: xr.Dataset, param: str) -> xr.DataArray:
-    """Compute a derived variable from its components already present in *ds*."""
-    if param == "SP_10M":
-        return (ds["U_10M"] ** 2 + ds["V_10M"] ** 2) ** 0.5
-    raise ValueError(f"No recipe for derived variable '{param}'")
-
-
-# ---------------------------------------------------------------------------
-# Truth loading
-# ---------------------------------------------------------------------------
-# TODO: consolidate with src/data_input/__init__.py as part of the
-# refactor/data-io branch. _open_zarr_component below duplicates
-# ~80% of load_analysis_data_from_zarr but returns a lazy DataArray
-# rather than a time-sliced Dataset, which is what our streaming
-# aggregation needs. The right end-state is a shared lazy-open primitive
-# in data_input that both consumers use; not introduced here to avoid
-# conflicting with the data-io refactor. Until then this opener must
-# mirror the loader's conventions (notably the m -> mm precip conversion
-# from MRB-820).
-
-
-def _open_zarr_component(
-    root: Path, param: str, accum_h: int | None = None
-) -> xr.DataArray:
-    """Open a single native zarr variable lazily as a DataArray."""
-    zarr_param = _params_map(root, accum_h)[param]
-
-    ds = xr.open_zarr(root, consolidated=False)
-    ds = ds.set_index(time="dates")
-
-    # Extract lat/lon before selecting on variable (they live on cell only).
-    spatial_dim = "cell"
-    lat = ds["latitudes"] if "latitudes" in ds else None
-    lon = ds["longitudes"] if "longitudes" in ds else None
-
-    ds = ds.assign_coords(variable=ds.attrs["variables"])
-    ds = ds.sel(variable=zarr_param).squeeze("ensemble", drop=True)
-
-    # Recover 2-D spatial shape when stored as a flat cell dimension.
-    if len(ds.attrs["field_shape"]) == 2:
-        ny, nx = ds.attrs["field_shape"]
-        y_idx, x_idx = np.unravel_index(np.arange(ny * nx), (ny, nx))
-        ds = ds.assign_coords(y=(spatial_dim, y_idx), x=(spatial_dim, x_idx))
-        ds = ds.set_index(**{spatial_dim: ("y", "x")}).unstack(spatial_dim)
-        spatial_dim = None  # now (y, x)
-
-    da = ds["data"].rename(param).drop_vars("variable", errors="ignore")
-
-    # Truth zarrs store precip in m (anemoi convention); all forecast loaders
-    # deliver canonical mm (kg m-2) since MRB-820, which put this conversion in
-    # load_analysis_data_from_zarr. Mirror it here until this opener is
-    # consolidated into data_input (refactor/data-io). Stays lazy (dask).
-    if param in _ACCUMULATED_PARAMS:
-        da = da * 1000
-
-    # Attach latitude/longitude as coordinates on the spatial dimension(s).
-    # Use the full names to match the forecast loader (load_forecast_data) and
-    # map_forecast_to_truth, which key on `latitude`/`longitude`.
-    if lat is not None and lon is not None:
-        if spatial_dim is not None:
-            # flat 1-D case: cell/values dim
-            da = da.assign_coords(
-                latitude=(spatial_dim, lat.values),
-                longitude=(spatial_dim, lon.values),
-            )
-        else:
-            # 2-D case: lat/lon still on original flat index — attach via unstack
-            da = da.assign_coords(
-                latitude=(["y", "x"], lat.values.reshape(ny, nx)),
-                longitude=(["y", "x"], lon.values.reshape(ny, nx)),
-            )
-
-    return da
-
-
-def open_truth_zarr(root: Path, param: str, accum_h: int | None = None) -> xr.DataArray:
-    """Open the truth zarr lazily and return a DataArray for *param*.
-
-    For derived variables (e.g. SP_10M) the required components are loaded and
-    the derivation is applied on the fly.  The returned DataArray has dimensions
-    ``(time, y, x)`` or ``(time, values)`` and always exposes ``latitude``/``longitude``.
-    ``accum_h`` selects the precip accumulation length (TOT_PREC_<N>H).
-    """
-    if param in _DERIVED:
-        components = {
-            c: _open_zarr_component(root, c, accum_h).drop_vars(
-                "variable", errors="ignore"
-            )
-            for c in _DERIVED[param]
-        }
-        ds = xr.Dataset(components)
-        return _compute_derived(ds, param)
-    return _open_zarr_component(root, param, accum_h)
 
 
 # ---------------------------------------------------------------------------
@@ -238,62 +106,21 @@ def main(args: Namespace) -> None:
     LOG.info("Output   : %s", args.output)
     LOG.info("=" * 60)
 
-    # Accumulated params (TOT_PREC) are stored cumulative-from-start, while the
-    # truth is a period accumulation whose length equals the verification step
-    # spacing (e.g. 6h for steps "0/120/6"). Derive that period so we can (a)
-    # request the matching [step - period, step] window from the forecast loader
-    # and (b) read the matching TOT_PREC_<period>H truth variable. We do not
-    # assume a fixed period; it follows the configured --steps.
-    accum_h: int | None = None
-    if args.param in _ACCUMULATED_PARAMS:
-        if not args.steps:
-            raise ValueError(
-                f"--steps is required for accumulated param '{args.param}' "
-                "(used to derive the accumulation period)."
-            )
-        spacing = np.diff(parse_steps(args.steps))
-        if spacing.size == 0:
-            raise ValueError(
-                f"Cannot derive an accumulation period from --steps '{args.steps}'."
-            )
-        accum_h = int(spacing.min())
+    # The accumulation period is encoded in the param name (e.g. TOT_PREC6 → 6h).
+    _, accum_h = parse_aggregated_param(args.param)
+    if accum_h is not None:
         if args.step < accum_h:
             raise ValueError(
                 f"Lead time {args.step}h is smaller than the {accum_h}h "
-                f"accumulation period; cannot form a [step - period, step] "
-                f"window for '{args.param}'."
+                f"accumulation period encoded in '{args.param}'."
             )
-        req_steps = [args.step - accum_h, args.step]
-        LOG.info("Accumulation period: %dh  (forecast window %s)", accum_h, req_steps)
-
-        # INCA delivers native 1h precip sums and (unlike the GRIB paths, where
-        # the cumulative-from-start diff adapts to the requested window) cannot
-        # re-aggregate to a coarser period: the value at the target step would
-        # stay a 1h sum while the truth read is TOT_PREC_<accum_h>H — a silent
-        # mismatch. Re-aggregation in the loader is a planned follow-up.
         if args.baseline_root and "INCA" in args.baseline_root.parts and accum_h != 1:
             raise ValueError(
-                f"INCA provides native 1h accumulations only, but the step "
-                f"spacing of --steps '{args.steps}' implies a {accum_h}h "
-                f"accumulation period for '{args.param}'. Use 1h-spaced steps "
-                f"for INCA score maps."
+                f"INCA provides native 1h accumulations only; '{args.param}' "
+                f"requires a {accum_h}h accumulation period. Use TOT_PREC1 for "
+                "INCA score maps."
             )
-    else:
-        req_steps = [args.step]
-
-    # Open the truth zarr once; individual time slices are loaded on demand.
-    truth_da = open_truth_zarr(args.truth, args.param, accum_h)
-    # Normalise to datetime64[ns] so membership checks work regardless of zarr precision.
-    truth_da = truth_da.assign_coords(
-        time=truth_da.time.values.astype("datetime64[ns]")
-    )
-    # Rename flat spatial dim to 'values' if the zarr uses 'cell'.
-    if "cell" in truth_da.dims:
-        truth_da = truth_da.rename({"cell": "values"})
-    truth_times = set(
-        truth_da.time.values
-    )  # keep as datetime64, tolist() yields ints for ns precision
-    LOG.info("Truth opened lazily: %s", truth_da)
+        LOG.info("Accumulation period: %dh", accum_h)
 
     if args.baseline_root:
         # The operational archive is too large to enumerate up front, so the
@@ -331,23 +158,6 @@ def main(args: Namespace) -> None:
 
     step_td = timedelta(hours=args.step)
 
-    # Every configured init must have a matching truth slice; a gap here would
-    # otherwise silently drop the init from the map. Check up front so the full
-    # set of missing valid times is reported at once rather than one per run.
-    required_valid_times = {
-        np.datetime64(rt + step_td).astype("datetime64[ns]") for rt, _ in init_items
-    }
-    missing_truth = sorted(required_valid_times - truth_times)
-    if missing_truth:
-        raise ValueError(
-            f"Truth is missing {len(missing_truth)} required valid time(s) for "
-            f"param={args.param}, step={args.step}h (e.g. "
-            f"{[str(t) for t in missing_truth[:5]]}). All configured "
-            "initialisations must be available so that run and baseline score "
-            "maps are computed over an identical sample; blacklist genuinely-"
-            "absent dates in the experiment config."
-        )
-
     # Running accumulators keyed by (season, init_hour) – initialised on the
     # first successfully processed sample so that we can infer the spatial
     # shape from the data. Each entry is a numpy array over the spatial
@@ -379,28 +189,12 @@ def main(args: Namespace) -> None:
         first_iter = n_ok == 0
 
         # --- load forecast ---
-        fct_params = (
-            list(_DERIVED[args.param]) if args.param in _DERIVED else [args.param]
-        )
-
+        # Derivation (SP_10M) and accumulation (TOT_PREC6) are handled inside
+        # load_forecast_data; pass the requested param directly.
+        src_root = args.baseline_root if args.baseline_root else grib_dir
         try:
-            # For accumulated params (TOT_PREC) req_steps is the [step - period,
-            # step] window; for GRIB sources (runs and the ICON archive) the
-            # loader de-accumulates the cumulative-from-start field over the
-            # requested steps (diff over `step`), so the target step holds the
-            # period accumulation; INCA returns native 1h sums, matching the
-            # period because accum_h == 1 is enforced above. Instantaneous
-            # params request a single step. The target step is selected just
-            # below.
-            #
-            # data_input._tot_prec_handling receives the requested steps and
-            # synthesises a zero initial condition when step 0 is requested but
-            # absent from the GRIB (anemoi-inference omits TOT_PREC at step 0),
-            # which makes the first-lead-time window [0, period] work for ML
-            # runs. Windows not containing step 0 are never zero-filled.
-            src_root = args.baseline_root if args.baseline_root else grib_dir
             fcst = load_forecast_data(
-                src_root, reftime, req_steps, fct_params, member=args.member
+                src_root, reftime, [args.step], [args.param], member=args.member
             )
         except Exception as exc:
             raise RuntimeError(
@@ -412,17 +206,8 @@ def main(args: Namespace) -> None:
                 "experiment config."
             ) from exc
 
-        # Select the target step. The earthkit loader returns forecasts over the
-        # requested steps with a `step` (timedelta64) dimension; for TOT_PREC the
-        # loader has already de-accumulated over the window, so the target step
-        # holds the period accumulation, and for instantaneous params only the
-        # single requested step is present.
         if "step" in fcst.dims:
             fcst = fcst.sel(step=np.timedelta64(args.step, "h"))
-
-        # Compute derived variable if needed.
-        if args.param in _DERIVED:
-            fcst = fcst.assign({args.param: _compute_derived(fcst, args.param)})
 
         if first_iter:
             LOG.info("fcst (after step selection): %s", fcst)
@@ -443,14 +228,9 @@ def main(args: Namespace) -> None:
                 )
 
         # --- load truth slice ---
-        truth_slice = truth_da.sel(time=valid_time).compute()
-        # For derived variables truth_da is already the derived DataArray,
-        # so wrap it in a Dataset for map_forecast_to_truth compatibility.
-        truth_ds = (
-            truth_slice.to_dataset(name=args.param)
-            if isinstance(truth_slice, xr.DataArray)
-            else truth_slice
-        )
+        truth_ds = load_truth_data(args.truth, reftime, [args.step], [args.param])
+        truth_ds = truth_ds.isel(time=0)
+        truth_slice = truth_ds[args.param]
 
         if first_iter:
             truth_raw = truth_slice.values
@@ -674,13 +454,7 @@ if __name__ == "__main__":
         "--steps",
         type=str,
         default=None,
-        help=(
-            "Forecast step spec 'start/stop/step' (e.g. '0/120/6'). Required for "
-            "accumulated params (TOT_PREC): the accumulation period is the step "
-            "spacing, the forecast is accumulated over [step - period, step], and "
-            "the matching TOT_PREC_<period>H truth variable is read. Ignored for "
-            "instantaneous params."
-        ),
+        help="Unused; kept for backwards compatibility with existing Snakemake rules.",
     )
     parser.add_argument(
         "--reftimes",
