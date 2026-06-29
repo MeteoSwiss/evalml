@@ -141,7 +141,7 @@ def parse_steps(steps: str) -> list[int]:
     return list(range(start, end + 1, step))
 
 
-def load_analysis_data_from_zarr(
+def _load_analysis_data_from_zarr(
     root: Path, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
     """Load analysis data from an anemoi-generated Zarr dataset
@@ -362,7 +362,7 @@ def _disaggregate_accum(cumul: xr.DataArray, steps: list[int], n: int) -> xr.Dat
     return result.clip(min=0)  # clip leaves NaN intact
 
 
-def load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
+def _load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
     """Load forecast data from a list of GRIB files. Returns raw fields as-is.
 
     External callers should use :func:`load_forecast_data`, which handles
@@ -516,7 +516,7 @@ def load_truth_data(
     """Load truth data from an analysis Zarr dataset or DWH observations via jretrieve."""
     if root.suffix == ".zarr":
         LOG.info("Loading ground truth from an analysis zarr dataset...")
-        truth = load_analysis_data_from_zarr(
+        truth = _load_analysis_data_from_zarr(
             root=root,
             reftime=reftime,
             steps=steps,
@@ -540,7 +540,7 @@ def load_truth_data(
     return truth
 
 
-def load_INCA_baseline_from_netcdf(
+def _load_INCA_baseline_from_netcdf(
     root: Path,
     reftime: datetime,
     steps: list[int],
@@ -867,7 +867,7 @@ def load_INCA_baseline_from_netcdf(
     return merged[list(params)]
 
 
-def load_icon_baseline_from_grib(
+def _load_icon_baseline_from_grib(
     root: Path,
     reftime: datetime,
     steps: list[int],
@@ -893,7 +893,7 @@ def load_icon_baseline_from_grib(
         n_loaded = 0
         for mid in member_ids:
             try:
-                ds = load_forecast_data_from_grib(
+                ds = _load_forecast_data_from_grib(
                     files=_collect_icon_archive_files(
                         root, reftime, steps, member_id=mid
                     ),
@@ -912,10 +912,58 @@ def load_icon_baseline_from_grib(
         LOG.info("Ensemble mean computed over %d members.", n_loaded)
         return acc / n_loaded
     else:
-        return load_forecast_data_from_grib(
+        return _load_forecast_data_from_grib(
             files=_collect_icon_archive_files(root, reftime, steps, member_id=member),
             params=params,
         )
+
+
+def _disaggregated_and_derived_params(
+    ds: xr.Dataset, steps: list[int], params: list[str]
+) -> xr.Dataset:
+    """Apply disaggregation and derived-param computation to a raw-loaded dataset.
+
+    Expects ds to contain cumulative-from-start fields for any accumulatable base
+    params (e.g. TOT_PREC) and all component fields for spatial derived params.
+    Returns a dataset with only the originally requested params at the originally
+    requested steps.
+    """
+    load_steps = get_steps(steps, params)
+
+    # IC synthesis + disaggregation for suffixed aggregated params (TOT_PREC6 etc.)
+    aggregated = {
+        p: parse_aggregated_param(p)
+        for p in params
+        if parse_aggregated_param(p)[1] is not None
+    }
+    base_params_seen: set[str] = set()
+    for agg_param, (base, n) in aggregated.items():
+        if base in ds.data_vars:
+            if base not in base_params_seen:
+                ds[base] = _ensure_accum_ic(ds[base], load_steps)
+                base_params_seen.add(base)
+            ds[agg_param] = _disaggregate_accum(ds[base], steps, n)
+
+    # Select only the originally requested steps (drop preceding helper steps)
+    if load_steps != list(steps) and "step" in ds.dims:
+        ds = ds.sel(step=[np.timedelta64(s, "h") for s in steps])
+
+    # Spatial derived params
+    for p in params:
+        if p in DERIVED_PARAMS:
+            ds = ds.assign({p: compute_derived(ds, p)})
+
+    # Drop base params not explicitly requested by the caller
+    for base, _ in aggregated.values():
+        if base not in params and base in ds.data_vars:
+            ds = ds.drop_vars(base)
+    for p in params:
+        if p in DERIVED_PARAMS:
+            for comp in DERIVED_PARAMS[p]:
+                if comp not in params:
+                    ds = ds.drop_vars(comp, errors="ignore")
+
+    return ds
 
 
 def load_forecast_data(
@@ -923,21 +971,32 @@ def load_forecast_data(
 ) -> xr.Dataset:
     """Load forecast data from GRIB files or an ICON archive.
 
+    Handles derived and aggregated params transparently:
+    - ``SP_10M`` is computed from ``U_10M`` / ``V_10M``
+    - ``TOT_PREC6`` is disaggregated from the cumulative ``TOT_PREC`` field
+    - Plain ``TOT_PREC`` is returned as cumulative-from-start without disaggregation
+
     Routing (in order):
-    1. ``*.grib`` files present in *root* → :func:`load_forecast_data_from_grib`
+    1. ``*.grib`` files present in *root* → :func:`_load_forecast_data_from_grib`
        (ML inference output)
-    2. ``INCA`` in path parts → :func:`load_INCA_baseline_from_netcdf`
-    3. Otherwise → ICON operational archive (via :func:`load_icon_baseline_from_grib`)
+    2. ``INCA`` in path parts → :func:`_load_INCA_baseline_from_netcdf`
+    3. Otherwise → ICON operational archive (via :func:`_load_icon_baseline_from_grib`)
     """
     root = Path(root)
+    load_params = get_base_params(params)
+    load_steps = get_steps(steps, params)
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
-        return load_forecast_data_from_grib(
-            files=_collect_ml_grib_files(root, steps),
-            params=params,
+        ds = _load_forecast_data_from_grib(
+            files=_collect_ml_grib_files(root, load_steps),
+            params=load_params,
         )
-    if "INCA" in root.parts:
+    elif "INCA" in root.parts:
         LOG.info("Loading INCA baseline from NetCDF files...")
-        return load_INCA_baseline_from_netcdf(root, reftime, steps, params)
-    LOG.info("Loading baseline forecasts from ICON GRIB archive...")
-    return load_icon_baseline_from_grib(root, reftime, steps, params, member=member)
+        ds = _load_INCA_baseline_from_netcdf(root, reftime, load_steps, load_params)
+    else:
+        LOG.info("Loading baseline forecasts from ICON GRIB archive...")
+        ds = _load_icon_baseline_from_grib(
+            root, reftime, load_steps, load_params, member=member
+        )
+    return _disaggregated_and_derived_params(ds, steps, params)
