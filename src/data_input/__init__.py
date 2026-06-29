@@ -202,7 +202,24 @@ def load_from_grib_file(file: str | list[str], sel_kwargs):
     else:
         file = str(file)
     fieldlist = ekd.from_source("file", file, lazily=True).to_fieldlist()
-    return fieldlist_to_xarray(fieldlist.sel(**sel_kwargs))
+    fieldlist = fieldlist.sel(**sel_kwargs)
+
+    # ICON-CH1/CH2 native GRIB lives on an unstructured (triangular) grid
+    # (gridType="unstructured_grid", GRIB2 grid-definition-template 101). On
+    # this cluster earthkit-data v1.0 cannot build its TensorGrid for such
+    # fields: its grid engine needs the GRIB `gridSpec`, but the bundled
+    # eckit-geo codec cannot parse ECMWF's ICON `.ek` grid file
+    # ("eckit::codec::InvalidRecord: version not found") and the auto-downloader
+    # is unavailable. Because `SingleDatasetBuilder.build()` always constructs
+    # the grid, no `to_xarray` profile flag (e.g. profile="grib",
+    # add_geo_coords=False) can avoid the crash. We therefore bypass earthkit's
+    # grid engine entirely for unstructured fields and attach the horizontal
+    # coordinates from the local ICON grid file instead (see
+    # `_unstructured_fieldlist_to_xarray`). Regular grids (e.g. rotated_ll
+    # COSMO output) are unaffected and keep using the earthkit path.
+    if _is_unstructured(fieldlist):
+        return _unstructured_fieldlist_to_xarray(fieldlist)
+    return fieldlist_to_xarray(fieldlist)
 
 
 def variable_name_profile(
@@ -230,6 +247,184 @@ def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
         profile = XARRAY_ENGINE_PROFILE | variable_name_profile(level_type)
         _ds = level_type_group.to_xarray(**profile, allow_holes=True)
         ds = ds.merge(_ds, compat="no_conflicts", combine_attrs="no_conflicts")
+    return ds
+
+
+# GRIB `typeOfLevel` -> the level-type category used by `variable_name_profile`.
+# Mirrors how earthkit-data's "grib" profile maps the GRIB level type onto the
+# `vertical.level_type` namespace key for the regular-grid path.
+_TYPE_OF_LEVEL_TO_LEVEL_TYPE = {
+    "surface": "surface",
+    "meanSea": "mean_sea",
+    "heightAboveGround": "height_above_ground_level",
+    "isobaricInhPa": "pressure",
+}
+
+
+def _is_unstructured(fieldlist) -> bool:
+    """Return True when the fieldlist is on an ICON-style unstructured grid.
+
+    Detection is based on the first field's GRIB ``gridType``. Reading
+    ``gridType`` does not trigger earthkit's grid engine (which is the part that
+    crashes for unstructured ICON grids), so this probe is safe.
+    """
+    if len(fieldlist) == 0:
+        return False
+    return fieldlist[0].metadata("gridType") == "unstructured_grid"
+
+
+def _load_icon_grid_latlon(uuid_of_hgrid: str):
+    """Load (latitude, longitude) arrays for an ICON grid from the local archive.
+
+    Uses ``meteodatalab.icon_grid.load_grid_from_balfrin`` (imported lazily so
+    that non-ICON code paths never require meteodatalab) which reads the ICON
+    grid NetCDF file shipped on the cluster and returns ``lat``/``lon`` defined
+    along a ``cell`` dimension. Returns degrees as numpy arrays.
+    """
+    from uuid import UUID
+
+    from meteodatalab.icon_grid import load_grid_from_balfrin
+
+    hcoords = load_grid_from_balfrin()(UUID(uuid_of_hgrid))
+    lat = np.asarray(hcoords["lat"].values, dtype=np.float64)
+    lon = np.asarray(hcoords["lon"].values, dtype=np.float64)
+    return lat, lon
+
+
+def _unstructured_fieldlist_to_xarray(fieldlist) -> xr.Dataset:
+    """Build an xarray Dataset from an unstructured ICON GRIB fieldlist.
+
+    earthkit-data's grid engine cannot decode ICON's unstructured grid on this
+    cluster (see :func:`load_from_grib_file` for the full rationale), so this
+    function assembles the Dataset directly from per-field values and metadata,
+    bypassing earthkit's ``to_xarray`` grid construction. The horizontal
+    coordinates are taken from the local ICON grid file via
+    :func:`_load_icon_grid_latlon`.
+
+    The output is structurally equivalent to what :func:`fieldlist_to_xarray`
+    yields for regular grids, so downstream code is unchanged:
+      * flat spatial dimension ``values`` (instead of ``y``/``x``);
+      * ``latitude``/``longitude`` coordinates over ``values``;
+      * ``forecast_reference_time``, ``step`` and ``number`` dimensions ensured
+        where they vary (matching ``XARRAY_ENGINE_PROFILE["ensure_dims"]``;
+        the unstructured spatial support replaces ``z`` by ``values``);
+      * a ``valid_time`` coordinate;
+      * surface / heightAboveGround / meanSea fields keep their plain parameter
+        name, pressure-level fields become ``{param}_{level}`` (per
+        :func:`variable_name_profile`).
+    """
+    ds = xr.Dataset()
+    if len(fieldlist) == 0:
+        return ds
+
+    uuid_of_hgrid = fieldlist[0].metadata("uuidOfHGrid")
+    lat, lon = _load_icon_grid_latlon(uuid_of_hgrid)
+
+    # Collect, per output variable name, the per-(reftime, step, number) fields.
+    # An "index" is the (reftime, step, number) coordinate tuple; values are
+    # stacked along these dimensions and only dimensions that actually vary are
+    # kept, mirroring the earthkit "ensure_dims" behaviour.
+    records: dict[str, dict[tuple, np.ndarray]] = {}
+    ref_times: dict[str, list] = {}
+    steps_s: dict[str, list] = {}
+    numbers: dict[str, list] = {}
+
+    for field in fieldlist:
+        short_name = field.metadata("shortName")
+        type_of_level = field.metadata("typeOfLevel")
+        level = field.metadata("level")
+        level_type = _TYPE_OF_LEVEL_TO_LEVEL_TYPE.get(type_of_level, type_of_level)
+
+        # Apply the same variable-naming rule as the regular path: pressure
+        # levels are split into one variable per level (`{param}_{level}`),
+        # everything else keeps the plain parameter name.
+        var_name = f"{short_name}_{level}" if level_type == "pressure" else short_name
+
+        ref_time = np.datetime64(
+            datetime.strptime(
+                f"{field.metadata('dataDate')}{field.metadata('dataTime'):04d}",
+                "%Y%m%d%H%M",
+            ),
+            "ns",
+        )
+        # Derive the lead time from valid - reference time rather than the GRIB
+        # `step`/`endStep` keys: those can come back with a unit suffix
+        # (e.g. "0m") that is awkward to parse, whereas the validity stamps are
+        # always absolute and unambiguous.
+        valid_time = np.datetime64(
+            datetime.strptime(
+                f"{field.metadata('validityDate')}"
+                f"{field.metadata('validityTime'):04d}",
+                "%Y%m%d%H%M",
+            ),
+            "ns",
+        )
+        step = (valid_time - ref_time).astype("timedelta64[ns]")
+        # Deterministic forecasts (e.g. the ML forecaster output) carry no GRIB
+        # `number` key, whereas EPS baselines do; treat a missing member as 0 so
+        # both ensemble and deterministic ICON GRIB load through this path.
+        try:
+            number = int(field.metadata("number"))
+        except (KeyError, TypeError, ValueError):
+            number = 0
+
+        idx = (ref_time, step, number)
+        # flatten=True returns the raw 1-D value array without consulting
+        # `field.shape`, which for unstructured grids would invoke the broken
+        # grid engine.
+        records.setdefault(var_name, {})[idx] = field.to_numpy(flatten=True).astype(
+            np.float32
+        )
+        ref_times.setdefault(var_name, [])
+        steps_s.setdefault(var_name, [])
+        numbers.setdefault(var_name, [])
+        if ref_time not in ref_times[var_name]:
+            ref_times[var_name].append(ref_time)
+        if step not in steps_s[var_name]:
+            steps_s[var_name].append(step)
+        if number not in numbers[var_name]:
+            numbers[var_name].append(number)
+
+    n_values = lat.size
+    for var_name, by_idx in records.items():
+        rts = sorted(ref_times[var_name])
+        sts = sorted(steps_s[var_name])
+        nums = sorted(numbers[var_name])
+
+        # Build a dense (reftime, step, number, values) array, NaN where a field
+        # is absent (analogous to earthkit's allow_holes=True behaviour).
+        arr = np.full(
+            (len(rts), len(sts), len(nums), n_values), np.nan, dtype=np.float32
+        )
+        for (rt, st, num), data in by_idx.items():
+            arr[rts.index(rt), sts.index(st), nums.index(num)] = data
+
+        da = xr.DataArray(
+            arr,
+            dims=["forecast_reference_time", "step", "number", "values"],
+            coords={
+                "forecast_reference_time": np.asarray(rts, dtype="datetime64[ns]"),
+                "step": np.asarray(sts, dtype="timedelta64[ns]"),
+                "number": np.asarray(nums, dtype=np.int64),
+            },
+        )
+        # Drop a singleton ensemble dimension to match the earthkit profile,
+        # which only adds `number` when more than one member is present (the
+        # regular path keeps the singleton forecast_reference_time/step dims, so
+        # those are retained here too).
+        if da.sizes["number"] == 1:
+            da = da.isel(number=0, drop=True)
+        ds[var_name] = da
+
+    # valid_time = forecast_reference_time + step (matches add_valid_time_coord).
+    ds = ds.assign_coords(
+        valid_time=ds["forecast_reference_time"] + ds["step"],
+        latitude=("values", lat),
+        longitude=("values", lon),
+    )
+
+    for attr in XARRAY_ENGINE_PROFILE["global_attrs"]:
+        ds.attrs.update(attr)
     return ds
 
 
