@@ -144,29 +144,25 @@ def parse_steps(steps: str) -> list[int]:
 def _load_analysis_data_from_zarr(
     root: Path, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
-    """Load analysis data from an anemoi-generated Zarr dataset
+    """Load analysis data from an anemoi-generated Zarr dataset.
 
-    This function loads analysis data from a Zarr dataset, processing it to make it more
-    xarray-friendly. It renames variables, sets the time index, and pivots the dataset.
+    Returns a dataset with 'step' dimension (timedelta from reftime).
+    Accumulatable params (e.g. TOT_PREC) are always 1H period-accumulated in
+    analysis zarrs — ICON stores them as TOT_PREC_1H, IFS as tp. Both are
+    converted to cumulative-from-start via _accumulate_from_hourly so that
+    _disaggregated_and_derived_params can disaggregate them uniformly.
     """
     USE_IFS_NAMES = {"-co2-", "-ea-", "ifsnames"}
-    if any(tag in root.name for tag in USE_IFS_NAMES):
-        # Zarr stores IFS shortNames; map ICON param names to IFS for selection
+    is_ifs = any(tag in root.name for tag in USE_IFS_NAMES)
+
+    if is_ifs:
         zarr_names = {p: _ICON_TO_IFS.get(p, p) for p in params}
     else:
-        # Zarr stores ICON param names; TOT_PREC has a time-resolution suffix
-        tot_prec_key = "TOT_PREC_6H" if min(np.diff(steps)) == 6 else "TOT_PREC_1H"
-        zarr_names = {p: p.replace("TOT_PREC", tot_prec_key) for p in params}
+        zarr_names = {p: f"{p}_1H" if p in _ACCUMULATABLE_PARAMS else p for p in params}
 
     ds = xr.open_zarr(root, consolidated=False)
-
-    # rename "dates" to "time" and set it as index
     ds = ds.set_index(time="dates")
-
-    # set 'variables' attr as dimension coordinate
     ds = ds.assign_coords({"variable": ds.attrs["variables"]})
-
-    # select variables and valid time, squeeze ensemble dimension
     ds = ds.sel(variable=[zarr_names[p] for p in params]).squeeze("ensemble", drop=True)
 
     # recover original 2D shape (not present for global Gaussian grids)
@@ -177,7 +173,6 @@ def _load_analysis_data_from_zarr(
         ds = ds.set_index(cell=("y", "x"))
         ds = ds.unstack("cell")
 
-    # set lat lon as coords (optional)
     if "latitudes" in ds and "longitudes" in ds:
         ds = ds.rename({"latitudes": "latitude", "longitudes": "longitude"})
     if "latitude" in ds and "longitude" in ds:
@@ -188,19 +183,43 @@ def _load_analysis_data_from_zarr(
         .rename({v: k for k, v in zarr_names.items() if v in ds["variable"].values})
     )
 
-    # change precipitation units from m to kg m-2
-    for prec_key in ("TOT_PREC_6H", "TOT_PREC_1H", "TOT_PREC"):
-        if prec_key in ds:
-            ds[prec_key] = (
-                ds[prec_key] * 1000
-            )  # convert precipitation units from m to mm
+    # Unit conversion: m -> mm for TOT_PREC (zarr stores in m)
+    if "TOT_PREC" in ds:
+        ds["TOT_PREC"] = ds["TOT_PREC"] * 1000
 
     # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
     if "cell" in ds.dims:
         ds = ds.rename({"cell": "values"})
 
-    times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
-    return _select_valid_times(ds, times)
+    ref_np = np.datetime64(reftime, "ns")
+    accum_params = [p for p in params if p in _ACCUMULATABLE_PARAMS]
+    plain = [p for p in params if p not in accum_params]
+
+    vars_out: dict[str, xr.DataArray] = {}
+
+    # Plain params: select at steps and assign step coords
+    if plain:
+        plain_times = ref_np + np.asarray(steps, dtype="timedelta64[h]")
+        ds_plain = _select_valid_times(ds[plain], plain_times)
+        step_td = (ds_plain["time"].values - ref_np).astype("timedelta64[ns]")
+        ds_plain = ds_plain.assign_coords(step=("time", step_td)).swap_dims(
+            {"time": "step"}
+        )
+        vars_out.update({p: ds_plain[p] for p in plain if p in ds_plain})
+
+    # Accum params (renamed to TOT_PREC): load all hourly data, then accumulate
+    if accum_params:
+        max_step = max(steps)
+        hourly_times = ref_np + np.arange(1, max_step + 1, dtype="timedelta64[h]")
+        ds_hourly = _select_valid_times(ds[accum_params], hourly_times)
+        step_td = (ds_hourly["time"].values - ref_np).astype("timedelta64[ns]")
+        ds_hourly = ds_hourly.assign_coords(step=("time", step_td)).swap_dims(
+            {"time": "step"}
+        )
+        for p in accum_params:
+            vars_out[p] = _accumulate_from_hourly(ds_hourly[p], steps)
+
+    return xr.Dataset(vars_out)
 
 
 def _collect_ml_grib_files(root: Path, steps: list[int] | None = None) -> list[Path]:
@@ -362,6 +381,23 @@ def _disaggregate_accum(cumul: xr.DataArray, steps: list[int], n: int) -> xr.Dat
     return result.clip(min=0)  # clip leaves NaN intact
 
 
+def _accumulate_from_hourly(da_1h: xr.DataArray, steps: list[int]) -> xr.DataArray:
+    """Reconstruct cumulative-from-start from 1H period-accumulated zarr values.
+
+    da_1h must have a 'step' dimension with hourly timedelta64 coordinates
+    covering steps 1h through max(steps). Computes the cumulative sum,
+    prepends step=0 with value 0 (IC), then subsets to steps.
+    """
+    max_step = max(steps)
+    all_1h = da_1h.sel(step=[np.timedelta64(h, "h") for h in range(1, max_step + 1)])
+    cumul = all_1h.cumsum(dim="step")
+    step0 = xr.zeros_like(cumul.isel(step=0)).assign_coords(
+        step=np.timedelta64(0, "ns")
+    )
+    cumul = xr.concat([step0, cumul], dim="step")
+    return cumul.sel(step=[np.timedelta64(s, "h") for s in steps])
+
+
 def _load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
     """Load forecast data from a list of GRIB files. Returns raw fields as-is.
 
@@ -513,18 +549,26 @@ def load_obs_data_from_jretrieve(
 def load_truth_data(
     root, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
-    """Load truth data from an analysis Zarr dataset or DWH observations via jretrieve."""
+    """Load truth data from an analysis Zarr dataset or DWH observations via jretrieve.
+
+    Handles derived and aggregated params transparently (same contract as
+    load_forecast_data): SP_10M is computed from U_10M/V_10M; TOT_PREC6 is
+    disaggregated from cumulative TOT_PREC; plain TOT_PREC is returned as-is.
+    Returns a dataset with 'time' dimension (valid datetimes).
+    """
     if root.suffix == ".zarr":
         LOG.info("Loading ground truth from an analysis zarr dataset...")
-        truth = _load_analysis_data_from_zarr(
-            root=root,
-            reftime=reftime,
-            steps=steps,
-            params=params,
-        )
-        truth = truth.compute().chunk(
+        load_params = get_base_params(params)
+        load_steps = get_steps(steps, params)
+        ds = _load_analysis_data_from_zarr(root, reftime, load_steps, load_params)
+        ds = _disaggregated_and_derived_params(ds, steps, params)
+        # Restore time dimension: convert step offsets back to valid datetimes
+        ref_np = np.datetime64(reftime, "ns")
+        time_vals = ref_np + ds["step"].values.astype("timedelta64[ns]")
+        ds = ds.assign_coords(time=("step", time_vals)).swap_dims({"step": "time"})
+        truth = ds.compute().chunk(
             {"time": 1, "y": -1, "x": -1}
-            if "y" in truth.dims and "x" in truth.dims
+            if "y" in ds.dims and "x" in ds.dims
             else {"time": 1, "values": -1}
         )
     elif "jretrieve" in str(root):
