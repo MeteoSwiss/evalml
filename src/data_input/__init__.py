@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Literal, Any
@@ -32,6 +33,78 @@ XARRAY_ENGINE_PROFILE = {
 }
 
 ZERO_KELVIN = -273.15  # °C
+
+# Base params whose GRIB representation is cumulative-from-start.
+# Extend this frozenset to enable new accumulatable variables.
+_ACCUMULATABLE_PARAMS: frozenset[str] = frozenset({"TOT_PREC"})
+
+# Spatial/multi-field derivations: output param → required input params.
+DERIVED_PARAMS: dict[str, tuple[str, ...]] = {
+    "SP_10M": ("U_10M", "V_10M"),
+}
+
+
+def parse_aggregated_param(param: str) -> tuple[str, int | None]:
+    """Decompose a param name into (base_param, agg_hours).
+
+    Always returns a tuple; agg_hours is None for non-aggregated params.
+
+    'TOT_PREC6' → ('TOT_PREC', 6)
+    'T_2M'      → ('T_2M', None)
+    'SP_10M'    → ('SP_10M', None)
+
+    A param is aggregated when its name ends with a plain integer AND its prefix
+    belongs to _ACCUMULATABLE_PARAMS. Extending _ACCUMULATABLE_PARAMS adds
+    support for new base params; new aggregation periods need no code change
+    (only a DWH_PARAM_MAP entry in load_obs_data_from_jretrieve).
+    """
+    m = re.fullmatch(r"([A-Z_]+?)(\d+)", param)
+    if m and m.group(1) in _ACCUMULATABLE_PARAMS:
+        return m.group(1), int(m.group(2))
+    return param, None
+
+
+def compute_derived(ds: xr.Dataset, param: str) -> xr.DataArray:
+    """Compute a spatial derived variable from its components already in ds."""
+    if param == "SP_10M":
+        return (ds["U_10M"] ** 2 + ds["V_10M"] ** 2) ** 0.5
+    raise ValueError(f"No recipe for derived variable '{param}'")
+
+
+def get_base_params(params: list[str]) -> list[str]:
+    """Expand derived/aggregated params to the native params needed for loading.
+
+    'SP_10M'    → {'U_10M', 'V_10M'}
+    'TOT_PREC6' → {'TOT_PREC'}
+    'T_2M'      → {'T_2M'}
+
+    Two-step: resolve aggregated param names to base params, then resolve
+    spatial derived params to their components. Returns a deduplicated list.
+    """
+    bases = {parse_aggregated_param(p)[0] for p in params}
+    return list({c for p in bases for c in DERIVED_PARAMS.get(p, (p,))})
+
+
+def get_steps(steps: list[int], params: list[str]) -> list[int]:
+    """Compute all time steps needed to satisfy all aggregation windows.
+
+    For each aggregated param (e.g. TOT_PREC6, agg_hours=6) and each requested
+    step s, adds s-agg_hours if s-agg_hours >= 0 (needed as the lower bound of
+    the accumulation diff window). Non-aggregated and spatial derived params
+    require no extra steps.
+
+    'TOT_PREC6', steps=[6,12,18]  → [0, 6, 12, 18]
+    'TOT_PREC6', steps=[3,6,12]   → [0, 3, 6, 12]  # step 3: 3-6<0, not added
+    'T_2M',      steps=[6,12]     → [6, 12]
+    """
+    extra = set()
+    for p in params:
+        _, n = parse_aggregated_param(p)
+        if n is not None:
+            for s in steps:
+                if s - n >= 0:
+                    extra.add(s - n)
+    return sorted(set(steps) | extra)
 
 
 def _select_valid_times(ds, times: np.datetime64, strict: bool = False):
@@ -233,97 +306,69 @@ def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
     return ds
 
 
-def _tot_prec_handling(
-    tp: xr.DataArray, requested_steps: list[int] | None = None
-) -> xr.DataArray:
-    _full_step_coord = tp["step"]  # step coordinate before .diff()
+def _ensure_accum_ic(cumul: xr.DataArray, steps: list[int]) -> xr.DataArray:
+    """Ensure a zero initial condition at step 0 in a cumulative-from-start field.
 
-    # anemoi-inference sometimes omits step 0 from the GRIB even with
-    # accumulate_from_start_of_forecast enabled: the field may be absent from
-    # the step coordinate entirely, or present but NaN-filled by earthkit-data
-    # (allow_holes=True). With cumulative-from-start data the accumulation at
-    # the initial condition is identically zero, so synthesise it — but only
-    # when step 0 was actually requested (`requested_steps`); for window loads
-    # like [18, 24] the first step is real data and must not be treated as an
-    # initial condition.
-    if requested_steps is not None:
-        if 0 in requested_steps:
-            step0_idx = np.where(tp["step"].values == np.timedelta64(0, "ns"))[0]
-            if step0_idx.size == 0:
-                LOG.warning(
-                    "Step 0 of TOT_PREC is missing from the GRIB, prepending "
-                    "zeroes assuming accumulate_from_start_of_forecast is "
-                    "enabled."
-                )
-                zero = xr.zeros_like(tp.isel(step=[0]))
-                zero = zero.assign_coords(step=[np.timedelta64(0, "ns")])
-                tp = xr.concat([zero, tp], dim="step")
-            elif tp[{"step": int(step0_idx[0])}].isnull().all():
-                LOG.warning(
-                    "Step 0 of TOT_PREC is all-NaN, filling with zeroes "
-                    "assuming accumulate_from_start_of_forecast is enabled."
-                )
-                tp[{"step": int(step0_idx[0])}] = 0.0
-    elif tp[{"step": 0}].isnull().all():
-        # Legacy path for callers that do not pass the requested steps: treat
-        # the first loaded step positionally as the initial condition.
-        LOG.warning(
-            "Step 0 of TOT_PREC is missing, filling with zeroes "
-            "assuming accumulate_from_start_of_forecast is enabled."
+    Should be called before any disaggregation when 0 is in load_steps.
+    Handles two modes:
+      (a) step 0 is absent entirely → prepend a zero-filled slice
+      (b) step 0 is present but all-NaN → fill with zeros
+    Only acts when 0 is in steps; other steps are genuine data and
+    must not be zero-filled.
+    """
+    if 0 not in steps:
+        return cumul
+    step0_td = np.timedelta64(0, "ns")
+    step0_idx = np.where(cumul["step"].values == step0_td)[0]
+    if step0_idx.size == 0:
+        LOG.info("Step 0 of cumulative field missing; prepending zeros (IC = 0).")
+        zero = xr.zeros_like(cumul.isel(step=[0])).assign_coords(step=[step0_td])
+        cumul = xr.concat([zero, cumul], dim="step")
+    elif cumul[{"step": int(step0_idx[0])}].isnull().all():
+        LOG.info("Step 0 of cumulative field is all-NaN; filling with zeros (IC = 0).")
+        cumul[{"step": int(step0_idx[0])}] = 0.0
+    return cumul
+
+
+def _disaggregate_accum(cumul: xr.DataArray, steps: list[int], n: int) -> xr.DataArray:
+    """Compute n-hour period accumulations from a cumulative-from-start field.
+
+    For each step s in steps where s >= n: result[s] = cumul[s] - cumul[s-n],
+    clipped to 0. For steps s < n (window extends before model start), result is NaN.
+    Raises ValueError if any valid window gives significantly negative values (data is
+    not actually cumulative from start).
+    """
+    step_coords = [np.timedelta64(s, "h") for s in steps]
+    result = xr.full_like(cumul.sel(step=step_coords), fill_value=np.nan)
+
+    valid_steps = [s for s in steps if s >= n]
+    for s in valid_steps:
+        result.loc[{"step": np.timedelta64(s, "h")}] = cumul.sel(
+            step=np.timedelta64(s, "h")
+        ) - cumul.sel(step=np.timedelta64(s - n, "h"))
+
+    if valid_steps:
+        valid_min = float(
+            result.sel(step=[np.timedelta64(s, "h") for s in valid_steps])
+            .min()
+            .compute()
         )
-        tp[{"step": 0}] = 0.0
-
-    # Disaggregate TOT_PREC from cumulative-from-start (expected when the
-    # accumulate_from_start_of_forecast post-processor is enabled in
-    # anemoi-inference) to per-step accumulations.
-    if tp.sizes["step"] < 2:
-        raise ValueError(
-            "Cannot de-accumulate TOT_PREC: only a single step was loaded and "
-            "step 0 was not requested/synthesised, so no accumulation window "
-            "can be formed. Request the preceding step as well."
-        )
-    LOG.info(
-        "Disaggregating TOT_PREC from cumulative-from-start to per-step accumulations."
-    )
-    tp = tp.diff("step")
-
-    # Sanity-check that the incoming data is actually cumulative. If
-    # some values are significantly negative, it indicates that the data
-    # is already period-accumulated.
-    min_diff = float(tp.min().compute())
-    if min_diff < -0.1:  # NOTE: TOT_PREC canonical units are mm
-        raise ValueError(
-            "TOT_PREC in the GRIB appears to already be "
-            f"period-accumulated (min(.diff()) = {min_diff:.3e} m). "
-            "Check that the accumulate_from_start_of_forecast post-processor "
-            "is enabled in the anemoi-inference config for this source."
-        )
-
-    # Clip remaining small negative values to zero
-    tp = tp.clip(min=0.0)
-
-    # Reindex to match the original lead_time coordinate
-    tp = tp.reindex(step=_full_step_coord)
-
-    return tp
+        if valid_min < -0.1:
+            raise ValueError(
+                f"Disaggregated field has significantly negative values "
+                f"(min={valid_min:.3e}); the source field may already be "
+                "period-accumulated rather than cumulative-from-start."
+            )
+    return result.clip(min=0)  # clip leaves NaN intact
 
 
-def load_forecast_data_from_grib(
-    files: list[Path], params: list[str], steps: list[int] | None = None
-) -> xr.Dataset:
-    """Load forecast data from a list of GRIB files (internal helper).
+def load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
+    """Load forecast data from a list of GRIB files. Returns raw fields as-is.
 
-    External callers should use :func:`load_forecast_data`, which derives
-    `files` from `steps` and routes by source. This helper is the shared
-    low-level loader for the ML-grib and ICON-archive paths.
-
-    `files` and `steps` are complementary, not redundant:
-    - `files` are the GRIB files that exist on disk (one per lead time).
-    - `steps` are the *requested* lead times, forwarded to the TOT_PREC
-      de-accumulation. They cannot be inferred from `files` alone: when step 0
-      is requested, anemoi-inference omits the TOT_PREC step-0 field entirely
-      (no file exists), so it is synthesised as zero to form the first
-      accumulation window. `steps` carries that intent.
+    External callers should use :func:`load_forecast_data`, which handles
+    param expansion, step expansion, IC synthesis, and disaggregation.
+    Cumulative-from-start fields (e.g. TOT_PREC) are returned without
+    disaggregation — that is the caller's responsibility.
     """
     # Extend param selection to include IFS aliases so that global-model GRIB files
     # (which use IFS shortNames like "tp", "2t") are also matched.
@@ -338,9 +383,6 @@ def load_forecast_data_from_grib(
     }
     if ifs_rename:
         ds = ds.rename(ifs_rename)
-
-    if "TOT_PREC" in ds.data_vars:
-        ds["TOT_PREC"] = _tot_prec_handling(ds["TOT_PREC"], requested_steps=steps)
 
     return ds
 
@@ -856,7 +898,6 @@ def load_icon_baseline_from_grib(
                         root, reftime, steps, member_id=mid
                     ),
                     params=params,
-                    steps=steps,
                 )
                 if "number" in ds.dims:
                     ds = ds.isel(number=0, drop=True)
@@ -874,7 +915,6 @@ def load_icon_baseline_from_grib(
         return load_forecast_data_from_grib(
             files=_collect_icon_archive_files(root, reftime, steps, member_id=member),
             params=params,
-            steps=steps,
         )
 
 
@@ -893,10 +933,8 @@ def load_forecast_data(
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
         return load_forecast_data_from_grib(
-            # NOTE: root is already for a specific reftime
             files=_collect_ml_grib_files(root, steps),
             params=params,
-            steps=steps,
         )
     if "INCA" in root.parts:
         LOG.info("Loading INCA baseline from NetCDF files...")
