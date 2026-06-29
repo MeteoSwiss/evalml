@@ -41,6 +41,7 @@ _ACCUMULATABLE_PARAMS: frozenset[str] = frozenset({"TOT_PREC"})
 # Spatial/multi-field derivations: output param → required input params.
 DERIVED_PARAMS: dict[str, tuple[str, ...]] = {
     "SP_10M": ("U_10M", "V_10M"),
+    "SP": ("U", "V"),
 }
 
 
@@ -72,6 +73,14 @@ def compute_derived(ds: xr.Dataset, param: str) -> xr.DataArray:
             "shortName": "SP_10M",
             "units": "m/s",
             "name": "10m wind speed",
+        }
+        return da
+    if param == "SP":
+        da = (ds["U"] ** 2 + ds["V"] ** 2) ** 0.5
+        da.attrs["parameter"] = {
+            "shortName": "SP",
+            "units": "m/s",
+            "name": "Wind speed",
         }
         return da
     raise ValueError(f"No recipe for derived variable '{param}'")
