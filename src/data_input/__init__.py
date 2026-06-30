@@ -36,13 +36,11 @@ ZERO_KELVIN = -273.15  # °C
 
 GRAVITY = 9.80665  # m/s² — standard gravity used to convert FIS geopotential to metres
 
-ICON_CH1_GRID_NC = Path(
-    "/scratch/mch/jenkins/icon/pool/data/ICON/mch/grids/icon-1"
-    "/external_parameter_icon_grid_0001_R19B08_mch.nc"
+ICON_CH1_CONST_GRIB = Path(
+    "/users/oprusers/osm/opr.inn/data/ICON_INPUT/ICON-CH1-EPS/lfff00000000c"
 )
-ICON_CH2_GRID_NC = Path(
-    "/scratch/mch/jenkins/icon/pool/data/ICON/mch/grids/icon-2"
-    "/external_parameter_icon_grid_0002_R19B07_mch.nc"
+ICON_CH2_CONST_GRIB = Path(
+    "/users/oprusers/osm/opr.inn/data/ICON_INPUT/ICON-CH2-EPS/lfff00000000c"
 )
 
 
@@ -80,10 +78,10 @@ def parse_steps(steps: str) -> list[int]:
     return list(range(start, end + 1, step))
 
 
-def _load_icon_topography(grid_nc: Path) -> np.ndarray:
-    """Return topography_c [m] from an ICON external parameter file."""
-    with xr.open_dataset(grid_nc) as ds:
-        return ds["topography_c"].values.astype(np.float32)
+def _load_icon_topography(const_grib: Path) -> np.ndarray:
+    """Return HSURF [m] from an ICON constants GRIB file."""
+    ds = load_from_grib_file(const_grib, {"parameter.variable": "HSURF"})
+    return ds["HSURF"].values.astype(np.float32).ravel()
 
 
 def _load_inca_dem(
@@ -114,14 +112,14 @@ def _try_assign_elevation(ds: xr.Dataset) -> xr.Dataset:
     if "values" not in ds.dims:
         return ds
     n = ds.sizes["values"]
-    for grid_nc in (ICON_CH1_GRID_NC, ICON_CH2_GRID_NC):
-        if not grid_nc.exists():
+    for const_grib in (ICON_CH1_CONST_GRIB, ICON_CH2_CONST_GRIB):
+        if not const_grib.exists():
             continue
-        topo = _load_icon_topography(grid_nc)
+        topo = _load_icon_topography(const_grib)
         if len(topo) == n:
-            LOG.info("Assigned elevation from %s (%d cells)", grid_nc.name, n)
+            LOG.info("Assigned elevation from %s (%d cells)", const_grib.name, n)
             return ds.assign_coords(elevation=("values", topo))
-    LOG.warning("Could not assign elevation: no ICON grid NC file matches values=%d", n)
+    LOG.warning("Could not assign elevation: no ICON constants GRIB matches values=%d", n)
     return ds
 
 
@@ -962,20 +960,20 @@ def load_icon_baseline_from_grib(
 
     # Attach model orography as elevation coordinate
     if "ICON-CH1-EPS" in root.parts:
-        grid_nc = ICON_CH1_GRID_NC
+        const_grib = ICON_CH1_CONST_GRIB
     elif "ICON-CH2-EPS" in root.parts:
-        grid_nc = ICON_CH2_GRID_NC
+        const_grib = ICON_CH2_CONST_GRIB
     else:
-        grid_nc = None
-    if grid_nc is not None and grid_nc.exists() and "values" in result.dims:
-        topo = _load_icon_topography(grid_nc)
+        const_grib = None
+    if const_grib is not None and const_grib.exists() and "values" in result.dims:
+        topo = _load_icon_topography(const_grib)
         if result.sizes["values"] == len(topo):
             result = result.assign_coords(elevation=("values", topo))
         else:
             LOG.warning(
                 "elevation not assigned: values=%d but %s has %d cells",
                 result.sizes["values"],
-                grid_nc.name,
+                const_grib.name,
                 len(topo),
             )
     return result

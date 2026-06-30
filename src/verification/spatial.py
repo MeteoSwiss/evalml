@@ -170,7 +170,7 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
             truth.indexes["values"], "values"
         )
         fcst = fcst.assign_coords(mindex_coords)
-    else:
+    elif "values" in truth.indexes:
         fcst = fcst.assign_coords(values=truth.indexes["values"])
 
     if truth_is_grid:
