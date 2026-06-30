@@ -2,7 +2,7 @@ import logging
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Literal, Any
+from typing import Callable, Literal, Any
 
 import earthkit.data as ekd
 import numpy as np
@@ -69,19 +69,19 @@ def compute_derived(ds: xr.Dataset, param: str) -> xr.DataArray:
     """Compute a spatial derived variable from its components already in ds."""
     if param == "SP_10M":
         da = (ds["U_10M"] ** 2 + ds["V_10M"] ** 2) ** 0.5
-        da.attrs["parameter"] = {
-            "shortName": "SP_10M",
-            "units": "m/s",
-            "name": "10m wind speed",
-        }
+        # da.attrs["parameter"] = {
+        #     "shortName": "SP_10M",
+        #     "units": "m/s",
+        #     "name": "10m wind speed",
+        # }
         return da
     if param == "SP":
         da = (ds["U"] ** 2 + ds["V"] ** 2) ** 0.5
-        da.attrs["parameter"] = {
-            "shortName": "SP",
-            "units": "m/s",
-            "name": "Wind speed",
-        }
+        # da.attrs["parameter"] = {
+        #     "shortName": "SP",
+        #     "units": "m/s",
+        #     "name": "Wind speed",
+        # }
         return da
     raise ValueError(f"No recipe for derived variable '{param}'")
 
@@ -843,6 +843,49 @@ def _load_INCA_baseline_from_netcdf(
         "datetime64[ns]"
     )
 
+    def _load_cumul(
+        param: str,
+        prefix: str,
+        reftime: datetime,
+        steps: list[int],
+        step_td: np.timedelta64,
+        valid_times: np.ndarray,
+        fill_missing_files: bool,
+        open_convert: Callable,
+        nan_array: Callable,
+        param_unit: str,
+    ) -> xr.DataArray:
+        """Load a period-accumulated INCA field and return cumulative-from-start totals.
+
+        Always loads at native resolution (10 min for RR, 5 min for RP) so that all
+        sub-frequency slots are summed. This is critical when freq='1h': a plain
+        reindex to hourly marks would pick only the last 10-min slot of each hour,
+        underestimating by ×6.
+        """
+        native_td = (
+            np.timedelta64(5, "m") if prefix == "RP" else np.timedelta64(10, "m")
+        )
+        native_td_ns = native_td.astype("timedelta64[ns]")
+        max_step_ns = int(max(steps) * step_td.astype("timedelta64[ns]"))
+        n_native = max_step_ns // int(native_td_ns)
+        ref_ns = np.datetime64(reftime, "ns")
+        native_vtimes = ref_ns + np.arange(1, n_native + 1) * native_td_ns
+
+        fp, da = open_convert(reftime, prefix)
+        if da is None:
+            if not fill_missing_files:
+                raise FileNotFoundError(
+                    f"INCA file not found for parameter {param!r}: {fp}"
+                )
+            LOG.warning("INCA file not found, filling %s with NaN: %s", param, fp)
+            return nan_array(param_unit).rename(param)
+
+        da_native = da.reindex(valid_time=native_vtimes)
+        cumul = da_native.cumsum(dim="valid_time", skipna=True)
+        step0 = xr.zeros_like(cumul.isel(valid_time=0)).assign_coords(valid_time=ref_ns)
+        cumul = xr.concat([step0, cumul], dim="valid_time")
+        return cumul.sel(valid_time=valid_times).rename(param)
+
     prefix_map = PARAM_TO_PREFIX[freq]
 
     datasets: dict[str, xr.DataArray] = {}
@@ -872,6 +915,21 @@ def _load_INCA_baseline_from_netcdf(
 
     for param in to_load:
         prefix = prefix_map[param]
+
+        if param in _ACCUMULATABLE_PARAMS:
+            datasets[param] = _load_cumul(
+                param,
+                prefix,
+                reftime=reftime,
+                steps=steps,
+                step_td=step_td,
+                valid_times=valid_times,
+                fill_missing_files=fill_missing_files,
+                open_convert=_open_convert,
+                nan_array=_nan_array,
+                param_unit=PARAM_UNITS[param],
+            )
+            continue
 
         if param in _SHIFTED_PARAMS and freq == "1h":
             datasets[param] = _load_shifted(param, prefix)
