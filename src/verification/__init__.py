@@ -45,11 +45,12 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
         ).transform
 
         regions = {}
-        # add inner region for ML evaluation
-        regions["all"] = [
-            Polygon(list(zip([1.5, 16, 16, 1.5, 1.5], [43, 43, 49.5, 49.5, 43])))
-        ]
-        if shp and shp != [""]:
+        has_shapefiles = bool(shp and shp != [""])
+        if has_shapefiles:
+            # With explicit regional shapefiles, restrict "all" to the Alpine inner domain
+            regions["all"] = [
+                Polygon(list(zip([1.5, 16, 16, 1.5, 1.5], [43, 43, 49.5, 49.5, 43])))
+            ]
             shp = [shp] if isinstance(shp, str) else shp
             for shapefile in shp:
                 region_name = Path(shapefile).stem
@@ -57,12 +58,20 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
                 regions[region_name] = [
                     transform(proj, record.geometry) for record in reader.records()
                 ]
+        else:
+            # No shapefile regions: "all" covers the full domain (e.g. global evaluation)
+            regions["all"] = None
         self.regions = regions
 
     def get_masks(self, lat: xr.DataArray, lon: xr.DataArray) -> xr.DataArray:
         masks = []
         for region_name, polygons in self.regions.items():
-            mask = self._mask_from_polygons(polygons, lat, lon)
+            if polygons is None:
+                mask = xr.DataArray(
+                    np.ones(lon.shape, dtype=bool), coords=lon.coords, dims=lon.dims
+                )
+            else:
+                mask = self._mask_from_polygons(polygons, lat, lon)
             masks.append(mask.assign_coords(region=region_name))
         return xr.concat(masks, dim="region")
 
