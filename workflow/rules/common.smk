@@ -20,6 +20,9 @@ ENV_HASH_FIELDS = {
 }
 # Fields excluded from ALL hashing (display/resource metadata only).
 RUN_HASH_EXCLUDE = {"label", "inference_resources", "_is_candidate", "model_type"}
+# Fields excluded from baseline hashing (display metadata only).
+BASELINE_HASH_EXCLUDE = {"label"}
+TRUTH_HASH_EXCLUDE = {"label"}
 
 
 # ============================================================================
@@ -79,9 +82,11 @@ def parse_reference_times():
 def parse_regions():
     """Parse regions from the configuration."""
     cfg = config["experiment"]["stratification"]
-    regions = [f"{cfg['root']}/{region}.shp" for region in cfg["regions"]]
-    regions_txt = ",".join(regions)
-    return regions_txt
+    region_names = cfg.get("regions", [])
+    if not region_names:
+        return ""
+    regions = [f"{cfg['root']}/{region}.shp" for region in region_names]
+    return ",".join(regions)
 
 
 def parse_showcase_regions():
@@ -140,6 +145,12 @@ def model_id(checkpoint_uri: str) -> str:
     """Generate a model ID based on the checkpoint URI."""
     ckpt_type = _checkpoint_uri_type(checkpoint_uri)
     if ckpt_type == "mlflow":
+        fragment = checkpoint_uri.split("#")[-1]
+        if "/models/" in fragment:
+            parts = fragment.strip("/").split("/")
+            if len(parts) >= 4 and parts[2] == "versions":
+                return f"{parts[1]}-v{parts[3]}"[:HASH_LENGTH]
+            return f"{parts[1]}-latest"[:HASH_LENGTH]
         return checkpoint_uri.split("/")[-1][:HASH_LENGTH]
     elif ckpt_type == "huggingface":
         return checkpoint_uri.split("/")[-1].split(".")[0]
@@ -160,7 +171,7 @@ def register_run(model_type, run_config, as_candidate=True):
     mid = model_id(run_cfg["checkpoint"])
 
     out = {}
-    if model_type == "interpolator":
+    if model_type == "temporal_downscaler":
         forecaster = run_cfg.get("forecaster")
         if forecaster is None:
             run_cfg["forecaster"] = None
@@ -180,7 +191,7 @@ def register_run(model_type, run_config, as_candidate=True):
     # Compute env_id (determines which venv/squashfs to use)
     e_hash = env_entry_hash(run_cfg, model_type)
     env_id_base = f"{model_type}-{mid}-{e_hash}"
-    if model_type == "interpolator":
+    if model_type == "temporal_downscaler":
         env_id = f"{env_id_base}-on-{env_dep_suffix}"
     else:
         env_id = env_id_base
@@ -245,27 +256,40 @@ def collect_all_baselines():
         if "baseline" not in run_entry:
             continue
         baseline_config = run_entry["baseline"]
-        baseline_id = Path(baseline_config["root"]).stem
-        baselines[baseline_id] = baseline_config
-
-    # Backward compatibility with legacy top-level `baselines` block.
-    for baseline_entry in copy.deepcopy(config.get("baselines", [])):
-        baseline_type = next(iter(baseline_entry))
-        baseline_config = baseline_entry[baseline_type]
-        baseline_id = Path(baseline_config["root"]).stem
-        baseline_config.pop("baseline_id", None)
+        baseline_id = f"baseline-{baseline_hash(baseline_config)}"
         baselines[baseline_id] = baseline_config
 
     return baselines
 
 
+def resolve_baseline_id(label: str) -> str:
+    """Resolve a baseline label to its hash-based ID.
+
+    Scorecard configs reference baselines by human-readable label (e.g. 'IFS').
+    This finds the matching baseline_id in BASELINE_CONFIGS.
+    Raises ValueError if the label doesn't match any registered baseline.
+    """
+    for baseline_id, cfg in BASELINE_CONFIGS.items():
+        if cfg.get("label") == label:
+            return baseline_id
+    available = [cfg.get("label") for cfg in BASELINE_CONFIGS.values()]
+    raise ValueError(
+        f"No baseline with label {label!r} found. "
+        f"Available baseline labels: {available}"
+    )
+
+
 def collect_experiment_participants():
     participants = {}
     for base in BASELINE_CONFIGS.keys():
-        participants[base] = OUT_ROOT / f"data/baselines/{base}/verif_aggregated.nc"
+        participants[base] = (
+            OUT_ROOT / f"data/baselines/{base}/verif_aggregated_{TRUTH_HASH}.nc"
+        )
     for exp in RUN_CONFIGS.keys():
         if RUN_CONFIGS[exp].get("_is_candidate", False):
-            participants[exp] = OUT_ROOT / f"data/runs/{exp}/verif_aggregated.nc"
+            participants[exp] = (
+                OUT_ROOT / f"data/runs/{exp}/verif_aggregated_{TRUTH_HASH}.nc"
+            )
     return participants
 
 
@@ -281,11 +305,11 @@ def env_entry_hash(run_config: dict, model_type: str) -> str:
     - checkpoint (different model)
     - extra_requirements (different dependencies)
     - disable_local_eccodes_definitions (different ECCODES setup)
-    - For interpolators: the forecaster's env_id (different upstream model)
+    - For temporal downscalers: the forecaster's env_id (different upstream model)
     """
     cfg = {k: v for k, v in run_config.items() if k in ENV_HASH_FIELDS}
     configs_to_hash = [cfg]
-    if model_type == "interpolator" and run_config.get("forecaster"):
+    if model_type == "temporal_downscaler" and run_config.get("forecaster"):
         # environment depends on which forecaster model (not which run config)
         configs_to_hash.append(run_config["forecaster"].get("env_id"))
     return generate_json_hash(configs_to_hash)
@@ -297,15 +321,21 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
     Changes to these fields create a new run_id (new outputs) but reuse the environment:
     - steps (lead times)
     - config YAML file contents (inference parameters)
-    - For interpolators: the forecaster's run_id (which run's outputs to read)
+    - For temporal downscalers: the forecaster's run_id (which run's outputs to read)
     """
     configs_to_hash = [{"steps": run_config["steps"]}]
     with open(run_config["config"], "r") as f:
         configs_to_hash.append(yaml.safe_load(f))
-    if model_type == "interpolator" and run_config.get("forecaster"):
+    if model_type == "temporal_downscaler" and run_config.get("forecaster"):
         # run output depends on which forecaster RUN was used (not just the env)
         configs_to_hash.append(run_config["forecaster"].get("run_id"))
     return generate_json_hash(configs_to_hash)
+
+
+def baseline_hash(baseline_config: dict) -> str:
+    """Hash of fields that determine baseline identity (excludes display/legacy metadata)."""
+    cfg = {k: v for k, v in baseline_config.items() if k not in BASELINE_HASH_EXCLUDE}
+    return generate_json_hash(cfg)
 
 
 def master_hash() -> str:
@@ -321,6 +351,30 @@ def master_hash() -> str:
     return generate_json_hash(configs_to_hash)
 
 
+def truth_hash(truth_config: dict) -> str:
+    """Generate a short hash of the configs for the truth data."""
+    cfg = {k: v for k, v in truth_config.items() if k not in TRUTH_HASH_EXCLUDE}
+    return generate_json_hash(cfg)
+
+
+def truth_file_dep(_):
+    """Truth file dependency: a real path for zarr, but a live-query
+    marker (no input file) for jretrieve."""
+    root = config["truth"]["root"]
+    return [] if "jretrieve" in str(root) else [root]
+
+
+# Fail fast: when the truth source is the live DWH (jretrievedwh), verify its
+# prerequisites at workflow-build time so a misconfigured environment is caught
+# at launch, before any (expensive) inference job runs.
+if "jretrieve" in str(config["truth"]["root"]):
+    from data_input.jretrieve import check_prerequisites, parse_selection
+
+    _, _jretrieve_stage, _ = parse_selection(config["truth"]["root"])
+    check_prerequisites(_jretrieve_stage)
+
+
+TRUTH_HASH = truth_hash(config["truth"])
 REGIONS = parse_regions()
 SHOWCASE_REGIONS = parse_showcase_regions()
 SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])
@@ -332,3 +386,43 @@ RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
+_scorecard = config.get("experiment", {}).get("scorecards") or {}
+SCORECARD_CONFIGS = (
+    _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
+)
+
+
+# Period-accumulated params verify a [lead - period, lead] window, so they have
+# no value at lead times shorter than one step spacing (e.g. no 0h precip map).
+# Short and canonical names both appear across the workflow (showcases vs maps).
+ACCUMULATED_PARAMS = {"TOT_PREC", "tp"}
+
+
+def resolve_leadtimes(steps_spec, requested="all", param=None):
+    """Lead times to compute for a single participant.
+
+    A run or baseline produces only the lead times in its own ``steps`` spec
+    (``start/stop/step``, hours). This returns those of the ``requested``
+    selection that the participant actually produces — the literal ``"all"``
+    (every produced lead time) or an explicit list of ints — so a 36h lead is
+    never requested of an ICON-CH1 baseline (steps ``0/33/6``), nor a >120h
+    lead of ICON-CH2. Explicitly requested lead times the participant cannot
+    produce are skipped with a warning. For accumulated ``param``s, lead times
+    shorter than one step spacing are dropped (no accumulation window).
+    """
+    start, end, step = map(int, steps_spec.split("/"))
+    supported = set(range(start, end + 1, step))
+    wanted = supported if requested == "all" else set(requested)
+
+    unsupported = sorted(wanted - supported)
+    if unsupported:
+        logging.getLogger("snakemake").warning(
+            "Skipping lead time(s) %sh: not produced by forecast steps '%s'.",
+            unsupported,
+            steps_spec,
+        )
+
+    valid = wanted & supported
+    if param in ACCUMULATED_PARAMS:
+        valid = {lt for lt in valid if lt >= step}
+    return sorted(valid)

@@ -19,18 +19,25 @@ rule inference_get_checkpoint:
         checkpoint_type=lambda wc: _checkpoint_uri_type(
             ENV_CONFIGS[wc.env_id]["checkpoint"]
         ),
+        checkpoint_is_registry=lambda wc: "/models/"
+        in ENV_CONFIGS[wc.env_id]["checkpoint"],
     shell:
         r"""
         (
             mkdir -p $(dirname {output.checkpoint})
             if [ "{params.checkpoint_type}" = "mlflow" ]; then
-                ln -s $(python workflow/scripts/inference_get_checkpoint_mlflow.py {params.checkpoint}) {output.checkpoint}
-                echo "Located checkpoint from MLFlow log."
-                echo "Created symlink: {output.checkpoint} -> $(readlink {output.checkpoint})"
+                if [ "{params.checkpoint_is_registry}" = "True" ]; then
+                    python workflow/scripts/inference_get_checkpoint_mlflow.py {params.checkpoint} --output {output.checkpoint}
+                    echo "Downloaded checkpoint from MLFlow model registry: {output.checkpoint}"
+                else
+                    ln -s $(python workflow/scripts/inference_get_checkpoint_mlflow.py {params.checkpoint}) {output.checkpoint}
+                    echo "Located checkpoint from MLFlow log."
+                    echo "Created symlink: {output.checkpoint} -> $(readlink {output.checkpoint})"
+                fi
             elif [ "{params.checkpoint_type}" = "huggingface" ]; then
                 repo_id=$(python -c "import re; print(re.search(r'huggingface\.co/([^/]+/[^/]+)', '{params.checkpoint}').group(1))")
-                file_path=$(python -c "import re; print(re.search(r'huggingface\.co/[^/]+/[^/]+/blob/[^/]+/(.*)', '{params.checkpoint}').group(1))")
-                cp $(uvx hf download $repo_id $file_path) {output.checkpoint}
+                file_path=$(python -c "import re; print(re.search(r'huggingface\.co/[^/]+/[^/]+/(?:blob|resolve)/[^/]+/(.*)', '{params.checkpoint}').group(1))")
+                cp $(uvx hf download --quiet $repo_id $file_path) {output.checkpoint}
                 echo "Copied checkpoint from HuggingFace: {output.checkpoint}"
             elif [ "{params.checkpoint_type}" = "local" ]; then
                 ln -s {params.checkpoint} {output.checkpoint}
@@ -99,7 +106,7 @@ rule inference_create_venv:
             uv pip install -r {input.requirements}
 
             echo "[$(date)] Compiling Python bytecode..."
-            python -m compileall -j 8 -o 0 -o 1 -o 2 .venv/lib/python*/site-packages
+            python -m compileall -j 8 -o 0 -o 1 -o 2 {output.venv}/lib/python*/site-packages
             echo "[$(date)] Testing that eccodes is working..."
             if ! python -c "import eccodes" &>/dev/null; then
                 echo "[$(date)] ERROR: eccodes is not installed correctly in the virtual environment."
@@ -111,12 +118,10 @@ rule inference_create_venv:
         """
 
 
+# Create a squashfs image for the inference virtual environment of
+# a specific checkpoint. Find more about this at
+# https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
 rule inference_make_squashfs_image:
-    """
-Create a squashfs image for the inference virtual environment of
-a specific checkpoint. Find more about this at
-https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
-"""
     input:
         venv=rules.inference_create_venv.output.venv,
     output:
@@ -125,25 +130,16 @@ https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
         OUT_ROOT / "logs/inference_make_squashfs_image/{env_id}.log",
     localrule: True
     shell:
-        # we can safely ignore the many warnings "Unrecognised xattr prefix..."
         "mksquashfs $(realpath {input.venv}) {output.image}"
         " -no-recovery -noappend -Xcompression-level 3"
         " > {log} 2>/dev/null"
 
 
+# Create a zipped directory that, when extracted, can be used as a sandbox
+# for running inference jobs for a specific checkpoint. Its main purpose is
+# to serve as a development environment for anemoi-inference and to facilitate
+# sharing with external collaborators.
 rule inference_create_sandbox:
-    """
-Create a zipped directory that, when extracted, can be used as a sandbox
-for running inference jobs for a specific checkpoint. Its main purpose is
-to serve as a development environment for anemoi-inference and to facilitate
-sharing with external collaborators.
-
-TO use this sandbox, unzip it to a target directory.
-
-```bash
-unzip sandbox.zip -d /path/to/target/directory
-```
-"""
     input:
         script="workflow/scripts/inference_create_sandbox.py",
         checkpoint=lambda wc: OUT_ROOT
@@ -215,8 +211,8 @@ def _get_forecaster_run_id(run_id):
     return RUN_CONFIGS[run_id]["forecaster"]["run_id"]
 
 
-rule inference_prepare_interpolator:
-    """Run the interpolator for a specific run ID."""
+# Prepare temporal downscaler for a specific run ID
+rule inference_prepare_temporal_downscaler:
     input:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
@@ -234,9 +230,12 @@ rule inference_prepare_interpolator:
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
         grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
         forecaster=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/forecaster"),
-        okfile=OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.ok",
+        okfile=touch(
+            OUT_ROOT
+            / "logs/inference_prepare_temporal_downscaler/{run_id}-{init_time}.ok"
+        ),
     log:
-        OUT_ROOT / "logs/inference_prepare_interpolator/{run_id}-{init_time}.log",
+        OUT_ROOT / "logs/inference_prepare_temporal_downscaler/{run_id}-{init_time}.log",
     localrule: True
     params:
         lead_time=lambda wc: get_leadtime(wc),
@@ -260,9 +259,9 @@ def _inference_routing_fn(wc):
 
     if run_config["model_type"] == "forecaster":
         input_path = f"logs/inference_prepare_forecaster/{wc.run_id}-{wc.init_time}.ok"
-    elif run_config["model_type"] == "interpolator":
+    elif run_config["model_type"] == "temporal_downscaler":
         input_path = (
-            f"logs/inference_prepare_interpolator/{wc.run_id}-{wc.init_time}.ok"
+            f"logs/inference_prepare_temporal_downscaler/{wc.run_id}-{wc.init_time}.ok"
         )
     else:
         raise ValueError(f"Unsupported model type: {run_config['model_type']}")
@@ -331,4 +330,4 @@ rule inference_execute:
         ) >{log} 2>&1
         touch {output.okfile}
         """
-    # fmt: on
+# fmt: on

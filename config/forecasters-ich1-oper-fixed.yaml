@@ -11,7 +11,6 @@ dates:
   - 2024-02-01T18:00
   - 2025-03-01T00:00
 
-
 runs:
   - forecaster:
       checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/9f4626a7562a4eb49700aaaaa8607230
@@ -19,8 +18,7 @@ runs:
       steps: 0/120/6
       config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
       extra_requirements:
-        - git+https://github.com/ecmwf/anemoi-inference.git@b9aaee5df86614cad9d8d08b76876a4be4e980db
-
+        - anemoi-inference==0.11.1
   # - forecaster:
   #     checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/233b1274e79b4bfea98378d196a8aba0
   #     label: stage_C_realch1
@@ -31,7 +29,6 @@ runs:
   #       - earthkit-data<0.19.0
   #       - git+https://github.com/ecmwf/anemoi-inference.git@fix/dataloader-dataset-config
 
-baselines:
   - baseline:
       label: ICON-CH1-EPS
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
@@ -56,7 +53,7 @@ experiment:
       - alpennordhang
       - innerealpentaeler
       - alpensuedseite
-    root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
   thresholds:
     TOT_PREC:
       gt: [0.0, 1, 5]
@@ -72,6 +69,8 @@ experiment:
       # - init_hour
       # - region
       - season
+  scoremaps:
+    enabled: false
 
 locations:
   output_root: output/
@@ -87,5 +86,3 @@ profile:
     runtime: "1h"
     gpus: 0
   jobs: 50
-  batch_rules:
-    plot_forecast_frame: 32

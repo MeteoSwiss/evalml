@@ -56,8 +56,8 @@ def prepare_workdir(workdir: Path, resources_root: Path):
     )
 
 
-def prepare_interpolator(smk):
-    """Prepare the interpolator for the inference run.
+def prepare_temporal_downscaler(smk):
+    """Prepare the temporal downscaler for the inference run.
 
     Required steps:
     - prepare working directory
@@ -174,8 +174,8 @@ def main(smk):
     """Main function to run the Snakemake workflow."""
     if smk.rule == "inference_prepare_forecaster":
         prepare_forecaster(smk)
-    elif smk.rule == "inference_prepare_interpolator":
-        prepare_interpolator(smk)
+    elif smk.rule == "inference_prepare_temporal_downscaler":
+        prepare_temporal_downscaler(smk)
     else:
         raise ValueError(f"Unknown rule: {smk.rule}")
 

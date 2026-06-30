@@ -1,0 +1,141 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Evaluate skill of Varda-single-1.0 against ground observations.
+
+config_label: varda-single-1.0
+
+dates:
+  start: 2025-03-01T00:00
+  end: 2025-03-03T00:00
+  frequency: 24h
+
+runs:
+  - temporal_downscaler:
+      checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
+      label: Varda-single-1.0
+      steps: 0/120/1
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
+      extra_requirements:
+        - anemoi-datasets==0.5.35
+        # - anemoi-inference==0.11.0
+      forecaster:
+        checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
+        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+        steps: 0/120/6
+  - baseline:
+      label: INCA
+      root: /store_new/mch/msclim/INCA
+      steps: 0/6/1
+  - baseline:
+      label: ICON-CH2-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/1
+  - baseline:
+      label: ICON-CH1-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/33/1
+
+truth:
+  label: SwissMetNet
+  root: jretrievedwh:1,2
+  # To verify against SwissMetNet observations from the DWH via jretrievedwh,
+  # set instead (requires jretrievedwh.py on $PATH and $OPR_HOME set):
+  # Other selectors: root: jretrievedwh:locations=ARO,KLO,LUG
+  #                  root: jretrievedwh:bbox=45.8,47.8,5.9,10.5
+  #                  append ;stage=devt to target a non-prod DWH stage
+
+experiment:
+  params:
+    - T_2M
+    - TD_2M
+    - U_10M
+    - V_10M
+    - TOT_PREC
+  stratification:
+    regions:
+      - mittelland
+      - berge
+      - alpennordseite
+      - alpensuedseite
+      - jura
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    TOT_PREC:
+      gt: [0.0, 1, 5]
+    U_10M:
+      gt: [2.5, 5.0, 10.0]
+    V_10M:
+      gt: [2.5, 5.0, 10.0]
+    T_2M:
+      lt: [273.15]
+      gt: [288.15, 298.15]
+  dashboard:
+    stratification:
+      # - region
+      # - init_hour
+      - season
+  scorecards:
+    enabled: true
+    sections:
+      nowcasting:
+        baseline: INCA
+        lead_times: "0/6/1"
+        stratification: region
+        variables:
+          - "U_10M:RMSE,R2,ETS"
+          - "V_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2,ETS"
+          - "TOT_PREC:RMSE,R2,ETS"
+      short_range:
+        baseline: ICON-CH1-CTRL
+        lead_times: "6/33/6"
+        stratification: region
+        variables:
+          - "U_10M:RMSE,R2,ETS"
+          - "V_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2,ETS"
+          - "TOT_PREC:RMSE,R2,ETS"
+      medium_range:
+        baseline: ICON-CH2-CTRL
+        lead_times: "24/120/24"
+        stratification: region
+        variables:
+          - "U_10M:RMSE,R2,ETS"
+          - "V_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2,ETS"
+          - "TOT_PREC:RMSE,R2,ETS"
+  scoremaps:
+    enabled: false
+
+showcase:
+  params:
+    - T_2M
+    - SP_10M
+    - TOT_PREC
+  meteograms:
+    enabled: false
+    stations: [JUN] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
+  animations:
+    enabled: true
+    domains:
+      # - globe
+      - europe
+      # - alps
+      - icon-ch
+      - switzerland
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+    slurm_account: s83
+  jobs: 50

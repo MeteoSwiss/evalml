@@ -19,8 +19,8 @@ CORE_SUBMODULES = {"models", "training", "graphs"}
 
 BASE_DEPENDENCIES = [
     "anemoi-inference",
-    "eccodes==2.39.1",
-    "eccodes-cosmo-resources-python",
+    "eccodes>=2.44.0,<2.48.0",
+    "eccodes-cosmo-resources-python==2.44.0.1",
 ]
 
 # Packages emitted in the output even when only found in provenance (not overrides).
