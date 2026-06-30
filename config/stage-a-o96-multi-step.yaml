@@ -14,7 +14,7 @@ runs:
       steps: 0/120/1
       config: resources/inference/configs/o96-global-multistep-forecaster.yaml
       disable_local_eccodes_definitions: true
-  
+
 truth:
   label: ERA5-o96
   root: /store_new/mch/msopr/ml/datasets/aifs-ea-an-oper-0001-mars-o96-1979-2024-1h-v3-with-era51.zarr
