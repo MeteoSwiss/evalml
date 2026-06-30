@@ -589,10 +589,14 @@ def load_truth_data(
         load_steps = get_steps(steps, params)
         ds = _load_analysis_data_from_zarr(root, reftime, load_steps, load_params)
         ds = _disaggregated_and_derived_params(ds, steps, params)
-        # Restore time dimension: convert step offsets back to valid datetimes
+        # Restore time dimension: convert step offsets back to valid datetimes.
+        # Drop 'step' before returning — it's a non-dim coord indexed by 'time'
+        # that conflicts with the 'step' dimension of fcst["valid_time"] when
+        # truth is used as truth.sel(time=fcst["valid_time"]) downstream.
         ref_np = np.datetime64(reftime, "ns")
         time_vals = ref_np + ds["step"].values.astype("timedelta64[ns]")
         ds = ds.assign_coords(time=("step", time_vals)).swap_dims({"step": "time"})
+        ds = ds.drop_vars("step")
         truth = ds.compute().chunk(
             {"time": 1, "y": -1, "x": -1}
             if "y" in ds.dims and "x" in ds.dims
