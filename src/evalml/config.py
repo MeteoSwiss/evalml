@@ -230,7 +230,8 @@ class ScoreMapsConfig(BaseModel):
         default=["T_2M"],
         description=(
             "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
-            "PS, PMSL, TOT_PREC (native), and SP_10M (derived wind speed from U_10M/V_10M)."
+            "PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 "
+            "(period-accumulated precipitation, period encoded in the name)."
         ),
     )
     leadtimes: List[int] = Field(
@@ -403,7 +404,7 @@ class ExperimentConfig(BaseModel):
         description="Spatial stratification settings for the analysis.",
     )
     params: List[str] = Field(
-        default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"],
+        default=["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"],
         description="List of parameters to compute verification metrics for.",
     )
     thresholds: Dict[str, Dict[str, List[float]]] = Field(
