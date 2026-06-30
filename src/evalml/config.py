@@ -517,6 +517,82 @@ class Profile(BaseModel):
         return out
 
 
+class MecConfig(BaseModel):
+    """Paths to input observation files for the MEC verification step."""
+
+    ekf_root: str = Field(
+        ...,
+        description="Root directory for EKF SYNOP files. Files are expected at {ekf_root}/{YYYYMM}/ekfSYNOP_{init}00.nc.",
+    )
+    mon_synop_root: str = Field(
+        ...,
+        description="Root directory for monSYNOP files. Files are expected at {mon_synop_root}/{YYYYMMDDH}/monSYNOP.nc.",
+    )
+    ver_synop_root: str = Field(
+        ...,
+        description="Root directory for reference verSYNOP files. Files are expected at {ver_synop_root}/verSYNOP_{init}00.nc.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class Ffv2Config(BaseModel):
+    """Configuration for the FFV2 scoring pipeline."""
+
+    experiment_ids: str = Field(
+        ...,
+        description="Comma-separated experiment IDs passed to FFV2.",
+    )
+    veri_ens_member: str = Field(
+        ...,
+        description="Comma-separated ensemble member indices passed to FFV2, one per experiment ID (typically -1 for deterministic runs).",
+    )
+    catthresholds: dict[str, list[float]] = Field(
+        ...,
+        description="Per-variable categorical thresholds for FFV2, mapping FFV2 variable names to lists of threshold values.",
+    )
+    pecthresholds: dict[str, dict[str, float]] = Field(
+        ...,
+        description="Per-variable PEC thresholds for FFV2, mapping FFV2 variable names to a dict with exactly one 'lower' and one 'upper' value.",
+    )
+    experiment_description: str = Field(
+        ...,
+        description="Short description of the experiment for FFV2 output files.",
+    )
+    file_description: str = Field(
+        ...,
+        description="File description string used in FFV2 output file naming.",
+    )
+    domain_table: str = Field(
+        ...,
+        description="Path to the domain table file (polygon) used by FFV2.",
+    )
+    blacklists: str = Field(
+        ...,
+        description="Path to the blacklist directory used by FFV2.",
+    )
+
+    @field_validator("veri_ens_member", mode="before")
+    @classmethod
+    def coerce_veri_ens_member_to_str(cls, v):
+        return str(v)
+
+    @field_validator("pecthresholds")
+    @classmethod
+    def validate_pecthresholds(cls, v):
+        for var, bounds in v.items():
+            invalid = set(bounds) - {"lower", "upper"}
+            if invalid:
+                raise ValueError(
+                    f"pecthresholds[{var!r}] contains invalid keys {invalid}; only 'lower' and 'upper' are allowed."
+                )
+            if not bounds:
+                raise ValueError(f"pecthresholds[{var!r}] must have at least one of 'lower' or 'upper'.")
+        return v
+
+    model_config = {"extra": "forbid"}
+
+
 class ConfigModel(BaseModel):
     """Top-level configuration."""
 
@@ -543,6 +619,14 @@ class ConfigModel(BaseModel):
     showcase: ShowcaseConfig = Field(
         default_factory=ShowcaseConfig,
         description="Settings for the showcase workflow.",
+    )
+    mec: MecConfig | None = Field(
+        None,
+        description="Input observation paths for the MEC verification step. Required when running with --mec.",
+    )
+    ffv2: Ffv2Config | None = Field(
+        None,
+        description="Configuration for the FFV2 scoring pipeline. Required when running with --ffv2.",
     )
 
     @model_validator(mode="after")
