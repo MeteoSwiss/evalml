@@ -406,9 +406,16 @@ def _accumulate_from_hourly(da_1h: xr.DataArray, steps: list[int]) -> xr.DataArr
     max_step = max(steps)
     all_1h = da_1h.sel(step=[np.timedelta64(h, "h") for h in range(1, max_step + 1)])
     cumul = all_1h.cumsum(dim="step")
-    step0 = xr.zeros_like(cumul.isel(step=0)).assign_coords(
-        step=np.timedelta64(0, "ns")
+    # expand_dims ensures step is the leading dimension in step0 before concat.
+    # Also assign the correct time coord for step=0 (= time[step=1] - 1h = reftime)
+    # so it agrees with plain-param DataArrays that have time=reftime at step=0,
+    # preventing a MergeError when xr.Dataset(vars_out) is called.
+    step0 = xr.zeros_like(cumul.isel(step=0)).expand_dims(
+        step=[np.timedelta64(0, "ns")]
     )
+    if "time" in all_1h.coords:
+        ref_time = all_1h["time"].values[0] - np.timedelta64(1, "h")
+        step0 = step0.assign_coords(time=("step", np.array([ref_time])))
     cumul = xr.concat([step0, cumul], dim="step")
     return cumul.sel(step=[np.timedelta64(s, "h") for s in steps])
 
@@ -724,7 +731,9 @@ def _load_INCA_baseline_from_netcdf(
         except FileNotFoundError:
             return fp, None
         LOG.info("Reading %s", fp)
-        da = d[pfx]
+        da = d[
+            pfx
+        ].load()  # eager load: d goes out of scope on return, closing the file handle
         u = da.attrs.get("units", "")
         if u == "degrees C":
             da = (da - ZERO_KELVIN).assign_attrs({**da.attrs, "units": "K"})
@@ -795,6 +804,7 @@ def _load_INCA_baseline_from_netcdf(
             "T_2M": "TT",
             "TD_2M": "TD",
             "TOT_PREC": "RR",
+            "SP_10M": "FF",
             "FF_10M": "FF",
             "DD_10M": "DD",
             "CLCT": "CT",
@@ -804,6 +814,7 @@ def _load_INCA_baseline_from_netcdf(
             "T_2M": "TT",
             "TD_2M": "TD",
             "TOT_PREC": "RR",
+            "SP_10M": "FF_10min",
             "FF_10M": "FF_10min",
             "DD_10M": "DD_10min",
             "CLCT": "CT",
@@ -818,6 +829,7 @@ def _load_INCA_baseline_from_netcdf(
         "T_2M": "K",
         "TD_2M": "K",
         "TOT_PREC": "kg m-2",
+        "SP_10M": "m/s",
         "FF_10M": "m/s",
         "DD_10M": "degrees",
         "CLCT": "%",
@@ -882,7 +894,10 @@ def _load_INCA_baseline_from_netcdf(
 
         da_native = da.reindex(valid_time=native_vtimes)
         cumul = da_native.cumsum(dim="valid_time", skipna=True)
-        step0 = xr.zeros_like(cumul.isel(valid_time=0)).assign_coords(valid_time=ref_ns)
+        # expand_dims ensures valid_time is the leading dimension in step0 before
+        # concat; without it xarray appends the new dim at the end, producing
+        # (y, x, valid_time) instead of (valid_time, y, x).
+        step0 = xr.zeros_like(cumul.isel(valid_time=0)).expand_dims(valid_time=[ref_ns])
         cumul = xr.concat([step0, cumul], dim="valid_time")
         return cumul.sel(valid_time=valid_times).rename(param)
 
@@ -960,9 +975,9 @@ def _load_INCA_baseline_from_netcdf(
             da = (da - ZERO_KELVIN).assign_attrs({**da.attrs, "units": "K"})
         elif units == "mm/h":
             da = da.assign_attrs({**da.attrs, "units": "kg m-2"})
-        # Reindex to the target time grid; variables coarser than freq get NaN
-        # at timestamps absent from their native resolution
-        datasets[param] = da.rename(param).reindex(valid_time=valid_times)
+        # Reindex to the target time grid and force eager loading before ds_var
+        # goes out of scope (closing the file handle) at the next loop iteration.
+        datasets[param] = da.rename(param).reindex(valid_time=valid_times).load()
 
     merged = xr.merge(list(datasets.values()), join="override", compat="override")
 
@@ -1070,9 +1085,9 @@ def _disaggregated_and_derived_params(
     if load_steps != list(steps) and "step" in ds.dims:
         ds = ds.sel(step=[np.timedelta64(s, "h") for s in steps])
 
-    # Spatial derived params
+    # Spatial derived params (skip if the loader already provided the variable natively)
     for p in params:
-        if p in DERIVED_PARAMS:
+        if p in DERIVED_PARAMS and p not in ds.data_vars:
             ds = ds.assign({p: compute_derived(ds, p)})
 
     # Drop base params not explicitly requested by the caller
@@ -1115,10 +1130,18 @@ def load_forecast_data(
         )
     elif "INCA" in root.parts:
         LOG.info("Loading INCA baseline from NetCDF files...")
-        ds = _load_INCA_baseline_from_netcdf(root, reftime, load_steps, load_params)
+        # INCA provides wind speed natively (FF), so don't expand SP_10M → U_10M/V_10M.
+        # Only expand aggregated params (e.g. TOT_PREC6 → TOT_PREC).
+        inca_load_params = list(
+            dict.fromkeys(parse_aggregated_param(p)[0] for p in params)
+        )
+        ds = _load_INCA_baseline_from_netcdf(
+            root, reftime, load_steps, inca_load_params
+        )
     else:
         LOG.info("Loading baseline forecasts from ICON GRIB archive...")
         ds = _load_icon_baseline_from_grib(
             root, reftime, load_steps, load_params, member=member
         )
+    LOG.info(ds)
     return _disaggregated_and_derived_params(ds, steps, params)
