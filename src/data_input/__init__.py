@@ -300,7 +300,7 @@ def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
         level_type = level_type_group.get("vertical.level_type")[0]
         profile = XARRAY_ENGINE_PROFILE | variable_name_profile(level_type)
         _ds = level_type_group.to_xarray(**profile, allow_holes=True)
-        ds = ds.merge(_ds, compat="no_conflicts", combine_attrs="no_conflicts")
+        ds = ds.merge(_ds, compat="no_conflicts", combine_attrs="no_conflicts", join="outer")
     return ds
 
 
