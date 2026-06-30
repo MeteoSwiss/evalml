@@ -46,6 +46,8 @@ def test_scoremaps_block_now_accepted(paper_config):
 
 def test_rule_a_scoremaps_require_zarr_truth(paper_config):
     """Rule (a): scoremaps against jretrieve/obs truth are rejected."""
+    # Force jretrieve truth so the test doesn't depend on the config file's setting.
+    paper_config["truth"] = {"label": "SwissMetNet", "root": "jretrieve:1,2"}
     paper_config["publication"]["scoremaps"] = {"enabled": True}
     with pytest.raises(ValueError, match="gridded.*zarr"):
         ConfigModel.model_validate(paper_config)

@@ -15,11 +15,29 @@ block that has the in-memory globals to hand.
 
 import json
 import os
+import re
 from pathlib import Path
 
 SCHEMA_VERSION = 1
 
-DEFAULT_MANIFEST_RELPATH = "publication/manifest.json"
+# Publication outputs (manifest + figures) are namespaced by the truth label so
+# station-based and analysis-based runs don't overwrite each other:
+#   <output_root>/publication/<truth_slug>/manifest.json
+#   <output_root>/figures/<truth_slug>/<figure>/
+PUBLICATION_RELDIR = "publication"
+MANIFEST_NAME = "manifest.json"
+
+
+def truth_slug(label: str) -> str:
+    """Filesystem-safe slug of a truth label (e.g. 'KENDA-CH1', 'SwissMetNet').
+
+    Used to namespace the manifest and figure directories. Any character outside
+    ``[A-Za-z0-9._-]`` becomes ``_``; runs of ``_`` collapse. Two truths sharing a
+    label will collide — labels are expected to be distinct.
+    """
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", str(label).strip()).strip("_")
+    return slug or "truth"
+
 
 # Path templates, relative to ``output_root``. run_id / baseline_id are opaque
 # (run_id contains '/'), so these are only ever str.format-joined, never split.
@@ -146,6 +164,7 @@ def build_manifest(
         "output_root": output_root,
         "truth": {
             "label": (truth_cfg or {}).get("label"),
+            "slug": truth_slug((truth_cfg or {}).get("label", "")),
             "hash": truth_hash,
             "type": ttype,
             "root": truth_root,
@@ -174,34 +193,78 @@ def write_manifest(path, manifest: dict) -> None:
         f.write("\n")
 
 
-def default_manifest_path(output_root: str | None = None) -> Path:
-    """Resolve the default manifest location.
+def manifest_path(output_root: str, truth_label: str) -> Path:
+    """Manifest location for a given truth label: ``<root>/publication/<slug>/manifest.json``."""
+    return (
+        Path(output_root) / PUBLICATION_RELDIR / truth_slug(truth_label) / MANIFEST_NAME
+    )
 
-    Precedence: ``$EVALML_MANIFEST`` env var > ``<output_root>/publication/
-    manifest.json`` > ``output/publication/manifest.json``.
+
+def figures_dir(output_root: str, truth_label: str) -> Path:
+    """Figure output root for a given truth label: ``<root>/figures/<slug>``."""
+    return Path(output_root) / "figures" / truth_slug(truth_label)
+
+
+def discover_manifests(output_root: str = "output") -> list[Path]:
+    """All per-truth manifests under ``<root>/publication/*/manifest.json``."""
+    base = Path(output_root) / PUBLICATION_RELDIR
+    return sorted(base.glob(f"*/{MANIFEST_NAME}"))
+
+
+def _manifest_label(p: Path) -> str:
+    """Best-effort truth label of a manifest file (falls back to its dir name)."""
+    try:
+        return json.loads(p.read_text()).get("truth", {}).get("label") or p.parent.name
+    except Exception:  # noqa: BLE001
+        return p.parent.name
+
+
+def default_manifest_path(
+    output_root: str | None = None, truth: str | None = None
+) -> Path:
+    """Resolve the manifest location.
+
+    Precedence: ``$EVALML_MANIFEST`` > the ``truth`` label's subdir > the sole
+    discovered manifest. Raises if several truths exist (ambiguous) or none do.
     """
     env = os.environ.get("EVALML_MANIFEST")
     if env:
         return Path(env)
     root = output_root or "output"
-    return Path(root) / DEFAULT_MANIFEST_RELPATH
-
-
-def load_manifest_dict(path=None) -> dict:
-    """Load and return the raw manifest dict, applying default-path precedence."""
-    p = Path(path) if path else default_manifest_path()
-    if not p.exists():
+    if truth:
+        return manifest_path(root, truth)
+    found = discover_manifests(root)
+    if len(found) == 1:
+        return found[0]
+    if not found:
         raise FileNotFoundError(
-            f"Publication manifest not found at {p}. Generate it with "
-            f"`evalml make <config> output/publication/manifest.json` "
-            f"(or set $EVALML_MANIFEST)."
+            f"No publication manifest under {Path(root) / PUBLICATION_RELDIR}/. "
+            f"Generate one with `evalml publication <config>` (or set $EVALML_MANIFEST)."
         )
+    raise ValueError(
+        f"Multiple publication manifests found (truths: {[_manifest_label(p) for p in found]}). "
+        f"Select one with --truth <label> or --manifest <path>."
+    )
+
+
+def load_manifest_dict(path=None, truth: str | None = None) -> dict:
+    """Load and return the raw manifest dict, applying default-path precedence."""
+    p = Path(path) if path else default_manifest_path(truth=truth)
+    if not p.exists():
+        avail = [_manifest_label(m) for m in discover_manifests()]
+        hint = (
+            f" Available truths: {avail}."
+            if avail
+            else " Generate it with "
+            "`evalml publication <config>` (or set $EVALML_MANIFEST)."
+        )
+        raise FileNotFoundError(f"Publication manifest not found at {p}.{hint}")
     with p.open() as f:
         return json.load(f)
 
 
-def load_manifest(path=None):
+def load_manifest(path=None, truth: str | None = None):
     """Load the manifest and wrap it in a :class:`evalml.publication.resolver.Manifest`."""
     from evalml.publication.resolver import Manifest
 
-    return Manifest(load_manifest_dict(path))
+    return Manifest(load_manifest_dict(path, truth))

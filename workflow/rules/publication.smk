@@ -7,6 +7,13 @@
 # rules are thin wrappers: produce the manifest + the data, then call the CLI.
 
 
+from evalml.publication.manifest import truth_slug
+
+# Publication outputs are namespaced by the truth label so station-based and
+# analysis-based runs don't overwrite each other's manifest or figures.
+TRUTH_SLUG = truth_slug((config.get("truth") or {}).get("label", ""))
+
+
 rule publication_manifest:
     """Persist the run/baseline -> hash -> data-path mapping for the CLI/notebooks.
 
@@ -17,7 +24,7 @@ The master hash (a digest of the whole config) is a rule param, so Snakemake's
 changes — without re-running on a no-op file touch.
 """
     output:
-        OUT_ROOT / "publication/manifest.json",
+        OUT_ROOT / f"publication/{TRUTH_SLUG}/manifest.json",
     localrule: True
     params:
         master_hash=master_hash(),
@@ -46,7 +53,7 @@ rule publication_figures:
         verif=EXPERIMENT_PARTICIPANTS.values(),
     output:
         report(
-            directory(OUT_ROOT / "figures/leadtime"),
+            directory(OUT_ROOT / f"figures/{TRUTH_SLUG}/leadtime"),
             htmlindex="publication_figures.html",
         ),
     log:
@@ -93,7 +100,7 @@ rule publication_meteogram:
         eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         report(
-            directory(OUT_ROOT / "figures/meteogram"),
+            directory(OUT_ROOT / f"figures/{TRUTH_SLUG}/meteogram"),
             htmlindex="publication_meteogram.html",
         ),
     log:
@@ -166,7 +173,7 @@ rule publication_scoremaps:
         manifest=rules.publication_manifest.output,
     output:
         report(
-            directory(OUT_ROOT / "figures/scoremaps"),
+            directory(OUT_ROOT / f"figures/{TRUTH_SLUG}/scoremaps"),
             htmlindex="publication_scoremaps.html",
         ),
     log:

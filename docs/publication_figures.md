@@ -13,11 +13,10 @@ Snakemake (reproducible) and standalone (interactive), without ever typing a has
 evalml publication config/varda-single_paper.yaml
 
 # 2. Interactive / re-render from data that already exists (no Snakemake)
-evalml make config/varda-single_paper.yaml output/publication/manifest.json  # build the manifest
-python -m evalml.publication list                                            # see what's available
-python -m evalml.publication figures   --output figures/leadtime
-python -m evalml.publication meteogram --output figures/meteogram
-python -m evalml.publication scoremaps --output figures/scoremaps            # needs gridded (zarr) truth
+python -m evalml.publication list        # see what's available (auto-finds the manifest)
+python -m evalml.publication figures     # --output defaults to figures/<truth>/leadtime
+python -m evalml.publication meteogram
+python -m evalml.publication scoremaps   # needs gridded (zarr) truth
 ```
 
 ---
@@ -98,7 +97,7 @@ flowchart TD
         manrule["rule publication_manifest<br/>(cheap localrule)"]
         figrules["rules publication_figures /<br/>_meteogram / _scoremaps<br/>(thin wrappers)"]
     end
-    manifest["output/publication/manifest.json<br/>run/baseline → hash → paths"]
+    manifest["output/publication/&lt;truth&gt;/manifest.json<br/>run/baseline → hash → paths"]
     subgraph pub["evalml.publication (importable)"]
         builder["manifest.py<br/>build / load"]
         resolver["resolver.py<br/>Manifest + validate_request"]
@@ -124,9 +123,11 @@ the manifest — so reproducible and interactive runs never drift.
 
 ## The manifest
 
-A JSON file at `output/publication/manifest.json` (under your config's
-`output_root`). It records everything a figure needs, so consumers never recompute
-a hash:
+A JSON file at `output/publication/<truth_slug>/manifest.json` (under your config's
+`output_root`), where `<truth_slug>` is a filesystem-safe form of the truth label
+(e.g. `SwissMetNet`, `KENDA-CH1`). Namespacing by truth means station-based and
+analysis-based runs don't overwrite each other (see *Output namespacing* below). It
+records everything a figure needs, so consumers never recompute a hash:
 
 ```jsonc
 {
@@ -135,6 +136,7 @@ a hash:
   "output_root": "output",
   "truth": {
     "label": "SwissMetNet",
+    "slug": "SwissMetNet",        // namespaces the manifest + figure dirs
     "hash": "caa0",               // TRUTH_HASH
     "type": "jretrieve",          // "jretrieve" (station obs) | "zarr" (gridded)
     "gridded": false
@@ -162,8 +164,24 @@ a hash:
 - **Regenerated automatically** when the config content changes — `master_hash()`
   is a rule `param`, so Snakemake's `params` rerun-trigger rebuilds it (a no-op
   file touch does *not* trigger it).
-- **Found automatically** by the CLI/notebooks at `output/publication/manifest.json`,
-  or via `--manifest PATH` / `$EVALML_MANIFEST`.
+- **Found automatically** by the CLI/notebooks: with one truth present it's
+  auto-discovered; with several, pick one with `--truth <label>` (or `--manifest
+  PATH` / `$EVALML_MANIFEST`).
+
+### Output namespacing
+
+Both the manifest and the figures are namespaced by truth label, so a station-based
+(`jretrieve`) and an analysis-based (`zarr`) run coexist instead of overwriting:
+
+```
+output/publication/<truth_slug>/manifest.json
+output/figures/<truth_slug>/{leadtime,meteogram,scoremaps}/
+```
+
+The underlying data is already separated by `TRUTH_HASH`; this extends the same
+separation to the manifest and figures. Standalone CLI renders default their
+`--output` to `figures/<truth_slug>/<figure>` too. Two truths sharing a label would
+collide — labels are expected to be distinct.
 
 ---
 
@@ -237,16 +255,16 @@ Use this to re-render from data that already exists, or to target a custom outpu
 location — it never triggers the inference/verification rerun cascade.
 
 ```bash
-# ensure the manifest exists (cheap; no inference)
-evalml make config/varda-single_paper.yaml output/publication/manifest.json
+# ensure the manifest exists (cheap; no inference) — lands under output/publication/<truth>/
+evalml make config/varda-single_paper.yaml output/publication/<truth>/manifest.json
 
-# discover what's available — no hashes typed
+# discover what's available — no hashes typed (auto-finds the manifest; --truth <label> if several)
 python -m evalml.publication list
 
-# render
-python -m evalml.publication figures   --output figures/leadtime
-python -m evalml.publication meteogram --output figures/meteogram
-python -m evalml.publication scoremaps --output figures/scoremaps
+# render (default --output is figures/<truth>/<figure>)
+python -m evalml.publication figures
+python -m evalml.publication meteogram
+python -m evalml.publication scoremaps
 ```
 
 Ad-hoc overrides (anything not given falls back to the manifest's configured case):
@@ -255,7 +273,8 @@ Ad-hoc overrides (anything not given falls back to the manifest's configured cas
 python -m evalml.publication meteogram --station GVE --init-time 202504030600
 python -m evalml.publication scoremaps --baseline ICON-CH2-CTRL --leadtime 48 --params T_2M,SP_10M
 python -m evalml.publication scoremaps --leadtime 6 --leadtime 24   # repeat for one figure per lead time
-python -m evalml.publication figures   --manifest /other/output/publication/manifest.json
+python -m evalml.publication list      --truth KENDA-CH1            # pick a truth when several exist
+python -m evalml.publication figures   --manifest /other/output/publication/KENDA-CH1/manifest.json
 ```
 
 `--output` controls **where figures are written** and is independent of where data
@@ -268,7 +287,7 @@ python -m evalml.publication figures --output /scratch/.../paper_figs/leadtime
 ### C. Interactive notebooks
 
 ```bash
-export EVALML_MANIFEST=output/publication/manifest.json
+export EVALML_MANIFEST=output/publication/<truth>/manifest.json
 marimo edit workflow/scripts/publication_meteogram.py
 ```
 
@@ -281,10 +300,10 @@ no manifest is found they fall back to built-in demo defaults and print a warnin
 
 | Path source | Figure | Location | Files |
 |---|---|---|---|
-| Snakemake | leadtime | `output/figures/leadtime/` | `publication_figures_rmse_bias.pdf/.png`, `..._ets.pdf/.png`, `.html` |
-| Snakemake | meteogram | `output/figures/meteogram/` | `publication_meteogram.pdf/.png`, `.html` |
-| Snakemake | scoremaps | `output/figures/scoremaps/` | `publication_scoremaps.pdf/.png`, `.html` |
-| CLI (default) | any | `./figures/<name>/` (cwd-relative) | same filenames |
+| Snakemake | leadtime | `output/figures/<truth>/leadtime/` | `publication_figures_rmse_bias.pdf/.png`, `..._ets.pdf/.png`, `.html` |
+| Snakemake | meteogram | `output/figures/<truth>/meteogram/` | `publication_meteogram.pdf/.png`, `.html` |
+| Snakemake | scoremaps | `output/figures/<truth>/scoremaps/` | `publication_scoremaps.pdf/.png`, `.html` |
+| CLI (default) | any | `./figures/<truth>/<name>/` (cwd-relative) | same filenames |
 | CLI `--output X` | any | `X/` | same filenames |
 
 ---

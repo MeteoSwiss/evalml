@@ -16,7 +16,11 @@ from pathlib import Path
 import click
 
 from evalml.config import PROJECT_ROOT
-from evalml.publication.manifest import default_manifest_path, load_manifest
+from evalml.publication.manifest import (
+    default_manifest_path,
+    load_manifest,
+    truth_slug,
+)
 from evalml.publication.resolver import ResolutionError
 
 SCRIPTS = PROJECT_ROOT / "workflow" / "scripts"
@@ -35,8 +39,14 @@ def _friendly_errors(func):
     return wrapper
 
 
-def _load(manifest):
-    return load_manifest(manifest)
+def _load(manifest, truth=None):
+    return load_manifest(manifest, truth=truth)
+
+
+def _fig_dir(m, name):
+    """Default standalone output dir, namespaced by truth slug: figures/<slug>/<name>."""
+    slug = m.truth.get("slug") or truth_slug(m.truth.get("label", ""))
+    return f"figures/{slug}/{name}"
 
 
 def _run(cmd, env=None) -> None:
@@ -60,7 +70,14 @@ manifest_option = click.option(
     "--manifest",
     default=None,
     metavar="PATH",
-    help="Manifest path (default: $EVALML_MANIFEST or output/publication/manifest.json).",
+    help="Manifest path (overrides --truth / discovery).",
+)
+truth_option = click.option(
+    "--truth",
+    default=None,
+    metavar="LABEL",
+    help="Truth label selecting which manifest to use (e.g. KENDA-CH1). "
+    "Auto-detected when only one exists.",
 )
 
 
@@ -71,12 +88,13 @@ def publication():
 
 @publication.command("list")
 @manifest_option
+@truth_option
 @_friendly_errors
-def list_(manifest):
+def list_(manifest, truth):
     """Show participants, truth and configured figures — no hashes needed."""
-    m = _load(manifest)
+    m = _load(manifest, truth)
     t = m.truth
-    click.echo(f"Manifest: {manifest or default_manifest_path()}")
+    click.echo(f"Manifest: {manifest or default_manifest_path(truth=truth)}")
     click.echo(f"Truth:    {t.get('label')} ({t.get('type')}, hash {t.get('hash')})")
     click.echo("Participants:")
     for p in m.participants():
@@ -102,11 +120,17 @@ def list_(manifest):
 
 @publication.command()
 @manifest_option
-@click.option("--output", default="figures/leadtime", help="Output directory.")
+@truth_option
+@click.option(
+    "--output",
+    default=None,
+    help="Output directory (default figures/<truth>/leadtime).",
+)
 @_friendly_errors
-def figures(manifest, output):
+def figures(manifest, truth, output):
     """Lead-time metric curves across all participants."""
-    m = _load(manifest)
+    m = _load(manifest, truth)
+    output = output or _fig_dir(m, "leadtime")
     m.validate_request("figures")
     pairs = m.verif_paths()
     verif = " ".join(path for path, _ in pairs)
@@ -127,15 +151,21 @@ def figures(manifest, output):
 
 @publication.command()
 @manifest_option
+@truth_option
 @click.option("--candidate", default=None, help="Candidate label (required if >1).")
 @click.option("--init-time", "init_time", default=None, help="Override init_time.")
 @click.option("--station", default=None, help="Override station.")
 @click.option("--params", default=None, help="Comma-separated display params.")
-@click.option("--output", default="figures/meteogram", help="Output directory.")
+@click.option(
+    "--output",
+    default=None,
+    help="Output directory (default figures/<truth>/meteogram).",
+)
 @_friendly_errors
-def meteogram(manifest, candidate, init_time, station, params, output):
+def meteogram(manifest, truth, candidate, init_time, station, params, output):
     """Time-series meteogram at a station for one case."""
-    m = _load(manifest)
+    m = _load(manifest, truth)
+    output = output or _fig_dir(m, "meteogram")
     cfg = m.publication.get("meteogram") or {}
     init_time = init_time or cfg.get("init_time")
     station = station or cfg.get("station")
@@ -174,6 +204,7 @@ def meteogram(manifest, candidate, init_time, station, params, output):
 
 @publication.command()
 @manifest_option
+@truth_option
 @click.option("--candidate", default=None, help="Candidate label (required if >1).")
 @click.option("--baseline", "baseline", default=None, help="Baseline label.")
 @click.option("--params", default=None, help="Comma-separated params (one row each).")
@@ -187,13 +218,27 @@ def meteogram(manifest, candidate, init_time, station, params, output):
 )
 @click.option("--season", default=None)
 @click.option("--region", default=None)
-@click.option("--output", default="figures/scoremaps", help="Output directory.")
+@click.option(
+    "--output",
+    default=None,
+    help="Output directory (default figures/<truth>/scoremaps).",
+)
 @_friendly_errors
 def scoremaps(
-    manifest, candidate, baseline, params, scores, leadtimes, season, region, output
+    manifest,
+    truth,
+    candidate,
+    baseline,
+    params,
+    scores,
+    leadtimes,
+    season,
+    region,
+    output,
 ):
     """Spatial skill-score map panel (candidate vs baseline)."""
-    m = _load(manifest)
+    m = _load(manifest, truth)
+    output = output or _fig_dir(m, "scoremaps")
     cfg = m.publication.get("scoremaps") or {}
     baseline = baseline or cfg.get("baseline_label", "ICON-CH1-CTRL")
     if leadtimes:

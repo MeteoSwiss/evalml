@@ -4,7 +4,14 @@ from datetime import datetime
 
 import pytest
 
-from evalml.publication.manifest import build_manifest, load_manifest, write_manifest
+from evalml.publication.manifest import (
+    build_manifest,
+    default_manifest_path,
+    load_manifest,
+    manifest_path,
+    truth_slug,
+    write_manifest,
+)
 from evalml.publication.resolver import Manifest, ResolutionError
 
 
@@ -125,6 +132,66 @@ def test_validate_meteogram_init_time():
     m = Manifest(_build())
     with pytest.raises(ResolutionError, match="not in the manifest"):
         m.validate_request("meteogram", init_time="209901010000")
+
+
+def test_truth_slug():
+    assert truth_slug("KENDA-CH1") == "KENDA-CH1"
+    assert truth_slug("SwissMetNet") == "SwissMetNet"
+    assert truth_slug("ICON-CH1 EPS mean") == "ICON-CH1_EPS_mean"
+    assert truth_slug("a/b c") == "a_b_c"
+    assert truth_slug("") == "truth"
+
+
+def test_build_manifest_records_truth_slug():
+    m = _build(truth_root="/store/x.zarr")
+    assert m["truth"]["slug"] == "T"  # fixture truth label is "T"
+
+
+def _write_truth_manifest(root, label, truth_root="/store/x.zarr"):
+    run_configs, baseline_configs, _ = _globals(truth_root)
+    man = build_manifest(
+        run_configs=run_configs,
+        baseline_configs=baseline_configs,
+        truth_cfg={"label": label, "root": truth_root},
+        truth_hash="aaaa",
+        reftimes=[datetime(2025, 4, 1, 0, 0)],
+        output_root=str(root),
+        publication_cfg={},
+        master_hash="m",
+    )
+    write_manifest(manifest_path(str(root), label), man)
+
+
+def test_discovery_single(tmp_path, monkeypatch):
+    monkeypatch.delenv("EVALML_MANIFEST", raising=False)
+    _write_truth_manifest(tmp_path, "KENDA-CH1")
+    assert default_manifest_path(output_root=str(tmp_path)) == manifest_path(
+        str(tmp_path), "KENDA-CH1"
+    )
+
+
+def test_discovery_multiple_requires_truth(tmp_path, monkeypatch):
+    monkeypatch.delenv("EVALML_MANIFEST", raising=False)
+    _write_truth_manifest(tmp_path, "KENDA-CH1")
+    _write_truth_manifest(tmp_path, "SwissMetNet", truth_root="jretrieve:1,2")
+    with pytest.raises(ValueError, match="Multiple publication manifests"):
+        default_manifest_path(output_root=str(tmp_path))
+    # explicit truth disambiguates
+    assert default_manifest_path(
+        output_root=str(tmp_path), truth="SwissMetNet"
+    ) == manifest_path(str(tmp_path), "SwissMetNet")
+    assert (
+        load_manifest(
+            default_manifest_path(output_root=str(tmp_path), truth="KENDA-CH1")
+        ).truth["label"]
+        == "KENDA-CH1"
+    )
+
+
+def test_discovery_none(tmp_path, monkeypatch):
+    monkeypatch.delenv("EVALML_MANIFEST", raising=False)
+    with pytest.raises(FileNotFoundError, match="No publication manifest"):
+        default_manifest_path(output_root=str(tmp_path))
 
 
 def test_write_and_load_roundtrip(tmp_path):

@@ -12,7 +12,11 @@ from evalml.publication.manifest import (
     SCHEMA_VERSION,
     build_manifest,
     default_manifest_path,
+    discover_manifests,
+    figures_dir,
     load_manifest,
+    manifest_path,
+    truth_slug,
     write_manifest,
 )
 from evalml.publication.resolver import Manifest, Participant, ResolutionError
@@ -23,6 +27,10 @@ __all__ = [
     "write_manifest",
     "load_manifest",
     "default_manifest_path",
+    "discover_manifests",
+    "manifest_path",
+    "figures_dir",
+    "truth_slug",
     "Manifest",
     "Participant",
     "ResolutionError",
