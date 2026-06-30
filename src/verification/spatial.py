@@ -6,9 +6,12 @@ and plotting scripts to map data between different spatial supports.
 
 from __future__ import annotations
 
+import logging
 import numpy as np
 import xarray as xr
 from scipy.spatial import cKDTree
+
+LOG = logging.getLogger(__name__)
 
 
 def spherical_nearest_neighbor_indices(
@@ -129,13 +132,20 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
     fcst_lon = fcst["longitude"].values
     truth_lat = truth["latitude"].values
     truth_lon = truth["longitude"].values
+
+    n_fcst = fcst_lat.size
+
     if (
         fcst_lat.shape == truth_lat.shape
         and fcst_lon.shape == truth_lon.shape
-        and np.max(np.abs(fcst_lat - truth_lat)) < 0.0003
-        and np.max(np.abs(fcst_lon - truth_lon)) < 0.0003
+        and np.max(np.abs(fcst_lat - truth_lat)) < 1e-6
+        and np.max(np.abs(fcst_lon - truth_lon)) < 1e-6
     ):
         if np.array_equal(fcst_lat, truth_lat) and np.array_equal(fcst_lon, truth_lon):
+            LOG.info(
+                "map_forecast_to_truth: grids are identical (%d points) — no remapping needed",
+                n_fcst,
+            )
             return fcst
         coords = {
             "latitude": (fcst["latitude"].dims, truth["latitude"].data),
@@ -143,6 +153,10 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
         }
         if "values" in fcst.dims and "values" in truth.dims:
             coords["values"] = truth["values"].data
+        LOG.info(
+            "map_forecast_to_truth: grids match within 1e-6 (%d points) — replacing coordinates only (no nearest-neighbour search)",
+            n_fcst,
+        )
         return fcst.assign_coords(coords)
 
     truth_is_grid = "y" in truth.dims and "x" in truth.dims
@@ -152,6 +166,12 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
     if truth_is_grid:
         truth = truth.stack(values=("y", "x"))
 
+    LOG.info(
+        "map_forecast_to_truth: full spherical nearest-neighbour regridding — "
+        "%d forecast points → %d truth locations",
+        fcst["latitude"].size,
+        truth["latitude"].size,
+    )
     nearest_idx = spherical_nearest_neighbor_indices(
         source_latitude=fcst["latitude"].values,
         source_longitude=fcst["longitude"].values,
