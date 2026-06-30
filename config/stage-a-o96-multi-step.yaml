@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Evaluate skill of a stage A o96 multi-step global model against ERA.
+
+dates:
+  start: 2024-01-01T00:00
+  end: 2024-01-01T00:00
+  frequency: 24h
+
+runs:
+  - forecaster:
+      checkpoint: /scratch/mch/miccatta/SwissAI_checkpoints/checkpoint_resO96_fr1_st1_in7_out6/a689d740f37642c38fd01a39cdbde96f/inference-last.ckpt
+      label: stage-a-o96-multi-step
+      steps: 0/120/1
+      config: resources/inference/configs/o96-global-multistep-forecaster.yaml
+      disable_local_eccodes_definitions: true
+  
+truth:
+  label: ERA5-o96
+  root: /store_new/mch/msopr/ml/datasets/aifs-ea-an-oper-0001-mars-o96-1979-2024-1h-v3-with-era51.zarr
+
+experiment:
+  params:
+    - T_2M
+    - TD_2M
+    - U_10M
+    - V_10M
+    - TOT_PREC
+  dashboard:
+    stratification:
+      # - region
+      # - init_hour
+      - season
+  stratification:
+    regions: []
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50
