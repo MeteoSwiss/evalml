@@ -46,6 +46,15 @@ from publication_style import (  # noqa: E402
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+# Force the standard map furniture (drawn by `subplot.standard_layers()` inside
+# StatePlotter.plot_field) to high-resolution Natural Earth geometry. Otherwise
+# it defaults to medium (50m), leaving a fuzzy low-res border under any overlay.
+# We also darken/thicken the country borders slightly for publication legibility.
+ekp.schema.borders["resolution"] = "high"
+ekp.schema.borders["edgecolor"] = "black"
+ekp.schema.borders["linewidth"] = 0.7
+ekp.schema.coastlines["resolution"] = "high"
+
 # Tighter geographic crop for publication: roughly equal visual margins around Switzerland.
 _PUB_EXTENTS = {
     "switzerland": [5.6, 10.8, 45.6, 48.0],
@@ -227,9 +236,6 @@ def _make_figure(
                 subplot.standard_layers()
             else:
                 plotter.plot_field(subplot, skill_vals, style=style, colorbar=False)
-
-            subplot.coastlines(edgecolor="black", linewidth=1.0, zorder=5)
-            subplot.borders(edgecolor="black", linewidth=0.5, zorder=5)
 
             _remove_latlon_labels(subplot.ax)
             mpl_axes.append(subplot.ax)
