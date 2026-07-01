@@ -123,7 +123,7 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
         regions = {}
         # add inner region for ML evaluation
         regions["all"] = [
-            Polygon(list(zip([1.5, 16, 16, 1.5, 1.5], [43, 43, 49.5, 49.5, 43])))
+            Polygon(list(zip([3.17, 11.95, 11.95, 3.17, 3.17], [43.69, 43.69, 49.39, 49.39, 43.69])))
         ]
         if shp and shp != [""]:
             shp = [shp] if isinstance(shp, str) else shp
