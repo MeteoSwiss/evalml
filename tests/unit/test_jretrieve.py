@@ -152,6 +152,8 @@ def test_load_obs_data_from_jretrieve(monkeypatch):
         ds["V_10M"].sel(values="ARO").values, [-3.0, 0.0], atol=1e-5
     )
     np.testing.assert_allclose(ds["latitude"].values, [46.79])
+    assert "elevation" in ds.coords
+    np.testing.assert_allclose(ds["elevation"].values, [1878.0])
 
 
 def test_load_truth_data_forwards_root(monkeypatch):

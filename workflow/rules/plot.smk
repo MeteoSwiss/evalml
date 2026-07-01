@@ -58,6 +58,11 @@ rule plot_meteogram:
             ).resolve()
         ),
         stations=config["showcase"]["meteograms"]["stations"],
+        lapse_rate_flag=(
+            "--lapse_rate_correction"
+            if config.get("lapse_rate_correction", True)
+            else ""
+        ),
     shell:
         """
         set -euo pipefail
@@ -77,6 +82,7 @@ rule plot_meteogram:
             --outdir {params.outdir:q}
             --param {wildcards.param:q}
             --stations {params.stations:q}
+            {params.lapse_rate_flag}
         )
 
         for i in "${{!BASELINE_ROOTS[@]}}"; do

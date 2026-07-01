@@ -21,6 +21,82 @@ from shapely.geometry import Polygon
 
 LOG = logging.getLogger(__name__)
 
+_T_LAPSE_RATE = 0.0065  # K/m — ICAO standard atmosphere
+_LAPSE_RATE_PARAMS: dict[str, float] = {"T_2M": _T_LAPSE_RATE}
+
+
+def apply_lapse_rate_correction(
+    fcst: xr.Dataset,
+    obs: xr.Dataset,
+    params: list[str],
+) -> xr.Dataset:
+    """Correct T_2M and TD_2M in *fcst* to the elevation of *obs*.
+
+    Requires both *fcst* and *obs* to carry an ``elevation`` coordinate (metres).
+    For forecasts this is the model orography from the ICON external parameter
+    file; for observations it comes from station metadata or FIS geopotential.
+    The function silently returns *fcst* unchanged when either coordinate is
+    absent so that pipelines without elevation data are not broken.
+
+    Formula applied per parameter:
+        T_corrected = T_forecast − Γ × (elevation_obs − elevation_fcst)
+
+    A positive height difference (obs higher than forecast grid cell) lowers the
+    corrected value, consistent with the standard atmospheric lapse rate.
+    """
+    missing = [
+        name
+        for name, ds in (("forecast", fcst), ("observations", obs))
+        if "elevation" not in ds.coords
+    ]
+    if missing:
+        raise ValueError(
+            f"Lapse-rate correction requested but elevation coordinate is missing "
+            f"from: {', '.join(missing)}."
+        )
+    dz = obs["elevation"] - fcst["elevation"]
+
+    dz_vals = np.asarray(dz).ravel()
+    n_missing = int(np.sum(~np.isfinite(dz_vals)))
+    if n_missing > 0:
+        raise ValueError(
+            f"Lapse-rate correction: {n_missing} missing elevation value(s) in dz; "
+            "both forecast and observation elevation coordinates must be fully defined."
+        )
+
+    max_abs_dz = float(np.abs(dz_vals).max())
+    if max_abs_dz < 1.0:
+        LOG.info(
+            "Lapse-rate correction: forecast and truth altitudes agree within rounding "
+            "(max |Δz| = %.2f m); correction is negligible.",
+            max_abs_dz,
+        )
+    else:
+        LOG.info(
+            "Lapse-rate correction: Δz range [%.1f, %.1f] m, mean %.1f m.",
+            float(dz_vals.min()),
+            float(dz_vals.max()),
+            float(dz_vals.mean()),
+        )
+
+    fcst = fcst.copy()
+    for param, rate in _LAPSE_RATE_PARAMS.items():
+        if param in params and param in fcst.data_vars:
+            correction = rate * dz
+            if max_abs_dz >= 1.0:
+                c_vals = np.asarray(correction).ravel()
+                LOG.info(
+                    "Lapse-rate correction for %s (Γ=%.4f K/m): "
+                    "correction range [%.3f, %.3f] K, mean %.3f K.",
+                    param,
+                    rate,
+                    float(c_vals.min()),
+                    float(c_vals.max()),
+                    float(c_vals.mean()),
+                )
+            fcst[param] = fcst[param] - correction
+    return fcst
+
 
 class AggregationMasks(abc.ABC):
     @abc.abstractmethod
@@ -47,7 +123,7 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
         regions = {}
         # add inner region for ML evaluation
         regions["all"] = [
-            Polygon(list(zip([1.5, 16, 16, 1.5, 1.5], [43, 43, 49.5, 49.5, 43])))
+            Polygon(list(zip([3.17, 11.95, 11.95, 3.17, 3.17], [43.69, 43.69, 49.39, 49.39, 43.69])))
         ]
         if shp and shp != [""]:
             shp = [shp] if isinstance(shp, str) else shp
