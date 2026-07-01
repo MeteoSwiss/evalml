@@ -1077,13 +1077,15 @@ def _disaggregated_and_derived_params(
         for p in params
         if parse_aggregated_param(p)[1] is not None
     }
-    base_params_seen: set[str] = set()
+    # Hold IC-prepended DataArrays separately: assigning a DataArray with extra
+    # step values back into the Dataset would silently reindex it to the
+    # Dataset's existing step coordinate (dropping the prepended step=0).
+    cumuls: dict[str, xr.DataArray] = {}
     for agg_param, (base, n) in aggregated.items():
         if base in ds.data_vars:
-            if base not in base_params_seen:
-                ds[base] = _ensure_accum_ic(ds[base], load_steps)
-                base_params_seen.add(base)
-            ds[agg_param] = _disaggregate_accum(ds[base], steps, n)
+            if base not in cumuls:
+                cumuls[base] = _ensure_accum_ic(ds[base], load_steps)
+            ds[agg_param] = _disaggregate_accum(cumuls[base], steps, n)
 
     # Select only the originally requested steps (drop preceding helper steps)
     if load_steps != list(steps) and "step" in ds.dims:
