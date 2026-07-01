@@ -643,7 +643,7 @@
             }
           ],
           "default": null,
-          "description": "Publication scoremap figure settings (omit to skip)."
+          "description": "Publication scoremap figure settings (omit to skip). Requires a gridded (zarr) truth source."
         }
       },
       "title": "PublicationConfig",
@@ -675,11 +675,13 @@
         },
         "init_time": {
           "description": "Initialisation time (YYYYMMDDHHMM) of the case to plot.",
+          "pattern": "^\\d{12}$",
           "title": "Init Time",
           "type": "string"
         },
         "station": {
           "description": "PeakWeather station ID to plot (e.g. KLO, GVE, LUG).",
+          "minLength": 1,
           "title": "Station",
           "type": "string"
         },
@@ -694,6 +696,7 @@
           "items": {
             "type": "string"
           },
+          "minItems": 1,
           "title": "Params",
           "type": "array"
         }

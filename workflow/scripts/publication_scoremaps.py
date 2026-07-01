@@ -46,6 +46,15 @@ from publication_style import (  # noqa: E402
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+# Force the standard map furniture (drawn by `subplot.standard_layers()` inside
+# StatePlotter.plot_field) to high-resolution Natural Earth geometry. Otherwise
+# it defaults to medium (50m), leaving a fuzzy low-res border under any overlay.
+# We also darken/thicken the country borders slightly for publication legibility.
+ekp.schema.borders["resolution"] = "high"
+ekp.schema.borders["edgecolor"] = "black"
+ekp.schema.borders["linewidth"] = 0.7
+ekp.schema.coastlines["resolution"] = "high"
+
 # Tighter geographic crop for publication: roughly equal visual margins around Switzerland.
 _PUB_EXTENTS = {
     "switzerland": [5.6, 10.8, 45.6, 48.0],
@@ -228,9 +237,6 @@ def _make_figure(
             else:
                 plotter.plot_field(subplot, skill_vals, style=style, colorbar=False)
 
-            subplot.coastlines(edgecolor="black", linewidth=1.0, zorder=5)
-            subplot.borders(edgecolor="black", linewidth=0.5, zorder=5)
-
             _remove_latlon_labels(subplot.ax)
             mpl_axes.append(subplot.ax)
 
@@ -290,17 +296,30 @@ def main() -> None:
     parser.add_argument(
         "--candidate_files",
         nargs="+",
-        required=True,
+        default=None,
         help=(
-            "Scoremap NC files for the candidate. "
-            "Ordered as: all params for leadtime[0], then all params for leadtime[1], …"
+            "Scoremap NC files for the candidate, ordered as: all params for "
+            "leadtimes[0], then all params for leadtimes[1], … Resolved from the "
+            "manifest when omitted."
         ),
     )
     parser.add_argument(
         "--baseline_files",
         nargs="+",
-        required=True,
-        help="Scoremap NC files for the baseline (same order as --candidate_files).",
+        default=None,
+        help="Scoremap NC files for the baseline (same order as --candidate_files). "
+        "Resolved from the manifest when omitted.",
+    )
+    parser.add_argument(
+        "--manifest",
+        default=None,
+        help="Manifest path (used to resolve files when --candidate_files/--baseline_files "
+        "are omitted). Defaults to $EVALML_MANIFEST or output/publication/manifest.json.",
+    )
+    parser.add_argument(
+        "--candidate",
+        default=None,
+        help="Candidate label for manifest resolution (required if several candidates).",
     )
     parser.add_argument(
         "--params",
@@ -329,6 +348,36 @@ def main() -> None:
 
     params = [p.strip() for p in args.params.split(",")]
     scores = [s.strip() for s in args.scores.split(",")]
+
+    # Resolve input files from the manifest when not given explicitly. The
+    # Snakemake wrappers always pass them; this is for direct interactive use.
+    if args.candidate_files is None or args.baseline_files is None:
+        from evalml.publication.manifest import load_manifest
+
+        manifest = load_manifest(args.manifest)
+        cand = manifest.get_candidate(args.candidate)
+        base = manifest.resolve_baseline(args.baseline_label)
+        for _lt in args.leadtimes:
+            manifest.validate_request(
+                "scoremaps",
+                candidate=args.candidate,
+                baseline=args.baseline_label,
+                leadtime=_lt,
+            )
+        # Ordered leadtime-major to match how the figures are sliced below.
+        if args.candidate_files is None:
+            args.candidate_files = [
+                manifest.scoremap_path(cand, p, lt)
+                for lt in args.leadtimes
+                for p in params
+            ]
+        if args.baseline_files is None:
+            args.baseline_files = [
+                manifest.scoremap_path(base, p, lt)
+                for lt in args.leadtimes
+                for p in params
+            ]
+
     candidate_files = [Path(f) for f in args.candidate_files]
     baseline_files = [Path(f) for f in args.baseline_files]
     n_params = len(params)

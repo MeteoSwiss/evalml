@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
 
@@ -387,14 +388,17 @@ class PublicationMeteogramConfig(BaseModel):
     )
     init_time: str = Field(
         ...,
+        pattern=r"^\d{12}$",
         description="Initialisation time (YYYYMMDDHHMM) of the case to plot.",
     )
     station: str = Field(
         ...,
+        min_length=1,
         description="PeakWeather station ID to plot (e.g. KLO, GVE, LUG).",
     )
     params: List[str] = Field(
         default=["T_2M", "TOT_PREC", "SP_10M", "DD_10M"],
+        min_length=1,
         description="Display parameters (one panel each); SP_10M/DD_10M are derived.",
     )
 
@@ -452,7 +456,8 @@ class PublicationConfig(BaseModel):
     )
     scoremaps: Optional[PublicationScoremapsConfig] = Field(
         default=None,
-        description="Publication scoremap figure settings (omit to skip).",
+        description="Publication scoremap figure settings (omit to skip). "
+        "Requires a gridded (zarr) truth source.",
     )
 
     model_config = {"extra": "forbid"}
@@ -656,6 +661,97 @@ class ConfigModel(BaseModel):
                     f"scoremaps.leadtimes contains {sorted(unsupported)} h which are not "
                     f"produced by participant with steps '{steps}'."
                 )
+        return self
+
+    def _enumerated_init_times(self) -> set[str]:
+        """All initialisation times as YYYYMMDDHHMM strings (post-blacklist)."""
+        fmt_in = "%Y-%m-%dT%H:%M"
+        fmt_out = "%Y%m%d%H%M"
+        if isinstance(self.dates, ExplicitDates):
+            return {
+                datetime.strptime(t, fmt_in).strftime(fmt_out) for t in self.dates.root
+            }
+        start = datetime.strptime(self.dates.start, fmt_in)
+        end = datetime.strptime(self.dates.end, fmt_in)
+        magnitude, unit = int(self.dates.frequency[:-1]), self.dates.frequency[-1]
+        freq = timedelta(days=magnitude) if unit == "d" else timedelta(hours=magnitude)
+        blacklist = {datetime.strptime(t, fmt_in) for t in self.dates.blacklist}
+        out: set[str] = set()
+        t = start
+        while t <= end:
+            if t not in blacklist:
+                out.add(t.strftime(fmt_out))
+            t += freq
+        return out
+
+    @model_validator(mode="after")
+    def validate_publication(self) -> "ConfigModel":
+        """Coherence checks for the publication workflow (only when enabled).
+
+        Catches config mistakes that would otherwise surface as cryptic Snakemake
+        graph-expansion errors: a meteogram case outside the date range, scoremaps
+        against a non-gridded truth, an unknown baseline label, or a lead time that
+        no participant produces.
+        """
+        from evalml.resolution import leadtime_producible
+
+        pub = self.publication
+        if pub is None:
+            return self
+
+        # Split runs into candidate runs (forecaster/temporal_downscaler) and baselines.
+        candidate_steps: list[str] = []
+        baseline_steps: dict[str, str] = {}
+        for item in self.runs:
+            field = next(iter(item.model_fields))
+            inner = getattr(item, field)
+            if field == "baseline":
+                baseline_steps[inner.label] = inner.steps
+            else:
+                candidate_steps.append(inner.steps)
+
+        # (c) meteogram init_time must be one of the configured initialisation times.
+        if pub.meteogram is not None and pub.meteogram.enabled:
+            valid_init = self._enumerated_init_times()
+            if pub.meteogram.init_time not in valid_init:
+                raise ValueError(
+                    f"publication.meteogram.init_time {pub.meteogram.init_time!r} is not "
+                    f"in the configured initialisation times (check `dates`)."
+                )
+
+        sm = pub.scoremaps
+        if sm is not None and sm.enabled:
+            # (a) scoremaps need a gridded (zarr) truth, not station/jretrieve obs.
+            if self.truth is None or "jretrieve" in str(self.truth.root):
+                truth_label = self.truth.label if self.truth else "<none>"
+                raise ValueError(
+                    f"publication.scoremaps requires a gridded (zarr) truth source; "
+                    f"configured truth {truth_label!r} is jretrieve/obs and has no "
+                    f"spatial scoremaps."
+                )
+            # (d) the named baseline must exist.
+            if sm.baseline_label not in baseline_steps:
+                raise ValueError(
+                    f"publication.scoremaps.baseline_label {sm.baseline_label!r} not found. "
+                    f"Available baseline labels: {list(baseline_steps)}."
+                )
+            # (b) each lead time must be produced by every candidate AND the baseline.
+            # Lead times come from scoremaps.steps, else experiment.scoremaps.leadtimes.
+            base_steps = baseline_steps[sm.baseline_label]
+            exp_sm = self.experiment.scoremaps
+            leadtimes = sm.steps or (exp_sm.leadtimes if exp_sm else None) or [24]
+            for leadtime in leadtimes:
+                for steps in candidate_steps:
+                    if not leadtime_producible(steps, leadtime):
+                        raise ValueError(
+                            f"publication.scoremaps leadtime {leadtime}h is not produced "
+                            f"by candidate run with steps '{steps}'."
+                        )
+                if not leadtime_producible(base_steps, leadtime):
+                    raise ValueError(
+                        f"publication.scoremaps leadtime {leadtime}h is not produced by "
+                        f"baseline {sm.baseline_label!r} (steps '{base_steps}')."
+                    )
         return self
 
     model_config = {
