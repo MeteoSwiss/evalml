@@ -21,32 +21,6 @@ logging.basicConfig(
 )
 
 
-def preprocess_ds(ds, param: str):
-    ds = ds.copy()
-    if param == "SP_10M":
-        ds[param] = (ds.U_10M**2 + ds.V_10M**2) ** 0.5
-        try:
-            units = ds["U_10M"].attrs["parameter"]["units"]
-        except KeyError:
-            units = None
-        ds[param].attrs["parameter"] = {
-            "shortName": "SP_10M",
-            "units": units,
-            "name": "10m wind speed",
-        }
-        ds = ds.drop_vars(["U_10M", "V_10M"])
-    if param == "SP":
-        ds[param] = (ds.U**2 + ds.V**2) ** 0.5
-        units = ds.U.attrs["parameter"]["units"]
-        ds[param].attrs["parameter"] = {
-            "shortName": "SP",
-            "units": units,
-            "name": "Wind speed",
-        }
-        ds = ds.drop_vars(["U", "V"])
-    return ds.squeeze()
-
-
 def main():
     parser = ArgumentParser()
     parser.add_argument(
@@ -135,13 +109,6 @@ def main():
         init_time,
     )
 
-    if param == "SP_10M":
-        paramlist = ["U_10M", "V_10M"]
-    elif param == "SP":
-        paramlist = ["U", "V"]
-    else:
-        paramlist = [param]
-
     # Load station metadata from DWH
     LOG.info("Fetching station metadata from jretrieve (SwissMetNet catalog)")
     _jr_stations, _jr_stage, _jr_seq_type = jr.parse_selection("jretrievedwh:1,2")
@@ -161,21 +128,21 @@ def main():
     }
 
     LOG.info("Loading analysis data from %s", analysis_root)
-    analysis_ds = load_truth_data(analysis_root, init_time, forecast_steps, paramlist)
-    analysis_ds = preprocess_ds(analysis_ds, param)
+    analysis_ds = load_truth_data(
+        analysis_root, init_time, forecast_steps, [param]
+    ).squeeze()
 
     # Load gridded data once — shared across all station plots
     LOG.info("Loading forecast data from %s", forecast_grib_dir)
     forecast_ds = load_forecast_data(
-        forecast_grib_dir, init_time, forecast_steps, paramlist
-    )
-    forecast_ds = preprocess_ds(forecast_ds, param)
+        forecast_grib_dir, init_time, forecast_steps, [param]
+    ).squeeze()
 
     baseline_ds_list = []
     for root, step, label in zip(baseline_roots, baseline_steps, baseline_labels):
         LOG.info("Loading baseline '%s' from %s", label, root)
         baseline_ds_list.append(
-            preprocess_ds(load_forecast_data(root, init_time, step, paramlist), param)
+            load_forecast_data(root, init_time, step, [param]).squeeze()
         )
 
     param2plot = forecast_ds[param].attrs.get("parameter", {})
