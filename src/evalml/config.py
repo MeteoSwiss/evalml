@@ -305,10 +305,13 @@ class AnimationsConfig(BaseModel):
             "[lon_min, lon_max, lat_min, lat_max], and optional 'projection'."
         ),
     )
-    fps: float = Field(
-        default=2.0,
+    fps: float | None = Field(
+        default=None,
         gt=0,
-        description="Frames per second for the output GIF animation.",
+        description=(
+            "Frames per second for the output GIF animation. "
+            "Defaults to one frame per forecast step interval."
+        ),
     )
 
 
