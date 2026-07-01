@@ -126,6 +126,16 @@ def load_analysis_data_from_zarr(
     if "cell" in ds.dims:
         ds = ds.rename({"cell": "values"})
 
+    # Drop grid points with undefined (NaN) coordinates
+    if "values" in ds.dims and "latitude" in ds.coords and "longitude" in ds.coords:
+        valid = np.isfinite(ds["latitude"].values) & np.isfinite(ds["longitude"].values)
+        if not valid.all():
+            LOG.warning(
+                "Dropping %d grid point(s) with undefined lat/lon from truth dataset.",
+                int((~valid).sum()),
+            )
+            ds = ds.isel(values=valid)
+
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
     return _select_valid_times(ds, times)
 
@@ -338,6 +348,13 @@ def load_forecast_data_from_grib(
     }
     if ifs_rename:
         ds = ds.rename(ifs_rename)
+
+    if "tp" in ifs_rename:
+        # IFS/ECMWF convention: "tp" is accumulated precip in meters.
+        # Convert to kg m-2 (mm) to match the ICON-native convention used
+        # elsewhere (truth-side conversion in load_analysis_data_from_zarr,
+        # and ICON-native forecast/truth pairs, which are already in mm).
+        ds["TOT_PREC"] = ds["TOT_PREC"] * 1000
 
     if "TOT_PREC" in ds.data_vars:
         ds["TOT_PREC"] = _tot_prec_handling(ds["TOT_PREC"], requested_steps=steps)

@@ -141,7 +141,7 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
             "latitude": (fcst["latitude"].dims, truth["latitude"].data),
             "longitude": (fcst["longitude"].dims, truth["longitude"].data),
         }
-        if "values" in fcst.dims and "values" in truth.dims:
+        if "values" in fcst.dims and "values" in truth.coords:
             coords["values"] = truth["values"].data
         return fcst.assign_coords(coords)
 
@@ -163,7 +163,8 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
     fcst = fcst.drop_vars(["x", "y", "values"], errors="ignore")
     fcst = fcst.assign_coords(longitude=("values", truth["longitude"].data))
     fcst = fcst.assign_coords(latitude=("values", truth["latitude"].data))
-    fcst = fcst.assign_coords(values=truth["values"])
+    if "values" in truth.coords:
+        fcst = fcst.assign_coords(values=truth["values"])
 
     if truth_is_grid:
         fcst = fcst.unstack("values")
