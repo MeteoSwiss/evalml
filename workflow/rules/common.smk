@@ -378,6 +378,9 @@ TRUTH_HASH = truth_hash(config["truth"])
 REGIONS = parse_regions()
 SHOWCASE_REGIONS = parse_showcase_regions()
 SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])
+SHOWCASE_ANIMATIONS_FPS = (
+    config.get("showcase", {}).get("animations", {}).get("frames_per_second", 2.0)
+)
 EXPERIMENT_PARAMS = config.get("experiment", {}).get(
     "params", ["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"]
 )
