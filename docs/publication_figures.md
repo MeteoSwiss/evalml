@@ -64,7 +64,7 @@ paths are identical, so existing artifacts remain valid and `experiment_all` /
 
 | File | Change | Backward-compat note |
 |------|--------|----------------------|
-| `src/evalml/config.py` | Adds `PublicationScoreMapsConfig`, `PublicationConfig.scoremaps`, and a `ConfigModel.validate_publication` cross-field validator. | The new validator only fires when `publication.enabled` is true — configs that don't use the publication block are unaffected. `extra: forbid` was added to `PublicationConfig`, so a misspelled key *under* `publication:` now errors (previously it could slip through). |
+| `src/evalml/config.py` | Adds `PublicationScoremapsConfig`, `PublicationConfig.scoremaps`, and a `ConfigModel.validate_publication` cross-field validator. | The validator only checks a figure whose per-task `enabled` is true — configs that don't use the publication block are unaffected. `extra: forbid` was added to `PublicationConfig`, so a misspelled key *under* `publication:` now errors (previously it could slip through). |
 | `workflow/rules/common.smk` | `resolve_leadtimes` / `resolve_baseline_id` / `ACCUMULATED_PARAMS` were moved into the importable `evalml.resolution` module and re-imported here. | Pure move — identical behaviour. Existing callers (`plot.smk`, `report.smk`) are unchanged. The only new requirement is that the `evalml` package is importable in the Snakemake process (it already is). |
 | `workflow/rules/publication.smk`, `workflow/Snakefile` | New `publication_manifest` rule; the three figure rules became thin CLI wrappers; `publication_all` gained the manifest. | Only the publication target is affected; no other target's DAG changes. |
 | `workflow/scripts/publication_*.py` | Defaults now come from the manifest, with a hardcoded fallback. | Behaviour is unchanged when the scripts are driven by the CLI/rules (which always pass explicit args). |
@@ -189,19 +189,24 @@ collide — labels are expected to be distinct.
 
 The `publication:` block drives everything and is validated at config load:
 
+Each figure has its own `enabled` switch — omit a block (or set `enabled: false`)
+to skip that figure:
+
 ```yaml
 publication:
-  enabled: true
+  leadtimes:
+    enabled: true                     # lead-time score figures
   meteogram:
+    enabled: false
     init_time: "202504010000"        # must be one of the configured `dates`
     station: "KLO"
     params: [T_2M, TOT_PREC, SP_10M, DD_10M]
-  scoremaps:                          # optional; REQUIRES gridded (zarr) truth
+  scoremaps:                          # REQUIRES gridded (zarr) truth
     enabled: true
     baseline_label: ICON-CH1-CTRL     # must match a baseline `label` in `runs`
-    leadtimes: [6, 24]                # one figure per lead time; each must be
-                                      # produced by candidate AND baseline
-    # leadtime: 24                    # backward-compat shortcut for leadtimes: [24]
+    steps: [6, 24]                    # one figure per lead time; each must be
+                                      # produced by candidate AND baseline.
+                                      # Omit to default to experiment.scoremaps.leadtimes.
     params: [T_2M, SP_10M]
     scores: [MSE_SKILL, BIAS_CONTRIB]
     region: switzerland
@@ -213,7 +218,7 @@ publication:
 | Rule | Rejected when | Message |
 |------|---------------|---------|
 | scoremaps need gridded truth | `scoremaps.enabled` but `truth` is jretrieve/obs | "requires a gridded (zarr) truth source" |
-| leadtime producible | any `scoremaps` lead time (`leadtimes`/`leadtime`) not in candidate **and** baseline `steps` | "leadtime Nh is not produced by …" |
+| leadtime producible | any `scoremaps.steps` lead time not in candidate **and** baseline `steps` | "leadtime Nh is not produced by …" |
 | baseline exists | `scoremaps.baseline_label` not among baselines | "not found. Available baseline labels: […]" |
 | meteogram init time | `meteogram.init_time` outside `dates` | "not in the configured initialisation times" |
 

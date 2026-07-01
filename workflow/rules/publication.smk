@@ -125,12 +125,15 @@ def _pub_scoremap_cfg():
 
 
 def _pub_scoremap_leadtimes(cfg):
-    """Lead times to plot: the `leadtimes` list, or the singular `leadtime`."""
-    if cfg.get("leadtimes"):
-        return list(cfg["leadtimes"])
-    if cfg.get("leadtime") is not None:
-        return [cfg["leadtime"]]
-    return [24]
+    """Lead times (hours) to plot: publication.scoremaps.steps when set,
+    otherwise falls back to experiment.scoremaps.leadtimes.
+    """
+    steps = cfg.get("steps")
+    if steps is not None:
+        return [int(s) for s in steps]
+    return list(
+        config.get("experiment", {}).get("scoremaps", {}).get("leadtimes", [6, 24])
+    )
 
 
 def _pub_scoremap_inputs(wc):

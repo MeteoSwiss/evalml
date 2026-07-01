@@ -368,9 +368,24 @@ class ShowcaseConfig(BaseModel):
     )
 
 
+class PublicationLeadtimesConfig(BaseModel):
+    """Configuration for the publication lead-time figure."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate the lead-time score figures.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class PublicationMeteogramConfig(BaseModel):
     """Case selection for the publication meteogram figure."""
 
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate the publication meteogram figure.",
+    )
     init_time: str = Field(
         ...,
         pattern=r"^\d{12}$",
@@ -390,77 +405,58 @@ class PublicationMeteogramConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
-class PublicationScoreMapsConfig(BaseModel):
-    """Case selection for the publication skill-score map figure.
-
-    One baseline / season / region, but one or more lead times (one figure per
-    lead time) — unlike the plural ``experiment.scoremaps`` config.
-    """
+class PublicationScoremapsConfig(BaseModel):
+    """Configuration for the publication scoremap figures."""
 
     enabled: bool = Field(
         default=False,
-        description="Whether to generate the publication scoremap figure.",
+        description="Whether to generate the publication scoremap figures.",
     )
-    baseline_label: str = Field(
-        default="ICON-CH1-CTRL",
-        description="Label of the baseline to compare the candidate against "
-        "(must match the `label` of a baseline entry in `runs`).",
+    steps: Optional[List[int]] = Field(
+        default=None,
+        description=(
+            "Lead times in hours to produce one scoremap figure each. "
+            "Defaults to experiment.scoremaps.leadtimes when omitted."
+        ),
     )
     params: List[str] = Field(
         default=["T_2M", "SP_10M"],
-        min_length=1,
-        description="Parameters to plot (one panel row each).",
-    )
-    leadtime: Optional[int] = Field(
-        default=None,
-        gt=0,
-        description="Single lead time (hours). Backward-compat shortcut for "
-        "`leadtimes: [leadtime]`. Ignored when `leadtimes` is set.",
-    )
-    leadtimes: Optional[List[int]] = Field(
-        default=None,
-        description="Lead times (hours) to plot — one figure per lead time. Each "
-        "must be produced by both the candidate and the chosen baseline.",
+        description="Parameters to show as rows in the scoremap panel.",
     )
     scores: List[str] = Field(
         default=["MSE_SKILL", "BIAS_CONTRIB"],
-        min_length=1,
-        description="Derived skill metrics to plot (e.g. MSE_SKILL, BIAS_CONTRIB).",
+        description="Score columns to show in the scoremap panel.",
+    )
+    baseline_label: str = Field(
+        default="ICON-CH1-CTRL",
+        description="Label of the baseline run to compare against.",
     )
     season: str = Field(
         default="all",
-        description="Season to plot ('all', 'DJF', 'MAM', 'JJA', 'SON').",
+        description="Season filter passed to the scoremap script.",
     )
     region: str = Field(
         default="switzerland",
-        description="Region to plot (e.g. switzerland, centraleurope).",
+        description="Geographic region for the scoremap plot.",
     )
 
     model_config = {"extra": "forbid"}
-
-    def effective_leadtimes(self) -> List[int]:
-        """Lead times to plot: ``leadtimes`` if set, else the single ``leadtime``."""
-        if self.leadtimes:
-            return list(self.leadtimes)
-        if self.leadtime is not None:
-            return [self.leadtime]
-        return [24]
 
 
 class PublicationConfig(BaseModel):
     """Configuration for the publication workflow."""
 
-    enabled: bool = Field(
-        default=False,
-        description="Whether to generate publication figures.",
+    leadtimes: Optional[PublicationLeadtimesConfig] = Field(
+        default=None,
+        description="Lead-time score figure settings (omit to skip).",
     )
     meteogram: Optional[PublicationMeteogramConfig] = Field(
         default=None,
-        description="Publication meteogram case selection (omit to skip it).",
+        description="Publication meteogram case selection (omit to skip).",
     )
-    scoremaps: Optional[PublicationScoreMapsConfig] = Field(
+    scoremaps: Optional[PublicationScoremapsConfig] = Field(
         default=None,
-        description="Publication scoremap case selection (omit to skip it). "
+        description="Publication scoremap figure settings (omit to skip). "
         "Requires a gridded (zarr) truth source.",
     )
 
@@ -656,7 +652,7 @@ class ConfigModel(BaseModel):
             return self
         requested = set(sm.leadtimes)
         for item in self.runs:
-            steps = getattr(item, next(iter(item.model_fields))).steps
+            steps = getattr(item, next(iter(type(item).model_fields))).steps
             start, end, step = map(int, steps.split("/"))
             producible = set(range(start, end + 1, step))
             unsupported = requested - producible
@@ -700,7 +696,7 @@ class ConfigModel(BaseModel):
         from evalml.resolution import leadtime_producible
 
         pub = self.publication
-        if pub is None or not pub.enabled:
+        if pub is None:
             return self
 
         # Split runs into candidate runs (forecaster/temporal_downscaler) and baselines.
@@ -715,7 +711,7 @@ class ConfigModel(BaseModel):
                 candidate_steps.append(inner.steps)
 
         # (c) meteogram init_time must be one of the configured initialisation times.
-        if pub.meteogram is not None:
+        if pub.meteogram is not None and pub.meteogram.enabled:
             valid_init = self._enumerated_init_times()
             if pub.meteogram.init_time not in valid_init:
                 raise ValueError(
@@ -740,8 +736,11 @@ class ConfigModel(BaseModel):
                     f"Available baseline labels: {list(baseline_steps)}."
                 )
             # (b) each lead time must be produced by every candidate AND the baseline.
+            # Lead times come from scoremaps.steps, else experiment.scoremaps.leadtimes.
             base_steps = baseline_steps[sm.baseline_label]
-            for leadtime in sm.effective_leadtimes():
+            exp_sm = self.experiment.scoremaps
+            leadtimes = sm.steps or (exp_sm.leadtimes if exp_sm else None) or [24]
+            for leadtime in leadtimes:
                 for steps in candidate_steps:
                     if not leadtime_producible(steps, leadtime):
                         raise ValueError(

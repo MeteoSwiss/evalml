@@ -110,11 +110,9 @@ def list_(manifest, truth):
     sm = pub.get("scoremaps")
     if sm and sm.get("enabled"):
         ok = "ok" if t.get("type") == "zarr" else "INVALID (needs zarr truth)"
-        lts = sm.get("leadtimes") or (
-            [sm["leadtime"]] if sm.get("leadtime") is not None else [24]
-        )
+        lts = sm.get("steps") or [24]
         click.echo(
-            f"Scoremaps: baseline={sm.get('baseline_label')} leadtimes={lts}h [{ok}]"
+            f"Scoremaps: baseline={sm.get('baseline_label')} steps={lts}h [{ok}]"
         )
 
 
@@ -243,10 +241,8 @@ def scoremaps(
     baseline = baseline or cfg.get("baseline_label", "ICON-CH1-CTRL")
     if leadtimes:
         leadtime_list = list(leadtimes)
-    elif cfg.get("leadtimes"):
-        leadtime_list = list(cfg["leadtimes"])
-    elif cfg.get("leadtime") is not None:
-        leadtime_list = [cfg["leadtime"]]
+    elif cfg.get("steps"):
+        leadtime_list = list(cfg["steps"])
     else:
         leadtime_list = [24]
     season = season or cfg.get("season", "all")

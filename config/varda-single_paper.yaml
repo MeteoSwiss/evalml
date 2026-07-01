@@ -30,22 +30,22 @@ runs:
       root: /store_new/mch/msopr/osm/ICON-CH2-EPS
       steps: 0/120/1
       member: control
-  # - baseline:
-  #     label: ICON-CH1-EPS mean
-  #     root: /store_new/mch/msopr/osm/ICON-CH1-EPS
-  #     steps: 0/33/1
-  #     member: mean
-  # - baseline:
-  #     label: ICON-CH2-EPS mean
-  #     root: /store_new/mch/msopr/osm/ICON-CH2-EPS
-  #     steps: 0/120/1
-  #     member: mean
+  - baseline:
+      label: ICON-CH1-EPS mean
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/33/1
+      member: mean
+  - baseline:
+      label: ICON-CH2-EPS mean
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/1
+      member: mean
 
 truth:
-  # label: KENDA-CH1
-  # root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
-  label: SwissMetNet
-  root: jretrieve:1,2
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+  # label: SwissMetNet
+  # root: jretrieve:1,2
 
 experiment:
   params:
@@ -98,10 +98,20 @@ experiment:
           - "TOT_PREC:RMSE,R2,ETS"
 
 publication:
-  enabled: true
+  leadtimes:
+    enabled: true
+  scoremaps:
+    enabled: true
+    steps: [6, 24]
+    params: [T_2M, SP_10M]
+    scores: [MSE_SKILL, BIAS_CONTRIB]
+    baseline_label: ICON-CH1-CTRL
+    season: all
+    region: switzerland
   meteogram:
-    init_time: "202506271800"
-    station: "SIO"
+    enabled: false
+    init_time: "202504010000"
+    station: "KLO"
     params: [T_2M, TOT_PREC, SP_10M, DD_10M]
 
 locations:

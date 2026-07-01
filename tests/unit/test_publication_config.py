@@ -18,18 +18,19 @@ def paper_config():
 def test_paper_config_validates(paper_config):
     """The shipped publication config must still validate unchanged."""
     model = ConfigModel.model_validate(paper_config)
-    assert model.publication.enabled
+    # Per-task enable switches (paper-figures design).
+    assert model.publication.leadtimes.enabled
+    assert model.publication.scoremaps.enabled
     # Structural check against the config (not a fixed case) so the plotted
     # meteogram case can change without breaking this test.
     assert (
         model.publication.meteogram.init_time
         == paper_config["publication"]["meteogram"]["init_time"]
     )
-    assert model.publication.scoremaps is None
 
 
 def test_scoremaps_block_now_accepted(paper_config):
-    """A scoremaps block is no longer rejected by extra:forbid (needs zarr truth)."""
+    """A scoremaps block is accepted by extra:forbid (needs zarr truth)."""
     paper_config["truth"] = {
         "label": "KENDA-CH1",
         "root": "/store/x.zarr",
@@ -37,7 +38,7 @@ def test_scoremaps_block_now_accepted(paper_config):
     paper_config["publication"]["scoremaps"] = {
         "enabled": True,
         "baseline_label": "ICON-CH1-CTRL",
-        "leadtime": 24,
+        "steps": [24],
     }
     model = ConfigModel.model_validate(paper_config)
     assert model.publication.scoremaps.enabled
@@ -53,51 +54,39 @@ def test_rule_a_scoremaps_require_zarr_truth(paper_config):
         ConfigModel.model_validate(paper_config)
 
 
-def test_scoremaps_leadtimes_list_accepted(paper_config):
-    """A `leadtimes` list validates and is exposed via effective_leadtimes()."""
+def test_scoremaps_steps_list_accepted(paper_config):
+    """A `steps` list validates and is exposed on the model."""
     paper_config["truth"] = {"label": "KENDA-CH1", "root": "/store/x.zarr"}
     paper_config["publication"]["scoremaps"] = {
         "enabled": True,
         "baseline_label": "ICON-CH2-CTRL",  # steps 0/120/1 -> 6 and 24 producible
-        "leadtimes": [6, 24],
+        "steps": [6, 24],
     }
     model = ConfigModel.model_validate(paper_config)
-    assert model.publication.scoremaps.effective_leadtimes() == [6, 24]
+    assert model.publication.scoremaps.steps == [6, 24]
 
 
-def test_scoremaps_singular_leadtime_backward_compat(paper_config):
-    """The singular `leadtime` still works as a one-element leadtimes list."""
-    paper_config["truth"] = {"label": "KENDA-CH1", "root": "/store/x.zarr"}
-    paper_config["publication"]["scoremaps"] = {
-        "enabled": True,
-        "baseline_label": "ICON-CH1-CTRL",
-        "leadtime": 24,
-    }
-    model = ConfigModel.model_validate(paper_config)
-    assert model.publication.scoremaps.effective_leadtimes() == [24]
-
-
-def test_rule_b_one_of_leadtimes_not_producible(paper_config):
+def test_rule_b_one_of_steps_not_producible(paper_config):
     """Rule (b): any lead time beyond the baseline's steps is rejected."""
     paper_config["truth"] = {"label": "KENDA-CH1", "root": "/store/x.zarr"}
     # ICON-CH1-CTRL steps 0/33/1 -> 120h not producible even though 24h is.
     paper_config["publication"]["scoremaps"] = {
         "enabled": True,
         "baseline_label": "ICON-CH1-CTRL",
-        "leadtimes": [24, 120],
+        "steps": [24, 120],
     }
     with pytest.raises(ValueError, match="120h is not produced by baseline"):
         ConfigModel.model_validate(paper_config)
 
 
-def test_rule_b_leadtime_not_producible_by_baseline(paper_config):
-    """Rule (b): leadtime beyond a baseline's steps is rejected."""
+def test_rule_b_step_not_producible_by_baseline(paper_config):
+    """Rule (b): a single step beyond a baseline's steps is rejected."""
     paper_config["truth"] = {"label": "KENDA-CH1", "root": "/store/x.zarr"}
     # ICON-CH1-CTRL has steps 0/33/1 -> 120h not producible.
     paper_config["publication"]["scoremaps"] = {
         "enabled": True,
         "baseline_label": "ICON-CH1-CTRL",
-        "leadtime": 120,
+        "steps": [120],
     }
     with pytest.raises(ValueError, match="120h is not produced by baseline"):
         ConfigModel.model_validate(paper_config)
@@ -115,7 +104,8 @@ def test_rule_d_unknown_baseline_label(paper_config):
 
 
 def test_rule_c_meteogram_init_time_out_of_range(paper_config):
-    """Rule (c): a meteogram init_time outside the date range is rejected."""
+    """Rule (c): an enabled meteogram init_time outside the date range is rejected."""
+    paper_config["publication"]["meteogram"]["enabled"] = True
     paper_config["publication"]["meteogram"]["init_time"] = "209901010000"
     with pytest.raises(ValueError, match="init_time.*not in the configured"):
         ConfigModel.model_validate(paper_config)
@@ -128,8 +118,8 @@ def test_meteogram_init_time_format_rejected(paper_config):
         ConfigModel.model_validate(paper_config)
 
 
-def test_disabled_publication_skips_checks(paper_config):
-    """An out-of-range meteogram is ignored when publication is disabled."""
-    paper_config["publication"]["enabled"] = False
+def test_disabled_meteogram_skips_init_time_check(paper_config):
+    """An out-of-range meteogram init_time is ignored when the meteogram is disabled."""
+    paper_config["publication"]["meteogram"]["enabled"] = False
     paper_config["publication"]["meteogram"]["init_time"] = "209901010000"
     ConfigModel.model_validate(paper_config)  # must not raise
