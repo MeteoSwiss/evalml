@@ -117,6 +117,7 @@ showcase:
     stations: [JUN] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
   animations:
     enabled: true
+    frames_per_second: 5
     domains:
       # - globe
       - europe
