@@ -29,19 +29,12 @@
           "title": "Domains",
           "type": "array"
         },
-        "fps": {
-          "anyOf": [
-            {
-              "exclusiveMinimum": 0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Frames per second for the output GIF animation. Defaults to one frame per forecast step interval.",
-          "title": "Fps"
+        "frames_per_second": {
+          "default": 2.0,
+          "description": "Frames per second for the output GIF animation.",
+          "exclusiveMinimum": 0,
+          "title": "Frames Per Second",
+          "type": "number"
         }
       },
       "title": "AnimationsConfig",
