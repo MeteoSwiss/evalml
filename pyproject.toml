@@ -26,11 +26,11 @@ dependencies = [
     "scores>=2.0.0",
     "eccodes>=2.44,<2.48",
     "eccodes-cosmo-resources-python==2.44.0.1",
-    "earthkit-data==1.0.0rc10",
-    "earthkit-utils==1.0.0rc1",
-    "earthkit-plots==1.0.0rc9",
-    "earthkit-meteo==1.0.0rc3",
-    "earthkit-geo==1.0.0rc7"
+    "earthkit-data==1.0,<1.1",
+    "earthkit-utils==1.0,<1.1",
+    "earthkit-plots==1.0,<1.1",
+    "earthkit-meteo==1.0,<1.1",
+    "earthkit-geo==1.0,<1.1"
 ]
 
 [project.scripts]

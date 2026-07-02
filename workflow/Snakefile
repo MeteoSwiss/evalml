@@ -49,7 +49,7 @@ wildcard_constraints:
 
 
 # prefer one rule because snakemake complains about ambiguous rules (same output)
-ruleorder: inference_prepare_forecaster > inference_prepare_interpolator
+ruleorder: inference_prepare_forecaster > inference_prepare_temporal_downscaler
 
 
 # optional messages, log and error handling

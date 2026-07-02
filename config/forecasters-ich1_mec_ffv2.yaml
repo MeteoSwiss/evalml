@@ -1,6 +1,8 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Evaluate skill of Stage E with/without cutoff edges trained with and without subgrid orography.
+  Evaluate skill of Varda-single-1.0 against ground observations.
+
+config_label: varda-single-1.0
 
 dates:
   start: 2025-08-01T00:00
@@ -9,32 +11,29 @@ dates:
 
 runs:
   - forecaster:
-      inference_resources:
-          slurm_partition: short-shared
-      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
-      label: stage_E_icon_1km_cutoff_edges_subgrid_orography
-      steps: 0/24/6
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/9f4626a7562a4eb49700aaaaa8607230
+      label: icon_1km_hierarchical_2_level_proc_from_scratch
+      steps: 0/48/6
       config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
       extra_requirements:
-        - git+https://github.com/ecmwf/anemoi-inference.git@e369b1a90313e9701db13f63364a467aa281cf36
-
-baselines:
+        - anemoi-inference==0.11.1
   - baseline:
-      baseline_id: ICON-CH1-EPS
-      label: ICON-CH1-ctrl
-      root: /store_new/mch/msopr/ml/ICON-CH1-EPS
-      steps: 0/24/6
-
-  - baseline:
-      baseline_id: ICON-CH2-EPS
-      label: ICON-CH2-ctrl
-      root: /store_new/mch/msopr/ml/ICON-CH2-EPS
-      steps: 0/24/6
-
+      label: ICON-CH1-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/33/6
 
 truth:
   label: KENDA-CH1
   root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
+#truth:
+#  label: SwissMetNet
+#  root: jretrievedwh:1,2
+  # To verify against SwissMetNet observations from the DWH via jretrievedwh,
+  # set instead (requires jretrievedwh.py on $PATH and $OPR_HOME set):
+  # Other selectors: root: jretrievedwh:locations=ARO,KLO,LUG
+  #                  root: jretrievedwh:bbox=45.8,47.8,5.9,10.5
+  #                  append ;stage=devt to target a non-prod DWH stage
 
 experiment:
   params:
@@ -46,7 +45,7 @@ experiment:
   stratification:
     regions:
       - jura
-    root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
   thresholds:
     TOT_PREC:
       gt: [0.0, 1, 5]
@@ -59,9 +58,11 @@ experiment:
       gt: [288.15, 298.15]
   dashboard:
     stratification:
-      # - init_hour
       # - region
+      # - init_hour
       - season
+  scoremaps:
+    enabled: false
 
 locations:
   output_root: output/
@@ -75,7 +76,7 @@ ffv2:
   experiment_ids: Varda
   experiment_description: Varda-Single_suboro
   file_description: exp_Varda-Single_2025
-  domain_table: /users/paa/01_store/02_FFV2/data/8_CH_bo
+  domain_table: /users/paa/01_store/02_FFV2/data/8_CH_box
   blacklists: /users/paa/01_store/02_FFV2/data/blacklist
   veri_ens_member: -1
   catthresholds:
@@ -119,6 +120,5 @@ profile:
     mem_mb_per_cpu: 1800
     runtime: "1h"
     gpus: 0
+    slurm_account: s83
   jobs: 50
-  batch_rules:
-    plot_forecast_frame: 32

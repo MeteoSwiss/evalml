@@ -113,11 +113,14 @@ This assembles the model input directory that MEC expects for a single valid tim
 
             # for each configured lead copy (and optionally merge) source files into input_mod
             for lead in {params.leads}; do
-                lead3=$(printf "%03d" "$lead")
                 # compute source init such that source_init + lead = ref(init)
                 src_epoch=$(date -u -d "${{init:0:4}}-${{init:4:2}}-${{init:6:2}}T${{init:8:2}}:${{init:10:2}}:00Z" +%s)
                 source_init=$(date -u -d "@$((src_epoch - lead * 3600))" +"%Y%m%d%H%M")
-                src_rel="$source_init/grib/${{source_init}}_${{lead3}}.grib"
+                # anemoi-inference writes grib/{{date}}{{time_int}}_{{step_int}}.grib where
+                # time_int is HHMM stripped of leading zeros (e.g. "0000" -> "0", "1800" -> "1800")
+                src_date="${{source_init:0:8}}"
+                src_time_int=$((10#${{source_init:8:4}}))
+                src_rel="$source_init/grib/${{src_date}}${{src_time_int}}_${{lead}}.grib"
 
                 if [[ -e "$src_rel" ]]; then
                     dest="mec/{wildcards.init_time}/input_mod/${{source_init}}.grib"
@@ -125,8 +128,8 @@ This assembles the model input directory that MEC expects for a single valid tim
                         echo "Copying $src_rel -> $dest"
                         cp "$src_rel" "$dest"
                     else
-                        prev_lead3=$(printf "%03d" "$((lead - 6))")
-                        prev_rel="$source_init/grib/${{source_init}}_${{prev_lead3}}.grib"
+                        prev_lead=$((lead - 6))
+                        prev_rel="$source_init/grib/${{src_date}}${{src_time_int}}_${{prev_lead}}.grib"
                         if [[ -e "$prev_rel" ]]; then
                             echo "Merging $prev_rel + $src_rel -> $dest"
                             cat "$prev_rel" "$src_rel" >"$dest"
