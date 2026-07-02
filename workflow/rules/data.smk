@@ -5,17 +5,18 @@ include: "common.smk"
 
 
 # Grid-definition files required by earthkit/eckit to decode the ICON-CH grids.
-# Automatic download/caching of these is currently broken (see README), so we
-# fetch them into eckit's default geo grid cache under $HOME, where it finds
-# them without any ECKIT_GEO_CACHE wiring. The output file names are the cache
-# keys eckit computes for each grid.
+# eckit downloads the raw ATLAS-IO definitions from ECMWF on first use and
+# writes a processed eckit::codec-format cache under ~/.local/share/eckit/geo/.
+# We trigger that on-demand processing via a SLURM job (not localrule) so that
+# it runs on a compute node with outbound internet access.  Dependent jobs
+# declare the cache files as inputs so Snakemake serialises the cache-warming
+# step before any parallel GRIB readers run.
+#
+# IMPORTANT: do NOT curl the raw .ek files directly into the cache directory.
+# The downloaded files are ATLAS-IO format; eckit's cache reader expects its
+# own eckit::codec format.  Placing the raw file there causes the error:
+#   eckit::codec::InvalidRecord: version not found in record <cache-file>
 ECKIT_GEO_GRID_DIR = Path.home() / ".local/share/eckit/geo/grid/icon"
-ECKIT_ICON_CH1_URL = (
-    "https://sites.ecmwf.int/repository/eckit/geo/grid/icon-ch/icon-ch1-c.ek"
-)
-ECKIT_ICON_CH2_URL = (
-    "https://sites.ecmwf.int/repository/eckit/geo/grid/icon-ch/icon-ch2-c.ek"
-)
 
 
 rule data_download_eckit_geo_grids:
@@ -26,12 +27,25 @@ rule data_download_eckit_geo_grids:
         / "bbbd5a09855499243c7a4aa4c8762920-67adabf5c0cff041ebaafa61a3bda267.ek",
     log:
         OUT_ROOT / "logs/data_download_eckit_geo_grids/download.log",
-    localrule: True
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=1,
+        mem_mb_per_cpu=1800,
+        runtime="15m",
     shell:
         """
         (
             set -euo pipefail
-            curl -fL {ECKIT_ICON_CH1_URL:q} -o {output.ch1:q}
-            curl -fL {ECKIT_ICON_CH2_URL:q} -o {output.ch2:q}
+            # Let eckit download the raw grid definitions itself and write the
+            # processed eckit::codec cache.  This is the only way to get the
+            # cache in the format eckit::codec::RecordReader expects.
+            # Must run on a compute node (not localrule) because login nodes
+            # do not have outbound internet access for eckit's grid download.
+            uv run python - <<'EOF'
+import eckit.geo
+eckit.geo.Grid("ICON-CH1")
+eckit.geo.Grid("ICON-CH2")
+print("eckit grid caches generated")
+EOF
         ) >{log} 2>&1
         """
