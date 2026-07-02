@@ -119,7 +119,9 @@ def _try_assign_elevation(ds: xr.Dataset) -> xr.Dataset:
         if len(topo) == n:
             LOG.info("Assigned elevation from %s (%d cells)", const_grib.name, n)
             return ds.assign_coords(elevation=("values", topo))
-    LOG.warning("Could not assign elevation: no ICON constants GRIB matches values=%d", n)
+    LOG.warning(
+        "Could not assign elevation: no ICON constants GRIB matches values=%d", n
+    )
     return ds
 
 
@@ -300,7 +302,9 @@ def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
         level_type = level_type_group.get("vertical.level_type")[0]
         profile = XARRAY_ENGINE_PROFILE | variable_name_profile(level_type)
         _ds = level_type_group.to_xarray(**profile, allow_holes=True)
-        ds = ds.merge(_ds, compat="no_conflicts", combine_attrs="no_conflicts", join="outer")
+        ds = ds.merge(
+            _ds, compat="no_conflicts", combine_attrs="no_conflicts", join="outer"
+        )
     return ds
 
 
