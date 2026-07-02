@@ -9,16 +9,7 @@ env:
 input:
   test:
     use_original_paths: true
-
-# nudging is not performed by the forecaster
-# pre_processors:
-#   - forward_transform_filter:
-#       nudge_toward_observation:
-#         path_to_observation: /scratch/mch/llanzila/sruc/evalml/output/data/observation/PeakWeather
-#         k: 3
-#         power: 4.0
-#         max_dist: 0.5
-        
+       
 post_processors:
   - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
       accumulations:

@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Evaluate skill of Varda-single-1.0 against ground observations.
+  Evaluate skill of Varda-rapid against ground observations.
 
 config_label: varda-single-1.0
 
@@ -12,12 +12,12 @@ dates:
 runs:
   - temporal_downscaler:
       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
-      label: Varda-single-1.0
+      label: Varda-rapid-0.1
       steps: 0/24/1
-      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi_nudge.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
-        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@bac161e7d5184335614ea6723987acc30e9d9b1d
+        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@0e1b8ac1a9eb3d4459f71f5a7418fc09c6305e1a
         - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
@@ -25,6 +25,22 @@ runs:
         steps: 0/24/6
         extra_requirements:
           - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
+
+  - temporal_downscaler:
+      checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
+      label: Varda-single-1.0
+      steps: 0/24/1
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
+      extra_requirements:
+        - anemoi-datasets==0.5.35
+        - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
+      forecaster:
+        checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
+        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+        steps: 0/24/6
+        extra_requirements:
+          - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
+
   - baseline:
       label: INCA
       root: /store_new/mch/msclim/INCA
@@ -78,7 +94,7 @@ experiment:
       # - init_hour
       - season
   scorecards:
-    enabled: false
+    enabled: true
     sections:
       nowcasting:
         baseline: INCA
@@ -100,7 +116,7 @@ experiment:
           - "TOT_PREC:RMSE,R2,ETS"
       medium_range:
         baseline: ICON-CH2-CTRL
-        lead_times: "24/120/24"
+        lead_times: "24/24/24"
         stratification: region
         variables:
           - "U_10M:RMSE,R2,ETS"
@@ -116,8 +132,8 @@ showcase:
     - U_10M
     - V_10M
   meteograms:
-    enabled: false
-    stations: [JUN] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
+    enabled: true
+    stations: [JUN, KLO, LUG, GVE] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
   animations:
     fps: 0.5
     enabled: true

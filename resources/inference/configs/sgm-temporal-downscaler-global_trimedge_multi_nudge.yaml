@@ -12,6 +12,19 @@ input:
                   scale: 0.001 # convert from kg m-2 to m
                   offset: 0
                   param: tp
+            - forward_transform_filter:
+                nudge_toward_observation:
+                  backend: jretrieve
+                  jretrieve_bbox: [45.7, 48.0, 5.8, 10.8]
+                  jretrieve_src_path: /scratch/mch/llanzila/sruc/evalml/src
+                  k: 3
+                  power: 4.0
+                  max_dist: 0.5
+            #     nudge_toward_observation:
+            #       path_to_observation: /scratch/mch/llanzila/sruc/evalml/output/data/observation/PeakWeather
+            #       k: 3
+            #       power: 4.0
+            #       max_dist: 0.5
           namer: &namer
             rules:
               - - shortName: T
