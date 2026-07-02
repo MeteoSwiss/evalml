@@ -177,9 +177,9 @@ rule sarus_pull_mec:
 
 rule run_mec:
     """Run the MEC container for one initialisation time, producing a verSYNOP feedback file in fdbk_files/.
-    TODO: Support not only 6h intervals for time-range variables such as precipitation.
-    Rather, make this dependent on the steps of the forecasts.
-    """
+TODO: Support not only 6h intervals for time-range variables such as precipitation.
+Rather, make this dependent on the steps of the forecasts.
+"""
     input:
         namelist=rules.generate_mec_namelist.output.namelist,
         prepare_obs=rules.prepare_mec_input.output.obs_file,

@@ -587,7 +587,9 @@ class Ffv2Config(BaseModel):
                     f"pecthresholds[{var!r}] contains invalid keys {invalid}; only 'lower' and 'upper' are allowed."
                 )
             if not bounds:
-                raise ValueError(f"pecthresholds[{var!r}] must have at least one of 'lower' or 'upper'.")
+                raise ValueError(
+                    f"pecthresholds[{var!r}] must have at least one of 'lower' or 'upper'."
+                )
         return v
 
     model_config = {"extra": "forbid"}
