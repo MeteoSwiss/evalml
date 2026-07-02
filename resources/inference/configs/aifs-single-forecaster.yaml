@@ -12,6 +12,11 @@ post_processors:
   - accumulate_from_start_of_forecast:
       accumulations:
         - tp
+  - forward_transform_filter:
+      rescale:
+        scale: 1000 # convert units from m to kg m-2
+        offset: 0
+        param: tp
 
 output:
   grib:

@@ -349,13 +349,6 @@ def load_forecast_data_from_grib(
     if ifs_rename:
         ds = ds.rename(ifs_rename)
 
-    if "tp" in ifs_rename:
-        # IFS/ECMWF convention: "tp" is accumulated precip in meters.
-        # Convert to kg m-2 (mm) to match the ICON-native convention used
-        # elsewhere (truth-side conversion in load_analysis_data_from_zarr,
-        # and ICON-native forecast/truth pairs, which are already in mm).
-        ds["TOT_PREC"] = ds["TOT_PREC"] * 1000
-
     if "TOT_PREC" in ds.data_vars:
         ds["TOT_PREC"] = _tot_prec_handling(ds["TOT_PREC"], requested_steps=steps)
 
