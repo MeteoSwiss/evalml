@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Literal, Any
 
 import earthkit.data as ekd
+import earthkit.meteo.vertical as ekdv
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -33,8 +34,6 @@ XARRAY_ENGINE_PROFILE = {
 }
 
 ZERO_KELVIN = -273.15  # °C
-
-GRAVITY = 9.80665  # m/s² — standard gravity used to convert FIS geopotential to metres
 
 ICON_CH1_CONST_GRIB = Path(
     "/users/oprusers/osm/opr.inn/data/ICON_INPUT/ICON-CH1-EPS/lfff00000000c"
@@ -194,7 +193,7 @@ def load_analysis_data_from_zarr(
     # Derive elevation from FIS (surface geopotential, m²/s²) and assign as coordinate.
     # FIS is constant in time, so drop the time dimension to get a purely spatial coord.
     if "FIS" in ds:
-        elevation = ds["FIS"].isel(time=0, drop=True) / GRAVITY
+        elevation = ekdv.geopotential_height_from_geopotential(ds["FIS"].isel(time=0, drop=True))
         ds = ds.assign_coords(elevation=elevation)
         if "FIS" not in params:
             ds = ds.drop_vars("FIS")
