@@ -1,4 +1,6 @@
+import json
 import logging
+import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Literal, Any
@@ -35,12 +37,49 @@ XARRAY_ENGINE_PROFILE = {
 
 ZERO_KELVIN = -273.15  # °C
 
-ICON_CH1_CONST_GRIB = Path(
-    "/users/oprusers/osm/opr.inn/data/ICON_INPUT/ICON-CH1-EPS/lfff00000000c"
+_STAC_ASSETS_URL = (
+    "https://data.geo.admin.ch/api/stac/v1/collections/{collection}/assets"
 )
-ICON_CH2_CONST_GRIB = Path(
-    "/users/oprusers/osm/opr.inn/data/ICON_INPUT/ICON-CH2-EPS/lfff00000000c"
-)
+_ICON_STAC_COLLECTION = {
+    "ICON-CH1-EPS": "ch.meteoschweiz.ogd-forecasting-icon-ch1",
+    "ICON-CH2-EPS": "ch.meteoschweiz.ogd-forecasting-icon-ch2",
+}
+_ICON_HORIZ_CONST_ASSET = {
+    "ICON-CH1-EPS": "horizontal_constants_icon-ch1-eps.grib2",
+    "ICON-CH2-EPS": "horizontal_constants_icon-ch2-eps.grib2",
+}
+_ICON_CONST_CACHE = Path.home() / ".cache" / "evalml-lapse" / "icon-constants"
+
+
+def _fetch_icon_const_grib(model: str) -> Path:
+    """Return path to the ICON horizontal constants GRIB file.
+
+    On first call the file is downloaded from the MeteoSwiss opendata STAC API
+    and cached under ~/.cache/evalml-lapse/icon-constants/. Subsequent calls
+    return the cached file immediately without hitting the network.
+    The download URL is pre-signed and expires, so we always query the STAC API
+    for a fresh URL — but only actually download when the cached file is absent.
+    """
+    _ICON_CONST_CACHE.mkdir(parents=True, exist_ok=True)
+    asset_id = _ICON_HORIZ_CONST_ASSET[model]
+    cached = _ICON_CONST_CACHE / asset_id
+    if cached.exists():
+        return cached
+    collection = _ICON_STAC_COLLECTION[model]
+    url = _STAC_ASSETS_URL.format(collection=collection)
+    LOG.info("Fetching %s constants download URL from %s", model, url)
+    with urllib.request.urlopen(url) as resp:
+        assets = json.load(resp)
+    href = assets[asset_id]["href"]
+    LOG.info("Downloading %s constants to %s", model, cached)
+    tmp = cached.with_suffix(".tmp")
+    try:
+        urllib.request.urlretrieve(href, tmp)
+        tmp.rename(cached)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+    return cached
 
 
 def _select_valid_times(ds, times: np.datetime64, strict: bool = False):
@@ -111,8 +150,11 @@ def _try_assign_elevation(ds: xr.Dataset) -> xr.Dataset:
     if "values" not in ds.dims:
         return ds
     n = ds.sizes["values"]
-    for const_grib in (ICON_CH1_CONST_GRIB, ICON_CH2_CONST_GRIB):
-        if not const_grib.exists():
+    for model in _ICON_STAC_COLLECTION:
+        try:
+            const_grib = _fetch_icon_const_grib(model)
+        except Exception as e:
+            LOG.warning("Could not fetch %s constants: %s", model, e)
             continue
         topo = _load_icon_topography(const_grib)
         if len(topo) == n:
@@ -962,23 +1004,26 @@ def load_icon_baseline_from_grib(
         )
 
     # Attach model orography as elevation coordinate
-    if "ICON-CH1-EPS" in root.parts:
-        const_grib = ICON_CH1_CONST_GRIB
-    elif "ICON-CH2-EPS" in root.parts:
-        const_grib = ICON_CH2_CONST_GRIB
-    else:
-        const_grib = None
-    if const_grib is not None and const_grib.exists() and "values" in result.dims:
-        topo = _load_icon_topography(const_grib)
-        if result.sizes["values"] == len(topo):
-            result = result.assign_coords(elevation=("values", topo))
-        else:
-            LOG.warning(
-                "elevation not assigned: values=%d but %s has %d cells",
-                result.sizes["values"],
-                const_grib.name,
-                len(topo),
-            )
+    model = next(
+        (m for m in _ICON_STAC_COLLECTION if m in root.parts), None
+    )
+    if model is not None and "values" in result.dims:
+        try:
+            const_grib = _fetch_icon_const_grib(model)
+        except Exception as e:
+            LOG.warning("Could not fetch %s constants for elevation: %s", model, e)
+            const_grib = None
+        if const_grib is not None:
+            topo = _load_icon_topography(const_grib)
+            if result.sizes["values"] == len(topo):
+                result = result.assign_coords(elevation=("values", topo))
+            else:
+                LOG.warning(
+                    "elevation not assigned: values=%d but %s has %d cells",
+                    result.sizes["values"],
+                    const_grib.name,
+                    len(topo),
+                )
     return result
 
 
