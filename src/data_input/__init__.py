@@ -235,7 +235,9 @@ def load_analysis_data_from_zarr(
     # Derive elevation from FIS (surface geopotential, m²/s²) and assign as coordinate.
     # FIS is constant in time, so drop the time dimension to get a purely spatial coord.
     if "FIS" in ds:
-        elevation = ekdv.geopotential_height_from_geopotential(ds["FIS"].isel(time=0, drop=True))
+        elevation = ekdv.geopotential_height_from_geopotential(
+            ds["FIS"].isel(time=0, drop=True)
+        )
         ds = ds.assign_coords(elevation=elevation)
         if "FIS" not in params:
             ds = ds.drop_vars("FIS")
@@ -1004,9 +1006,7 @@ def load_icon_baseline_from_grib(
         )
 
     # Attach model orography as elevation coordinate
-    model = next(
-        (m for m in _ICON_STAC_COLLECTION if m in root.parts), None
-    )
+    model = next((m for m in _ICON_STAC_COLLECTION if m in root.parts), None)
     if model is not None and "values" in result.dims:
         try:
             const_grib = _fetch_icon_const_grib(model)
