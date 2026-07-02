@@ -23,5 +23,10 @@ def test_publication_meteogram_block_validates():
 
     cfg = yaml.safe_load(Path("config/varda-single_paper.yaml").read_text())
     model = ConfigModel.model_validate(cfg)
-    assert model.publication.meteogram.init_time == "202504010000"
+    # Compare against the config rather than a hard-coded case so changing the
+    # plotted meteogram case doesn't break this structural check.
+    assert (
+        model.publication.meteogram.init_time
+        == cfg["publication"]["meteogram"]["init_time"]
+    )
     assert "DD_10M" in model.publication.meteogram.params
