@@ -122,6 +122,7 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
 
         regions = {}
         # add inner region for ML evaluation
+        # this is the extent of the largest lat/lon box that is fully within the radar/INCA domain
         regions["all"] = [
             Polygon(
                 list(
