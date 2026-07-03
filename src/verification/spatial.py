@@ -163,7 +163,15 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
     fcst = fcst.drop_vars(["x", "y", "values"], errors="ignore")
     fcst = fcst.assign_coords(longitude=("values", truth["longitude"].data))
     fcst = fcst.assign_coords(latitude=("values", truth["latitude"].data))
-    fcst = fcst.assign_coords(values=truth["values"])
+    # Restore the multi-index on values (needed for unstack) without pulling in
+    # truth's other coordinates (e.g. elevation), which would overwrite fcst's.
+    if truth_is_grid:
+        mindex_coords = xr.Coordinates.from_pandas_multiindex(
+            truth.indexes["values"], "values"
+        )
+        fcst = fcst.assign_coords(mindex_coords)
+    elif "values" in truth.indexes:
+        fcst = fcst.assign_coords(values=truth.indexes["values"])
 
     if truth_is_grid:
         fcst = fcst.unstack("values")

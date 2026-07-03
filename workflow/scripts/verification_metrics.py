@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-from verification import verify  # noqa: E402
+from verification import verify, apply_lapse_rate_correction_inplace  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
 from data_input import (
     parse_steps,
@@ -83,6 +83,9 @@ def main(args: ScriptConfig):
         "Aligned forecast and truth in %s seconds",
         (datetime.now() - now).total_seconds(),
     )
+
+    if args.lapse_rate_correction:
+        apply_lapse_rate_correction_inplace(fcst, truth, args.params)
 
     # compute metrics and statistics
     now = datetime.now()
@@ -180,6 +183,12 @@ if __name__ == "__main__":
         type=Path,
         default="verif.nc",
         help="Output file to save the verification results (default: verif.nc).",
+    )
+    parser.add_argument(
+        "--lapse_rate_correction",
+        action="store_true",
+        default=False,
+        help="Apply standard-atmosphere lapse-rate correction to T_2M and TD_2M.",
     )
     args = parser.parse_args()
 
