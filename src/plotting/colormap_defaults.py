@@ -53,6 +53,14 @@ _CMAP_DEFAULTS = {
         "extend": "both",
     },
     "QV_925": load_ncl_colormap("RH_6lev.ct") | {"extend": "both"},
+    "CLCT": {
+        "cmap": plt.get_cmap("Blues", 10),
+        "vmin": 0,
+        "vmax": 1,
+        "extend": "neither",
+        "units": "",
+        "levels": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+    },
     "TOT_PREC_1H": {
         "extend": "max",
         "colors": [

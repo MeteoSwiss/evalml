@@ -1,5 +1,4 @@
 from contextlib import contextmanager
-from functools import cached_property
 from pathlib import Path
 
 import cartopy.crs as ccrs
@@ -174,8 +173,8 @@ class StatePlotter:
         # of the plotting function is a lot faster than letting tricontourf or
         # tripcolor handle it in general, but not sure if using earthkit
         # removed for now to simplify the workflow
-        if proj == _PROJECTIONS["orthographic"]:
-            triang, mask = self._orthographic_tri
+        if isinstance(proj, ccrs.Orthographic):
+            triang, mask = self._orthographic_tri(proj)
         else:
             triang, mask = self.tri, slice(None, None)
         x, y = triang.x, triang.y
@@ -265,13 +264,10 @@ class StatePlotter:
                 except Exception:
                     pass
 
-    @cached_property
-    def _orthographic_tri(self) -> Triangulation:
-        """Compute the triangulation for the orthographic projection."""
-        x, y, _ = (
-            _PROJECTIONS["orthographic"]
-            .transform_points(ccrs.PlateCarree(), self.lon, self.lat)
-            .T
-        )
+    def _orthographic_tri(
+        self, proj: ccrs.Projection
+    ) -> tuple[Triangulation, np.ndarray]:
+        """Compute the triangulation for an orthographic-family projection."""
+        x, y, _ = proj.transform_points(ccrs.PlateCarree(), self.lon, self.lat).T
         mask = ~(np.isnan(x) | np.isnan(y))
         return Triangulation(x[mask], y[mask]), mask

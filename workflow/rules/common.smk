@@ -92,10 +92,12 @@ def parse_regions():
 def parse_showcase_regions():
     """Parse showcase domains from config.
 
-    Returns a dict mapping domain name -> {extent, projection}.
+    Returns a dict mapping domain name -> {extent, projection, rotate, hours_per_revolution}.
     Named domains (strings) have extent=None and projection=None,
     meaning the plot script will fall back to the DOMAINS lookup.
     Custom domains carry their explicit extent and projection.
+    rotate/hours_per_revolution only take effect when extent is None
+    (full-globe domains).
     """
     result = {}
     for r in (
@@ -104,11 +106,18 @@ def parse_showcase_regions():
         .get("domains", ["globe", "europe", "switzerland"])
     ):
         if isinstance(r, str):
-            result[r] = {"extent": None, "projection": None}
+            result[r] = {
+                "extent": None,
+                "projection": None,
+                "rotate": False,
+                "hours_per_revolution": 96.0,
+            }
         else:
             result[r["name"]] = {
                 "extent": r.get("extent"),
                 "projection": r.get("projection", "orthographic"),
+                "rotate": r.get("rotate", False),
+                "hours_per_revolution": r.get("hours_per_revolution", 96.0),
             }
     return result
 
@@ -392,10 +401,14 @@ SCORECARD_CONFIGS = (
 )
 
 
-# Period-accumulated params verify a [lead - period, lead] window, so they have
-# no value at lead times shorter than one step spacing (e.g. no 0h precip map).
+# Params with no value at lead time 0. Two distinct reasons land here:
+# - period-accumulated params (TOT_PREC/tp) verify a [lead - period, lead]
+#   window, so they have no value at lead times shorter than one step spacing
+#   (e.g. no 0h precip map).
+# - diagnostic params (e.g. CLCT/tcc) aren't part of the model's input state,
+#   so they're simply absent from the initial-state GRIB file written at step 0.
 # Short and canonical names both appear across the workflow (showcases vs maps).
-ACCUMULATED_PARAMS = {"TOT_PREC", "tp"}
+PARAMS_WITHOUT_STEP_ZERO_VALUE = {"TOT_PREC", "tp", "CLCT", "tcc"}
 
 
 def resolve_leadtimes(steps_spec, requested="all", param=None):
@@ -423,6 +436,6 @@ def resolve_leadtimes(steps_spec, requested="all", param=None):
         )
 
     valid = wanted & supported
-    if param in ACCUMULATED_PARAMS:
+    if param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
         valid = {lt for lt in valid if lt >= step}
     return sorted(valid)

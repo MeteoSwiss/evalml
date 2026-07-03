@@ -182,6 +182,16 @@ def main():
         if region_cfg.get("extent") is not None:
             projection = get_projection(region_cfg.get("projection") or "orthographic")
             extent = region_cfg["extent"]
+        elif region_cfg.get("rotate"):
+            base = DOMAINS[region_name]["projection"].proj4_params
+            central_longitude = (
+                base["lon_0"]
+                + 360.0 * lead_time / region_cfg["hours_per_revolution"]
+            ) % 360
+            projection = ccrs.Orthographic(
+                central_longitude=central_longitude, central_latitude=base["lat_0"]
+            )
+            extent = DOMAINS[region_name]["extent"]
         else:
             projection = DOMAINS[region_name]["projection"]
             extent = DOMAINS[region_name]["extent"]
@@ -193,6 +203,14 @@ def main():
             name=region_name,
             size=(6, 6),
         )
+        if region_cfg.get("rotate"):
+            # earthkit.plots creates figures with constrained_layout=True
+            # (earthkit.plots.components.figures.Figure.__init__), which
+            # re-flows axes margins per draw to fit whichever gridline labels
+            # happen to be rendered — label content/width varies with rotation
+            # angle, shifting the globe within an otherwise fixed-size canvas.
+            # Freeze the layout so the map's position is identical every frame.
+            fig.fig.set_layout_engine(None)
         subplot = fig.add_map(row=0, column=0)
 
         plotter.plot_field(
@@ -208,7 +226,12 @@ def main():
         fig.title(f"{param}, time: {validtime}")
 
         outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
-        fig.save(outfn, bbox_inches="tight", dpi=200)
+        # earthkit.plots' Figure.save() defaults bbox_inches to "tight", which
+        # crops to each frame's own content extent — that extent varies with the
+        # rotating globe's gridline labels, making frames jump around when
+        # stitched into a GIF. Pass bbox_inches=None explicitly to override that
+        # default and always save the fixed full canvas.
+        fig.save(outfn, dpi=200, bbox_inches=None)
         LOG.info("saved: %s", outfn)
 
 

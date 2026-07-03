@@ -3,17 +3,32 @@ description: |
   Evaluate skill of a stage A o96 multi-step global model against ERA.
 
 dates:
-  start: 2024-01-01T00:00
-  end: 2024-01-01T00:00
-  frequency: 24h
+  # start: 2024-01-01T00:00
+  # end: 2024-07-01T00:00
+  # frequency: 59h
+  - 2024-01-01T00:00
 
 runs:
   - forecaster:
       checkpoint: /scratch/mch/miccatta/SwissAI_checkpoints/checkpoint_resO96_fr1_st1_in7_out6/a689d740f37642c38fd01a39cdbde96f/inference-last.ckpt
-      label: stage-a-o96-multi-step
+      label: resO96_fr1_st1_in7_out6
       steps: 0/120/1
       config: resources/inference/configs/o96-global-multistep-forecaster.yaml
       disable_local_eccodes_definitions: true
+
+  # - forecaster:
+  #     checkpoint: /scratch/mch/miccatta/SwissAI_checkpoints/checkpoint_resO96_fr1_st1_in2_out1/877cb9559f6c484d97b3733b7481c39a/inference-last.ckpt
+  #     label: resO96_fr1_st1_in2_out1
+  #     steps: 0/120/1
+  #     config: resources/inference/configs/o96-global-multistep-forecaster.yaml
+  #     disable_local_eccodes_definitions: true
+
+  # - forecaster:
+  #     checkpoint: /scratch/mch/miccatta/SwissAI_checkpoints/checkpoint_resO96_fr1_st1_in4_out3/70b8ec9d55144f968513b706415ffc04/inference-last.ckpt
+  #     label: resO96_fr1_st1_in4_out3
+  #     steps: 0/120/1
+  #     config: resources/inference/configs/o96-global-multistep-forecaster.yaml
+  #     disable_local_eccodes_definitions: true
 
 truth:
   label: ERA5-o96
@@ -26,6 +41,7 @@ experiment:
     - U_10M
     - V_10M
     - TOT_PREC
+    - CLCT
   dashboard:
     stratification:
       # - region
@@ -33,6 +49,25 @@ experiment:
       - season
   stratification:
     regions: []
+
+showcase:
+  params:
+    - T_2M
+    - SP_10M
+    - TOT_PREC
+    - CLCT
+  meteograms:
+    enabled: false # Because to Jretrieve credentials
+  animations:
+    enabled: true
+    domains:
+      - name: globe
+        rotate: true
+        hours_per_revolution: 120
+      # - europe
+      # # - alps
+      # - icon-ch
+      # - switzerland
 
 locations:
   output_root: output/

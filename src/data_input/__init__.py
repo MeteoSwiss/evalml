@@ -22,6 +22,7 @@ _IFS_TO_ICON = {
     "2d": "TD_2M",
     "sp": "PS",
     "lsm": "FR_LAND",
+    "tcc": "CLCT",
 }
 _ICON_TO_IFS = {v: k for k, v in _IFS_TO_ICON.items()}
 
@@ -216,10 +217,12 @@ def load_from_grib_file(file: str | list[str], sel_kwargs):
 
 
 def variable_name_profile(
-    level_type: Literal["height_above_ground_level", "mean_sea", "surface", "pressure"],
+    level_type: Literal[
+        "height_above_ground_level", "mean_sea", "surface", "pressure", "entire_atmosphere"
+    ],
 ) -> dict[str, Any]:
     """Resolve variable name profile based on the level type."""
-    if level_type in ["height_above_ground_level", "mean_sea", "surface"]:
+    if level_type in ["height_above_ground_level", "mean_sea", "surface", "entire_atmosphere"]:
         return {}
     elif level_type == "pressure":
         return {

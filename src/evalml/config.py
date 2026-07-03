@@ -272,8 +272,28 @@ class DomainConfig(BaseModel):
         "orthographic",
         description="Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
     )
+    rotate: bool = Field(
+        False,
+        description=(
+            "Rotate the viewpoint across animation frames as lead time advances. "
+            "Only valid for full-globe domains (extent: null)."
+        ),
+    )
+    hours_per_revolution: float = Field(
+        96.0,
+        gt=0,
+        description="Simulated lead-time hours for one full 360° rotation, when rotate is enabled.",
+    )
 
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _rotate_requires_globe(self):
+        if self.rotate and self.extent is not None:
+            raise ValueError(
+                "rotate: true is only valid for full-globe domains (extent: null)."
+            )
+        return self
 
 
 class MeteogramConfig(BaseModel):
