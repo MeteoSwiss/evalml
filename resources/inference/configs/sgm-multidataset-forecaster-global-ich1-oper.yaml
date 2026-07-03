@@ -33,9 +33,6 @@ output:
           - extract_mask: # removes global points
               mask: "lam_0/cutout_mask"
               as_slice: true
-          - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
-              accumulations:
-                - tp
     - grib:
         path: grib/ifs-{date}{time:04}_{step:03}.grib
         encoding:
