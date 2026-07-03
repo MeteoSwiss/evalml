@@ -752,9 +752,22 @@
       "description": "Stratification settings for the analysis.",
       "properties": {
         "regions": {
-          "description": "List of region names for stratification. Empty list means no spatial stratification.",
+          "description": "List of region specs for spatial stratification. String entries are shapefile names (resolved against 'root'). Dict entries map a region name to a bounding box [lon_min, lon_max, lat_min, lat_max]. The special key 'all' overrides the default full-domain region; any other key adds a named bbox region.",
           "items": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              }
+            ]
           },
           "title": "Regions",
           "type": "array"
@@ -769,7 +782,7 @@
             }
           ],
           "default": null,
-          "description": "Root directory where the region shapefiles are stored. Required when regions is non-empty.",
+          "description": "Root directory where the region shapefiles are stored. Required when regions contains string entries.",
           "title": "Root"
         }
       },

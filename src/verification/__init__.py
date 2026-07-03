@@ -44,13 +44,9 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
             src_crs.proj4_init, dst_crs.proj4_init, always_xy=True
         ).transform
 
-        regions = {}
+        regions = {"all": None}
         has_shapefiles = bool(shp and shp != [""])
         if has_shapefiles:
-            # With explicit regional shapefiles, restrict "all" to the Alpine inner domain
-            regions["all"] = [
-                Polygon(list(zip([1.5, 16, 16, 1.5, 1.5], [43, 43, 49.5, 49.5, 43])))
-            ]
             shp = [shp] if isinstance(shp, str) else shp
             for shapefile in shp:
                 region_name = Path(shapefile).stem
@@ -58,9 +54,6 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
                 regions[region_name] = [
                     transform(proj, record.geometry) for record in reader.records()
                 ]
-        else:
-            # No shapefile regions: "all" covers the full domain (e.g. global evaluation)
-            regions["all"] = None
         self.regions = regions
 
     def get_masks(self, lat: xr.DataArray, lon: xr.DataArray) -> xr.DataArray:
@@ -235,12 +228,25 @@ def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
     return out
 
 
+def _bbox_polygon(lon_min, lon_max, lat_min, lat_max) -> Polygon:
+    return Polygon(
+        [
+            (lon_min, lat_min),
+            (lon_max, lat_min),
+            (lon_max, lat_max),
+            (lon_min, lat_max),
+            (lon_min, lat_min),
+        ]
+    )
+
+
 def verify(
     fcst: xr.Dataset,
     obs: xr.Dataset,
     fcst_label: str,
     obs_label: str,
-    regions: list[str] | None = None,
+    shp_regions: list[str] | None = None,
+    bbox_regions: dict[str, list[float]] | None = None,
     dim: list[str] | None = None,
     threshold_dict: dict[str, dict[str, list[float]]] | None = None,
     num_workers: int | None = None,
@@ -262,8 +268,12 @@ def verify(
         Label for the forecast source (used in output dataset).
     obs_label : str
         Label for the observation source (used in output dataset).
-    regions : list[str] or None, optional
-        List of shapefile paths or region names to use for spatial aggregation. If None, uses default region ('all').
+    shp_regions : list[str] or None, optional
+        List of shapefile paths for spatial stratification. Region names are taken from the file stems.
+    bbox_regions : dict[str, list[float]] or None, optional
+        Named bounding-box regions as ``{name: [lon_min, lon_max, lat_min, lat_max]}``.
+        The ``"all"`` key overrides the default full-domain region.
+        Any other key adds an additional named region.
     dim : list[str] or None, optional
         List of dimension names to reduce over when computing metrics/statistics. If None, tries to infer from fcst.
     threshold_dict : dict[str, dict[str, list[float]]] or None, optional
@@ -296,7 +306,9 @@ def verify(
             dim = ["values"]
 
     fcst_aligned, obs_aligned = xr.align(fcst, obs, join="inner", copy=False)
-    region_polygons = ShapefileSpatialAggregationMasks(shp=regions)
+    region_polygons = ShapefileSpatialAggregationMasks(shp=shp_regions or [])
+    for name, bbox in (bbox_regions or {}).items():
+        region_polygons.regions[name] = [_bbox_polygon(*bbox)]
     masks = region_polygons.get_masks(
         lon=obs_aligned["longitude"], lat=obs_aligned["latitude"]
     )

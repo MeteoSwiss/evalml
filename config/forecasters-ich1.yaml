@@ -57,6 +57,7 @@ experiment:
     - TOT_PREC
   stratification:
     regions:
+      - all: [1.5, 16, 43, 49.5]
       - jura
       - mittelland
       - voralpen

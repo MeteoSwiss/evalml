@@ -91,7 +91,8 @@ def main(args: ScriptConfig):
         truth,
         args.source_id,
         args.truth_source_id,
-        args.regions,
+        shp_regions=args.shp_regions,
+        bbox_regions=args.bbox_regions,
         threshold_dict=args.threshold_dict,
     )
     LOG.info(
@@ -158,9 +159,20 @@ if __name__ == "__main__":
         help="Stable identifier for the truth source (e.g. truth_<TRUTH_HASH>).",
     )
     parser.add_argument(
-        "--regions",
+        "--shp_regions",
         type=lambda x: [r for r in x.split(",") if r],
-        help="Comma-separated list of shapefile paths defining regions for stratification.",
+        help="Comma-separated list of shapefile paths for spatial stratification.",
+        default="",
+    )
+    parser.add_argument(
+        "--bbox_regions",
+        type=lambda x: {
+            name: [float(v) for v in bbox.split(",")]
+            for part in x.split(";")
+            if part
+            for name, bbox in [part.split(":", 1)]
+        },
+        help="Semicolon-separated bounding-box regions as name:lon_min,lon_max,lat_min,lat_max.",
         default="",
     )
     parser.add_argument(
