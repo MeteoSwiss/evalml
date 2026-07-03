@@ -122,14 +122,7 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
         # add inner region for ML evaluation
         # this is the extent of the largest lat/lon box that is fully within the radar/INCA domain
         regions["all"] = [
-            Polygon(
-                list(
-                    zip(
-                        [3.17, 11.95, 11.95, 3.17, 3.17],
-                        [43.69, 43.69, 49.39, 49.39, 43.69],
-                    )
-                )
-            )
+            Polygon(list(zip([1.5, 16, 16, 1.5, 1.5], [43, 43, 49.5, 49.5, 43])))
         ]
         if shp and shp != [""]:
             shp = [shp] if isinstance(shp, str) else shp
