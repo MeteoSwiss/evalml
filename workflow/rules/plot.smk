@@ -28,7 +28,6 @@ rule plot_meteogram:
         script="workflow/scripts/plot_meteogram.py",
         inference_okfile=rules.inference_execute.output.okfile,
         truth_dep=truth_file_dep,
-        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         expand(
             OUT_ROOT
@@ -99,7 +98,6 @@ rule plot_forecast_frame:
     input:
         script="workflow/scripts/plot_forecast_frame.py",
         inference_okfile=rules.inference_execute.output.okfile,
-        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         expand(
             OUT_ROOT

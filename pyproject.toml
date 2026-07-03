@@ -30,7 +30,7 @@ dependencies = [
     "earthkit-utils>=1.0,<1.1",
     "earthkit-plots>=1.0,<1.1",
     "earthkit-meteo>=1.0,<1.1",
-    "earthkit-geo>=1.0,<1.1"
+    "earthkit-geo>=1.0,<1.1",
 ]
 
 [project.scripts]
