@@ -1013,15 +1013,7 @@ def load_icon_baseline_from_grib(
             const_grib = None
         if const_grib is not None:
             topo = _load_icon_topography(const_grib)
-            if result.sizes["values"] == len(topo):
-                result = result.assign_coords(elevation=("values", topo))
-            else:
-                LOG.warning(
-                    "elevation not assigned: values=%d but %s has %d cells",
-                    result.sizes["values"],
-                    const_grib.name,
-                    len(topo),
-                )
+            result = result.assign_coords(elevation=("values", topo))
     return result
 
 
