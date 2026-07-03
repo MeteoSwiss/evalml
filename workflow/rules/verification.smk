@@ -16,7 +16,6 @@ rule verification_metrics_baseline:
         script="workflow/scripts/verification_metrics.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth_dep=truth_file_dep,
-        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT / f"data/baselines/{{baseline_id}}/{{init_time}}/verif_{TRUTH_HASH}.nc",
     log:
@@ -65,7 +64,6 @@ rule verification_metrics:
         script="workflow/scripts/verification_metrics.py",
         inference_okfile=rules.inference_execute.output.okfile,
         truth_dep=truth_file_dep,
-        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/verif_{TRUTH_HASH}.nc",
     log:
@@ -233,7 +231,6 @@ rule verification_scoremaps_baseline:
         script="workflow/scripts/verification_scoremaps.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth=config["truth"]["root"],
-        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT
         / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
