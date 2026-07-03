@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
+from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
@@ -396,14 +396,37 @@ class Locations(BaseModel):
 class Stratification(BaseModel):
     """Stratification settings for the analysis."""
 
-    regions: List[str] = Field(
+    regions: List[Union[str, Dict[str, List[float]]]] = Field(
         default_factory=list,
-        description="List of region names for stratification. Empty list means no spatial stratification.",
+        description=(
+            "List of region specs for spatial stratification. String entries are shapefile names "
+            "(resolved against 'root'). Dict entries map a region name to a bounding box "
+            "[lon_min, lon_max, lat_min, lat_max]. The special key 'all' overrides the default "
+            "full-domain region; any other key adds a named bbox region."
+        ),
     )
     root: Optional[str] = Field(
         None,
-        description="Root directory where the region shapefiles are stored. Required when regions is non-empty.",
+        description="Root directory where the region shapefiles are stored. Required when regions contains string entries.",
     )
+
+    @field_validator("regions")
+    @classmethod
+    def validate_regions(
+        cls, v: List[Union[str, Dict[str, List[float]]]]
+    ) -> List[Union[str, Dict[str, List[float]]]]:
+        for entry in v:
+            if isinstance(entry, dict):
+                if len(entry) != 1:
+                    raise ValueError(
+                        f"Each bbox region dict must have exactly one key, got: {list(entry.keys())}"
+                    )
+                name, bbox = next(iter(entry.items()))
+                if len(bbox) != 4:
+                    raise ValueError(
+                        f"Bbox for region '{name}' must have exactly 4 values [lon_min, lon_max, lat_min, lat_max], got {len(bbox)}."
+                    )
+        return v
 
 
 class Dashboard(BaseModel):

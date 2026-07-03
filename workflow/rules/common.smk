@@ -79,14 +79,26 @@ def parse_reference_times():
     return times
 
 
-def parse_regions():
-    """Parse regions from the configuration."""
+def parse_shp_regions():
+    """Return comma-separated shapefile paths from the regions config."""
     cfg = config["experiment"]["stratification"]
-    region_names = cfg.get("regions", [])
-    if not region_names:
-        return ""
-    regions = [f"{cfg['root']}/{region}.shp" for region in region_names]
-    return ",".join(regions)
+    root = cfg.get("root", "")
+    return ",".join(
+        f"{root}/{entry}.shp"
+        for entry in cfg.get("regions", [])
+        if isinstance(entry, str)
+    )
+
+
+def parse_bbox_regions():
+    """Return semicolon-separated name:lon_min,lon_max,lat_min,lat_max entries."""
+    cfg = config["experiment"]["stratification"]
+    parts = []
+    for entry in cfg.get("regions", []):
+        if isinstance(entry, dict):
+            for name, bbox in entry.items():
+                parts.append(f"{name}:{','.join(str(v) for v in bbox)}")
+    return ";".join(parts)
 
 
 def parse_showcase_regions():
@@ -385,7 +397,8 @@ if "jretrieve" in str(config["truth"]["root"]):
 
 
 TRUTH_HASH = truth_hash(config["truth"])
-REGIONS = parse_regions()
+SHP_REGIONS = parse_shp_regions()
+BBOX_REGIONS = parse_bbox_regions()
 SHOWCASE_REGIONS = parse_showcase_regions()
 SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])
 EXPERIMENT_PARAMS = config.get("experiment", {}).get(
