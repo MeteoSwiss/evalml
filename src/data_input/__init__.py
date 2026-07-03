@@ -127,7 +127,11 @@ def load_analysis_data_from_zarr(
     if "cell" in ds.dims:
         ds = ds.rename({"cell": "values"})
 
-    # Drop grid points with undefined (NaN) coordinates
+    # Drop grid points with undefined (NaN) coordinates. This can occur when
+    # xarray opens a zarr dataset whose lat/lon arrays have fill_value=0.0: any
+    # grid point sitting exactly on 0° longitude is masked to NaN by xarray even
+    # though it is a valid point in the raw zarr (e.g. aifs-ea-an-oper o96 ERA5
+    # dataset has 192 such points).
     if "values" in ds.dims and "latitude" in ds.coords and "longitude" in ds.coords:
         valid = np.isfinite(ds["latitude"].values) & np.isfinite(ds["longitude"].values)
         if not valid.all():
