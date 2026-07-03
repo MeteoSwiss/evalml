@@ -11,7 +11,7 @@ from data_input import (
     load_forecast_data,
     load_truth_data,
 )
-from verification import apply_lapse_rate_correction
+from verification import apply_lapse_rate_correction_inplace
 from verification.spatial import map_forecast_to_truth
 
 LOG = logging.getLogger(__name__)
@@ -230,13 +230,11 @@ def main():
         ]
 
         if args.lapse_rate_correction:
-            forecast_station_ds = apply_lapse_rate_correction(
+            apply_lapse_rate_correction_inplace(
                 forecast_station_ds, station_ds, paramlist
             )
-            baseline_station_ds_list = [
-                apply_lapse_rate_correction(ds, station_ds, paramlist)
-                for ds in baseline_station_ds_list
-            ]
+            for ds in baseline_station_ds_list:
+                apply_lapse_rate_correction_inplace(ds, station_ds, paramlist)
 
         fig, ax = plt.subplots()
 

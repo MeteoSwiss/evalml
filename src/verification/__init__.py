@@ -25,7 +25,7 @@ _T_LAPSE_RATE = 0.0065  # K/m — ICAO standard atmosphere
 _LAPSE_RATE_PARAMS: dict[str, float] = {"T_2M": _T_LAPSE_RATE}
 
 
-def apply_lapse_rate_correction(
+def apply_lapse_rate_correction_inplace(
     fcst: xr.Dataset,
     obs: xr.Dataset,
     params: list[str],
@@ -79,7 +79,6 @@ def apply_lapse_rate_correction(
             float(dz_vals.mean()),
         )
 
-    fcst = fcst.copy()
     for param, rate in _LAPSE_RATE_PARAMS.items():
         if param in params and param in fcst.data_vars:
             correction = rate * dz
@@ -95,7 +94,6 @@ def apply_lapse_rate_correction(
                     float(c_vals.mean()),
                 )
             fcst[param] = fcst[param] - correction
-    return fcst
 
 
 class AggregationMasks(abc.ABC):

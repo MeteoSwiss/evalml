@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-from verification import verify, apply_lapse_rate_correction  # noqa: E402
+from verification import verify, apply_lapse_rate_correction_inplace  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
 from data_input import (
     parse_steps,
@@ -85,7 +85,7 @@ def main(args: ScriptConfig):
     )
 
     if args.lapse_rate_correction:
-        fcst = apply_lapse_rate_correction(fcst, truth, args.params)
+        apply_lapse_rate_correction_inplace(fcst, truth, args.params)
 
     # compute metrics and statistics
     now = datetime.now()
