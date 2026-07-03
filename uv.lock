@@ -1033,7 +1033,7 @@ wheels = [
 
 [[package]]
 name = "earthkit-data"
-version = "1.0.0"
+version = "1.0.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cfgrib" },
@@ -1057,9 +1057,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "xarray" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7c/e8/494b2f544a3b2f0caf3af386ceb667f97ba4875b15c78b49888cc6d130fc/earthkit_data-1.0.0.tar.gz", hash = "sha256:57100921bfe18810230c1cd308fe1f62c5882d603fc56108a5926ead6291fe7a", size = 10090399, upload-time = "2026-06-29T08:11:46.783Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8b/fb/f5de89345c712f7e3cdb13318a3f2cbdeead35c1b2bffe6d504305d18053/earthkit_data-1.0.2.tar.gz", hash = "sha256:e067c7a0a1fc0540936df5f3fe66e6fc8568a995138022a6075d9fd260b24755", size = 10091131, upload-time = "2026-07-02T09:19:41.416Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1e/82/517d02b673173ed94705979c84975007eb95a3f919e2dcf784d49599681d/earthkit_data-1.0.0-py3-none-any.whl", hash = "sha256:4ca59a7ec0b5893898555a5fc399957343bd1f3f7eba873e02ea768d9478c86f", size = 550697, upload-time = "2026-06-29T08:11:44.881Z" },
+    { url = "https://files.pythonhosted.org/packages/1c/be/56ed3a1144d7d7cce876be1d0d2536fece99aab445facdc5fdcb893a4c86/earthkit_data-1.0.2-py3-none-any.whl", hash = "sha256:6fdc12ac3a51ff2e565477619426fbdefee94097f4b86b70638bc9c2bb1ed492", size = 550969, upload-time = "2026-07-02T09:19:39.708Z" },
 ]
 
 [[package]]
@@ -1097,7 +1097,7 @@ wheels = [
 
 [[package]]
 name = "earthkit-plots"
-version = "1.0.0"
+version = "1.0.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "adjusttext" },
@@ -1111,9 +1111,9 @@ dependencies = [
     { name = "plotly" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/88/98/6a5e96aa51148cd3f750fc9465fb860fee7e80f78e2fc18dfe0a3170100a/earthkit_plots-1.0.0.tar.gz", hash = "sha256:9d9a78a01e6bd00cb838faf186312f7f2cef86c93b2604d272e67480aceea410", size = 61469690, upload-time = "2026-06-29T08:28:03.638Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0a/04/b1226e74b05aecf97ba1f60b107d41aac22944b92fca728932761f6ce4a6/earthkit_plots-1.0.2.tar.gz", hash = "sha256:7e28b660125520d15ad7d2650a9f797e5fab15f1feeb2586e5d899e6dac13f85", size = 2888678, upload-time = "2026-07-02T09:42:17.443Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ad/c5/6e92602376cb93572a16466d08eaabdfe0a46891b5dec264e9063bef412f/earthkit_plots-1.0.0-py3-none-any.whl", hash = "sha256:e9cd468773d3f42757a61d91130f98609988e8b5145c1a00bcffefbe5cf5e485", size = 3055324, upload-time = "2026-06-29T08:28:00.839Z" },
+    { url = "https://files.pythonhosted.org/packages/32/13/35e988595d2f577785927be7f56f5ddc5a3df44cb7fde1dcc8686e403b3e/earthkit_plots-1.0.2-py3-none-any.whl", hash = "sha256:b8a5fe0098bd227782f4b17d0bf24cee73d88e3e64ce587a8110d48f2b9c1c2d", size = 3055924, upload-time = "2026-07-02T09:42:15.963Z" },
 ]
 
 [[package]]
@@ -1132,15 +1132,15 @@ wheels = [
 
 [[package]]
 name = "earthkit-utils"
-version = "1.0.0"
+version = "1.0.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "array-api-compat" },
     { name = "pint" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/43/ff/9a45a632b24eb2a2e512dd8d24cd5c86db6c35df499025c2c9e1e5bab61e/earthkit_utils-1.0.0.tar.gz", hash = "sha256:e1e042cc90b3f14245784fa0dc6fc0a0eb3fbeb6ff9a60dad3a5236da2058793", size = 125012, upload-time = "2026-06-29T08:09:21.222Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8a/ba/b4e1aeb037c11a02f68eebb9cba3918d462edb24b2ebfeaf851ef18ca060/earthkit_utils-1.0.2.tar.gz", hash = "sha256:f5e69be87ebfffb2ef5556a0f7439fee6746198c62aa3fe83498e8d327a9fa55", size = 125028, upload-time = "2026-06-29T14:11:58.702Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/97/21/2fe9c74b6a150c0e5e96334b078ac84a73f423a3131651304df0d1ac7eb5/earthkit_utils-1.0.0-py3-none-any.whl", hash = "sha256:98f9a010defeb5bc01a3138f3c9921add076e4042ad26efc25e2ee1d57bc271e", size = 41050, upload-time = "2026-06-29T08:09:19.958Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/da/8a6bffefd03108c4e6ecf2390b41f18be160bc018710db3db1f857520628/earthkit_utils-1.0.2-py3-none-any.whl", hash = "sha256:eef89a1f6a3f03d4cca2b82975a3f4548d3db43a17646014952453b00d98edb8", size = 41054, upload-time = "2026-06-29T14:11:57.626Z" },
 ]
 
 [[package]]

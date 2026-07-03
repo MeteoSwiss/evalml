@@ -221,6 +221,7 @@ def collect_all_runs() -> dict:
                 # (as_candidate=False) demote a run that was already registered as
                 # an explicit candidate. Order in config["runs"] must not matter.
                 run_cfg["_is_candidate"] = True
+                run_cfg["label"] = runs[run_id].get("label")
             runs[run_id] = run_cfg
     return runs
 
