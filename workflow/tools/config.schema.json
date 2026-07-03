@@ -227,6 +227,19 @@
           "description": "Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
           "title": "Projection",
           "type": "string"
+        },
+        "rotate": {
+          "default": false,
+          "description": "Rotate the viewpoint across animation frames as lead time advances. Only valid for full-globe domains (extent: null).",
+          "title": "Rotate",
+          "type": "boolean"
+        },
+        "hours_per_revolution": {
+          "default": 96.0,
+          "description": "Simulated lead-time hours for one full 360\u00b0 rotation, when rotate is enabled.",
+          "exclusiveMinimum": 0,
+          "title": "Hours Per Revolution",
+          "type": "number"
         }
       },
       "required": [
