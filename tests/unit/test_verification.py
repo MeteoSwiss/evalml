@@ -104,60 +104,65 @@ def test_aggregate_results_n_samples_by_season_and_init_hour():
 # ---------------------------------------------------------------------------
 
 
-def _make_lapse_rate_datasets(fcst_elev, obs_elev, t2m=280.0, td2m=270.0):
-    """Return (fcst, obs) pair with elevation coordinates and T/TD data vars."""
-    n = len(fcst_elev)
-    fcst = xr.Dataset(
-        {
-            "T_2M": (["step", "values"], np.full((3, n), t2m, dtype=np.float32)),
-            "TD_2M": (["step", "values"], np.full((3, n), td2m, dtype=np.float32)),
-        },
-        coords={"elevation": ("values", np.array(fcst_elev, dtype=np.float32))},
-    )
-    obs = xr.Dataset(
-        coords={"elevation": ("values", np.array(obs_elev, dtype=np.float32))}
-    )
-    return fcst, obs
+@pytest.fixture
+def make_lapse_rate_datasets():
+    def _make(fcst_elev, obs_elev, t2m=280.0, td2m=270.0):
+        n = len(fcst_elev)
+        fcst = xr.Dataset(
+            {
+                "T_2M": (["step", "values"], np.full((3, n), t2m, dtype=np.float32)),
+                "TD_2M": (["step", "values"], np.full((3, n), td2m, dtype=np.float32)),
+            },
+            coords={"elevation": ("values", np.array(fcst_elev, dtype=np.float32))},
+        )
+        obs = xr.Dataset(
+            coords={"elevation": ("values", np.array(obs_elev, dtype=np.float32))}
+        )
+        return fcst, obs
+
+    return _make
 
 
-def test_lapse_rate_correction_temperature():
+def test_lapse_rate_correction_temperature(make_lapse_rate_datasets):
     # Station 500 m above forecast grid cell → T should decrease by 0.0065 * 500 = 3.25 K
-    fcst, obs = _make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
+    fcst, obs = make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
     apply_lapse_rate_correction_inplace(fcst, obs, ["T_2M", "TD_2M"])
     np.testing.assert_allclose(fcst["T_2M"].values, 280.0 - 0.0065 * 500.0, atol=1e-4)
 
 
-def test_lapse_rate_correction_dewpoint_unchanged():
+def test_lapse_rate_correction_dewpoint_unchanged(make_lapse_rate_datasets):
     # TD_2M is not corrected — only T_2M gets the lapse-rate adjustment
-    fcst, obs = _make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
+    fcst, obs = make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
     apply_lapse_rate_correction_inplace(fcst, obs, ["T_2M", "TD_2M"])
     np.testing.assert_array_equal(fcst["TD_2M"].values, 270.0)
 
 
-def test_lapse_rate_correction_station_below_grid():
+def test_lapse_rate_correction_station_below_grid(make_lapse_rate_datasets):
     # Station 300 m below forecast grid → T should increase by 0.0065 * 300 = 1.95 K
-    fcst, obs = _make_lapse_rate_datasets(fcst_elev=[800.0], obs_elev=[500.0])
+    fcst, obs = make_lapse_rate_datasets(fcst_elev=[800.0], obs_elev=[500.0])
     apply_lapse_rate_correction_inplace(fcst, obs, ["T_2M"])
     np.testing.assert_allclose(fcst["T_2M"].values, 280.0 + 0.0065 * 300.0, atol=1e-4)
 
 
-def test_lapse_rate_correction_raises_without_forecast_elevation():
-    fcst, obs = _make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
+def test_lapse_rate_correction_raises_without_forecast_elevation(
+    make_lapse_rate_datasets,
+):
+    fcst, obs = make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
     fcst_no_elev = fcst.drop_vars("elevation")
     with pytest.raises(ValueError, match="forecast"):
         apply_lapse_rate_correction_inplace(fcst_no_elev, obs, ["T_2M", "TD_2M"])
 
 
-def test_lapse_rate_correction_raises_without_obs_elevation():
-    fcst, obs = _make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
+def test_lapse_rate_correction_raises_without_obs_elevation(make_lapse_rate_datasets):
+    fcst, obs = make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
     obs_no_elev = obs.drop_vars("elevation")
     with pytest.raises(ValueError, match="observations"):
         apply_lapse_rate_correction_inplace(fcst, obs_no_elev, ["T_2M", "TD_2M"])
 
 
-def test_lapse_rate_correction_only_requested_params():
+def test_lapse_rate_correction_only_requested_params(make_lapse_rate_datasets):
     # Pass only T_2M in params — TD_2M should not be corrected
-    fcst, obs = _make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
+    fcst, obs = make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
     apply_lapse_rate_correction_inplace(fcst, obs, ["T_2M"])
     np.testing.assert_allclose(fcst["T_2M"].values, 280.0 - 0.0065 * 500.0, atol=1e-4)
     np.testing.assert_array_equal(fcst["TD_2M"].values, 270.0)
