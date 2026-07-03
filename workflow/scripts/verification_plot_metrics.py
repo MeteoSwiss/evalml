@@ -14,6 +14,20 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
+plt.style.use(["classic", "seaborn-v0_8-colorblind"])
+plt.rcParams.update({
+    "axes.grid": True,
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "figure.figsize": (10, 6),
+    "figure.dpi": 150,
+    "lines.linewidth": 1.5,
+    "lines.markersize": 3,
+    "lines.markeredgewidth": 0,
+    "legend.frameon": False,
+    "font.size": 12,
+})
+
 
 def _ensure_unique_lead_time(ds: xr.Dataset) -> xr.Dataset:
     """Drop duplicate lead_time entries within a Dataset (keep first occurrence)."""
@@ -140,10 +154,11 @@ def main(args: Namespace) -> None:
                 color="black" if "analysis" in source else None,
                 ax=ax,
             )
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=sub_df["source"].nunique())
         args.output_dir.mkdir(parents=True, exist_ok=True)
         fn = f"{metric}_{param}"
         fn += f"_{season}_{init_hour}.png" if args.stratify else ".png"
-        plt.savefig(args.output_dir / fn)
+        plt.savefig(args.output_dir / fn, bbox_inches="tight")
         plt.close(fig)
 
 
