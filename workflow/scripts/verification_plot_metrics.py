@@ -156,7 +156,11 @@ def main(args: Namespace) -> None:
                 color="black" if "analysis" in source else None,
                 ax=ax,
             )
-        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=sub_df["source"].nunique())
+        ax.legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.15),
+            ncol=sub_df["source"].nunique(),
+        )
         args.output_dir.mkdir(parents=True, exist_ok=True)
         fn = f"{metric}_{param}"
         fn += f"_{season}_{init_hour}.png" if args.stratify else ".png"
