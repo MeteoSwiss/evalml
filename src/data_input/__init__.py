@@ -238,9 +238,7 @@ def load_analysis_data_from_zarr(
         elevation = ekdv.geopotential_height_from_geopotential(
             ds["FIS"].isel(time=0, drop=True)
         )
-        ds = ds.assign_coords(elevation=elevation)
-        if "FIS" not in params:
-            ds = ds.drop_vars("FIS")
+        ds = ds.assign_coords(elevation=elevation).drop_vars(["FIS"])
 
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
     return _select_valid_times(ds, times)
