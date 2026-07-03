@@ -103,7 +103,42 @@ def nearest_grid_yx_indices(
     return np.asarray(y_idx, dtype=int), np.asarray(x_idx, dtype=int)
 
 
-def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
+def _extrapolation_mask(
+    source_lat: np.ndarray,
+    source_lon: np.ndarray,
+    target_lat: np.ndarray,
+    target_lon: np.ndarray,
+) -> np.ndarray:
+    """Return a boolean mask that is True where target points lie outside the source domain.
+
+    The source domain is its lat/lon bounding box extended by one estimated
+    native grid spacing on each side, so that truth points near the forecast
+    boundary are not spuriously masked. For 2-D sources the spacing is the
+    median adjacent-cell distance; for 1-D sources it is approximated from the
+    overall extent.
+    """
+    target_lat = np.asarray(target_lat).ravel()
+    target_lon = np.asarray(target_lon).ravel()
+
+    if source_lat.ndim == 2:
+        dlat = float(np.median(np.abs(np.diff(source_lat, axis=0))))
+        dlon = float(np.median(np.abs(np.diff(source_lon, axis=1))))
+    else:
+        n = max(source_lat.size - 1, 1)
+        dlat = float((source_lat.max() - source_lat.min()) / n)
+        dlon = float((source_lon.max() - source_lon.min()) / n)
+
+    return (
+        (target_lat < source_lat.min() - dlat)
+        | (target_lat > source_lat.max() + dlat)
+        | (target_lon < source_lon.min() - dlon)
+        | (target_lon > source_lon.max() + dlon)
+    )
+
+
+def map_forecast_to_truth(
+    fcst: xr.Dataset, truth: xr.Dataset, extrapolate: bool = False
+) -> xr.Dataset:
     """Map forecast points to truth locations using nearest-neighbor matching.
 
     The forecast is flattened to a single spatial `values` dimension (when
@@ -119,6 +154,11 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
     truth
         Reference dataset with `latitude` and `longitude` coordinates on either
         `(y, x)` or `values`.
+    extrapolate
+        If False (default), truth points that fall outside the bounding box of
+        the forecast domain — by more than the estimated native grid spacing —
+        are set to missing in the returned dataset. Set to True to reproduce the
+        unconstrained nearest-neighbor behaviour.
 
     Returns
     -------
@@ -147,6 +187,10 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
 
     truth_is_grid = "y" in truth.dims and "x" in truth.dims
 
+    # Preserve original source shape for the domain check before stacking.
+    fcst_lat_raw = fcst_lat
+    fcst_lon_raw = fcst_lon
+
     if "y" in fcst.dims and "x" in fcst.dims:
         fcst = fcst.stack(values=("y", "x"))
     if truth_is_grid:
@@ -159,7 +203,22 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
         target_longitude=truth["longitude"].values,
     )
 
+    outside = (
+        None
+        if extrapolate
+        else _extrapolation_mask(
+            fcst_lat_raw,
+            fcst_lon_raw,
+            truth["latitude"].values,
+            truth["longitude"].values,
+        )
+    )
+
     fcst = fcst.isel(values=nearest_idx)
+
+    if outside is not None and np.any(outside):
+        fcst = fcst.where(xr.DataArray(~outside, dims=["values"]))
+
     fcst = fcst.drop_vars(["x", "y", "values"], errors="ignore")
     fcst = fcst.assign_coords(longitude=("values", truth["longitude"].data))
     fcst = fcst.assign_coords(latitude=("values", truth["latitude"].data))
