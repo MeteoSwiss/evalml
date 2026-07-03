@@ -15,18 +15,20 @@ logging.basicConfig(
 )
 
 plt.style.use(["classic", "seaborn-v0_8-colorblind"])
-plt.rcParams.update({
-    "axes.grid": True,
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-    "figure.figsize": (10, 6),
-    "figure.dpi": 150,
-    "lines.linewidth": 1.5,
-    "lines.markersize": 3,
-    "lines.markeredgewidth": 0,
-    "legend.frameon": False,
-    "font.size": 12,
-})
+plt.rcParams.update(
+    {
+        "axes.grid": True,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "figure.figsize": (10, 6),
+        "figure.dpi": 150,
+        "lines.linewidth": 1.5,
+        "lines.markersize": 3,
+        "lines.markeredgewidth": 0,
+        "legend.frameon": False,
+        "font.size": 12,
+    }
+)
 
 
 def _ensure_unique_lead_time(ds: xr.Dataset) -> xr.Dataset:
