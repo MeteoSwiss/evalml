@@ -312,7 +312,7 @@ def verify(
     dim: list[str] | None = None,
     threshold_dict: dict[str, dict[str, list[float]]] | None = None,
     num_workers: int | None = None,
-    max_missing_fraction: float = 0.2,
+    max_missing_fraction: float = 0.0,
 ) -> xr.Dataset:
     """
     Compute verification metrics and statistics comparing forecast and observation datasets.
@@ -342,10 +342,11 @@ def verify(
     num_workers : int or None, optional
         Number of parallel workers for computation. If None, uses available CPU cores minus 2.
     max_missing_fraction : float, optional
-        Maximum allowed fraction of missing values (from either fcst or obs) within a region
+        Maximum allowed fraction of missing forecast values among obs-valid in-region points
         before a metric is set to NaN. Computed per region and time step over the reduction
-        dimensions. Default is 0.2 (20%). This allows legitimate station dropouts while
-        suppressing metrics where the forecast does not cover the region.
+        dimensions. Default is 0.0 — no missing forecasts are tolerated where observations
+        exist. Increase to a small positive value (e.g. 0.05) if spurious forecast gaps need
+        to be accommodated.
 
     Returns
     -------
@@ -397,11 +398,11 @@ def verify(
         fcst_param = fcst_aligned[param].where(masks)
         obs_param = obs_aligned[param].where(masks)
 
-        # Missing fraction: proportion of in-region points where either source is NaN.
-        # Computed with skipna=True so only in-region points (non-masked by region) count.
+        # Missing fraction: among obs-valid in-region points, fraction where fcst is missing.
+        # Normalising by obs availability avoids penalising parameters with fewer stations.
         missing_fraction = (
-            (fcst_param.isnull() | obs_param.isnull())
-            .where(masks)
+            fcst_param.isnull()
+            .where(obs_param.notnull() & masks)
             .mean(dim=dim, skipna=True)
         )
         too_many_missing = missing_fraction > max_missing_fraction
