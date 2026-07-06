@@ -957,6 +957,12 @@
         }
       ]
     },
+    "lapse_rate_correction": {
+      "default": true,
+      "description": "Apply standard-atmosphere lapse-rate correction to T_2M.",
+      "title": "Lapse Rate Correction",
+      "type": "boolean"
+    },
     "experiment": {
       "$ref": "#/$defs/ExperimentConfig",
       "description": "Settings for the experiment workflow outputs."

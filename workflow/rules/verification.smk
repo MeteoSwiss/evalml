@@ -17,7 +17,7 @@ rule verification_metrics_baseline:
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth_dep=truth_file_dep,
     output:
-        OUT_ROOT / f"data/baselines/{{baseline_id}}/{{init_time}}/verif_{TRUTH_HASH}.nc",
+        OUT_ROOT / f"data/baselines/{{baseline_id}}/{{init_time}}/verif_{VERIF_HASH}.nc",
     log:
         OUT_ROOT / "logs/verification_metrics_baseline/{baseline_id}-{init_time}.log",
     resources:
@@ -32,6 +32,11 @@ rule verification_metrics_baseline:
         regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
+        lapse_rate_flag=(
+            "--lapse_rate_correction"
+            if config.get("lapse_rate_correction", True)
+            else ""
+        ),
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
@@ -46,6 +51,7 @@ rule verification_metrics_baseline:
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
             --member "{params.member}" \
+            {params.lapse_rate_flag} \
             --output {output} >{log} 2>&1
         """
 
@@ -65,7 +71,7 @@ rule verification_metrics:
         inference_okfile=rules.inference_execute.output.okfile,
         truth_dep=truth_file_dep,
     output:
-        OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/verif_{TRUTH_HASH}.nc",
+        OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/verif_{VERIF_HASH}.nc",
     log:
         OUT_ROOT / "logs/verification_metrics/{run_id}-{init_time}.log",
     resources:
@@ -85,6 +91,11 @@ rule verification_metrics:
         ).resolve(),
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
+        lapse_rate_flag=(
+            "--lapse_rate_correction"
+            if config.get("lapse_rate_correction", True)
+            else ""
+        ),
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
@@ -98,6 +109,7 @@ rule verification_metrics:
             --regions "{params.regions}" \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
+            {params.lapse_rate_flag} \
             --output {output} >{log} 2>&1
         """
 
@@ -118,7 +130,7 @@ rule verification_metrics_aggregation:
             allow_missing=True,
         ),
     output:
-        OUT_ROOT / f"data/runs/{{run_id}}/verif_aggregated_{TRUTH_HASH}.nc",
+        OUT_ROOT / f"data/runs/{{run_id}}/verif_aggregated_{VERIF_HASH}.nc",
     log:
         OUT_ROOT / "logs/verification_metrics_aggregation/{run_id}.log",
     resources:
@@ -140,7 +152,7 @@ use rule verification_metrics_aggregation as verification_metrics_aggregation_ba
             allow_missing=True,
         ),
     output:
-        OUT_ROOT / f"data/baselines/{{baseline_id}}/verif_aggregated_{TRUTH_HASH}.nc",
+        OUT_ROOT / f"data/baselines/{{baseline_id}}/verif_aggregated_{VERIF_HASH}.nc",
     log:
         OUT_ROOT / "logs/verification_metrics_aggregation_baseline/{baseline_id}.log",
 
