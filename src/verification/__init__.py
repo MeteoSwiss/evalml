@@ -59,12 +59,14 @@ def apply_lapse_rate_correction_inplace(
     dz_vals = np.asarray(dz).ravel()
     n_missing = int(np.sum(~np.isfinite(dz_vals)))
     if n_missing > 0:
-        raise ValueError(
-            f"Lapse-rate correction: {n_missing} missing elevation value(s) in dz; "
-            "both forecast and observation elevation coordinates must be fully defined."
+        LOG.warning(
+            "Lapse-rate correction: %d missing elevation value(s) in dz; "
+            "statistics and corrections are computed over the remaining %d point(s).",
+            n_missing,
+            dz_vals.size - n_missing,
         )
 
-    max_abs_dz = float(np.abs(dz_vals).max())
+    max_abs_dz = float(np.nanmax(np.abs(dz_vals)))
     if max_abs_dz < 1.0:
         LOG.info(
             "Lapse-rate correction: forecast and truth altitudes agree within rounding "
@@ -74,9 +76,9 @@ def apply_lapse_rate_correction_inplace(
     else:
         LOG.info(
             "Lapse-rate correction: Δz range [%.1f, %.1f] m, mean %.1f m.",
-            float(dz_vals.min()),
-            float(dz_vals.max()),
-            float(dz_vals.mean()),
+            float(np.nanmin(dz_vals)),
+            float(np.nanmax(dz_vals)),
+            float(np.nanmean(dz_vals)),
         )
 
     for param, rate in _LAPSE_RATE_PARAMS.items():
@@ -89,9 +91,9 @@ def apply_lapse_rate_correction_inplace(
                     "correction range [%.3f, %.3f] K, mean %.3f K.",
                     param,
                     rate,
-                    float(c_vals.min()),
-                    float(c_vals.max()),
-                    float(c_vals.mean()),
+                    float(np.nanmin(c_vals)),
+                    float(np.nanmax(c_vals)),
+                    float(np.nanmean(c_vals)),
                 )
             fcst[param] = fcst[param] - correction
 
@@ -310,6 +312,7 @@ def verify(
     dim: list[str] | None = None,
     threshold_dict: dict[str, dict[str, list[float]]] | None = None,
     num_workers: int | None = None,
+    max_missing_fraction: float = 0.2,
 ) -> xr.Dataset:
     """
     Compute verification metrics and statistics comparing forecast and observation datasets.
@@ -338,6 +341,11 @@ def verify(
         If None, no thresholds used.
     num_workers : int or None, optional
         Number of parallel workers for computation. If None, uses available CPU cores minus 2.
+    max_missing_fraction : float, optional
+        Maximum allowed fraction of missing values (from either fcst or obs) within a region
+        before a metric is set to NaN. Computed per region and time step over the reduction
+        dimensions. Default is 0.2 (20%). This allows legitimate station dropouts while
+        suppressing metrics where the forecast does not cover the region.
 
     Returns
     -------
@@ -389,6 +397,15 @@ def verify(
         fcst_param = fcst_aligned[param].where(masks)
         obs_param = obs_aligned[param].where(masks)
 
+        # Missing fraction: proportion of in-region points where either source is NaN.
+        # Computed with skipna=True so only in-region points (non-masked by region) count.
+        missing_fraction = (
+            (fcst_param.isnull() | obs_param.isnull())
+            .where(masks)
+            .mean(dim=dim, skipna=True)
+        )
+        too_many_missing = missing_fraction > max_missing_fraction
+
         score = _compute_scores(
             fcst_param,
             obs_param,
@@ -396,7 +413,7 @@ def verify(
             source=fcst_label,
             dim=dim,
             thresholds=thresholds,
-        )
+        ).where(~too_many_missing)
         fcst_stats = _compute_statistics(
             fcst_param,
             prefix=param + ".",
@@ -409,7 +426,9 @@ def verify(
             source=obs_label,
             dim=dim,
         )
-        param_statistics = xr.concat([fcst_stats, obs_stats], dim="source")
+        param_statistics = xr.concat([fcst_stats, obs_stats], dim="source").where(
+            ~too_many_missing
+        )
         # Compute eagerly per parameter to prevent dask graph bloat
         scores.append(_merge_metrics([score], num_workers=num_workers))
         statistics.append(_merge_metrics([param_statistics], num_workers=num_workers))
