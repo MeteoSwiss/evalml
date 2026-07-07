@@ -420,16 +420,14 @@ def verify(
             prefix=param + ".",
             source=fcst_label,
             dim=dim,
-        )
+        ).where(~too_many_missing)
         obs_stats = _compute_statistics(
             obs_param,
             prefix=param + ".",
             source=obs_label,
             dim=dim,
         )
-        param_statistics = xr.concat([fcst_stats, obs_stats], dim="source").where(
-            ~too_many_missing
-        )
+        param_statistics = xr.concat([fcst_stats, obs_stats], dim="source")
         # Compute eagerly per parameter to prevent dask graph bloat
         scores.append(_merge_metrics([score], num_workers=num_workers))
         statistics.append(_merge_metrics([param_statistics], num_workers=num_workers))
