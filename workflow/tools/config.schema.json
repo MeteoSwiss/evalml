@@ -346,6 +346,76 @@
       "title": "ExplicitDates",
       "type": "array"
     },
+    "Ffv2Config": {
+      "additionalProperties": false,
+      "description": "Configuration for the FFV2 scoring pipeline.",
+      "properties": {
+        "experiment_ids": {
+          "description": "Comma-separated experiment IDs passed to FFV2.",
+          "title": "Experiment Ids",
+          "type": "string"
+        },
+        "veri_ens_member": {
+          "description": "Comma-separated ensemble member indices passed to FFV2, one per experiment ID (typically -1 for deterministic runs).",
+          "title": "Veri Ens Member",
+          "type": "string"
+        },
+        "catthresholds": {
+          "additionalProperties": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "description": "Per-variable categorical thresholds for FFV2, mapping FFV2 variable names to lists of threshold values.",
+          "title": "Catthresholds",
+          "type": "object"
+        },
+        "pecthresholds": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object"
+          },
+          "description": "Per-variable PEC thresholds for FFV2, mapping FFV2 variable names to a dict with exactly one 'lower' and one 'upper' value.",
+          "title": "Pecthresholds",
+          "type": "object"
+        },
+        "experiment_description": {
+          "description": "Short description of the experiment for FFV2 output files.",
+          "title": "Experiment Description",
+          "type": "string"
+        },
+        "file_description": {
+          "description": "File description string used in FFV2 output file naming.",
+          "title": "File Description",
+          "type": "string"
+        },
+        "domain_table": {
+          "description": "Path to the domain table file (polygon) used by FFV2.",
+          "title": "Domain Table",
+          "type": "string"
+        },
+        "blacklists": {
+          "description": "Path to the blacklist directory used by FFV2.",
+          "title": "Blacklists",
+          "type": "string"
+        }
+      },
+      "required": [
+        "experiment_ids",
+        "veri_ens_member",
+        "catthresholds",
+        "pecthresholds",
+        "experiment_description",
+        "file_description",
+        "domain_table",
+        "blacklists"
+      ],
+      "title": "Ffv2Config",
+      "type": "object"
+    },
     "ForecasterConfig": {
       "additionalProperties": false,
       "description": "Single training run stored in MLflow.",
@@ -546,6 +616,34 @@
         "output_root"
       ],
       "title": "Locations",
+      "type": "object"
+    },
+    "MecConfig": {
+      "additionalProperties": false,
+      "description": "Paths to input observation files for the MEC verification step.",
+      "properties": {
+        "ekf_root": {
+          "description": "Root directory for EKF SYNOP files. Files are expected at {ekf_root}/{YYYYMM}/ekfSYNOP_{init}00.nc.",
+          "title": "Ekf Root",
+          "type": "string"
+        },
+        "mon_synop_root": {
+          "description": "Root directory for monSYNOP files. Files are expected at {mon_synop_root}/{YYYYMMDDH}/monSYNOP.nc.",
+          "title": "Mon Synop Root",
+          "type": "string"
+        },
+        "ver_synop_root": {
+          "description": "Root directory for reference verSYNOP files. Files are expected at {ver_synop_root}/verSYNOP_{init}00.nc.",
+          "title": "Ver Synop Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ekf_root",
+        "mon_synop_root",
+        "ver_synop_root"
+      ],
+      "title": "MecConfig",
       "type": "object"
     },
     "MeteogramConfig": {
@@ -984,6 +1082,30 @@
     "showcase": {
       "$ref": "#/$defs/ShowcaseConfig",
       "description": "Settings for the showcase workflow."
+    },
+    "mec": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MecConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Input observation paths for the MEC verification step. Required when running with --mec."
+    },
+    "ffv2": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Ffv2Config"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Configuration for the FFV2 scoring pipeline. Required when running with --ffv2."
     }
   },
   "required": [
