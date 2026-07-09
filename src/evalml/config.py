@@ -305,6 +305,11 @@ class AnimationsConfig(BaseModel):
             "[lon_min, lon_max, lat_min, lat_max], and optional 'projection'."
         ),
     )
+    frames_per_second: float = Field(
+        default=2.0,
+        gt=0,
+        description="Frames per second for the output GIF animation.",
+    )
 
 
 class ScorecardConfig(BaseModel):
@@ -612,6 +617,10 @@ class ConfigModel(BaseModel):
         description="List of experiment participants, including forecaster/temporal downscaler ML runs and baselines.",
     )
     truth: TruthConfig | None
+    lapse_rate_correction: bool = Field(
+        default=True,
+        description="Apply standard-atmosphere lapse-rate correction to T_2M.",
+    )
     experiment: ExperimentConfig = Field(
         ...,
         description="Settings for the experiment workflow outputs.",

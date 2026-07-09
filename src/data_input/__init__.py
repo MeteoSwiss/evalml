@@ -1,9 +1,12 @@
+import json
 import logging
+import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Literal, Any
 
 import earthkit.data as ekd
+import earthkit.meteo.vertical as ekdv
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -22,6 +25,7 @@ _IFS_TO_ICON = {
     "2d": "TD_2M",
     "sp": "PS",
     "lsm": "FR_LAND",
+    "z": "FSI",
 }
 _ICON_TO_IFS = {v: k for k, v in _IFS_TO_ICON.items()}
 
@@ -32,6 +36,50 @@ XARRAY_ENGINE_PROFILE = {
 }
 
 ZERO_KELVIN = -273.15  # °C
+
+_STAC_ASSETS_URL = (
+    "https://data.geo.admin.ch/api/stac/v1/collections/{collection}/assets"
+)
+_ICON_STAC_COLLECTION = {
+    "ICON-CH1-EPS": "ch.meteoschweiz.ogd-forecasting-icon-ch1",
+    "ICON-CH2-EPS": "ch.meteoschweiz.ogd-forecasting-icon-ch2",
+}
+_ICON_HORIZ_CONST_ASSET = {
+    "ICON-CH1-EPS": "horizontal_constants_icon-ch1-eps.grib2",
+    "ICON-CH2-EPS": "horizontal_constants_icon-ch2-eps.grib2",
+}
+_ICON_CONST_CACHE = Path.home() / ".cache" / "evalml-lapse" / "icon-constants"
+
+
+def _fetch_icon_const_grib(model: str) -> Path:
+    """Return path to the ICON horizontal constants GRIB file.
+
+    On first call the file is downloaded from the MeteoSwiss opendata STAC API
+    and cached under ~/.cache/evalml-lapse/icon-constants/. Subsequent calls
+    return the cached file immediately without hitting the network.
+    The download URL is pre-signed and expires, so we always query the STAC API
+    for a fresh URL — but only actually download when the cached file is absent.
+    """
+    _ICON_CONST_CACHE.mkdir(parents=True, exist_ok=True)
+    asset_id = _ICON_HORIZ_CONST_ASSET[model]
+    cached = _ICON_CONST_CACHE / asset_id
+    if cached.exists():
+        return cached
+    collection = _ICON_STAC_COLLECTION[model]
+    url = _STAC_ASSETS_URL.format(collection=collection)
+    LOG.info("Fetching %s constants download URL from %s", model, url)
+    with urllib.request.urlopen(url) as resp:
+        assets = json.load(resp)
+    href = assets[asset_id]["href"]
+    LOG.info("Downloading %s constants to %s", model, cached)
+    tmp = cached.with_suffix(".tmp")
+    try:
+        urllib.request.urlretrieve(href, tmp)
+        tmp.rename(cached)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+    return cached
 
 
 def _select_valid_times(ds, times: np.datetime64, strict: bool = False):
@@ -68,6 +116,56 @@ def parse_steps(steps: str) -> list[int]:
     return list(range(start, end + 1, step))
 
 
+def _load_icon_topography(const_grib: Path) -> np.ndarray:
+    """Return HSURF [m] from an ICON constants GRIB file."""
+    ds = load_from_grib_file(const_grib, {"parameter.variable": "HSURF"})
+    return ds["HSURF"].values.astype(np.float32).ravel()
+
+
+def _load_inca_dem(
+    topo_nc: Path, x_target: np.ndarray, y_target: np.ndarray
+) -> np.ndarray:
+    """Return DEM [m] from INCA topography file, interpolated to the target (y, x) grid."""
+    with xr.open_dataset(topo_nc) as ds:
+        dem = (
+            ds["DEM"]
+            .assign_coords(
+                p_j=("p_j", ds["x"].values.astype(np.float64)),
+                p_i=("p_i", ds["y"].values.astype(np.float64)),
+            )
+            .rename({"p_j": "x", "p_i": "y"})
+        )
+        return dem.interp(x=x_target, y=y_target, method="linear").values.astype(
+            np.float32
+        )
+
+
+def _try_assign_elevation(ds: xr.Dataset) -> xr.Dataset:
+    """Attempt to attach elevation from a known ICON grid NC file.
+
+    Matches by comparing the size of the ``values`` dimension to the number of
+    cells in each candidate grid file.  Silently returns the dataset unchanged
+    when no match is found (e.g. non-ICON or custom grids).
+    """
+    if "values" not in ds.dims:
+        return ds
+    n = ds.sizes["values"]
+    for model in _ICON_STAC_COLLECTION:
+        try:
+            const_grib = _fetch_icon_const_grib(model)
+        except Exception as e:
+            LOG.warning("Could not fetch %s constants: %s", model, e)
+            continue
+        topo = _load_icon_topography(const_grib)
+        if len(topo) == n:
+            LOG.info("Assigned elevation from %s (%d cells)", const_grib.name, n)
+            return ds.assign_coords(elevation=("values", topo))
+    LOG.warning(
+        "Could not assign elevation: no ICON constants GRIB matches values=%d", n
+    )
+    return ds
+
+
 def load_analysis_data_from_zarr(
     root: Path, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
@@ -76,14 +174,20 @@ def load_analysis_data_from_zarr(
     This function loads analysis data from a Zarr dataset, processing it to make it more
     xarray-friendly. It renames variables, sets the time index, and pivots the dataset.
     """
+
+    # Always include FIS so we can derive an elevation coordinate below
+    params_with_altitude = list(dict.fromkeys(params + ["FIS"]))
+
     USE_IFS_NAMES = {"-co2-", "-ea-", "ifsnames"}
     if any(tag in root.name for tag in USE_IFS_NAMES):
         # Zarr stores IFS shortNames; map ICON param names to IFS for selection
-        zarr_names = {p: _ICON_TO_IFS.get(p, p) for p in params}
+        zarr_names = {p: _ICON_TO_IFS.get(p, p) for p in params_with_altitude}
     else:
         # Zarr stores ICON param names; TOT_PREC has a time-resolution suffix
         tot_prec_key = "TOT_PREC_6H" if min(np.diff(steps)) == 6 else "TOT_PREC_1H"
-        zarr_names = {p: p.replace("TOT_PREC", tot_prec_key) for p in params}
+        zarr_names = {
+            p: p.replace("TOT_PREC", tot_prec_key) for p in params_with_altitude
+        }
 
     ds = xr.open_zarr(root, consolidated=False)
 
@@ -94,7 +198,9 @@ def load_analysis_data_from_zarr(
     ds = ds.assign_coords({"variable": ds.attrs["variables"]})
 
     # select variables and valid time, squeeze ensemble dimension
-    ds = ds.sel(variable=[zarr_names[p] for p in params]).squeeze("ensemble", drop=True)
+    ds = ds.sel(variable=[zarr_names[p] for p in params_with_altitude]).squeeze(
+        "ensemble", drop=True
+    )
 
     # recover original 2D shape (not present for global Gaussian grids)
     if "field_shape" in ds.attrs and len(ds.attrs["field_shape"]) == 2:
@@ -125,6 +231,14 @@ def load_analysis_data_from_zarr(
     # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
     if "cell" in ds.dims:
         ds = ds.rename({"cell": "values"})
+
+    # Derive elevation from FIS (surface geopotential, m²/s²) and assign as coordinate.
+    # FIS is constant in time, so drop the time dimension to get a purely spatial coord.
+    if "FIS" in ds:
+        elevation = ekdv.geopotential_height_from_geopotential(
+            ds["FIS"].isel(time=0, drop=True)
+        )
+        ds = ds.assign_coords(elevation=elevation).drop_vars(["FIS"])
 
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
     return _select_valid_times(ds, times)
@@ -229,7 +343,9 @@ def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
         level_type = level_type_group.get("vertical.level_type")[0]
         profile = XARRAY_ENGINE_PROFILE | variable_name_profile(level_type)
         _ds = level_type_group.to_xarray(**profile, allow_holes=True)
-        ds = ds.merge(_ds, compat="no_conflicts", combine_attrs="no_conflicts")
+        ds = ds.merge(
+            _ds, compat="no_conflicts", combine_attrs="no_conflicts", join="outer"
+        )
     return ds
 
 
@@ -361,6 +477,7 @@ def _jretrieve_df_to_xarray(df, short_names, catalog) -> xr.Dataset:
         "values": ("values", catalog.nat_abbr),
         "latitude": ("values", catalog.latitude),
         "longitude": ("values", catalog.longitude),
+        "elevation": ("values", catalog.elevation),
     }
     data_vars: dict[str, tuple] = {}
     if df.empty:
@@ -555,6 +672,8 @@ def load_INCA_baseline_from_netcdf(
           x, y                     – Swiss CH1903 (EPSG:21781) easting/northing [m]
           latitude, longitude      – WGS84 latitude/longitude [°], shape (y, x),
                                      derived from CH1903 via pyproj
+          elevation                – surface altitude [m], shape (y, x), from
+                                     INCA1km_topography_parameters.nc (DEM variable)
           step                     – forecast lead time (timedelta64[ns])
           valid_time               – absolute timestamps (datetime64[ns])
           forecast_reference_time  – scalar reference time (datetime64[ns])
@@ -822,6 +941,13 @@ def load_INCA_baseline_from_netcdf(
     merged = merged.swap_dims({"valid_time": "step"})
     merged = merged.assign_coords(forecast_reference_time=ref_time_np)
 
+    topo_nc = root / "INCA1km_topography_parameters.nc"
+    if not topo_nc.exists():
+        raise FileNotFoundError(f"INCA topography file not found: {topo_nc}")
+    dem = _load_inca_dem(topo_nc, merged.x.values, merged.y.values)
+    merged = merged.assign_coords(elevation=(("y", "x"), dem))
+    LOG.info("Assigned elevation from %s", topo_nc.name)
+
     return merged[list(params)]
 
 
@@ -869,13 +995,26 @@ def load_icon_baseline_from_grib(
                 f"No ensemble members could be loaded for {reftime} from {root}"
             )
         LOG.info("Ensemble mean computed over %d members.", n_loaded)
-        return acc / n_loaded
+        result = acc / n_loaded
     else:
-        return load_forecast_data_from_grib(
+        result = load_forecast_data_from_grib(
             files=_collect_icon_archive_files(root, reftime, steps, member_id=member),
             params=params,
             steps=steps,
         )
+
+    # Attach model orography as elevation coordinate
+    model = next((m for m in _ICON_STAC_COLLECTION if m in root.parts), None)
+    if model is not None and "values" in result.dims:
+        try:
+            const_grib = _fetch_icon_const_grib(model)
+        except Exception as e:
+            LOG.warning("Could not fetch %s constants for elevation: %s", model, e)
+            const_grib = None
+        if const_grib is not None:
+            topo = _load_icon_topography(const_grib)
+            result = result.assign_coords(elevation=("values", topo))
+    return result
 
 
 def load_forecast_data(
@@ -892,12 +1031,13 @@ def load_forecast_data(
     root = Path(root)
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
-        return load_forecast_data_from_grib(
+        ds = load_forecast_data_from_grib(
             # NOTE: root is already for a specific reftime
             files=_collect_ml_grib_files(root, steps),
             params=params,
             steps=steps,
         )
+        return _try_assign_elevation(ds)
     if "INCA" in root.parts:
         LOG.info("Loading INCA baseline from NetCDF files...")
         return load_INCA_baseline_from_netcdf(root, reftime, steps, params)

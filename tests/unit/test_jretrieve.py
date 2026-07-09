@@ -58,12 +58,16 @@ def test_check_prerequisites_ok(monkeypatch, tmp_path):
     conf.write_text("# conf\n")
     monkeypatch.setattr(jr.shutil, "which", lambda name: "/opt/bin/jretrievedwh.py")
     monkeypatch.setenv("OPR_HOME", str(tmp_path))
+    monkeypatch.setenv("JRETRIEVE_CLIENT_ID", "dummy-id")
+    monkeypatch.setenv("JRETRIEVE_CLIENT_SECRET", "dummy-secret")
     jr.check_prerequisites("prod")  # should not raise
 
 
 def test_check_prerequisites_missing_binary(monkeypatch):
     monkeypatch.setattr(jr.shutil, "which", lambda name: None)
     monkeypatch.setattr(jr.os.path, "isfile", lambda p: False)
+    monkeypatch.setenv("JRETRIEVE_CLIENT_ID", "dummy-id")
+    monkeypatch.setenv("JRETRIEVE_CLIENT_SECRET", "dummy-secret")
     with pytest.raises(jr.JretrieveError, match=r"\$PATH"):
         jr.check_prerequisites("prod")
 
@@ -72,12 +76,58 @@ def test_check_prerequisites_aggregates_all_problems(monkeypatch):
     monkeypatch.setattr(jr.shutil, "which", lambda name: None)
     monkeypatch.setattr(jr.os.path, "isfile", lambda p: False)
     monkeypatch.setattr(Path, "is_file", lambda self: False)
+    monkeypatch.setenv("JRETRIEVE_CLIENT_ID", "dummy-id")
+    monkeypatch.setenv("JRETRIEVE_CLIENT_SECRET", "dummy-secret")
     with pytest.raises(jr.JretrieveError) as exc:
         jr.check_prerequisites("prod")
     msg = str(exc.value)
     assert (
         "$PATH" in msg and "conf file not found" in msg
     )  # both reported, not just the first
+
+
+def test_check_credentials_ok_from_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("JRETRIEVE_CLIENT_ID", "dummy-id")
+    monkeypatch.setenv("JRETRIEVE_CLIENT_SECRET", "dummy-secret")
+    assert jr._check_credentials(tmp_path) is None
+
+
+def test_check_credentials_ok_from_dotenv(monkeypatch, tmp_path):
+    monkeypatch.delenv("JRETRIEVE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("JRETRIEVE_CLIENT_SECRET", raising=False)
+    (tmp_path / ".env").write_text(
+        "JRETRIEVE_CLIENT_ID=id-from-file\nJRETRIEVE_CLIENT_SECRET=secret-from-file\n"
+    )
+    assert jr._check_credentials(tmp_path) is None
+
+
+def test_check_credentials_missing_both_no_dotenv(monkeypatch, tmp_path):
+    monkeypatch.delenv("JRETRIEVE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("JRETRIEVE_CLIENT_SECRET", raising=False)
+    msg = jr._check_credentials(tmp_path)
+    assert msg is not None
+    assert "JRETRIEVE_CLIENT_ID" in msg
+    assert "JRETRIEVE_CLIENT_SECRET" in msg
+    assert ".env file not found" in msg
+
+
+def test_check_credentials_dotenv_exists_but_incomplete(monkeypatch, tmp_path):
+    monkeypatch.delenv("JRETRIEVE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("JRETRIEVE_CLIENT_SECRET", raising=False)
+    (tmp_path / ".env").write_text("JRETRIEVE_CLIENT_ID=id-from-file\n")
+    msg = jr._check_credentials(tmp_path)
+    assert msg is not None
+    assert "JRETRIEVE_CLIENT_SECRET" in msg
+    assert ".env file exists" in msg
+
+
+def test_check_prerequisites_missing_credentials(monkeypatch):
+    monkeypatch.setattr(jr.shutil, "which", lambda name: "/opt/bin/jretrievedwh.py")
+    monkeypatch.setattr(Path, "is_file", lambda self: str(self).endswith(".prod.py"))
+    monkeypatch.delenv("JRETRIEVE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("JRETRIEVE_CLIENT_SECRET", raising=False)
+    with pytest.raises(jr.JretrieveError, match="JRETRIEVE_CLIENT"):
+        jr.check_prerequisites("prod")
 
 
 def _sample_meta():
@@ -152,6 +202,8 @@ def test_load_obs_data_from_jretrieve(monkeypatch):
         ds["V_10M"].sel(values="ARO").values, [-3.0, 0.0], atol=1e-5
     )
     np.testing.assert_allclose(ds["latitude"].values, [46.79])
+    assert "elevation" in ds.coords
+    np.testing.assert_allclose(ds["elevation"].values, [1878.0])
 
 
 def test_load_truth_data_forwards_root(monkeypatch):

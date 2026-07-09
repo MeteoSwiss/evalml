@@ -28,6 +28,13 @@
           },
           "title": "Domains",
           "type": "array"
+        },
+        "frames_per_second": {
+          "default": 2.0,
+          "description": "Frames per second for the output GIF animation.",
+          "exclusiveMinimum": 0,
+          "title": "Frames Per Second",
+          "type": "number"
         }
       },
       "title": "AnimationsConfig",
@@ -1055,6 +1062,12 @@
           "type": "null"
         }
       ]
+    },
+    "lapse_rate_correction": {
+      "default": true,
+      "description": "Apply standard-atmosphere lapse-rate correction to T_2M.",
+      "title": "Lapse Rate Correction",
+      "type": "boolean"
     },
     "experiment": {
       "$ref": "#/$defs/ExperimentConfig",
