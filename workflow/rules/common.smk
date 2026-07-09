@@ -394,8 +394,12 @@ if "jretrieve" in str(config["truth"]["root"]):
 TRUTH_HASH = truth_hash(config["truth"])
 VERIF_HASH = verif_hash(config)
 REGIONS = parse_regions()
-SHOWCASE_REGIONS = parse_showcase_regions()
-SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])
+_showcase = config.get("showcase", {})
+SHOWCASE_CONFIG = {
+    "regions": parse_showcase_regions(),
+    "params": _showcase.get("params", ["T_2M", "SP_10M"]),
+    "fps": _showcase.get("animations", {}).get("frames_per_second", 2.0),
+}
 EXPERIMENT_PARAMS = config.get("experiment", {}).get(
     "params", ["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"]
 )

@@ -28,6 +28,13 @@
           },
           "title": "Domains",
           "type": "array"
+        },
+        "frames_per_second": {
+          "default": 2.0,
+          "description": "Frames per second for the output GIF animation.",
+          "exclusiveMinimum": 0,
+          "title": "Frames Per Second",
+          "type": "number"
         }
       },
       "title": "AnimationsConfig",
