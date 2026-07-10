@@ -377,7 +377,6 @@ def verify(
     )
 
     scores = []
-    statistics = []
     for param in fcst_aligned.data_vars:
         if param not in obs_aligned.data_vars:
             LOG.warning("Parameter %s not in obs, skipping", param)
@@ -428,11 +427,13 @@ def verify(
             dim=dim,
         )
         param_statistics = xr.concat([fcst_stats, obs_stats], dim="source")
-        # Compute eagerly per parameter to prevent dask graph bloat
-        scores.append(_merge_metrics([score], num_workers=num_workers))
-        statistics.append(_merge_metrics([param_statistics], num_workers=num_workers))
+        # Single compute per parameter: score + statistics share fcst_param/obs_param
+        # subgraphs so dask evaluates the data in one pass, preventing graph bloat.
+        scores.append(
+            _merge_metrics([score, param_statistics], num_workers=num_workers)
+        )
 
-    out = xr.merge(scores + statistics, join="outer", compat="no_conflicts")
+    out = xr.merge(scores, join="outer", compat="no_conflicts")
     LOG.info("Computed metrics in %.2f seconds", time.time() - start)
     LOG.info("Metrics dataset: \n%s", out)
     return out
