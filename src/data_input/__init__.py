@@ -73,19 +73,19 @@ def compute_derived(ds: xr.Dataset, param: str) -> xr.DataArray:
     """Compute a spatial derived variable from its components already in ds."""
     if param == "SP_10M":
         da = (ds["U_10M"] ** 2 + ds["V_10M"] ** 2) ** 0.5
-        # da.attrs["parameter"] = {
-        #     "shortName": "SP_10M",
-        #     "units": "m/s",
-        #     "name": "10m wind speed",
-        # }
+        da.attrs["parameter"] = {
+            "shortName": "SP_10M",
+            "units": "m/s",
+            "name": "10m wind speed",
+        }
         return da
     if param == "SP":
         da = (ds["U"] ** 2 + ds["V"] ** 2) ** 0.5
-        # da.attrs["parameter"] = {
-        #     "shortName": "SP",
-        #     "units": "m/s",
-        #     "name": "Wind speed",
-        # }
+        da.attrs["parameter"] = {
+            "shortName": "SP",
+            "units": "m/s",
+            "name": "Wind speed",
+        }
         return da
     raise ValueError(f"No recipe for derived variable '{param}'")
 
