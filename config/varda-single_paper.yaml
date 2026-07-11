@@ -4,8 +4,8 @@ description: |
 
 dates:
   start: 2025-04-01T00:00
-  end: 2025-12-26T18:00
-  frequency: 54h
+  end: 2025-12-26T18:00 # to ensure that the full forecasts is in 2025
+  frequency: 30h
 
 runs:
   - temporal_downscaler:
@@ -20,6 +20,11 @@ runs:
         checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/120/6
+  - forecaster:
+      label: stage-E-with-rollout
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/98d4e297f0164f18a0ad50fb01fbff42
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+      steps: 0/120/6
   - baseline:
       label: ICON-CH1-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
@@ -51,9 +56,10 @@ experiment:
   params:
     - T_2M
     - TD_2M
-    - U_10M
-    - V_10M
-    - TOT_PREC
+    - SP_10M
+    - TOT_PREC1
+    - TOT_PREC6
+    - PMSL
   stratification:
     regions:
       - jura
@@ -63,11 +69,11 @@ experiment:
       - alpensuedseite
     root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
   thresholds:
-    TOT_PREC:
-      gt: [0.0, 1, 5]
-    U_10M:
-      gt: [2.5, 5.0, 10.0]
-    V_10M:
+    TOT_PREC1:
+      gt: [0.0, 0.1, 1, 5, 10]
+    TOT_PREC6:
+      gt: [0.0, 0.1, 5, 10, 20, 50]
+    SP_10M:
       gt: [2.5, 5.0, 10.0]
     T_2M:
       lt: [273.15]
@@ -87,7 +93,7 @@ experiment:
         variables:
           - "U_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2"
-          - "TOT_PREC:RMSE,R2,ETS"
+          - "TOT_PREC1:RMSE,R2,ETS"
       medium_range:
         baseline: ICON-CH2-CTRL
         lead_times: "24/120/24"
@@ -95,7 +101,7 @@ experiment:
         variables:
           - "U_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2"
-          - "TOT_PREC:RMSE,R2,ETS"
+          - "TOT_PREC6:RMSE,R2,ETS"
 
 publication:
   leadtimes:
