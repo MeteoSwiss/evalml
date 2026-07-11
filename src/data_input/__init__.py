@@ -1295,5 +1295,4 @@ def load_forecast_data(
         ds = _load_icon_baseline_from_grib(
             root, reftime, load_steps, load_params, member=member
         )
-    LOG.info(ds)
     return _disaggregated_and_derived_params(ds, steps, params)
