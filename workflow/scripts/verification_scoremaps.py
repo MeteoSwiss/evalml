@@ -186,6 +186,25 @@ def main(args: Namespace) -> None:
         else None
     )
 
+    # Fail fast if any required valid time is absent from the truth dataset.
+    # Checking up front means the full set of missing times is reported at once
+    # rather than one error per reftime mid-loop.
+    if truth_lazy is not None:
+        truth_times = set(truth_lazy.time.values.astype("datetime64[ns]"))
+        required_valid_times = {
+            np.datetime64(rt + step_td).astype("datetime64[ns]") for rt, _ in init_items
+        }
+        missing_truth = sorted(required_valid_times - truth_times)
+        if missing_truth:
+            raise ValueError(
+                f"Truth is missing {len(missing_truth)} required valid time(s) for "
+                f"param={args.param}, step={args.step}h (e.g. "
+                f"{[str(t) for t in missing_truth[:5]]}). All configured "
+                "initialisations must be available so that run and baseline score "
+                "maps are computed over an identical sample; blacklist genuinely-"
+                "absent dates in the experiment config."
+            )
+
     n_ok = 0
 
     for reftime, grib_dir in init_items:
