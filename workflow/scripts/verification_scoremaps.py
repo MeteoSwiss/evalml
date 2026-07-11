@@ -38,7 +38,12 @@ from pathlib import Path
 import numpy as np
 import xarray as xr
 
-from data_input import load_forecast_data, load_truth_data, parse_aggregated_param
+from data_input import (
+    load_forecast_data,
+    load_truth_data,
+    open_truth_zarr,
+    parse_aggregated_param,
+)
 from verification.spatial import map_forecast_to_truth
 
 LOG = logging.getLogger(__name__)
@@ -175,6 +180,12 @@ def main(args: Namespace) -> None:
     }
     ref_truth_slice: xr.DataArray | None = None  # kept for output coordinates
 
+    truth_lazy = (
+        open_truth_zarr(args.truth, [args.param])
+        if args.truth.suffix == ".zarr"
+        else None
+    )
+
     n_ok = 0
 
     for reftime, grib_dir in init_items:
@@ -228,7 +239,9 @@ def main(args: Namespace) -> None:
                 )
 
         # --- load truth slice ---
-        truth_ds = load_truth_data(args.truth, reftime, [args.step], [args.param])
+        truth_ds = load_truth_data(
+            args.truth, reftime, [args.step], [args.param], lazy_ds=truth_lazy
+        )
         truth_ds = truth_ds.isel(time=0)
         truth_slice = truth_ds[args.param]
 

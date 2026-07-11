@@ -255,18 +255,14 @@ def _try_assign_elevation(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-def _load_analysis_data_from_zarr(
-    root: Path, reftime: datetime, steps: list[int], params: list[str]
-) -> xr.Dataset:
-    """Load analysis data from an anemoi-generated Zarr dataset.
+def _open_analysis_zarr(root: Path, params: list[str]) -> xr.Dataset:
+    """Open an anemoi analysis zarr lazily with variable selection and dataset preparation.
 
-    Returns a dataset with 'step' dimension (timedelta from reftime).
-    Accumulatable params (e.g. TOT_PREC) are always 1H period-accumulated in
-    analysis zarrs — ICON stores them as TOT_PREC_1H, IFS as tp. Both are
-    converted to cumulative-from-start via _accumulate_from_hourly so that
-    _disaggregated_and_derived_params can disaggregate them uniformly.
+    Does everything _load_analysis_data_from_zarr does before the reftime-
+    dependent time selection: opens the store, selects variables, recovers
+    spatial shape, sets lat/lon coords, converts units, and derives elevation.
+    Returns a dask-backed Dataset with a 'time' dimension spanning all dates.
     """
-
     # Always include FIS so we can derive an elevation coordinate below
     params_with_altitude = list(dict.fromkeys(params + ["FIS"]))
 
@@ -285,7 +281,7 @@ def _load_analysis_data_from_zarr(
     ds = ds.set_index(time="dates")
     ds = ds.assign_coords({"variable": ds.attrs["variables"]})
 
-    # select variables and valid time, squeeze ensemble dimension
+    # select variables and squeeze ensemble dimension
     ds = ds.sel(variable=[zarr_names[p] for p in params_with_altitude]).squeeze(
         "ensemble", drop=True
     )
@@ -323,7 +319,39 @@ def _load_analysis_data_from_zarr(
             ds["FIS"].isel(time=0, drop=True)
         )
         ds = ds.assign_coords(elevation=elevation).drop_vars(["FIS"])
-    # From now on we use `params` instead of `params_with_altitude`
+
+    return ds
+
+
+def open_truth_zarr(root: Path, params: list[str]) -> xr.Dataset:
+    """Open truth zarr lazily for repeated per-reftime selection.
+
+    Use this before a reftime loop and pass the result as ``lazy_ds`` to
+    ``load_truth_data`` to avoid re-opening the store on every iteration.
+    Only supported for ``.zarr`` roots.
+    """
+    return _open_analysis_zarr(root, get_base_params(params))
+
+
+def _load_analysis_data_from_zarr(
+    root: Path,
+    reftime: datetime,
+    steps: list[int],
+    params: list[str],
+    lazy_ds: xr.Dataset | None = None,
+) -> xr.Dataset:
+    """Load analysis data from an anemoi-generated Zarr dataset.
+
+    Returns a dataset with 'step' dimension (timedelta from reftime).
+    Accumulatable params (e.g. TOT_PREC) are always 1H period-accumulated in
+    analysis zarrs — ICON stores them as TOT_PREC_1H, IFS as tp. Both are
+    converted to cumulative-from-start via _accumulate_from_hourly so that
+    _disaggregated_and_derived_params can disaggregate them uniformly.
+
+    Pass a pre-opened ``lazy_ds`` (from ``open_truth_zarr``) to skip
+    re-opening the zarr store on every call.
+    """
+    ds = lazy_ds if lazy_ds is not None else _open_analysis_zarr(root, params)
 
     ref_np = np.datetime64(reftime, "ns")
     accum_params = [p for p in params if p in _ACCUMULATABLE_PARAMS]
@@ -697,7 +725,11 @@ def load_obs_data_from_jretrieve(
 
 
 def load_truth_data(
-    root, reftime: datetime, steps: list[int], params: list[str]
+    root,
+    reftime: datetime,
+    steps: list[int],
+    params: list[str],
+    lazy_ds: xr.Dataset | None = None,
 ) -> xr.Dataset:
     """Load truth data from an analysis Zarr dataset or DWH observations via jretrieve.
 
@@ -705,12 +737,17 @@ def load_truth_data(
     load_forecast_data): SP_10M is computed from U_10M/V_10M; TOT_PREC6 is
     disaggregated from cumulative TOT_PREC; plain TOT_PREC is returned as-is.
     Returns a dataset with 'time' dimension (valid datetimes).
+
+    Pass ``lazy_ds`` (from ``open_truth_zarr``) to reuse a pre-opened zarr
+    store across multiple reftimes instead of reopening it on every call.
     """
     if root.suffix == ".zarr":
         LOG.info("Loading ground truth from an analysis zarr dataset...")
         load_params = get_base_params(params)
         load_steps = get_steps(steps, params)
-        ds = _load_analysis_data_from_zarr(root, reftime, load_steps, load_params)
+        ds = _load_analysis_data_from_zarr(
+            root, reftime, load_steps, load_params, lazy_ds=lazy_ds
+        )
         ds = _disaggregated_and_derived_params(ds, steps, params)
         # Restore time dimension: convert step offsets back to valid datetimes.
         # Drop 'step' before returning — it's a non-dim coord indexed by 'time'
