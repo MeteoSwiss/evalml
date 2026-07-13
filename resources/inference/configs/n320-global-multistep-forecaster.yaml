@@ -1,0 +1,31 @@
+input:
+  test:
+    use_original_paths: true
+
+allow_nans: true
+
+patch_metadata:
+  config:
+    dataloader:
+      test:
+        datasets:
+          data:
+            dataset_config:
+              dataset: /store_new/mch/msopr/ml/datasets/aifs-ea-an-oper-0001-mars-n320-1979-2024-1h-v2-with-era51.zarr
+
+
+post_processors:
+  - accumulate_from_start_of_forecast:
+      accumulations:
+        - tp
+  - forward_transform_filter:
+      rescale:
+        scale: 1000 # convert units from m to kg m-2
+        offset: 0
+        param: tp
+
+output:
+  grib:
+    path: grib/{date}{time:04}_{step:03}.grib
+
+write_initial_state: true

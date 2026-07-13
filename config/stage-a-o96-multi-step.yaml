@@ -3,10 +3,10 @@ description: |
   Evaluate skill of a stage A o96 multi-step global model against ERA.
 
 dates:
-  # start: 2024-01-01T00:00
-  # end: 2024-07-01T00:00
-  # frequency: 59h
-  - 2024-01-01T00:00
+  start: 2024-01-01T00:00
+  end: 2024-07-01T00:00
+  frequency: 59h
+  # - 2024-01-01T00:00
 
 runs:
   - forecaster:
@@ -15,6 +15,13 @@ runs:
       steps: 0/120/1
       config: resources/inference/configs/o96-global-multistep-forecaster.yaml
       disable_local_eccodes_definitions: true
+
+  # - forecaster:
+  #     checkpoint: /scratch/mch/miccatta/SwissAI_checkpoints/checkpoint_resO96_fr1_st1_in7_out6/f812c442ebee498485da0f7c4a74bb7a/inference-last.ckpt
+  #     label: resO96_fr1_st1_in7_out6_w_1_1_2_2_4_8
+  #     steps: 0/120/1
+  #     config: resources/inference/configs/o96-global-multistep-forecaster.yaml
+  #     disable_local_eccodes_definitions: true
 
   # - forecaster:
   #     checkpoint: /scratch/mch/miccatta/SwissAI_checkpoints/checkpoint_resO96_fr1_st1_in2_out1/877cb9559f6c484d97b3733b7481c39a/inference-last.ckpt
