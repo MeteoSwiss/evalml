@@ -16,6 +16,8 @@ PARAMS_MAP = {
     "PMSL": "msl",
     "TOT_PREC": "tp",
     "CLCT": "tcc",
+    "CLCL": "lcc",
+    "SSRD": "ssrd",
 }
 
 PARAMS_MAP_INV = {v: k for k, v in PARAMS_MAP.items()}

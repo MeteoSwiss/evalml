@@ -54,12 +54,36 @@ _CMAP_DEFAULTS = {
     },
     "QV_925": load_ncl_colormap("RH_6lev.ct") | {"extend": "both"},
     "CLCT": {
-        "cmap": plt.get_cmap("Blues", 10),
+        # extend="neither" relies on preprocess_field() clipping away from
+        # exact 0/1 (see plot_forecast_frame.py) to avoid a tricontourf bug
+        # on orthographic projections.
+        "cmap": plt.get_cmap("Blues_r"),
         "vmin": 0,
         "vmax": 1,
-        "extend": "both",
+        "extend": "neither",
         "units": "",
-        "levels": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+        "levels": list(np.linspace(0, 1, 21)),
+    },
+    "CLCL": {
+        "cmap": plt.get_cmap("Blues_r"),
+        "vmin": 0,
+        "vmax": 1,
+        "extend": "neither",
+        "units": "",
+        "levels": list(np.linspace(0, 1, 21)),
+    },
+    "SSRD": {
+        # tricontourf always bands regardless of "levels" being set (it falls
+        # back to an auto locator with ~7 bands otherwise) — use a fine level
+        # set here to approximate a smooth gradient instead. extend="max"
+        # only (not "both") since preprocess_field() already clips away from
+        # exact 0 — see CLCT.
+        "cmap": plt.get_cmap("YlOrRd"),
+        "vmin": 0,
+        "vmax": 4e6,
+        "extend": "max",
+        "units": "J m-2",
+        "levels": list(np.linspace(0, 4e6, 21)),
     },
     "TOT_PREC_1H": {
         "extend": "max",

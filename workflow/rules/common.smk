@@ -422,7 +422,16 @@ SCORECARD_CONFIGS = (
 # - diagnostic params (e.g. CLCT/tcc) aren't part of the model's input state,
 #   so they're simply absent from the initial-state GRIB file written at step 0.
 # Short and canonical names both appear across the workflow (showcases vs maps).
-PARAMS_WITHOUT_STEP_ZERO_VALUE = {"TOT_PREC", "tp", "CLCT", "tcc"}
+PARAMS_WITHOUT_STEP_ZERO_VALUE = {
+    "TOT_PREC",
+    "tp",
+    "CLCT",
+    "tcc",
+    "CLCL",
+    "lcc",
+    "SSRD",
+    "ssrd",
+}
 
 
 def resolve_leadtimes(steps_spec, requested="all", param=None):

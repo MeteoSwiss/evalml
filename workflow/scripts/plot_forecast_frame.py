@@ -88,6 +88,15 @@ def preprocess_field(param: str, state: dict):
         return ekm_wind.speed(fields["U"], fields["V"]), "m/s"
     if param == "TOT_PREC":
         return np.maximum(fields[param], 0), "mm"
+    if param in ("CLCT", "CLCL"):
+        # Avoid exact 0/1 plateaus breaking tricontourf on orthographic
+        # projections (tmp/reproduce_clct_bug.py). Pair with extend="neither".
+        # Any new bounded field with silent-blank or GeometryCollection-crash
+        # globe frames likely needs the same clip-away-from-boundary fix.
+        return np.clip(fields[param], 1e-6, 1 - 1e-6), None
+    if param == "SSRD":
+        # Same issue, bottom boundary only (night-side plateau).
+        return np.maximum(fields[param], 1e-6), None
     return fields[param], None
 
 
@@ -178,6 +187,7 @@ def main():
 
     for region_name, region_cfg in regions.items():
         LOG.info("Plotting region %s", region_name)
+        outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
         plotter = StatePlotter(state["longitudes"], state["latitudes"], outdir)
         if region_cfg.get("extent") is not None:
             projection = get_projection(region_cfg.get("projection") or "orthographic")
@@ -188,6 +198,7 @@ def main():
                 base["lon_0"]
                 + 360.0 * lead_time / region_cfg["hours_per_revolution"]
             ) % 360
+            #  central_longitude=central_longitude, central_latitude=0.0 for zero-centered
             projection = ccrs.Orthographic(
                 central_longitude=central_longitude, central_latitude=base["lat_0"]
             )
@@ -203,18 +214,14 @@ def main():
             name=region_name,
             size=(6, 6),
         )
-        if region_cfg.get("rotate"):
-            # earthkit.plots creates figures with constrained_layout=True
-            # (earthkit.plots.components.figures.Figure.__init__), which
-            # re-flows axes margins per draw to fit whichever gridline labels
-            # happen to be rendered — label content/width varies with rotation
-            # angle, shifting the globe within an otherwise fixed-size canvas.
-            # Freeze the layout so the map's position is identical every frame.
-            fig.fig.set_layout_engine(None)
         subplot = fig.add_map(row=0, column=0)
 
         plotter.plot_field(
-            subplot, field, **get_style(param, units_override, accu=accu)
+            subplot,
+            field,
+            title=f"{param}, time: {validtime}",
+            gridline_labels=not region_cfg.get("rotate", False),
+            **get_style(param, units_override, accu=accu),
         )
         if len(state["lam_envelope"]) > 0:
             subplot.ax.add_geometries(
@@ -223,9 +230,7 @@ def main():
                 facecolor="none",
                 crs=ccrs.PlateCarree(),
             )
-        fig.title(f"{param}, time: {validtime}")
 
-        outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
         # earthkit.plots' Figure.save() defaults bbox_inches to "tight", which
         # crops to each frame's own content extent — that extent varies with the
         # rotating globe's gridline labels, making frames jump around when

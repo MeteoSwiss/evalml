@@ -23,6 +23,14 @@ _IFS_TO_ICON = {
     "sp": "PS",
     "lsm": "FR_LAND",
     "tcc": "CLCT",
+    "lcc": "CLCL",
+    # TODO: ssrd is treated as a plain per-step field (no de-accumulation),
+    # which only holds because it's not currently listed in any
+    # accumulate_from_start_of_forecast.accumulations in the inference
+    # configs (unlike tp, see _tot_prec_handling). If ssrd/strd are ever
+    # added there, this needs the same cumulative-since-start handling tp
+    # gets, or verification/plots will silently be wrong.
+    "ssrd": "SSRD",
 }
 _ICON_TO_IFS = {v: k for k, v in _IFS_TO_ICON.items()}
 
