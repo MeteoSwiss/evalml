@@ -299,6 +299,7 @@ def fetch_data(
     increment_minutes=60,
     seq_type="surface",
     stage="prod",
+    use_limitation: int | None = None,
     timeout_s=600,
 ) -> pd.DataFrame:
     """Fetch observation data; columns: station (int), termin (YYYYMMDDhhmmss),
@@ -317,6 +318,8 @@ def fetch_data(
         "csv",
         *_stations_to_argv(stations),
     ]
+    if use_limitation is not None:
+        argv += ["--use-limitation", str(use_limitation)]
     LOG.info("jretrieve data: %s", " ".join(argv))
     return _parse_csv(_run_with_retry(argv, env=_build_env(stage), timeout_s=timeout_s))
 
