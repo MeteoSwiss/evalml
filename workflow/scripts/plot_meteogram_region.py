@@ -2,8 +2,11 @@
 
 Loads the configured truth (SwissMetNet observations via jretrieve, or a gridded
 analysis zarr), averages it over the points inside the region shapefile at each
-valid time, and plots the series. For TOT_PREC this is the areal-mean hourly
-precipitation over the region.
+valid time, and plots the series in the shared publication figure style. For
+TOT_PREC this is the areal-mean hourly precipitation over the region.
+
+Written for the Valais precipitation case-study figure of the paper, but works
+for any region shapefile and parameter.
 """
 
 import logging
@@ -11,12 +14,15 @@ from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
 
-import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 
 from data_input import parse_steps, load_truth_data
 from verification import ShapefileSpatialAggregationMasks
+
+# Shared look for the paper figures (sibling module, on sys.path when run directly).
+from publication_style import line_style, param_label
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -88,32 +94,34 @@ def main():
     spatial_dims = [d for d in truth[param].dims if d != "time"]
     series = truth[param].where(region_mask).mean(dim=spatial_dims, skipna=True)
 
-    units = UNITS.get(param, "")
     times = np.asarray(truth["time"].values)
-    fig, ax = plt.subplots(figsize=(10, 4))
+    # Lead time in hours since init.
+    lead_hours = (times - np.datetime64(init_time)) / np.timedelta64(1, "h")
+
+    plt.style.use(Path(__file__).resolve().parent / "publication.mplstyle")
+    fig, ax = plt.subplots(figsize=(8, 3.0))
     ax.plot(
-        times,
+        lead_hours,
         np.asarray(series.values, dtype=float),
-        color="C0",
-        marker=".",
-        ms=3,
         label=args.truth_label,
+        **line_style(args.truth_label),
     )
-    ax.set_ylabel(f"{param} areal mean ({units})" if units else f"{param} areal mean")
-    ax.set_xlabel("valid time (UTC)")
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b %Hh"))
-    fig.autofmt_xdate()
-    ax.grid(True, alpha=0.3)
+    ax.set_ylabel(UNITS.get(param, ""))
+    ax.text(0.01, 0.97, param_label(param), transform=ax.transAxes, ha="left", va="top")
+    # Lead-time x-axis: major gridline every 24 h, minor every 6 h.
+    ax.xaxis.set_major_locator(mticker.MultipleLocator(24))
+    ax.xaxis.set_minor_locator(mticker.MultipleLocator(6))
+    ax.grid(True, axis="x", which="major", color="0.6", linewidth=0.8, linestyle="--")
+    ax.grid(True, axis="x", which="minor", color="0.8", linewidth=0.6, linestyle=":")
+    ax.set_xlabel("Lead time (h)")
+    ax.set_xlim(left=0)
     ax.legend()
-    ax.set_title(
-        f"{region_name} — {args.truth_label} {param} areal mean over {n_points} points\n"
-        f"init {init_time:%Y-%m-%d %H:%M} UTC"
-    )
+    fig.suptitle(f"{region_name.capitalize()} — Init time {init_time:%Y-%m-%d %H:%M}")
 
     outfn = Path(args.outfn)
     outfn.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
-    fig.savefig(outfn, dpi=120)
+    fig.savefig(outfn, dpi=200, bbox_inches="tight")
     plt.close(fig)
     LOG.info("saved: %s", outfn)
 
