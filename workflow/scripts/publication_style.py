@@ -21,19 +21,42 @@ COLOR_CH1 = "#008dff"
 COLOR_CH2 = "#003a7d"
 COLOR_VARDA = "#d83034"
 
-# Skill score colormap: blue = model better, red = baseline better.
-# Matches the scorecard dot palette in report_scorecard.py.
-COLOR_SKILL_MODEL_BETTER = "#4878d0"  # seaborn muted blue
-COLOR_SKILL_BASELINE_BETTER = "#d65f5f"  # seaborn muted red
+# Skill score colormap: red = baseline better, blue = model better.
+# ColorBrewer RdBu palette. The deep RdBu ends (#b2182b/#2166ac) are reserved for
+# the out-of-range extremes (colorbar arrows); the in-range bins use the lighter
+# tiers so the extremes stand out (see _build_skill_artifacts).
+COLOR_SKILL_MODEL_BETTER = "#2166ac"  # RdBu blue (extreme)
+COLOR_SKILL_BASELINE_BETTER = "#b2182b"  # RdBu red (extreme)
 
 SKILL_CMAP = LinearSegmentedColormap.from_list(
     "skill",
-    [COLOR_SKILL_BASELINE_BETTER, "#ffffff", COLOR_SKILL_MODEL_BETTER],
+    [
+        "#d6604d",  # red: strongest in-range bin
+        "#f4a582",
+        "#fddbc7",
+        "#ffffff",  # neutral
+        "#d1e5f0",
+        "#92c5de",
+        "#4393c3",  # blue: strongest in-range bin
+    ],
 )
 # Grey colour for the neutral band (|skill| < 0.05).
 SKILL_GREY = "#ffffff"
-# Levels capped at ±0.3; the central bin [−0.05, 0.05] is rendered in SKILL_GREY.
-SKILL_LEVELS = [-0.35, -0.25, -0.15, -0.05, 0.05, 0.15, 0.25, 0.35]
+# Levels capped at ±0.55 (0.10 spacing); the central bin [−0.05, 0.05] is SKILL_GREY.
+SKILL_LEVELS = [
+    -0.55,
+    -0.45,
+    -0.35,
+    -0.25,
+    -0.15,
+    -0.05,
+    0.05,
+    0.15,
+    0.25,
+    0.35,
+    0.45,
+    0.55,
+]
 
 # Human-readable score names used in panel titles / labels.
 SCORE_LABELS = {

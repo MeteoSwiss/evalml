@@ -48,23 +48,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 # Force the standard map furniture (drawn by `subplot.standard_layers()` inside
 # StatePlotter.plot_field) to high-resolution Natural Earth geometry. Otherwise
-# it defaults to medium (50m), leaving a fuzzy low-res border under any overlay.
+# it defaults to medium (50m), leaving a fuzzy low-res border.
 # We also darken/thicken the country borders slightly for publication legibility.
 ekp.schema.borders["resolution"] = "high"
 ekp.schema.borders["edgecolor"] = "black"
-ekp.schema.borders["linewidth"] = 0.7
+ekp.schema.borders["linewidth"] = 1.0
 ekp.schema.coastlines["resolution"] = "high"
 
 # Tighter geographic crop for publication: roughly equal visual margins around Switzerland.
 _PUB_EXTENTS = {
     "switzerland": [5.6, 10.8, 45.6, 48.0],
 }
-
-
-def _darken(hex_color: str, factor: float = 0.6) -> str:
-    """Return a darkened hex color by scaling RGB channels."""
-    r, g, b = mcolors.to_rgb(hex_color)
-    return mcolors.to_hex((r * factor, g * factor, b * factor))
 
 
 # Sentinel boundary that covers all realistic skill values (SP_10M can reach ~1e9).
@@ -74,30 +68,32 @@ _SENTINEL = 1e15
 def _build_skill_artifacts():
     """Return (ekp_style, mpl_cmap, mpl_norm) for the discrete skill colormap.
 
-    Inner bins (within ±0.35) use SKILL_CMAP-sampled colors with a white neutral band.
-    Outer bins (|skill| > 0.35) use a darkened extreme color both in the map (via
-    sentinel levels in the earthkit Style) and in the colorbar triangular tips (via
-    cmap.set_under / set_over).
+    In-range bins (within the SKILL_LEVELS span) use the lighter SKILL_CMAP-sampled
+    colors with a white neutral band. Out-of-range values (beyond the SKILL_LEVELS
+    span) use the deep RdBu extremes (COLOR_SKILL_*), so the extremes stand out from
+    the lighter in-range bins, both in the map (via sentinel levels) and the colorbar
+    tips (cmap.set_under/over).
     """
     n_side = (len(SKILL_LEVELS) - 2) // 2  # bins per side excluding the neutral bin
     reds = [to_hex(SKILL_CMAP(i / (2 * n_side))) for i in range(n_side)]
     blues = [to_hex(SKILL_CMAP((n_side + 1 + i) / (2 * n_side))) for i in range(n_side)]
     inner_colors = reds + [SKILL_GREY] + blues
-    darker_red = _darken(reds[0])
-    darker_blue = _darken(blues[-1])
+    outer_red = COLOR_SKILL_BASELINE_BETTER  # deep extreme for out-of-range values
+    outer_blue = COLOR_SKILL_MODEL_BETTER
 
-    # Earthkit Style: sentinel outer levels ensure values beyond ±0.3 fall into the
-    # dedicated darker outer bins rather than being clipped to the adjacent bin color.
+    # Earthkit Style: sentinel outer levels catch values beyond the SKILL_LEVELS
+    # span and render them in the deep extreme color, distinct from the lighter
+    # in-range bins.
     sentinel_levels = [-_SENTINEL] + list(SKILL_LEVELS) + [_SENTINEL]
-    all_colors = [darker_red] + inner_colors + [darker_blue]
+    all_colors = [outer_red] + inner_colors + [outer_blue]
     style = ekp.styles.Style(
         levels=sentinel_levels, colors=all_colors, extend="neither", units="skill"
     )
 
-    # Matplotlib colorbar: inner levels only, with darker under/over for the tips.
+    # Matplotlib colorbar: inner levels only; tips reuse the strongest inner color.
     cmap = mcolors.ListedColormap(inner_colors)
-    cmap.set_under(darker_red)
-    cmap.set_over(darker_blue)
+    cmap.set_under(outer_red)
+    cmap.set_over(outer_blue)
     norm = mcolors.BoundaryNorm(SKILL_LEVELS, ncolors=len(inner_colors))
 
     return style, cmap, norm
