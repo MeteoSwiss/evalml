@@ -288,13 +288,6 @@ class MeteogramConfig(BaseModel):
         default=["GVE", "KLO", "LUG"],
         description="List of PeakWeather station IDs to generate meteograms for.",
     )
-    region_shapefiles: List[str] = Field(
-        default=[],
-        description=(
-            "Region shapefile paths (EPSG:2056) for areal-mean TOT_PREC meteograms, "
-            "built via the `meteogram_region_all` target. Empty disables them."
-        ),
-    )
 
 
 class AnimationsConfig(BaseModel):
