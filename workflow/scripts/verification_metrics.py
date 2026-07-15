@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-from verification import verify  # noqa: E402
+from verification import verify, apply_lapse_rate_correction_inplace  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
 from data_input import (
     parse_steps,
@@ -51,7 +51,9 @@ def main(args: ScriptConfig):
     # get baseline forecast data
     now = datetime.now()
 
-    fcst = load_forecast_data(args.forecast, args.reftime, args.steps, args.params)
+    fcst = load_forecast_data(
+        args.forecast, args.reftime, args.steps, args.params, member=args.member
+    )
 
     LOG.info(
         "Loaded forecast data in %s seconds: \n%s",
@@ -69,23 +71,46 @@ def main(args: ScriptConfig):
     )
 
     # align forecast and truth data spatially and temporally
+    now = datetime.now()
     fcst = map_forecast_to_truth(fcst, truth)
-    truth = truth.sel(time=fcst.time)
+    # map_forecast_to_truth uses fancy indexing which collapses the spatial
+    # dimension into one monolithic dask chunk; rechunk by step so that
+    # verify() can parallelise over time steps rather than materialising the
+    # full (regions × steps × values) array at once.
+    fcst = fcst.chunk({"step": 1})
+    truth = truth.sel(time=fcst["valid_time"])
+    LOG.info(
+        "Aligned forecast and truth in %s seconds",
+        (datetime.now() - now).total_seconds(),
+    )
+
+    if args.lapse_rate_correction:
+        apply_lapse_rate_correction_inplace(fcst, truth, args.params)
 
     # compute metrics and statistics
+    now = datetime.now()
     results = verify(
         fcst,
         truth,
-        args.label,
-        args.truth_label,
+        args.source_id,
+        args.truth_source_id,
         args.regions,
         threshold_dict=args.threshold_dict,
     )
+    LOG.info(
+        "Computed verification metrics in %s seconds",
+        (datetime.now() - now).total_seconds(),
+    )
 
     # save results to NetCDF
+    now = datetime.now()
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    results.to_netcdf(args.output)
-    LOG.info("Saved verification results to %s", args.output)
+    results.earthkit.to_netcdf(args.output)
+    LOG.info(
+        "Saved verification results to %s in %s seconds",
+        args.output,
+        (datetime.now() - now).total_seconds(),
+    )
 
     LOG.info("Program completed successfully.")
 
@@ -124,20 +149,20 @@ if __name__ == "__main__":
         help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
     )
     parser.add_argument(
-        "--label",
+        "--source_id",
         type=str,
-        default="COSMO-E",
-        help="Label for the forecast or baseline data (default: COSMO-E).",
+        required=True,
+        help="Stable identifier for the forecast or baseline source (e.g. run_id or baseline_id).",
     )
     parser.add_argument(
-        "--truth_label",
+        "--truth_source_id",
         type=str,
-        default="COSMO KENDA",
-        help="Label for the truth data (default: COSMO KENDA).",
+        required=True,
+        help="Stable identifier for the truth source (e.g. truth_<TRUTH_HASH>).",
     )
     parser.add_argument(
         "--regions",
-        type=lambda x: x.split(","),
+        type=lambda x: [r for r in x.split(",") if r],
         help="Comma-separated list of shapefile paths defining regions for stratification.",
         default="",
     )
@@ -148,10 +173,22 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
+        "--member",
+        type=str,
+        default="000",
+        help="Ensemble member to load: '000' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default="verif.nc",
         help="Output file to save the verification results (default: verif.nc).",
+    )
+    parser.add_argument(
+        "--lapse_rate_correction",
+        action="store_true",
+        default=False,
+        help="Apply standard-atmosphere lapse-rate correction to T_2M and TD_2M.",
     )
     args = parser.parse_args()
 

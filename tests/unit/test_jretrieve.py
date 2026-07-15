@@ -1,0 +1,221 @@
+from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
+
+import data_input
+from data_input import jretrieve as jr
+
+
+def test_stations_to_argv_group():
+    assert jr._stations_to_argv({"group": "1,2"}) == [
+        "-a",
+        "stn_group_id,1,2",
+    ]
+
+
+def test_stations_to_argv_locations_from_string():
+    assert jr._stations_to_argv({"locations": "ARO,KLO"}) == ["-i", "nat_abbr,ARO,KLO"]
+
+
+def test_stations_to_argv_bbox_from_string():
+    assert jr._stations_to_argv({"bbox": "45.8,47.8,5.9,10.5"}) == [
+        "-l",
+        "45.8,47.8,5.9,10.5",
+    ]
+
+
+def test_stations_to_argv_rejects_ambiguous():
+    with pytest.raises(ValueError, match="exactly one"):
+        jr._stations_to_argv({"group": "x", "bbox": "1,2,3,4"})
+
+
+def test_parse_selection_default_group():
+    assert jr.parse_selection("jretrievedwh:") == (
+        {"group": "SwissMetNet"},
+        "prod",
+        "surface",
+    )
+    assert jr.parse_selection("jretrievedwh:SwissMetNet") == (
+        {"group": "SwissMetNet"},
+        "prod",
+        "surface",
+    )
+
+
+def test_parse_selection_keyvalue_and_stage():
+    assert jr.parse_selection("jretrievedwh:locations=ARO,KLO;stage=devt") == (
+        {"locations": "ARO,KLO"},
+        "devt",
+        "surface",
+    )
+
+
+def test_check_prerequisites_ok(monkeypatch, tmp_path):
+    conf = tmp_path / ".jretrievedwh-conf.prod.py"
+    conf.write_text("# conf\n")
+    monkeypatch.setattr(jr.shutil, "which", lambda name: "/opt/bin/jretrievedwh.py")
+    monkeypatch.setenv("OPR_HOME", str(tmp_path))
+    monkeypatch.setenv("JRETRIEVE_CLIENT_ID", "dummy-id")
+    monkeypatch.setenv("JRETRIEVE_CLIENT_SECRET", "dummy-secret")
+    jr.check_prerequisites("prod")  # should not raise
+
+
+def test_check_prerequisites_missing_binary(monkeypatch):
+    monkeypatch.setattr(jr.shutil, "which", lambda name: None)
+    monkeypatch.setattr(jr.os.path, "isfile", lambda p: False)
+    monkeypatch.setenv("JRETRIEVE_CLIENT_ID", "dummy-id")
+    monkeypatch.setenv("JRETRIEVE_CLIENT_SECRET", "dummy-secret")
+    with pytest.raises(jr.JretrieveError, match=r"\$PATH"):
+        jr.check_prerequisites("prod")
+
+
+def test_check_prerequisites_aggregates_all_problems(monkeypatch):
+    monkeypatch.setattr(jr.shutil, "which", lambda name: None)
+    monkeypatch.setattr(jr.os.path, "isfile", lambda p: False)
+    monkeypatch.setattr(Path, "is_file", lambda self: False)
+    monkeypatch.setenv("JRETRIEVE_CLIENT_ID", "dummy-id")
+    monkeypatch.setenv("JRETRIEVE_CLIENT_SECRET", "dummy-secret")
+    with pytest.raises(jr.JretrieveError) as exc:
+        jr.check_prerequisites("prod")
+    msg = str(exc.value)
+    assert (
+        "$PATH" in msg and "conf file not found" in msg
+    )  # both reported, not just the first
+
+
+def test_check_credentials_ok_from_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("JRETRIEVE_CLIENT_ID", "dummy-id")
+    monkeypatch.setenv("JRETRIEVE_CLIENT_SECRET", "dummy-secret")
+    assert jr._check_credentials(tmp_path) is None
+
+
+def test_check_credentials_ok_from_dotenv(monkeypatch, tmp_path):
+    monkeypatch.delenv("JRETRIEVE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("JRETRIEVE_CLIENT_SECRET", raising=False)
+    (tmp_path / ".env").write_text(
+        "JRETRIEVE_CLIENT_ID=id-from-file\nJRETRIEVE_CLIENT_SECRET=secret-from-file\n"
+    )
+    assert jr._check_credentials(tmp_path) is None
+
+
+def test_check_credentials_missing_both_no_dotenv(monkeypatch, tmp_path):
+    monkeypatch.delenv("JRETRIEVE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("JRETRIEVE_CLIENT_SECRET", raising=False)
+    msg = jr._check_credentials(tmp_path)
+    assert msg is not None
+    assert "JRETRIEVE_CLIENT_ID" in msg
+    assert "JRETRIEVE_CLIENT_SECRET" in msg
+    assert ".env file not found" in msg
+
+
+def test_check_credentials_dotenv_exists_but_incomplete(monkeypatch, tmp_path):
+    monkeypatch.delenv("JRETRIEVE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("JRETRIEVE_CLIENT_SECRET", raising=False)
+    (tmp_path / ".env").write_text("JRETRIEVE_CLIENT_ID=id-from-file\n")
+    msg = jr._check_credentials(tmp_path)
+    assert msg is not None
+    assert "JRETRIEVE_CLIENT_SECRET" in msg
+    assert ".env file exists" in msg
+
+
+def test_check_prerequisites_missing_credentials(monkeypatch):
+    monkeypatch.setattr(jr.shutil, "which", lambda name: "/opt/bin/jretrievedwh.py")
+    monkeypatch.setattr(Path, "is_file", lambda self: str(self).endswith(".prod.py"))
+    monkeypatch.delenv("JRETRIEVE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("JRETRIEVE_CLIENT_SECRET", raising=False)
+    with pytest.raises(jr.JretrieveError, match="JRETRIEVE_CLIENT"):
+        jr.check_prerequisites("prod")
+
+
+def _sample_meta():
+    return pd.DataFrame(
+        {
+            "station": [2, 1, 1],
+            "op_since": [19900101000000, 19800101000000, 19800101000000],
+            "op_till": ["", "", ""],
+            "parameter": ["tre200s0", "fkl010z0", "tre200s0"],
+            "latitude": [47.48, 46.79, 46.79],
+            "longitude": [8.54, 9.68, 9.68],
+            "elev": [426.0, 1878.0, 1878.0],
+            "stn_name": ["Zurich", "Arosa", "Arosa"],
+            "nat_abbr": ["KLO", "ARO", "ARO"],
+        }
+    )
+
+
+def test_station_catalog_from_meta_collapses_and_sorts():
+    cat = jr.StationCatalog.from_meta(_sample_meta())
+    assert cat.n == 2
+    assert list(cat.nat_abbr) == ["ARO", "KLO"]  # sorted by nat_abbr
+    assert list(cat.station_id) == [1, 2]
+    np.testing.assert_allclose(cat.latitude, [46.79, 47.48])
+
+
+def test_load_obs_data_from_jretrieve(monkeypatch):
+    meta = pd.DataFrame(
+        {
+            "station": [1, 2],
+            "op_since": [19800101000000, 19900101000000],
+            "op_till": ["", ""],
+            "parameter": ["tre200s0", "tre200s0"],
+            "latitude": [46.79, 47.48],
+            "longitude": [9.68, 8.54],
+            "elev": [1878.0, 426.0],
+            "stn_name": ["Arosa", "Zurich"],
+            "nat_abbr": ["ARO", "KLO"],
+        }
+    )
+    data = pd.DataFrame(
+        {
+            "station": [1, 1],
+            "termin": [20250115000000, 20250115010000],
+            "tre200s0": [10.0, 11.0],  # degC
+            "fkl010z0": [3.0, 4.0],  # m/s
+            "dkl010z0": [0.0, 90.0],  # deg
+        }
+    )
+    # Skip the live environment check so the test runs anywhere (incl. CI,
+    # which has no jretrievedwh.py / $OPR_HOME).
+    monkeypatch.setattr(jr, "check_prerequisites", lambda *a, **k: None)
+    monkeypatch.setattr(jr, "fetch_meta", lambda **kw: meta)
+    monkeypatch.setattr(jr, "fetch_data", lambda **kw: data)
+
+    ds = data_input.load_obs_data_from_jretrieve(
+        "jretrievedwh:locations=ARO,KLO",
+        datetime(2025, 1, 15, 0, 0),
+        [0, 1],
+        ["T_2M", "U_10M", "V_10M"],
+    )
+
+    assert set(ds.dims) == {"time", "values"}
+    assert list(ds["values"].values) == ["ARO"]  # KLO all-NaN -> dropped
+    assert set(ds.data_vars) == {"T_2M", "U_10M", "V_10M"}
+    np.testing.assert_allclose(ds["T_2M"].sel(values="ARO").values, [283.15, 284.15])
+    # DD=0 -> U=0, V=-FF ; DD=90 -> U=-FF, V=0
+    np.testing.assert_allclose(
+        ds["U_10M"].sel(values="ARO").values, [0.0, -4.0], atol=1e-5
+    )
+    np.testing.assert_allclose(
+        ds["V_10M"].sel(values="ARO").values, [-3.0, 0.0], atol=1e-5
+    )
+    np.testing.assert_allclose(ds["latitude"].values, [46.79])
+    assert "elevation" in ds.coords
+    np.testing.assert_allclose(ds["elevation"].values, [1878.0])
+
+
+def test_load_truth_data_forwards_root(monkeypatch):
+    seen = {}
+
+    def fake_loader(root, reftime, steps, params):
+        seen["root"] = root
+        return "SENTINEL"
+
+    monkeypatch.setattr(data_input, "load_obs_data_from_jretrieve", fake_loader)
+    out = data_input.load_truth_data(
+        Path("jretrievedwh:SwissMetNet"), datetime(2025, 1, 15), [0], ["T_2M"]
+    )
+    assert out == "SENTINEL"
+    assert "jretrievedwh:SwissMetNet" in str(seen["root"])

@@ -96,7 +96,7 @@ function makeCellSpec(cellData) {
     height: 160,
     encoding: {
       x: {
-        field: "lead_time",
+        field: "step",
         type: "quantitative",
         title: "Lead time (h)",
       },
@@ -125,7 +125,7 @@ function makeCellSpec(cellData) {
       tooltip: [
         { field: "source",            type: "nominal",      title: "Source" },
         { field: "region_season_init",type: "nominal",      title: "Region/Season/Init" },
-        { field: "lead_time",         type: "quantitative", title: "Lead time (h)" },
+        { field: "step",         type: "quantitative", title: "Lead time (h)" },
         { field: "value",             type: "quantitative", title: "Value", format: ".4f" },
       ],
     },
@@ -139,34 +139,47 @@ let legendView = null;
 
 async function renderLegend(filteredData) {
   const src = filteredData.length ? filteredData : DATA;
+  const tinyMark = { type: "point", filled: true, opacity: 0, size: 0 };
   const spec = {
-    data: { values: src },
-    config: { view: { stroke: null } },
-    mark: { type: "point", filled: true, opacity: 0, size: 0 },
-    width: 1,
-    height: 1,
-    encoding: {
-      color: {
-        field: "source",
-        type: "nominal",
-        scale: { domain: ALL_SOURCES },
-        legend: {
-          orient: "left", title: "Source", offset: 8,
-          symbolType: "circle", symbolSize: 120,
+    config: { view: { stroke: null }, concat: { spacing: 32 } },
+    hconcat: [
+      {
+        data: { values: src },
+        mark: tinyMark,
+        width: 1, height: 1,
+        encoding: {
+          shape: {
+            field: "region_season_init",
+            type: "nominal",
+            legend: {
+              orient: "bottom",
+              direction: "horizontal",
+              title: "Region / Season / Init",
+              labelLimit: 400,
+              symbolType: "circle", symbolSize: 120,
+            },
+          },
         },
       },
-      shape: {
-        field: "region_season_init",
-        type: "nominal",
-        legend: {
-          orient: "right",
-          title: "Region / Season / Init",
-          offset: 8,
-          labelLimit: 400,
-          symbolType: "circle", symbolSize: 120,
+      {
+        data: { values: src },
+        mark: tinyMark,
+        width: 1, height: 1,
+        encoding: {
+          color: {
+            field: "source",
+            type: "nominal",
+            scale: { domain: ALL_SOURCES },
+            legend: {
+              orient: "bottom",
+              direction: "horizontal",
+              title: "Source",
+              symbolType: "circle", symbolSize: 120,
+            },
+          },
         },
       },
-    },
+    ],
   };
   try {
     if (legendView) { try { legendView.finalize(); } catch (e) {} }

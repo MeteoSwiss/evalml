@@ -20,7 +20,7 @@ runs:
       extra_requirements:
         - earthkit-utils<0.2.0
         - earthkit-data<0.19.0
-        - git+https://github.com/ecmwf/anemoi-inference.git@main
+        - anemoi-inference==0.11.1
 
   - baseline:
       label: ICON-CH1-ctrl
@@ -51,7 +51,7 @@ experiment:
       - alpennordhang
       - innerealpentaeler
       - alpensuedseite
-    root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
   thresholds:
     TOT_PREC:
       gt: [0.0, 1, 5]
@@ -67,6 +67,8 @@ experiment:
       # - init_hour
       # - region
       - season
+  scoremaps:
+    enabled: false
 
 locations:
   output_root: output/
@@ -82,5 +84,3 @@ profile:
     runtime: "1h"
     gpus: 0
   jobs: 50
-  batch_rules:
-    plot_forecast_frame: 32

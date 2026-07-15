@@ -182,8 +182,18 @@ def _build_config(args) -> dict:
         }
 
     return {
-        "model": {"path": args.verif_run, "source": args.run_source},
-        "baseline": {"path": args.verif_baseline, "source": args.baseline_source},
+        "model": {
+            "path": args.verif_run,
+            "source": args.run_source,
+            "label": args.run_label if args.run_label is not None else args.run_source,
+        },
+        "baseline": {
+            "path": args.verif_baseline,
+            "source": args.baseline_source,
+            "label": args.baseline_label
+            if args.baseline_label is not None
+            else args.baseline_source,
+        },
         "stratification": args.stratification,
         "lead_times": args.lead_times,
         # All recognised metrics — every entry must also appear in metric_directions.
@@ -215,19 +225,36 @@ def _load_relative_diff(cfg: dict) -> xr.Dataset:
         if dim != strat_dim:
             sel_coords[dim] = all_value
 
-    model_ds = (
-        xr.open_dataset(cfg["model"]["path"]).sel(**sel_coords).squeeze(drop=True)
-    )
-    baseline_ds = (
-        xr.open_dataset(cfg["baseline"]["path"])
-        .sel(**{**sel_coords, "source": baseline_source})
-        .squeeze(drop=True)
+    model_ds = xr.open_dataset(cfg["model"]["path"])
+    baseline_ds = xr.open_dataset(cfg["baseline"]["path"])
+
+    for label, ds in [("model", model_ds), ("baseline", baseline_ds)]:
+        if "n_samples" not in ds.data_vars:
+            raise ValueError(
+                f"'n_samples' is missing from the {label} dataset '{cfg[label]['path']}'.\n"
+                f"This file was likely produced before n_samples tracking was introduced.\n"
+                f"Fix: delete '{cfg[label]['path']}' and rerun the pipeline."
+            )
+    model_n = int(model_ds["n_samples"].sel(season="all", init_hour=-999).item())
+    baseline_n = int(baseline_ds["n_samples"].sel(season="all", init_hour=-999).item())
+    if model_n != baseline_n:
+        fewer = (
+            cfg["model"]["path"] if model_n < baseline_n else cfg["baseline"]["path"]
+        )
+        raise ValueError(
+            f"n_samples mismatch: model has {model_n} and baseline has {baseline_n} "
+            f"forecast dates.\n"
+            f"Both runs must cover the same set of dates for a valid scorecard.\n"
+            f"Fix: delete '{fewer}' and rerun the pipeline."
+        )
+
+    model_ds = model_ds.sel(**sel_coords).squeeze(drop=True)
+    baseline_ds = baseline_ds.sel(**{**sel_coords, "source": baseline_source}).squeeze(
+        drop=True
     )
 
     common_vars = [v for v in model_ds.data_vars if v in baseline_ds.data_vars]
-    common_leads = sorted(
-        set(model_ds.lead_time.values) & set(baseline_ds.lead_time.values)
-    )
+    common_leads = sorted(set(model_ds.step.values) & set(baseline_ds.step.values))
 
     if not common_vars:
         raise ValueError(
@@ -238,8 +265,8 @@ def _load_relative_diff(cfg: dict) -> xr.Dataset:
     if not common_leads:
         raise ValueError("No lead times in common between model and baseline.")
 
-    model_slice = model_ds[common_vars].sel(lead_time=common_leads)
-    baseline_slice = baseline_ds[common_vars].sel(lead_time=common_leads)
+    model_slice = model_ds[common_vars].sel(step=common_leads)
+    baseline_slice = baseline_ds[common_vars].sel(step=common_leads)
 
     rel_diff = (model_slice - baseline_slice) / abs(baseline_slice) * 100
     rel_diff = rel_diff.where(
@@ -263,14 +290,14 @@ def _filter_diff(diff: xr.Dataset, cfg: dict) -> xr.Dataset:
     if cfg.get("lead_times"):
         start, stop, step = (int(x) for x in cfg["lead_times"].split("/"))
         requested = {pd.Timedelta(h, "h") for h in range(start, stop + 1, step)}
-        available = {pd.Timedelta(lt) for lt in result.lead_time.values}
+        available = {pd.Timedelta(lt) for lt in result.step.values}
         keep = sorted(requested & available)
         if not keep:
             raise ValueError(
                 f"No lead times match '{cfg['lead_times']}'. "
                 f"Available (h): {sorted(_timedelta_to_hours(lt) for lt in available)}"
             )
-        result = result.sel(lead_time=keep)
+        result = result.sel(step=keep)
 
     keep = [
         var
@@ -588,8 +615,8 @@ def _render_scorecard(diff: xr.Dataset, cfg: dict, outfn: Path):
     legend = plot["legend"]
     dots = plot["dots"]
     fonts = plot["fonts"]
-    model_source = cfg["model"]["source"]
-    baseline_source = cfg["baseline"]["source"]
+    model_source = cfg["model"]["label"]
+    baseline_source = cfg["baseline"]["label"]
     strat_dim = cfg.get("stratification", "region")
 
     plt.rcParams["font.family"] = plot["rcparams"]["font_family"]
@@ -599,8 +626,8 @@ def _render_scorecard(diff: xr.Dataset, cfg: dict, outfn: Path):
     # Decompose data-var names (e.g. "T_2M.RMSE") into (group, metric) pairs.
     rows = [tuple(v.rsplit(".", 1)) for v in diff.data_vars]
     slices = list(diff[strat_dim].values)
-    n_leads = diff.sizes["lead_time"]
-    lead_hours = [_timedelta_to_hours(lt) for lt in diff.lead_time.values]
+    n_leads = diff.sizes["step"]
+    lead_hours = [_timedelta_to_hours(lt) for lt in diff.step.values]
     has_missing = any(np.isnan(diff[v].values).any() for v in diff.data_vars)
 
     slice_label_w_in, slice_label_h_rows, metric_label_w_pt = _measure_label_sizes(
@@ -784,6 +811,18 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Value of the 'source' dim to select inside --verif_baseline.",
+    )
+    parser.add_argument(
+        "--run_label",
+        type=str,
+        default=None,
+        help="Human-readable label for the model run (used in plot titles/legend). Defaults to --run_source.",
+    )
+    parser.add_argument(
+        "--baseline_label",
+        type=str,
+        default=None,
+        help="Human-readable label for the baseline (used in plot titles/legend). Defaults to --baseline_source.",
     )
     parser.add_argument(
         "--lead_times",

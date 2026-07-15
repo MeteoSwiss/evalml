@@ -4,13 +4,14 @@ from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from peakweather import PeakWeatherDataset
+import xarray as xr
 
 from data_input import (
     parse_steps,
     load_forecast_data,
     load_truth_data,
 )
+from verification import apply_lapse_rate_correction_inplace
 from verification.spatial import map_forecast_to_truth
 
 LOG = logging.getLogger(__name__)
@@ -96,13 +97,16 @@ def main():
         default="truth",
         help="Label for analysis line in plot legend.",
     )
-    parser.add_argument(
-        "--peakweather", type=str, default=None, help="Path to PeakWeather dataset"
-    )
     parser.add_argument("--date", type=str, default=None, help="reference datetime")
     parser.add_argument("--outdir", type=str, help="output directory")
     parser.add_argument("--param", type=str, help="parameter")
     parser.add_argument("--stations", nargs="+", type=str, help="station IDs")
+    parser.add_argument(
+        "--lapse_rate_correction",
+        action="store_true",
+        default=False,
+        help="Apply standard-atmosphere lapse-rate correction to T_2M.",
+    )
 
     args = parser.parse_args()
 
@@ -124,7 +128,6 @@ def main():
             "Mismatched baseline arguments: --baseline and --baseline_label "
             "must be provided the same number of times."
         )
-    peakweather_dir = Path(args.peakweather)
     init_time = datetime.strptime(args.date, "%Y%m%d%H%M")
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -145,6 +148,23 @@ def main():
     else:
         paramlist = [param]
 
+    LOG.info("Loading analysis data from %s", analysis_root)
+    analysis_ds = load_truth_data(analysis_root, init_time, forecast_steps, paramlist)
+    analysis_ds = preprocess_ds(analysis_ds, param)
+
+    # Build station coordinate lookup from the loaded analysis dataset so that
+    # any station with data for the plotted parameter is found (a fixed
+    # parameter like rre150h0 would exclude stations like JUN).
+    catalog_lookup = {
+        str(sta): (float(lat), float(lon), float(elev))
+        for sta, lat, lon, elev in zip(
+            analysis_ds["values"].values,
+            analysis_ds["latitude"].values,
+            analysis_ds["longitude"].values,
+            analysis_ds["elevation"].values,
+        )
+    }
+
     # Load gridded data once — shared across all station plots
     LOG.info("Loading forecast data from %s", forecast_grib_dir)
     forecast_ds = load_forecast_data(
@@ -152,23 +172,12 @@ def main():
     )
     forecast_ds = preprocess_ds(forecast_ds, param)
 
-    steps = [int(s) for s in forecast_ds.lead_time.dt.total_seconds().values / 3600]
-    LOG.info("Loading analysis data from %s", analysis_root)
-    analysis_ds = load_truth_data(analysis_root, init_time, steps, paramlist)
-    analysis_ds = preprocess_ds(analysis_ds, param)
-
     baseline_ds_list = []
     for root, step, label in zip(baseline_roots, baseline_steps, baseline_labels):
         LOG.info("Loading baseline '%s' from %s", label, root)
         baseline_ds_list.append(
             preprocess_ds(load_forecast_data(root, init_time, step, paramlist), param)
         )
-
-    # Load station metadata once
-    LOG.info("Loading station metadata from %s", peakweather_dir)
-    peakweather = PeakWeatherDataset(root=peakweather_dir)
-    stations_table = peakweather.stations_table
-    stations_table.index.names = ["values"]
 
     param2plot = forecast_ds[param].attrs.get("parameter", {})
     short = param2plot.get("shortName", "")
@@ -183,16 +192,49 @@ def main():
             stations.index(station) + 1,
             len(stations),
         )
-        station_ds = stations_table.to_xarray().sel(values=[station])
-        station_ds = station_ds.rename({"latitude": "lat", "longitude": "lon"})
-        station_ds = station_ds.set_coords(("lat", "lon", "station_name"))
-        station_ds = station_ds.drop_vars(list(station_ds.data_vars))
+        if station not in catalog_lookup:
+            LOG.warning(
+                "Station %r has no observations for parameter %s — writing placeholder.",
+                station,
+                param,
+            )
+            outfn = outdir / f"{init_time.strftime('%Y%m%d%H%M')}_{param}_{station}.png"
+            fig, ax = plt.subplots()
+            ax.text(
+                0.5,
+                0.5,
+                f"No observations for {param}\nat station {station}",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+            )
+            ax.set_axis_off()
+            plt.savefig(outfn)
+            plt.close(fig)
+            LOG.info("saved placeholder: %s", outfn)
+            continue
+        lat, lon, elev = catalog_lookup[station]
+        station_ds = xr.Dataset(
+            coords={
+                "values": [station],
+                "latitude": ("values", [lat]),
+                "longitude": ("values", [lon]),
+                "elevation": ("values", [elev]),
+            }
+        )
 
         forecast_station_ds = map_forecast_to_truth(forecast_ds, station_ds)
         analysis_station_ds = map_forecast_to_truth(analysis_ds, station_ds)
         baseline_station_ds_list = [
             map_forecast_to_truth(ds, station_ds) for ds in baseline_ds_list
         ]
+
+        if args.lapse_rate_correction:
+            apply_lapse_rate_correction_inplace(
+                forecast_station_ds, station_ds, paramlist
+            )
+            for ds in baseline_station_ds_list:
+                apply_lapse_rate_correction_inplace(ds, station_ds, paramlist)
 
         fig, ax = plt.subplots()
 
@@ -207,13 +249,13 @@ def main():
             zip(baseline_labels, baseline_station_ds_list), start=1
         ):
             ax.plot(
-                baseline_station_ds["time"].values,
+                baseline_station_ds["valid_time"].values,
                 baseline_station_ds[param].values,
                 color=f"C{i}",
                 label=baseline_label,
             )
         ax.plot(
-            forecast_station_ds["time"].values,
+            forecast_station_ds["valid_time"].values,
             forecast_station_ds[param].values,
             color="C0",
             label=forecast_label,

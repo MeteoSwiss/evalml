@@ -14,16 +14,32 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
+plt.style.use(["classic", "seaborn-v0_8-colorblind"])
+plt.rcParams.update(
+    {
+        "axes.grid": True,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "figure.figsize": (10, 6),
+        "figure.dpi": 150,
+        "lines.linewidth": 1.5,
+        "lines.markersize": 3,
+        "lines.markeredgewidth": 0,
+        "legend.frameon": False,
+        "font.size": 12,
+    }
+)
+
 
 def _ensure_unique_lead_time(ds: xr.Dataset) -> xr.Dataset:
     """Drop duplicate lead_time entries within a Dataset (keep first occurrence)."""
     try:
-        idx = ds.get_index("lead_time")
+        idx = ds.get_index("step")
     except Exception:
-        idx = pd.Index(ds["lead_time"].values)
+        idx = pd.Index(ds["step"].values)
     if getattr(idx, "has_duplicates", False):
         keep = ~idx.duplicated(keep="first")
-        ds = ds.isel(lead_time=keep)
+        ds = ds.isel(step=keep)
     return ds
 
 
@@ -44,9 +60,9 @@ def _select_best_sources(dfs: list[xr.Dataset]) -> list[xr.Dataset]:
             if s in d.source.values:
                 di = d.sel(source=s)
                 try:
-                    n = pd.Index(di["lead_time"].values).unique().size
+                    n = pd.Index(di["step"].values).unique().size
                 except Exception:
-                    n = len(pd.unique(di["lead_time"].values))
+                    n = len(pd.unique(di["step"].values))
                 candidates.append((i, n))
         if candidates:
             best_idx, _ = max(candidates, key=lambda t: t[1])
@@ -91,7 +107,7 @@ def main(args: Namespace) -> None:
     )
     all_df[["param", "metric"]] = all_df["stack"].str.split(".", n=1, expand=True)
     all_df.drop(columns=["stack"], inplace=True)
-    all_df["lead_time"] = all_df["lead_time"].dt.total_seconds() / 3600
+    all_df["step"] = all_df["step"].dt.total_seconds() / 3600
 
     metrics = all_df["metric"].unique()
     params = all_df["param"].unique()
@@ -127,22 +143,28 @@ def main(args: Namespace) -> None:
         title = f"{metric} - {param} - {region}"
         title += f"- {season} - {init_hour}" if args.stratify else ""
         for source, df in sub_df.groupby("source"):
+            display_label = args.label_map.get(source, source)
             df.plot(
-                x="lead_time",
+                x="step",
                 y="value",
                 kind="line",
                 marker="o",
                 title=title,
                 xlabel="Lead Time [h]",
                 ylabel=decode_metric(metric),
-                label=source,
+                label=display_label,
                 color="black" if "analysis" in source else None,
                 ax=ax,
             )
+        ax.legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.15),
+            ncol=sub_df["source"].nunique(),
+        )
         args.output_dir.mkdir(parents=True, exist_ok=True)
         fn = f"{metric}_{param}"
         fn += f"_{season}_{init_hour}.png" if args.stratify else ".png"
-        plt.savefig(args.output_dir / fn)
+        plt.savefig(args.output_dir / fn, bbox_inches="tight")
         plt.close(fig)
 
 
@@ -168,5 +190,16 @@ if __name__ == "__main__":
         default="plots",
         help="Path to save the aggregated results.",
     )
+    parser.add_argument(
+        "--labels",
+        type=str,
+        default="",
+        help="Comma-separated source_id:display_label pairs for legend text.",
+    )
     args = parser.parse_args()
+    args.label_map = {}
+    for pair in args.labels.split(","):
+        if ":" in pair:
+            sid, _, lbl = pair.partition(":")
+            args.label_map[sid.strip()] = lbl.strip()
     main(args)

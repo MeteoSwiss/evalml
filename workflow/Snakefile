@@ -19,6 +19,7 @@ include: "rules/inference.smk"
 include: "rules/verification.smk"
 include: "rules/report.smk"
 include: "rules/plot.smk"
+include: "rules/verif_obs.smk"
 
 
 # about workflow
@@ -43,6 +44,12 @@ RESULTS_DIR = OUT_ROOT / "results" / EXPERIMENT_NAME
 # form results/{showcase}/{run_id}/... — constrain showcase to a single path component.
 wildcard_constraints:
     showcase=r"[^/]+",
+    run_id=r"[^/]+/[^/]+",
+    init_time=r"\d{12}",
+
+
+# prefer one rule because snakemake complains about ambiguous rules (same output)
+ruleorder: inference_prepare_forecaster > inference_prepare_temporal_downscaler
 
 
 # optional messages, log and error handling
@@ -81,8 +88,18 @@ onstart:
     print(_c(f"   Workdir:     {Path.cwd()}", "90"))
     print(_c(f"   Config:      {CONFIG_FILE.name}", "90"))
     print(_c(f"   Experiment:  {EXPERIMENT_NAME}", "90"))
-    print(_c(f"   Candidates:  {", ".join(CANDIDATES)}", "90"))
-    print(_c(f"   Baselines:   {", ".join(BASELINES)}", "90"))
+    print(
+        _c(
+            f"   Candidates:  {", ".join(v.get("label", k) for k, v in CANDIDATES.items())}",
+            "90",
+        )
+    )
+    print(
+        _c(
+            f"   Baselines:   {", ".join(v.get("label", k) for k, v in BASELINES.items())}",
+            "90",
+        )
+    )
     print(_c(f"   Data dir:    {DATA_DIR}", "90"))
     print(_c(f"   Logs dir:    {LOGS_DIR}", "90"))
     print(_c(f"   Results dir: {RESULTS_DIR}", "90"))
@@ -120,6 +137,9 @@ onerror:
 # -----------------------------------------------------
 
 
+SCOREMAPS_CONFIGS = config.get("experiment", {}).get("scoremaps") or {}
+
+
 rule experiment_all:
     """Target rule for experiment workflow."""
     input:
@@ -143,7 +163,39 @@ rule experiment_all:
                     scorecard_name=list(SCORECARD_CONFIGS),
                 )
             ]
-            if config.get("experiment", {}).get("scorecards", {}).get("enabled", True)
+            if (config.get("experiment", {}).get("scorecards") or {}).get(
+                "enabled", True
+            )
+            else []
+        ),
+        (
+            expand(
+                rules.plot_scoremaps.output,
+                run_id=list(CANDIDATES),
+                param=SCOREMAPS_CONFIGS["params"],
+                leadtime=SCOREMAPS_CONFIGS["leadtimes"],
+                score=SCOREMAPS_CONFIGS["scores"],
+                region=SCOREMAPS_CONFIGS["regions"],
+                season=SCOREMAPS_CONFIGS["seasons"],
+                init_hour=SCOREMAPS_CONFIGS["init_hours"],
+                experiment=EXPERIMENT_NAME,
+            )
+            if SCOREMAPS_CONFIGS.get("enabled", False)
+            else []
+        ),
+        (
+            expand(
+                rules.plot_scoremaps_baseline.output,
+                baseline_id=list(BASELINES),
+                param=SCOREMAPS_CONFIGS["params"],
+                leadtime=SCOREMAPS_CONFIGS["leadtimes"],
+                score=SCOREMAPS_CONFIGS["scores"],
+                region=SCOREMAPS_CONFIGS["regions"],
+                season=SCOREMAPS_CONFIGS["seasons"],
+                init_hour=SCOREMAPS_CONFIGS["init_hours"],
+                experiment=EXPERIMENT_NAME,
+            )
+            if SCOREMAPS_CONFIGS.get("enabled", False)
             else []
         ),
 
@@ -156,8 +208,8 @@ rule showcase_all:
                 rules.make_forecast_animation.output,
                 init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
                 run_id=CANDIDATES,
-                param=SHOWCASE_PARAMS,
-                region=list(SHOWCASE_REGIONS.keys()),
+                param=SHOWCASE_CONFIG["params"],
+                region=list(SHOWCASE_CONFIG["regions"].keys()),
                 showcase=EXPERIMENT_NAME,
             )
             if config["showcase"]["animations"]["enabled"]
@@ -168,7 +220,7 @@ rule showcase_all:
                 rules.plot_meteogram.output,
                 init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
                 run_id=CANDIDATES,
-                param=SHOWCASE_PARAMS,
+                param=SHOWCASE_CONFIG["params"],
                 sta=config["showcase"]["meteograms"]["stations"],
                 showcase=EXPERIMENT_NAME,
             )
@@ -190,10 +242,17 @@ rule inference_all:
     """Run inference for all reference times as defined in the configuration."""
     input:
         expand(
-            OUT_ROOT / "data/runs/{run_id}/{init_time}/raw",
+            rules.inference_execute.output.okfile,
             init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             run_id=CANDIDATES,
         ),
+    output:
+        run_all_ok=touch(OUT_ROOT / "logs/run_inference_all.ok"),
+    shell:
+        """
+        mkdir -p $(dirname {output.run_all_ok})
+        touch {output.run_all_ok}
+        """
 
 
 rule verification_metrics_all:
@@ -211,4 +270,31 @@ rule verification_metrics_plot_all:
         expand(
             rules.verification_metrics_plot.output,
             experiment=EXPERIMENT_NAME,
+        ),
+
+
+rule mec_all:
+    """Target rule for MEC observation verification (produces fdbk_files)."""
+    input:
+        expand(
+            OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}00.nc",
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
+            run_id=CANDIDATES,
+        ),
+
+
+rule ffv2_all:
+    """Target rule for FFV2 scoring pipeline (consumes fdbk_files, produces shiny scores)."""
+    input:
+        expand(
+            rules.reorganize_ffv2_files.output,
+            run_id=collect_all_candidates(),
+        ),
+        # Explicitly require all MEC feedback files so that Snakemake detects missing
+        # files and triggers the full MEC→FFV2 chain even when shiny/ already exists
+        # from a prior run (intermediate rules may have missing provenance).
+        expand(
+            OUT_ROOT / "data/runs/{run_id}/fdbk_files/verSYNOP_{init_time}00.nc",
+            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES_MEC],
+            run_id=CANDIDATES,
         ),

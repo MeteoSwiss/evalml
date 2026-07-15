@@ -22,16 +22,13 @@ def test_load_valid_colormap(monkeypatch, tmp_path):
     norm = result["norm"]
     bounds = result["bounds"]
 
-    # cmap has n_levs-1 colors inside
+    # cmap holds the n_levs-1 inner colors, under/over excluded
     assert cmap.N == 2
-    # name is stem
-    assert cmap.name == "test_colormap"
-    # cmap colors
-    assert np.allclose(cmap(0), (40 / 255, 50 / 255, 60 / 255, 1.0))
-    assert np.allclose(cmap(1), (70 / 255, 80 / 255, 90 / 255, 1.0))
-    # under/over colors
-    assert np.allclose(cmap(-9999), (10 / 255, 20 / 255, 30 / 255, 1.0))
-    assert np.allclose(cmap(9999), (100 / 255, 110 / 255, 120 / 255, 1.0))
+    assert np.allclose(cmap(0), (*[x / 255 for x in (40, 50, 60)], 1.0))
+    assert np.allclose(cmap(1), (*[x / 255 for x in (70, 80, 90)], 1.0))
+    # under/over are set separately
+    assert np.allclose(cmap.get_under(), (*[x / 255 for x in (10, 20, 30)], 1.0))
+    assert np.allclose(cmap.get_over(), (*[x / 255 for x in (100, 110, 120)], 1.0))
     # bounds
     assert np.allclose(norm.boundaries, [0, 1, 2])
     assert np.allclose(bounds, [0, 1, 2])

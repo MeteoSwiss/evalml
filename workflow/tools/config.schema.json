@@ -28,6 +28,13 @@
           },
           "title": "Domains",
           "type": "array"
+        },
+        "frames_per_second": {
+          "default": 2.0,
+          "description": "Frames per second for the output GIF animation.",
+          "exclusiveMinimum": 0,
+          "title": "Frames Per Second",
+          "type": "number"
         }
       },
       "title": "AnimationsConfig",
@@ -36,20 +43,6 @@
     "BaselineConfig": {
       "description": "Configuration for a single baseline to include in the verification.",
       "properties": {
-        "baseline_id": {
-          "anyOf": [
-            {
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Deprecated compatibility field. Workflow baseline IDs are derived from the stem of `root`.",
-          "title": "Baseline Id"
-        },
         "label": {
           "description": "Label for the baseline that will be used in experiment results such as reports and figures.",
           "minLength": 1,
@@ -57,7 +50,7 @@
           "type": "string"
         },
         "root": {
-          "description": "Root directory where the baseline data is stored. The workflow derives the baseline ID from the stem of this path.",
+          "description": "Root directory where the baseline data is stored.",
           "minLength": 1,
           "title": "Root",
           "type": "string"
@@ -66,6 +59,12 @@
           "description": "Forecast steps to be used from baseline, e.g. '10/120/1'.",
           "pattern": "^\\d*/\\d*/\\d*$",
           "title": "Steps",
+          "type": "string"
+        },
+        "member": {
+          "default": "000",
+          "description": "Ensemble member to use: '000'/'control' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID. WARNING: when using 'median' with temporally aggregated parameters (e.g. 6-hourly precipitation), do NOT aggregate the hourly median \u2014 this introduces a significant negative bias. Instead, read the corresponding pre-aggregated median files (e.g. ..._median06h). Ensure the baseline data files match the aggregation period.",
+          "title": "Member",
           "type": "string"
         }
       },
@@ -167,6 +166,33 @@
           "description": "Maximum runtime, e.g. '1h'.",
           "title": "Runtime",
           "type": "string"
+        },
+        "slurm_account": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "SLURM account to charge.",
+          "title": "Slurm Account"
+        },
+        "gpus": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Default GPU count per job (0 for non-GPU jobs).",
+          "title": "Gpus"
         }
       },
       "required": [
@@ -269,6 +295,18 @@
           ],
           "default": null,
           "description": "Scorecard generation configuration. Omit or set enabled: false to disable."
+        },
+        "scoremaps": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScoreMapsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Score map plot configuration. Omit or set enabled: false to disable."
         }
       },
       "required": [
@@ -308,12 +346,82 @@
       "title": "ExplicitDates",
       "type": "array"
     },
+    "Ffv2Config": {
+      "additionalProperties": false,
+      "description": "Configuration for the FFV2 scoring pipeline.",
+      "properties": {
+        "experiment_ids": {
+          "description": "Comma-separated experiment IDs passed to FFV2.",
+          "title": "Experiment Ids",
+          "type": "string"
+        },
+        "veri_ens_member": {
+          "description": "Comma-separated ensemble member indices passed to FFV2, one per experiment ID (typically -1 for deterministic runs).",
+          "title": "Veri Ens Member",
+          "type": "string"
+        },
+        "catthresholds": {
+          "additionalProperties": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "description": "Per-variable categorical thresholds for FFV2, mapping FFV2 variable names to lists of threshold values.",
+          "title": "Catthresholds",
+          "type": "object"
+        },
+        "pecthresholds": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object"
+          },
+          "description": "Per-variable PEC thresholds for FFV2, mapping FFV2 variable names to a dict with exactly one 'lower' and one 'upper' value.",
+          "title": "Pecthresholds",
+          "type": "object"
+        },
+        "experiment_description": {
+          "description": "Short description of the experiment for FFV2 output files.",
+          "title": "Experiment Description",
+          "type": "string"
+        },
+        "file_description": {
+          "description": "File description string used in FFV2 output file naming.",
+          "title": "File Description",
+          "type": "string"
+        },
+        "domain_table": {
+          "description": "Path to the domain table file (polygon) used by FFV2.",
+          "title": "Domain Table",
+          "type": "string"
+        },
+        "blacklists": {
+          "description": "Path to the blacklist directory used by FFV2.",
+          "title": "Blacklists",
+          "type": "string"
+        }
+      },
+      "required": [
+        "experiment_ids",
+        "veri_ens_member",
+        "catthresholds",
+        "pecthresholds",
+        "experiment_description",
+        "file_description",
+        "domain_table",
+        "blacklists"
+      ],
+      "title": "Ffv2Config",
+      "type": "object"
+    },
     "ForecasterConfig": {
       "additionalProperties": false,
       "description": "Single training run stored in MLflow.",
       "properties": {
         "checkpoint": {
-          "description": "The mlflow run ID, as a 32-character hexadecimal string.",
+          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
           "title": "Checkpoint",
           "type": "string"
         },
@@ -494,104 +602,6 @@
       "title": "InferenceResources",
       "type": "object"
     },
-    "InterpolatorConfig": {
-      "additionalProperties": false,
-      "description": "Single training run stored in MLflow.",
-      "properties": {
-        "checkpoint": {
-          "description": "The mlflow run ID, as a 32-character hexadecimal string.",
-          "title": "Checkpoint",
-          "type": "string"
-        },
-        "label": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The label for the run that will be used in experiment results such as reports and figures.",
-          "title": "Label"
-        },
-        "steps": {
-          "description": "Forecast lead times in hours, formatted as 'start/end/step'. The range includes the start lead time and continues with the given step until reaching or exceeding the end lead time. Example: '0/120/6' for lead times every 6 hours up to 120 h, or '0/33/6' up to 30 h.",
-          "title": "Steps",
-          "type": "string"
-        },
-        "extra_requirements": {
-          "description": "List of extra dependencies to install for this model. These will be added to the requirements.txt file in the run directory.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Extra Requirements",
-          "type": "array"
-        },
-        "inference_resources": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/InferenceResources"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Resource requirements for inference jobs (optional; defaults handled externally)."
-        },
-        "disable_local_eccodes_definitions": {
-          "default": false,
-          "description": "If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
-          "title": "Disable Local Eccodes Definitions",
-          "type": "boolean"
-        },
-        "config": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "string"
-            }
-          ],
-          "description": "Configuration for the interpolator run. Can be a dictionary of parameters or a path to a configuration file. By default, it will point to resources/inference/configs/interpolator.yaml in the evalml repository.",
-          "title": "Config"
-        },
-        "forecaster": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ForecasterConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Configuration for the forecaster run that this interpolator is based on."
-        }
-      },
-      "required": [
-        "checkpoint",
-        "steps"
-      ],
-      "title": "InterpolatorConfig",
-      "type": "object"
-    },
-    "InterpolatorItem": {
-      "properties": {
-        "interpolator": {
-          "$ref": "#/$defs/InterpolatorConfig"
-        }
-      },
-      "required": [
-        "interpolator"
-      ],
-      "title": "InterpolatorItem",
-      "type": "object"
-    },
     "Locations": {
       "description": "Locations of data and services used in the workflow.",
       "properties": {
@@ -606,6 +616,34 @@
         "output_root"
       ],
       "title": "Locations",
+      "type": "object"
+    },
+    "MecConfig": {
+      "additionalProperties": false,
+      "description": "Paths to input observation files for the MEC verification step.",
+      "properties": {
+        "ekf_root": {
+          "description": "Root directory for EKF SYNOP files. Files are expected at {ekf_root}/{YYYYMM}/ekfSYNOP_{init}00.nc.",
+          "title": "Ekf Root",
+          "type": "string"
+        },
+        "mon_synop_root": {
+          "description": "Root directory for monSYNOP files. Files are expected at {mon_synop_root}/{YYYYMMDDH}/monSYNOP.nc.",
+          "title": "Mon Synop Root",
+          "type": "string"
+        },
+        "ver_synop_root": {
+          "description": "Root directory for reference verSYNOP files. Files are expected at {ver_synop_root}/verSYNOP_{init}00.nc.",
+          "title": "Ver Synop Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ekf_root",
+        "mon_synop_root",
+        "ver_synop_root"
+      ],
+      "title": "MecConfig",
       "type": "object"
     },
     "MeteogramConfig": {
@@ -670,6 +708,87 @@
         "jobs"
       ],
       "title": "Profile",
+      "type": "object"
+    },
+    "ScoreMapsConfig": {
+      "additionalProperties": false,
+      "description": "Parameters controlling which score map plots are produced.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to produce score maps (computationally intensive).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "params": {
+          "default": [
+            "T_2M"
+          ],
+          "description": "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, PS, PMSL, TOT_PREC (native), and SP_10M (derived wind speed from U_10M/V_10M).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "leadtimes": {
+          "default": [
+            6,
+            24
+          ],
+          "description": "List of lead times (hours) to plot.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Leadtimes",
+          "type": "array"
+        },
+        "scores": {
+          "default": [
+            "BIAS"
+          ],
+          "description": "List of verification scores to plot. Supported: BIAS, RMSE, MAE.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Scores",
+          "type": "array"
+        },
+        "regions": {
+          "default": [
+            "switzerland"
+          ],
+          "description": "List of regions to plot (e.g. switzerland, centraleurope).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Regions",
+          "type": "array"
+        },
+        "seasons": {
+          "default": [
+            "all"
+          ],
+          "description": "List of seasons to plot ('all', 'DJF', 'MAM', 'JJA', 'SON').",
+          "items": {
+            "type": "string"
+          },
+          "title": "Seasons",
+          "type": "array"
+        },
+        "init_hours": {
+          "default": [
+            "all"
+          ],
+          "description": "List of initialization hours to plot. Use 'all' for the unstratified view, or zero-padded hour strings like '00', '06', '12', '18'.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Init Hours",
+          "type": "array"
+        }
+      },
+      "title": "ScoreMapsConfig",
       "type": "object"
     },
     "ScorecardConfig": {
@@ -738,7 +857,7 @@
       "description": "Stratification settings for the analysis.",
       "properties": {
         "regions": {
-          "description": "List of region names for stratification.",
+          "description": "List of region names for stratification. Empty list means no spatial stratification.",
           "items": {
             "type": "string"
           },
@@ -746,16 +865,118 @@
           "type": "array"
         },
         "root": {
-          "description": "Root directory where the region shapefiles are stored.",
-          "title": "Root",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Root directory where the region shapefiles are stored. Required when regions is non-empty.",
+          "title": "Root"
+        }
+      },
+      "title": "Stratification",
+      "type": "object"
+    },
+    "TemporalDownscalerConfig": {
+      "additionalProperties": false,
+      "description": "Single training run stored in MLflow.",
+      "properties": {
+        "checkpoint": {
+          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
+          "title": "Checkpoint",
           "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The label for the run that will be used in experiment results such as reports and figures.",
+          "title": "Label"
+        },
+        "steps": {
+          "description": "Forecast lead times in hours, formatted as 'start/end/step'. The range includes the start lead time and continues with the given step until reaching or exceeding the end lead time. Example: '0/120/6' for lead times every 6 hours up to 120 h, or '0/33/6' up to 30 h.",
+          "title": "Steps",
+          "type": "string"
+        },
+        "extra_requirements": {
+          "description": "List of extra dependencies to install for this model. These will be added to the requirements.txt file in the run directory.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Extra Requirements",
+          "type": "array"
+        },
+        "inference_resources": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InferenceResources"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Resource requirements for inference jobs (optional; defaults handled externally)."
+        },
+        "disable_local_eccodes_definitions": {
+          "default": false,
+          "description": "If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
+          "title": "Disable Local Eccodes Definitions",
+          "type": "boolean"
+        },
+        "config": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Configuration for the temporal downscaler run. Can be a dictionary of parameters or a path to a configuration file. By default, it will point to resources/inference/configs/temporal_downscaler.yaml in the evalml repository.",
+          "title": "Config"
+        },
+        "forecaster": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ForecasterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Configuration for the forecaster run that this temporal downscaler is based on."
         }
       },
       "required": [
-        "regions",
-        "root"
+        "checkpoint",
+        "steps"
       ],
-      "title": "Stratification",
+      "title": "TemporalDownscalerConfig",
+      "type": "object"
+    },
+    "TemporalDownscalerItem": {
+      "properties": {
+        "temporal_downscaler": {
+          "$ref": "#/$defs/TemporalDownscalerConfig"
+        }
+      },
+      "required": [
+        "temporal_downscaler"
+      ],
+      "title": "TemporalDownscalerItem",
       "type": "object"
     },
     "TruthConfig": {
@@ -815,14 +1036,14 @@
       "title": "Dates"
     },
     "runs": {
-      "description": "List of experiment participants, including forecaster/interpolator ML runs and baselines.",
+      "description": "List of experiment participants, including forecaster/temporal downscaler ML runs and baselines.",
       "items": {
         "anyOf": [
           {
             "$ref": "#/$defs/ForecasterItem"
           },
           {
-            "$ref": "#/$defs/InterpolatorItem"
+            "$ref": "#/$defs/TemporalDownscalerItem"
           },
           {
             "$ref": "#/$defs/BaselineItem"
@@ -830,14 +1051,6 @@
         ]
       },
       "title": "Runs",
-      "type": "array"
-    },
-    "baselines": {
-      "description": "Deprecated top-level baselines list. Prefer defining baseline entries directly in `runs`.",
-      "items": {
-        "$ref": "#/$defs/BaselineItem"
-      },
-      "title": "Baselines",
       "type": "array"
     },
     "truth": {
@@ -849,6 +1062,12 @@
           "type": "null"
         }
       ]
+    },
+    "lapse_rate_correction": {
+      "default": true,
+      "description": "Apply standard-atmosphere lapse-rate correction to T_2M.",
+      "title": "Lapse Rate Correction",
+      "type": "boolean"
     },
     "experiment": {
       "$ref": "#/$defs/ExperimentConfig",
@@ -863,6 +1082,30 @@
     "showcase": {
       "$ref": "#/$defs/ShowcaseConfig",
       "description": "Settings for the showcase workflow."
+    },
+    "mec": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MecConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Input observation paths for the MEC verification step. Required when running with --mec."
+    },
+    "ffv2": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Ffv2Config"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Configuration for the FFV2 scoring pipeline. Required when running with --ffv2."
     }
   },
   "required": [
