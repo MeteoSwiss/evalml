@@ -76,12 +76,17 @@ def _load_config(path: str) -> dict:
     return ConfigModel.model_validate(raw).model_dump(mode="json")
 
 
+def _verif_hash(cfg: dict) -> str:
+    """The hash the pipeline puts in the verif_aggregated file name."""
+    truth = {k: v for k, v in cfg["truth"].items() if k not in _HASH_EXCLUDE}
+    verif = {"lapse_rate_correction": cfg.get("lapse_rate_correction", True)}
+    return _hash({"truth": truth, "verif": verif})
+
+
 def _resolve_sources(cfg: dict, lower: str, upper: str, run_source: str | None) -> list:
     """Return [(name, file, source_id)] for the run and the two anchor baselines."""
     data = Path(cfg.get("locations", {}).get("output_root", "output/")) / "data"
-    truth = {k: v for k, v in cfg["truth"].items() if k not in _HASH_EXCLUDE}
-    verif = {"lapse_rate_correction": cfg.get("lapse_rate_correction", True)}
-    vhash = _hash({"truth": truth, "verif": verif})
+    vhash = _verif_hash(cfg)
 
     # A run id (env_id/run_hash) comes from a recursive registration of the nested
     # forecaster, environment and checkpoint, which is not reproduced here — the
@@ -237,9 +242,20 @@ def main(args) -> None:
     )
     table = build_table(sources, variables)
 
-    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-    table.to_csv(args.output)
-    print(f"\nsaved: {args.output}\n")
+    vhash = _verif_hash(cfg)
+    title = (
+        f"Analysis (lead time {args.lead_time_h}) between "
+        f"{args.lower} (0%) and {args.upper} (100%), verif {vhash}"
+    )
+    output = Path(
+        args.output
+        or "output/results/"
+        f"analysis_lt{args.lead_time_h}_{args.lower}_vs_{args.upper}_{vhash}.csv"
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    table.to_csv(output)
+    print(f"\n{title}")
+    print(f"saved: {output}\n")
     print(table.to_string())
 
 
@@ -274,7 +290,7 @@ if __name__ == "__main__":
     )
     p.add_argument(
         "--output",
-        default="output/results/analysis_verification_table_lt0.csv",
-        help="Output CSV path.",
+        default=None,
+        help="Output CSV path (default: built from the anchors and the verif hash).",
     )
     main(p.parse_args())
