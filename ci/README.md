@@ -24,7 +24,7 @@ You can trigger in one of two ways:
 
 ![Re-triggering a new test with a PR comment](images/cscs-ci-run.png)
 
-- Making `main` (or another branch being merged) a CI-enabled branch. This 
+- Making `main` (or another branch being merged) a CI-enabled branch. This
 will cause tests to trigger anytime a PR is created. However,
 *only PRs from a trusted user* will run  successfully. (Otherwise, tests are
 triggered and then fail because they cannot be scheduled in CSCS.)
