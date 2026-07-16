@@ -10,7 +10,15 @@ The configuration `cscs.yml` controls which tests are run. For example,
 `unit_test_job` calls the command `pytest tests/unit` (after setting up an environment).
 Adding another test suite is relatively simple; just make a new job.
 
-These tests should be triggered automatically in PRs. 
+
+## Using CI/CD
+These tests should be triggered automatically in PRs to `main`. When you make a new PR, tests should be triggered automatically. You'll see something like this (look for `cscs/default`):
+
+![alt text](image.png)
+
+You can re-trigger tests by adding a comment `cscs-ci run`:
+
+![alt text](image-1.png)
 
 ## Admin setup
 The CI project `mch-evalml` controls how the 
@@ -25,5 +33,4 @@ To disable CI/CD (for example, if balfrin is down, or there is some other proble
 navigate to the [administrative interface](https://cicd-ext-mw.cscs.ch/ci/setup/ui?repo=6067442399726097), go to `Default CI enabled branches`, and remove `main` (or any other branches you wish to disable).
 
 To enable, just add it back.
-
 ### Tests aren't running.
