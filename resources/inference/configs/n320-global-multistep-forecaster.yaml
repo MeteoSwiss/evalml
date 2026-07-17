@@ -27,5 +27,10 @@ post_processors:
 output:
   grib:
     path: grib/{date}{time:04}_{step:03}.grib
+    # ssrd/strd have no valid value at step 0 (1h-period accumulation ending
+    # at the current time would need data before the forecast start) —
+    # "skip" omits them from the initial state instead of erroring or writing
+    # a physically meaningless value.
+    negative_step_mode: skip
 
 write_initial_state: true

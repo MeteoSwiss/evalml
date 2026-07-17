@@ -15,6 +15,12 @@ runs:
       steps: 0/120/1
       config: resources/inference/configs/o96-global-multistep-forecaster.yaml
       disable_local_eccodes_definitions: true
+  - forecaster:
+      checkpoint: /scratch/mch/miccatta/SwissAI_checkpoints/checkpoint_resO96_fr1_st1_in7_out6_water/b1b457100bbe42358bfab53fda8f6d67/inference-last.ckpt
+      label: resO96_fr1_st1_in7_out6_water
+      steps: 0/120/1
+      config: resources/inference/configs/o96-global-multistep-forecaster.yaml
+      disable_local_eccodes_definitions: true
 
   # - forecaster:
   #     checkpoint: /scratch/mch/miccatta/SwissAI_checkpoints/checkpoint_resO96_fr1_st1_in7_out6/f812c442ebee498485da0f7c4a74bb7a/inference-last.ckpt
@@ -49,6 +55,8 @@ experiment:
     - V_10M
     - TOT_PREC
     - CLCT
+    - CLCL
+    - SSRD
   dashboard:
     stratification:
       # - region
