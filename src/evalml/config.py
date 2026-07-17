@@ -160,6 +160,30 @@ class TemporalDownscalerConfig(RunConfig):
         description="Configuration for the forecaster run that this temporal downscaler is based on.",
     )
 
+    copy_prognostic_from_forecaster: bool = Field(
+        False,
+        description=(
+            "If true, the prognostic variables at the overlap steps (the temporal "
+            "downscaler output steps that coincide with the forecaster's boundary "
+            "steps, e.g. multiples of 6 h) are overwritten in the downscaler GRIB "
+            "with the forecaster's values. This makes the forecaster-alone and "
+            "forecaster+downscaler metrics agree at those steps, at which the "
+            "downscaler merely re-predicts a state it was given as input. Diagnostic "
+            "variables (e.g. hourly-accumulated TOT_PREC) are left untouched. "
+            "Requires `forecaster` to be set."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _require_forecaster_when_copying(self) -> "TemporalDownscalerConfig":
+        if self.copy_prognostic_from_forecaster and self.forecaster is None:
+            raise ValueError(
+                "copy_prognostic_from_forecaster is true but no `forecaster` is "
+                "configured for this temporal downscaler; there is no forecaster "
+                "run to copy the prognostic overlap-step values from."
+            )
+        return self
+
 
 class BaselineConfig(BaseModel):
     """Configuration for a single baseline to include in the verification."""
