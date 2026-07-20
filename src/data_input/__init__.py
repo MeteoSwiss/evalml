@@ -381,8 +381,7 @@ def _load_analysis_data_from_zarr(
         for p in accum_params:
             vars_out[p] = _accumulate_from_hourly(ds_hourly[p], steps)
 
-    times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
-    return _select_valid_times(ds, times)
+    return xr.Dataset(vars_out)
 
 
 def _collect_ml_grib_files(root: Path, steps: list[int] | None = None) -> list[Path]:
