@@ -15,6 +15,7 @@ runs:
       label: Varda-single-1.0
       steps: 0/120/1
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
+      copy_prognostic_from_forecaster: true
       extra_requirements:
         - anemoi-datasets==0.5.35
         # - anemoi-inference==0.11.0
