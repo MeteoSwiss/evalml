@@ -323,6 +323,7 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
     - steps (lead times)
     - config YAML file contents (inference parameters)
     - For temporal downscalers: the forecaster's run_id (which run's outputs to read)
+    - For temporal downscalers: copy_prognostic_from_forecaster, but only when enabled
     """
     configs_to_hash = [{"steps": run_config["steps"]}]
     with open(run_config["config"], "r") as f:
@@ -330,6 +331,11 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
     if model_type == "temporal_downscaler" and run_config.get("forecaster"):
         # run output depends on which forecaster RUN was used (not just the env)
         configs_to_hash.append(run_config["forecaster"].get("run_id"))
+        # Copying the forecaster's prognostic values at the overlap steps rewrites
+        # the output GRIB, so an enabled run must get its own run_id. Hash it only when enabled, so
+        # existing runs that leave the flag off keep their current run_id.
+        if run_config.get("copy_prognostic_from_forecaster"):
+            configs_to_hash.append({"copy_prognostic_from_forecaster": True})
     return generate_json_hash(configs_to_hash)
 
 
