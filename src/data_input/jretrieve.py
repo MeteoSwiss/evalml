@@ -59,6 +59,55 @@ def _build_env(stage: str) -> dict[str, str]:
     return env
 
 
+def _check_credentials(conf_dir: Path) -> str | None:
+    """Return a descriptive error string if jretrieve credentials are missing."""
+    client_id = os.environ.get("JRETRIEVE_CLIENT_ID")
+    client_secret = os.environ.get("JRETRIEVE_CLIENT_SECRET")
+
+    dotenv_path = conf_dir / ".env"
+    dotenv_exists = dotenv_path.is_file()
+
+    if not (client_id and client_secret) and dotenv_exists:
+        dotenv: dict[str, str] = {}
+        try:
+            with open(dotenv_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, _, value = line.partition("=")
+                    dotenv[key.strip()] = value.strip().strip('"').strip("'")
+        except OSError:
+            pass
+        client_id = client_id or dotenv.get("JRETRIEVE_CLIENT_ID")
+        client_secret = client_secret or dotenv.get("JRETRIEVE_CLIENT_SECRET")
+
+    if client_id and client_secret:
+        return None
+
+    missing = [
+        name
+        for name, val in (
+            ("JRETRIEVE_CLIENT_ID", client_id),
+            ("JRETRIEVE_CLIENT_SECRET", client_secret),
+        )
+        if not val
+    ]
+    lines = [
+        f"Missing jretrieve credentials: {', '.join(missing)}.",
+        "Credentials must be supplied in one of two ways:",
+        f"  1. Set {' and '.join(missing)} as environment variables.",
+        f"  2. Add them to {dotenv_path}",
+    ]
+    if dotenv_exists:
+        lines.append(
+            f"     (.env file exists but does not contain {' or '.join(missing)})"
+        )
+    else:
+        lines.append("     (.env file not found — create it with the missing keys)")
+    return "\n".join(lines)
+
+
 def check_prerequisites(stage: str = "prod") -> None:
     """Fail-fast validation that the jretrievedwh environment is usable.
 
@@ -73,9 +122,13 @@ def check_prerequisites(stage: str = "prod") -> None:
         _resolve_binary()
     except JretrieveError as e:
         problems.append(str(e))
-    conf_path = Path(__file__).parents[2] / ".jretrievedwh-conf.prod.py"
+    conf_dir = Path(__file__).parents[2]
+    conf_path = conf_dir / ".jretrievedwh-conf.prod.py"
     if not conf_path.is_file():
         problems.append(f"jretrieve conf file not found: {conf_path}")
+    cred_problem = _check_credentials(conf_dir)
+    if cred_problem:
+        problems.append(cred_problem)
     if problems:
         raise JretrieveError(
             "jretrievedwh prerequisites not met:\n  - " + "\n  - ".join(problems)

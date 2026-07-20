@@ -59,6 +59,11 @@ rule plot_meteogram:
             ).resolve()
         ),
         stations=config["showcase"]["meteograms"]["stations"],
+        lapse_rate_flag=(
+            "--lapse_rate_correction"
+            if config.get("lapse_rate_correction", True)
+            else ""
+        ),
     shell:
         """
         set -euo pipefail
@@ -78,6 +83,7 @@ rule plot_meteogram:
             --outdir {params.outdir:q}
             --param {wildcards.param:q}
             --stations {params.stations:q}
+            {params.lapse_rate_flag}
         )
 
         for i in "${{!BASELINE_ROOTS[@]}}"; do
@@ -98,7 +104,7 @@ rule plot_forecast_frame:
         expand(
             OUT_ROOT
             / "data/runs/{{run_id}}/{{init_time}}/frames/frame_{{leadtime}}_{{param}}_{region}.png",
-            region=list(SHOWCASE_REGIONS.keys()),
+            region=list(SHOWCASE_CONFIG["regions"].keys()),
         ),
     log:
         OUT_ROOT
@@ -113,7 +119,7 @@ rule plot_forecast_frame:
         grib_out_dir=lambda wc: str(
             (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib").resolve()
         ),
-        regions_json=json.dumps(SHOWCASE_REGIONS),
+        regions_json=json.dumps(SHOWCASE_CONFIG["regions"]),
         outdir=lambda wc: str(
             (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/frames").resolve()
         ),
@@ -151,11 +157,11 @@ rule make_forecast_animation:
         OUT_ROOT
         / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
     wildcard_constraints:
-        param="|".join(map(re.escape, SHOWCASE_PARAMS)),
-        region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
+        param="|".join(map(re.escape, SHOWCASE_CONFIG["params"])),
+        region="|".join(map(re.escape, SHOWCASE_CONFIG["regions"].keys())),
     localrule: True
     params:
-        delay=lambda wc: 10 * int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
+        delay=round(100 / SHOWCASE_CONFIG["fps"]),
     shell:
         """
         FRAMES=$(for f in {input}; do [ -s "$f" ] && echo "$f"; done | tr '\\n' ' ')

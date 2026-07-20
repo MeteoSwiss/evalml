@@ -305,12 +305,12 @@ def collect_experiment_participants():
     participants = {}
     for base in BASELINE_CONFIGS.keys():
         participants[base] = (
-            OUT_ROOT / f"data/baselines/{base}/verif_aggregated_{TRUTH_HASH}.nc"
+            OUT_ROOT / f"data/baselines/{base}/verif_aggregated_{VERIF_HASH}.nc"
         )
     for exp in RUN_CONFIGS.keys():
         if RUN_CONFIGS[exp].get("_is_candidate", False):
             participants[exp] = (
-                OUT_ROOT / f"data/runs/{exp}/verif_aggregated_{TRUTH_HASH}.nc"
+                OUT_ROOT / f"data/runs/{exp}/verif_aggregated_{VERIF_HASH}.nc"
             )
     return participants
 
@@ -379,6 +379,22 @@ def truth_hash(truth_config: dict) -> str:
     return generate_json_hash(cfg)
 
 
+def verif_hash(full_config: dict) -> str:
+    """Hash of all settings that affect verification outputs.
+
+    Combines the truth source with verification-method settings so that
+    changing either (e.g. switching lapse_rate_correction on/off) produces
+    new output paths and unconditionally triggers a rerun.
+    """
+    truth_cfg = {
+        k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE
+    }
+    experiment_verif_cfg = {
+        "lapse_rate_correction": full_config.get("lapse_rate_correction", True),
+    }
+    return generate_json_hash({"truth": truth_cfg, "verif": experiment_verif_cfg})
+
+
 def truth_file_dep(_):
     """Truth file dependency: a real path for zarr, but a live-query
     marker (no input file) for jretrieve."""
@@ -399,8 +415,14 @@ if "jretrieve" in str(config["truth"]["root"]):
 TRUTH_HASH = truth_hash(config["truth"])
 SHP_REGIONS = parse_shp_regions()
 BBOX_REGIONS = parse_bbox_regions()
-SHOWCASE_REGIONS = parse_showcase_regions()
-SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])
+VERIF_HASH = verif_hash(config)
+REGIONS = parse_regions()
+_showcase = config.get("showcase", {})
+SHOWCASE_CONFIG = {
+    "regions": parse_showcase_regions(),
+    "params": _showcase.get("params", ["T_2M", "SP_10M"]),
+    "fps": _showcase.get("animations", {}).get("frames_per_second", 2.0),
+}
 EXPERIMENT_PARAMS = config.get("experiment", {}).get(
     "params", ["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"]
 )

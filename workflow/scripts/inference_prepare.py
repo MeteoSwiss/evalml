@@ -99,7 +99,10 @@ def prepare_temporal_downscaler(smk):
         config_content = f.read()
     LOG.info("Config: \n%s", config_content)
 
-    LOG.info("Temporal downscaler preparation complete.")
+    okfile = Path(smk.output.okfile)
+    okfile.parent.mkdir(parents=True, exist_ok=True)
+    okfile.touch()
+    LOG.info("Interpolator preparation complete.")
 
 
 def prepare_forecaster(smk):
@@ -124,6 +127,9 @@ def prepare_forecaster(smk):
         config_content = f.read()
     LOG.info("Config: \n%s", config_content)
 
+    okfile = Path(smk.output.okfile)
+    okfile.parent.mkdir(parents=True, exist_ok=True)
+    okfile.touch()
     LOG.info("Forecaster preparation complete.")
 
 
