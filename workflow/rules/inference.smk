@@ -331,3 +331,39 @@ rule inference_execute:
         touch {output.okfile}
         """
 # fmt: on
+
+
+# For temporal downscalers with copy_prognostic_from_forecaster enabled, rewrite
+# the prognostic variables at the overlap steps in place with the forecaster's
+# values (see workflow/scripts/inference_patch_overlap.py). Runs locally in the
+# evalml venv (earthkit-data), not the inference squashfs. Only pulled into the
+# DAG when a consumer routes to it via forecast_okfile().
+rule inference_patch_overlap:
+    input:
+        okfile=rules.inference_execute.output.okfile,
+        metadata=lambda wc: OUT_ROOT
+        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/anemoi.json",
+        config=OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml",
+        script="workflow/scripts/inference_patch_overlap.py",
+    output:
+        okfile=OUT_ROOT / "logs/inference_patch_overlap/{run_id}-{init_time}.ok",
+    log:
+        OUT_ROOT / "logs/inference_patch_overlap/{run_id}-{init_time}.log",
+    localrule: True
+    params:
+        grib_dir=lambda wc: (
+            OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
+        ).resolve(),
+        forecaster_dir=lambda wc: (
+            OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}/forecaster"
+        ).resolve(),
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run python {input.script} \
+            --grib-dir {params.grib_dir} \
+            --forecaster-dir {params.forecaster_dir} \
+            --metadata {input.metadata} \
+            --config {input.config} \
+            --okfile {output.okfile} >{log} 2>&1
+        """

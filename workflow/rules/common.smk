@@ -339,6 +339,26 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
     return generate_json_hash(configs_to_hash)
 
 
+def forecast_okfile(run_id: str, init_time: str) -> Path:
+    """Okfile marking that a run's forecast GRIB is ready for downstream consumers.
+
+    Normally this is the ``inference_execute`` okfile. For a temporal downscaler
+    with a forecaster parent and ``copy_prognostic_from_forecaster`` enabled, the
+    GRIB is rewritten in place afterwards by ``inference_patch_overlap``, so
+    consumers must instead wait for the patch okfile.
+    """
+    rc = RUN_CONFIGS[run_id]
+    if (
+        rc.get("model_type") == "temporal_downscaler"
+        and rc.get("forecaster")
+        and rc.get("copy_prognostic_from_forecaster")
+    ):
+        stem = "inference_patch_overlap"
+    else:
+        stem = "inference_execute"
+    return OUT_ROOT / f"logs/{stem}/{run_id}-{init_time}.ok"
+
+
 def baseline_hash(baseline_config: dict) -> str:
     """Hash of fields that determine baseline identity (excludes display/legacy metadata)."""
     cfg = {k: v for k, v in baseline_config.items() if k not in BASELINE_HASH_EXCLUDE}
