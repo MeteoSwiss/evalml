@@ -97,7 +97,6 @@ rule publication_meteogram:
         "workflow/scripts/publication_meteogram.py",
         manifest=rules.publication_manifest.output,
         verif=_meteogram_data_dep,
-        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         report(
             directory(OUT_ROOT / f"figures/{TRUTH_SLUG}/meteogram"),
