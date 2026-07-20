@@ -15,7 +15,6 @@ runs:
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
-        # - anemoi-inference==0.11.0
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
@@ -49,8 +48,6 @@ runs:
 truth:
   label: KENDA-CH1
   root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
-  # label: SwissMetNet
-  # root: jretrieve:1,2
 
 experiment:
   params:
@@ -102,23 +99,10 @@ experiment:
           - "U_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2"
           - "TOT_PREC6:RMSE,R2,ETS"
-
-publication:
-  leadtimes:
-    enabled: true
   scoremaps:
     enabled: true
-    steps: [6, 24]
-    params: [T_2M, SP_10M]
-    scores: [MSE_SKILL, BIAS_CONTRIB]
-    baseline_label: ICON-CH1-CTRL
-    season: all
-    region: switzerland
-  meteogram:
-    enabled: false
-    init_time: "202504010000"
-    station: "KLO"
-    params: [T_2M, TOT_PREC, SP_10M, DD_10M]
+    leadtimes: [6, 24]
+    params: ["T_2M", "SP_10M", "TOT_PREC1", "TOT_PREC6"]
 
 locations:
   output_root: output/
