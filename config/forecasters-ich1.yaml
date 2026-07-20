@@ -52,9 +52,9 @@ experiment:
   params:
     - T_2M
     - TD_2M
-    - U_10M
-    - V_10M
-    - TOT_PREC
+    - SP_10M
+    - TOT_PREC6
+    - PMSL
   stratification:
     regions:
       - jura
@@ -65,11 +65,9 @@ experiment:
       - alpensuedseite
     root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
   thresholds:
-    TOT_PREC:
-      gt: [0.0, 1, 5]
-    U_10M:
-      gt: [2.5, 5.0, 10.0]
-    V_10M:
+    TOT_PREC6:
+      gt: [0.0, 0.1, 5, 10, 20, 50]
+    SP_10M:
       gt: [2.5, 5.0, 10.0]
     T_2M:
       lt: [273.15]

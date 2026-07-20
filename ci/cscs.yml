@@ -1,0 +1,40 @@
+include:
+  - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
+
+.baremetal-runner-balfrin:
+  # take santis as starting point
+  extends: [.baremetal-runner-santis-gh200]
+  variables:
+    F7T_URL: 'https://api.cscs.ch/mch/firecrest/v2'
+    FIRECREST_SYSTEM: 'balfrin'
+    ARCH: 'x86_64'
+    SLURM_JOB_NUM_NODES: 1
+    SLURM_NTASKS: 1
+
+unit_test_job:
+  extends: [.baremetal-runner-balfrin]
+  before_script:
+    - |
+      echo "Setting up environment for unit tests on $(hostname)"
+      VENV_DIR="$(pwd)/.venv"
+      echo "uv installed at: $(which uv)"
+      uv --version
+      echo "will install evalml at: $VENV_DIR"
+      UV_HOME="$VENV_DIR" uv sync
+      source "$VENV_DIR/bin/activate"
+  script:
+    - pytest tests/unit
+
+integration_test_job:
+  extends: [.baremetal-runner-balfrin]
+  before_script:
+    - |
+      echo "Setting up environment for integration tests on $(hostname)"
+      VENV_DIR="$(pwd)/.venv"
+      echo "uv installed at: $(which uv)"
+      uv --version
+      echo "will install evalml at: $VENV_DIR"
+      UV_HOME="$VENV_DIR" uv sync
+      source "$VENV_DIR/bin/activate"
+  script:
+    - pytest tests/integration

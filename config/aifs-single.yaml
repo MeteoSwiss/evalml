@@ -33,9 +33,8 @@ experiment:
   params:
     - T_2M
     - TD_2M
-    - U_10M
-    - V_10M
-    - TOT_PREC
+    - SP_10M
+    - TOT_PREC6
   dashboard:
     stratification:
       # - region

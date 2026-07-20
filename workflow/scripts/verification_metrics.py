@@ -105,6 +105,16 @@ def main(args: ScriptConfig):
     # save results to NetCDF
     now = datetime.now()
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    # Strip any non-NetCDF-serializable attrs (e.g. dicts set by compute_derived)
+    # before writing; those attrs are only meaningful for in-memory use (e.g. plot_meteogram).
+    _netcdf_types = (str, bytes, int, float, list, tuple)
+    results.attrs = {
+        k: v for k, v in results.attrs.items() if isinstance(v, _netcdf_types)
+    }
+    for _var in results.data_vars.values():
+        _var.attrs = {
+            k: v for k, v in _var.attrs.items() if isinstance(v, _netcdf_types)
+        }
     results.earthkit.to_netcdf(args.output)
     LOG.info(
         "Saved verification results to %s in %s seconds",
