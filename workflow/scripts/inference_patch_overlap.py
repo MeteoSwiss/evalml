@@ -55,39 +55,48 @@ def prognostic_variables(metadata: dict) -> set[str]:
 
     ``output.prognostic`` are the variables that are both input and output
     (copied from the forecaster); ``output.diagnostic`` (e.g. ``tp``) are
-    output-only and left untouched. Reading them from the metadata keeps the
-    list correct if the model's variable set ever changes.
+    output-only and left untouched.
     """
     out = metadata["data_indices"]["data"]["data"]["output"]
     idx_to_name = {v: k for k, v in out["name_to_index"].items()}
     return {idx_to_name[i] for i in out["prognostic"]}
 
 
-def overlap_steps(metadata: dict, downscaler_steps: list[int]) -> list[int]:
+def lead_time_hours(config: dict) -> int:
+    """Forecast horizon in hours, read from the rendered inference config's
+    ``lead_time`` (e.g. ``120h``). This is the authoritative run horizon and,
+    unlike the GRIB filenames, is a stable structured field."""
+    lead_time = str(config["lead_time"]).strip()
+    if lead_time.endswith("h"):
+        return int(lead_time[:-1])
+    if lead_time.endswith("d"):
+        return int(lead_time[:-1]) * 24
+    return int(lead_time)  # bare number of hours
+
+
+def overlap_steps(metadata: dict, max_step: int) -> list[int]:
     """Global lead times at which the downscaler re-predicts a forecaster boundary.
 
     Derived from ``config.training.explicit_times``: the within-window overlap is
     ``set(input) & set(target)``; the window advances by the input span (stride).
-    Tiling those offsets across windows and intersecting with the run's actual
-    output steps gives the global overlap steps (e.g. {6, 12, 18, ...}).
+    Tiling those offsets across windows up to the forecast horizon gives the
+    global overlap steps (e.g. {6, 12, 18, ...}).
     """
-    et = metadata["config"]["training"]["explicit_times"]
-    inp, tgt = et["input"], et["target"]
-    offsets = sorted(set(inp) & set(tgt))
+    explicit_times = metadata["config"]["training"]["explicit_times"]
+    downscale_input, downscale_target = explicit_times["input"], explicit_times["target"]
+    offsets = sorted(set(downscale_input) & set(downscale_target)) # offsets = inputs that are repredicted.
     if not offsets:
         return []
-    stride = max(inp) - min(inp)
+    stride = max(downscale_input) - min(downscale_input) # stride = window span
     if stride <= 0:
         return []
-    steps = set(downscaler_steps)
-    max_step = max(downscaler_steps)
     windows = range(0, max_step + 1, stride)
-    return sorted({w + off for off in offsets for w in windows if (w + off) in steps})
+    return sorted({w + off for off in offsets for w in windows if w + off <= max_step})
 
 
-def _namer_rules(config_path: Path) -> list:
-    """Extract the LAM ``namer.rules`` (ICON shortName -> anemoi name) from the
-    rendered inference config. This is the exact mapping the downscaler used to
+def _namer_map(config: dict) -> dict[str, str]:
+    """Build the LAM ``shortName -> anemoi name`` map from the rendered inference
+    config's ``namer.rules``. This is the exact mapping the downscaler used to
     read the forecaster input, so it is the correct inverse for its LAM output."""
 
     def _find(obj):
@@ -106,47 +115,36 @@ def _namer_rules(config_path: Path) -> list:
                     return r
         return None
 
-    with open(config_path, "r") as f:
-        rules = _find(yaml.safe_load(f))
-    return rules or []
-
-
-def _lam_name_resolver(config_path: Path):
-    """Return a fn mapping a LAM GRIB field to its anemoi variable name."""
-    shortname_to_template = {
+    rules = _find(config) or []
+    return {
         rule[0]["shortName"]: rule[1]
-        for rule in _namer_rules(config_path)
+        for rule in rules
         if isinstance(rule, list) and len(rule) == 2 and "shortName" in rule[0]
     }
 
-    def resolve(short_name: str, level, type_of_level: str) -> str | None:
-        template = shortname_to_template.get(short_name)
-        if template is None:
-            return None
-        return template.format(level=level) if "{level}" in template else template
 
-    return resolve
+def _anemoi_name(short_name, level, type_of_level, ifs: bool, namer: dict) -> str | None:
+    """Map a GRIB field to its anemoi variable name.
 
-
-def _ifs_name_resolver():
-    """Return a fn mapping a global (IFS-named) GRIB field to its anemoi name.
-
-    Surface/single-level IFS shortNames already equal the anemoi names
-    (``2t``, ``sp``, ``msl``, ``tp``, ...); pressure-level fields map to
-    ``{shortName}_{level}`` (``t_500``, ``q_850``, ...).
+    Global/IFS stream: surface shortNames already equal the anemoi names
+    (``2t``, ``sp``, ``tp``, ...); pressure levels become ``{shortName}_{level}``
+    (``t_500``). LAM stream: ICON shortNames go through the config ``namer``
+    (``T``->``t_{level}``, ``T_2M``->``2t``); unknown names return None.
     """
-
-    def resolve(short_name: str, level, type_of_level: str) -> str | None:
-        if type_of_level == "isobaricInhPa":
-            return f"{short_name}_{level}"
-        return short_name
-
-    return resolve
+    if ifs:
+        return f"{short_name}_{level}" if type_of_level == "isobaricInhPa" else short_name
+    template = namer.get(short_name)
+    if template is None:
+        return None
+    return template.format(level=level) if "{level}" in template else template
 
 
 def _field_key(field) -> tuple:
-    md = field.metadata()
-    return (md.get("shortName"), md.get("level"), md.get("typeOfLevel"))
+    return (
+        field.metadata("shortName"),
+        field.metadata("level"),
+        field.metadata("typeOfLevel"),
+    )
 
 
 def _find_step_file(directory: Path, step: int, ifs: bool) -> Path | None:
@@ -176,21 +174,22 @@ def _patch_stream_file(
     downscaler_file: Path,
     forecaster_file: Path,
     prognostic: set[str],
-    resolve_name,
+    ifs: bool,
+    namer: dict,
 ) -> int:
     """Overwrite prognostic fields in ``downscaler_file`` in place with the
     matching forecaster fields. Returns the number of fields replaced."""
-    ds = ekd.from_source("file", str(downscaler_file))
-    fc = ekd.from_source("file", str(forecaster_file))
+    ds_data = ekd.from_source("file", str(downscaler_file)).to_fieldlist()
+    fc_data = ekd.from_source("file", str(forecaster_file)).to_fieldlist()
 
     # Index forecaster fields by (shortName, level, typeOfLevel) for lookup.
-    fc_by_key = {_field_key(f): f for f in fc}
+    fc_by_key = {_field_key(f): f for f in fc_data}
 
     patched = 0
     out_fields = []
-    for field in ds:
+    for field in ds_data:
         short_name, level, type_of_level = _field_key(field)
-        name = resolve_name(short_name, level, type_of_level)
+        name = _anemoi_name(short_name, level, type_of_level, ifs, namer)
         if name is None or name not in prognostic:
             out_fields.append(field)  # diagnostic / forcing / unknown -> keep as-is
             continue
@@ -208,8 +207,8 @@ def _patch_stream_file(
             continue
         # 1:1 grid assumption (see module docstring): a pure value copy is only
         # valid when both fields live on the same grid. Enforce it per field.
-        n_ds = field.metadata().get("numberOfValues")
-        n_fc = match.metadata().get("numberOfValues")
+        n_ds = field.metadata("numberOfValues")
+        n_fc = match.metadata("numberOfValues")
         if n_ds != n_fc:
             raise ValueError(
                 f"Grid mismatch for {name} ({short_name}/{level}) in "
@@ -218,7 +217,10 @@ def _patch_stream_file(
                 "value-copy requires the downscaler and forecaster to share the "
                 "same output grid (true for a temporal downscaler)."
             )
-        out_fields.append(field.clone(values=match.to_numpy()))
+        # `set(values=...)` returns a new field with the data swapped and all
+        # metadata kept. Equivalent alternative: `type(field).from_field(field,
+        # data=match.to_numpy())`.
+        out_fields.append(field.set(values=match.to_numpy()))
         patched += 1
 
     tmp = downscaler_file.with_suffix(downscaler_file.suffix + ".patched")
@@ -227,16 +229,13 @@ def _patch_stream_file(
     return patched
 
 
-def _parse_steps(steps: str) -> list[int]:
-    start, end, step = map(int, steps.split("/"))
-    return list(range(start, end + 1, step))
-
-
 def main(args: argparse.Namespace) -> int:
     metadata = _load_metadata(args.metadata)
+    with open(args.config, "r") as f:
+        config = yaml.safe_load(f)
+
     prognostic = prognostic_variables(metadata)
-    steps = _parse_steps(args.steps)
-    overlaps = overlap_steps(metadata, steps)
+    overlaps = overlap_steps(metadata, lead_time_hours(config))
 
     if not overlaps:
         LOG.info(
@@ -246,17 +245,14 @@ def main(args: argparse.Namespace) -> int:
         Path(args.okfile).touch()
         return 0
 
-    LOG.info("Prognostic variables (%d): %s", len(prognostic), sorted(prognostic))
+    LOG.info("Patching downscaler prognostic variables (%d): %s", len(prognostic), sorted(prognostic))
     LOG.info("Overlap steps to patch: %s", overlaps)
 
-    resolvers = {
-        False: _lam_name_resolver(args.config),  # LAM stream (ICON names via namer)
-        True: _ifs_name_resolver(),  # global stream (IFS names)
-    }
+    namer = _namer_map(config)  # LAM shortName -> anemoi name
 
     total = 0
     for step in overlaps:
-        for ifs in (False, True):
+        for ifs in (False, True): # prefix "ifs" is for global models.
             ds_file = _find_step_file(args.grib_dir, step, ifs=ifs)
             fc_file = _find_step_file(args.forecaster_dir, step, ifs=ifs)
             stream = "ifs" if ifs else "lam"
@@ -271,7 +267,8 @@ def main(args: argparse.Namespace) -> int:
                     ds_file.name,
                 )
                 continue
-            n = _patch_stream_file(ds_file, fc_file, prognostic, resolvers[ifs])
+            n = _patch_stream_file(ds_file, fc_file, prognostic, ifs, namer)
+            assert len(prognostic) == n
             LOG.info(
                 "Patched %d prognostic field(s) in %s (step %s, %s stream) from %s",
                 n,
@@ -313,10 +310,8 @@ if __name__ == "__main__":
         "--config",
         type=Path,
         required=True,
-        help="Rendered downscaler inference config.yaml (for the LAM namer).",
-    )
-    parser.add_argument(
-        "--steps", type=str, required=True, help="Downscaler steps as 'start/end/step'."
+        help="Rendered downscaler inference config.yaml (for lead_time and the "
+        "LAM namer).",
     )
     parser.add_argument("--okfile", type=Path, required=True, help="Okfile to touch.")
     args = parser.parse_args()
