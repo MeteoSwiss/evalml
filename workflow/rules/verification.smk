@@ -295,6 +295,8 @@ _SAL_ARGS = (
 
 rule verification_sal:
     input:
+        "src/verification/__init__.py",
+        "src/verification/spatial.py",
         "src/verification/sal.py",
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_sal.py",
@@ -333,6 +335,8 @@ rule verification_sal:
 
 rule verification_sal_baseline:
     input:
+        "src/verification/__init__.py",
+        "src/verification/spatial.py",
         "src/verification/sal.py",
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_sal.py",
@@ -345,7 +349,7 @@ rule verification_sal_baseline:
         OUT_ROOT
         / f"logs/verification_sal_baseline/{{baseline_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
     resources:
-        cpus_per_task=24,
+        cpus_per_task=2,
         mem_mb=50_000,
         runtime="60m",
     params:
