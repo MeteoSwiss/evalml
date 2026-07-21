@@ -326,11 +326,18 @@ class SalConfig(BaseModel):
             raise ValueError(
                 "sal.grid_extent must be [lon_min, lon_max, lat_min, lat_max]."
             )
+        if any(x != x or x in (float("inf"), float("-inf")) for x in v):
+            raise ValueError(f"sal.grid_extent values must be finite; got {v}.")
         lon_min, lon_max, lat_min, lat_max = v
-        if lon_min >= lon_max or lat_min >= lat_max:
+        if not -90.0 <= lat_min < lat_max <= 90.0:
             raise ValueError(
-                f"sal.grid_extent must have lon_min < lon_max and lat_min < "
-                f"lat_max; got {v}."
+                f"sal.grid_extent latitudes must satisfy -90 <= lat_min < "
+                f"lat_max <= 90; got lat_min={lat_min}, lat_max={lat_max}."
+            )
+        if not -180.0 <= lon_min < lon_max <= 360.0:
+            raise ValueError(
+                f"sal.grid_extent longitudes must satisfy -180 <= lon_min < "
+                f"lon_max <= 360; got lon_min={lon_min}, lon_max={lon_max}."
             )
         return v
 
@@ -728,7 +735,7 @@ class ConfigModel(BaseModel):
             return self
         requested = set(sm.leadtimes)
         for item in self.runs:
-            steps = getattr(item, next(iter(item.model_fields))).steps
+            steps = getattr(item, next(iter(type(item).model_fields))).steps
             start, end, step = map(int, steps.split("/"))
             producible = set(range(start, end + 1, step))
             unsupported = requested - producible
@@ -746,7 +753,7 @@ class ConfigModel(BaseModel):
             return self
         requested = set(sal.leadtimes)
         for item in self.runs:
-            steps = getattr(item, next(iter(item.model_fields))).steps
+            steps = getattr(item, next(iter(type(item).model_fields))).steps
             start, end, step = map(int, steps.split("/"))
             producible = set(range(start, end + 1, step))
             unsupported = requested - producible
