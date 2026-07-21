@@ -49,9 +49,10 @@ experiment:
   params:
     - T_2M
     - TD_2M
-    - U_10M
-    - V_10M
-    - TOT_PREC
+    - SP_10M
+    - TOT_PREC1
+    - TOT_PREC6
+    - PMSL
   stratification:
     regions:
       - mittelland
@@ -61,11 +62,11 @@ experiment:
       - jura
     root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
   thresholds:
-    TOT_PREC:
-      gt: [0.0, 1, 5]
-    U_10M:
-      gt: [2.5, 5.0, 10.0]
-    V_10M:
+    TOT_PREC1:
+      gt: [0.0, 0.1, 1, 5, 10]
+    TOT_PREC6:
+      gt: [0.0, 0.1, 5, 10, 20, 50]
+    SP_10M:
       gt: [2.5, 5.0, 10.0]
     T_2M:
       lt: [273.15]
@@ -86,7 +87,7 @@ experiment:
           - "U_10M:RMSE,R2,ETS"
           - "V_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2,ETS"
-          - "TOT_PREC:RMSE,R2,ETS"
+          - "TOT_PREC1:RMSE,R2,ETS"
       short_range:
         baseline: ICON-CH1-CTRL
         lead_times: "6/33/6"
@@ -95,7 +96,7 @@ experiment:
           - "U_10M:RMSE,R2,ETS"
           - "V_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2,ETS"
-          - "TOT_PREC:RMSE,R2,ETS"
+          - "TOT_PREC6:RMSE,R2,ETS"
       medium_range:
         baseline: ICON-CH2-CTRL
         lead_times: "24/120/24"
@@ -104,7 +105,7 @@ experiment:
           - "U_10M:RMSE,R2,ETS"
           - "V_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2,ETS"
-          - "TOT_PREC:RMSE,R2,ETS"
+          - "TOT_PREC6:RMSE,R2,ETS"
   scoremaps:
     enabled: false
 
@@ -112,7 +113,7 @@ showcase:
   params:
     - T_2M
     - SP_10M
-    - TOT_PREC
+    - TOT_PREC1
   meteograms:
     enabled: false
     stations: [JUN] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
