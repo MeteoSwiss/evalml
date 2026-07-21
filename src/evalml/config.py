@@ -261,6 +261,82 @@ class ScoreMapsConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class SalConfig(BaseModel):
+    """Parameters controlling the SAL precipitation verification computation.
+
+    SAL (Structure–Amplitude–Location; Wernli et al. 2008) is a per-init,
+    object-based precipitation score. When enabled it is computed for every run
+    and baseline over the requested params and lead times, and written to
+    per-participant CSV files (one per param/lead time, one row per
+    initialisation). This is a compute-only capability; plotting the results
+    lives in the publication-figures workflow.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to compute SAL scores (requires pysteps + scikit-image).",
+    )
+    params: List[str] = Field(
+        default=["TOT_PREC6"],
+        description=(
+            "Accumulated precipitation params to score, the accumulation period "
+            "encoded in the name (e.g. TOT_PREC1, TOT_PREC6, TOT_PREC24)."
+        ),
+    )
+    leadtimes: List[int] = Field(
+        default=[6, 12, 18, 24, 30],
+        description="List of lead times (hours) to score.",
+    )
+    thr_factor: float = Field(
+        default=0.067,
+        description=(
+            "SAL object-detection threshold factor (Wernli et al. 2008, eq. 1); "
+            "the detection contour is thr_factor * the thr_quantile-percentile of "
+            "the wet precipitation. 0.067 is the pysteps default."
+        ),
+    )
+    thr_quantile: float = Field(
+        default=0.95,
+        description="Wet quantile (0–1) defining the SAL detection threshold.",
+    )
+    grid_extent: List[float] = Field(
+        default=[-1.0, 18.0, 42.0, 50.5],
+        description=(
+            "SAL raster extent [lon_min, lon_max, lat_min, lat_max] in degrees "
+            "(PlateCarree). Both forecast and truth are remapped onto this raster."
+        ),
+    )
+    grid_step_lat: float = Field(
+        default=0.01,
+        description="SAL raster latitude spacing in degrees.",
+    )
+    grid_step_lon: float = Field(
+        default=0.0145,
+        description=(
+            "SAL raster longitude spacing in degrees. Choose grid_step_lat and "
+            "grid_step_lon so pixels are metrically near-square at the domain's "
+            "central latitude (pysteps' Location term assumes square pixels)."
+        ),
+    )
+
+    @field_validator("grid_extent")
+    @classmethod
+    def validate_grid_extent(cls, v: List[float]) -> List[float]:
+        if len(v) != 4:
+            raise ValueError(
+                "sal.grid_extent must be [lon_min, lon_max, lat_min, lat_max]."
+            )
+        lon_min, lon_max, lat_min, lat_max = v
+        if lon_min >= lon_max or lat_min >= lat_max:
+            raise ValueError(
+                f"sal.grid_extent must have lon_min < lon_max and lat_min < "
+                f"lat_max; got {v}."
+            )
+        return v
+
+    model_config = {"extra": "forbid"}
+
+
 class DomainConfig(BaseModel):
     """A custom map domain defined by name, extent, and projection."""
 
@@ -430,6 +506,10 @@ class ExperimentConfig(BaseModel):
     scoremaps: Optional[ScoreMapsConfig] = Field(
         default=None,
         description="Score map plot configuration. Omit or set enabled: false to disable.",
+    )
+    sal: Optional[SalConfig] = Field(
+        default=None,
+        description="SAL precipitation verification. Omit or set enabled: false to disable.",
     )
 
     @field_validator("thresholds")
@@ -655,6 +735,24 @@ class ConfigModel(BaseModel):
             if unsupported:
                 raise ValueError(
                     f"scoremaps.leadtimes contains {sorted(unsupported)} h which are not "
+                    f"produced by participant with steps '{steps}'."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_sal_leadtimes(self) -> "ConfigModel":
+        sal = self.experiment.sal
+        if sal is None or not sal.enabled:
+            return self
+        requested = set(sal.leadtimes)
+        for item in self.runs:
+            steps = getattr(item, next(iter(item.model_fields))).steps
+            start, end, step = map(int, steps.split("/"))
+            producible = set(range(start, end + 1, step))
+            unsupported = requested - producible
+            if unsupported:
+                raise ValueError(
+                    f"sal.leadtimes contains {sorted(unsupported)} h which are not "
                     f"produced by participant with steps '{steps}'."
                 )
         return self
