@@ -416,7 +416,6 @@ TRUTH_HASH = truth_hash(config["truth"])
 SHP_REGIONS = parse_shp_regions()
 BBOX_REGIONS = parse_bbox_regions()
 VERIF_HASH = verif_hash(config)
-REGIONS = parse_regions()
 _showcase = config.get("showcase", {})
 SHOWCASE_CONFIG = {
     "regions": parse_showcase_regions(),
