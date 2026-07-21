@@ -291,6 +291,13 @@ rule publication_all:
             [rules.publication_meteogram.output]
             if config.get("publication", {}).get("meteogram", {}).get("enabled", False)
             else []
+        )
+        + (
+            [rules.publication_teaser.output]
+            if ((config.get("publication", {}) or {}).get("teaser") or {}).get(
+                "enabled", False
+            )
+            else []
         ),
 
 

@@ -448,6 +448,36 @@ class PublicationScoremapsConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class PublicationTeaserConfig(BaseModel):
+    """Case selection and styling for the publication teaser ('hero') figure."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate the publication teaser figure.",
+    )
+    init_time: str = Field(
+        ...,
+        pattern=r"^\d{12}$",
+        description="Initialisation time (YYYYMMDDHHMM) of the case to plot.",
+    )
+    leadtime: int = Field(
+        default=24,
+        ge=0,
+        description="Lead time in hours for the plotted forecast frame.",
+    )
+    dark: bool = Field(
+        default=False,
+        description="Dark variant: black background, white text/ticks, glow.",
+    )
+    grid: Optional[str] = Field(
+        default=None,
+        description="ICON grid file for the true-mesh (tripcolor) zoom. "
+        "Falls back to a Delaunay mesh when omitted.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class PublicationConfig(BaseModel):
     """Configuration for the publication workflow."""
 
@@ -463,6 +493,10 @@ class PublicationConfig(BaseModel):
         default=None,
         description="Publication scoremap figure settings (omit to skip). "
         "Requires a gridded (zarr) truth source.",
+    )
+    teaser: Optional[PublicationTeaserConfig] = Field(
+        default=None,
+        description="Publication teaser (hero) figure settings (omit to skip).",
     )
 
     model_config = {"extra": "forbid"}

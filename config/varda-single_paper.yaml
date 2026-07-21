@@ -119,6 +119,12 @@ publication:
     init_time: "202504010000"
     station: "KLO"
     params: [T_2M, TOT_PREC, SP_10M, DD_10M]
+  teaser:
+    enabled: true
+    init_time: "202504051200"
+    leadtime: 24
+    dark: false
+    grid: /store_new/mch/msopr/ml/grids/icon_grid_0001_R19B08_mch.nc
 
 locations:
   output_root: output/
