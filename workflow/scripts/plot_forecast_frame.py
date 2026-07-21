@@ -195,8 +195,7 @@ def main():
         elif region_cfg.get("rotate"):
             base = DOMAINS[region_name]["projection"].proj4_params
             central_longitude = (
-                base["lon_0"]
-                + 360.0 * lead_time / region_cfg["hours_per_revolution"]
+                base["lon_0"] + 360.0 * lead_time / region_cfg["hours_per_revolution"]
             ) % 360
             #  central_longitude=central_longitude, central_latitude=0.0 for zero-centered
             projection = ccrs.Orthographic(

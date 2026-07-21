@@ -484,11 +484,20 @@ def load_from_grib_file(file: str | list[str], sel_kwargs):
 
 def variable_name_profile(
     level_type: Literal[
-        "height_above_ground_level", "mean_sea", "surface", "pressure", "entire_atmosphere"
+        "height_above_ground_level",
+        "mean_sea",
+        "surface",
+        "pressure",
+        "entire_atmosphere",
     ],
 ) -> dict[str, Any]:
     """Resolve variable name profile based on the level type."""
-    if level_type in ["height_above_ground_level", "mean_sea", "surface", "entire_atmosphere"]:
+    if level_type in [
+        "height_above_ground_level",
+        "mean_sea",
+        "surface",
+        "entire_atmosphere",
+    ]:
         return {}
     elif level_type == "pressure":
         return {

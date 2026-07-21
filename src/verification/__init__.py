@@ -121,7 +121,6 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
         regions = {"all": None}
         has_shapefiles = bool(shp and shp != [""])
         if has_shapefiles:
-
             shp = [shp] if isinstance(shp, str) else shp
             for shapefile in shp:
                 region_name = Path(shapefile).stem
