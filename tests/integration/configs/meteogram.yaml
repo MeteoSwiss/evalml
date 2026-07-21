@@ -42,6 +42,7 @@ experiment:
 showcase:
   params:
     - T_2M
+    - SP_10M
   meteograms:
     enabled: true
     stations:
