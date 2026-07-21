@@ -4,8 +4,10 @@ import pytest
 from evalml.config import ConfigModel, SalConfig
 from verification.sal import (
     DEFAULT_THR_FACTOR,
+    MIN_TRUTH_POINT_DENSITY,
     build_regular_grid,
     compute_sal,
+    point_density_per_km2,
     remap_field,
     remap_indices,
 )
@@ -100,6 +102,37 @@ def test_compute_sal_is_invariant_to_common_rescaling():
 
 
 # ---------------------------------------------------------------------------
+# Truth point density (gridded-field guard)
+# ---------------------------------------------------------------------------
+
+
+def test_point_density_dense_grid_exceeds_cutoff():
+    # ~1 km grid over a 1° x 1° box (~111 x 77 km) -> ~1 point/km²
+    lats = np.linspace(46.0, 47.0, 111)
+    lons = np.linspace(7.0, 8.0, 78)
+    lon2d, lat2d = np.meshgrid(lons, lats)
+    density = point_density_per_km2(lat2d, lon2d)
+    assert density > MIN_TRUTH_POINT_DENSITY
+    assert density > 0.5  # order ~1 point/km²
+
+
+def test_point_density_sparse_stations_below_cutoff():
+    rng = np.random.default_rng(0)
+    slat = rng.uniform(46.0, 47.0, 150)  # ~150 stations over the same box
+    slon = rng.uniform(7.0, 8.0, 150)
+    assert point_density_per_km2(slat, slon) < MIN_TRUTH_POINT_DENSITY
+
+
+def test_point_density_degenerate_inputs_return_zero():
+    assert point_density_per_km2(np.array([46.0]), np.array([7.0])) == 0.0
+    # collinear points -> zero-area bounding box
+    assert (
+        point_density_per_km2(np.array([46.0, 46.0, 46.0]), np.linspace(7.0, 8.0, 3))
+        == 0.0
+    )
+
+
+# ---------------------------------------------------------------------------
 # Config model
 # ---------------------------------------------------------------------------
 
@@ -119,6 +152,10 @@ def test_sal_config_grid_extent_validation():
         SalConfig(grid_extent=[1.0, 2.0, 3.0])  # wrong length
     with pytest.raises(ValueError, match="lon_min < lon_max"):
         SalConfig(grid_extent=[18.0, -1.0, 42.0, 50.5])  # lon_min >= lon_max
+    with pytest.raises(ValueError, match="finite"):
+        SalConfig(grid_extent=[float("nan"), 18.0, 42.0, 50.5])  # non-finite
+    with pytest.raises(ValueError, match="latitudes"):
+        SalConfig(grid_extent=[-1.0, 18.0, 42.0, 100.0])  # lat_max out of range
 
 
 def test_sal_leadtime_validator_rejects_unproducible(example_config):

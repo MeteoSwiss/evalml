@@ -50,8 +50,10 @@ from data_input import (
 from verification.sal import (
     DEFAULT_THR_FACTOR,
     DEFAULT_THR_QUANTILE,
+    MIN_TRUTH_POINT_DENSITY,
     build_regular_grid,
     compute_sal,
+    point_density_per_km2,
     remap_field,
     remap_indices,
 )
@@ -62,8 +64,6 @@ logging.basicConfig(
 )
 
 DATETIME_FMT = "%Y%m%d%H%M"
-
-SEASONS = ["DJF", "MAM", "JJA", "SON"]
 
 # Default near-isotropic raster: ~1.1 km cells, metrically near-square at
 # ~46.5°N, covering the greater-Alpine domain. Overridable via CLI / config.
@@ -273,6 +273,27 @@ def main(args: Namespace) -> None:
 
         # --- build remap indices once (static source grids) ---
         if fcst_idx is None:
+            # SAL requires a resolved truth field, not sparse station data:
+            # remapping ~150 scattered stations onto the ~1 km raster yields an
+            # almost-empty field and physically meaningless scores. Reject truth
+            # whose point density is too low to form a field (station networks
+            # are ~0.005 points/km², analyses ~1). Checked once, on the first
+            # init, so the failure is fast rather than after the full loop.
+            density = point_density_per_km2(truth_lat, truth_lon)
+            if density < MIN_TRUTH_POINT_DENSITY:
+                raise ValueError(
+                    f"Truth point density is ~{density:.3g} points/km² over its "
+                    f"{truth_lat.size}-point footprint, below the "
+                    f"{MIN_TRUTH_POINT_DENSITY} points/km² required for SAL. SAL "
+                    "needs a gridded analysis field (e.g. the KENDA-CH1 zarr, "
+                    "~1 point/km²); sparse station observations such as "
+                    "jretrieve/SwissMetNet are not valid SAL truth."
+                )
+            LOG.info(
+                "Truth point density: %.3g points/km² (%d points)",
+                density,
+                truth_lat.size,
+            )
             LOG.info("Building remap indices for %d forecast points", fcst_lat.size)
             fcst_idx = remap_indices(fcst_lat, fcst_lon, lat2d, lon2d)
             if (
