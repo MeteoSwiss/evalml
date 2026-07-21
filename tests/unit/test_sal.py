@@ -147,6 +147,19 @@ def test_sal_config_defaults_and_extra_forbid():
         SalConfig(unknown_key=1)
 
 
+def test_sal_config_rejects_non_precip_params():
+    with pytest.raises(ValueError, match="TOT_PREC"):
+        SalConfig(params=["T_2M"])
+    with pytest.raises(ValueError, match="TOT_PREC"):
+        SalConfig(params=["TOT_PREC6", "SP_10M"])  # one bad among valid
+
+
+def test_sal_config_accepts_precip_params_including_cumulative():
+    # accumulated windows and bare cumulative-from-start are both allowed
+    s = SalConfig(params=["TOT_PREC1", "TOT_PREC6", "TOT_PREC"])
+    assert s.params == ["TOT_PREC1", "TOT_PREC6", "TOT_PREC"]
+
+
 def test_sal_config_grid_extent_validation():
     with pytest.raises(ValueError, match="lon_min, lon_max, lat_min, lat_max"):
         SalConfig(grid_extent=[1.0, 2.0, 3.0])  # wrong length

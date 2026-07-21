@@ -319,6 +319,19 @@ class SalConfig(BaseModel):
         ),
     )
 
+    @field_validator("params")
+    @classmethod
+    def validate_params_are_precip(cls, v: List[str]) -> List[str]:
+        bad = [p for p in v if not p.startswith("TOT_PREC")]
+        if bad:
+            raise ValueError(
+                "sal.params must be precipitation parameters starting with "
+                "'TOT_PREC' (e.g. TOT_PREC1, TOT_PREC6, or bare TOT_PREC for "
+                "cumulative-from-start); SAL is defined for precipitation only. "
+                f"Invalid: {bad}."
+            )
+        return v
+
     @field_validator("grid_extent")
     @classmethod
     def validate_grid_extent(cls, v: List[float]) -> List[float]:

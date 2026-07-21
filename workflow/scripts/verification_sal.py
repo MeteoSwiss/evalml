@@ -145,6 +145,13 @@ def main(args: Namespace) -> None:
     LOG.info("Output   : %s", args.output)
     LOG.info("=" * 60)
 
+    # SAL is defined for precipitation only.
+    if not args.param.startswith("TOT_PREC"):
+        raise ValueError(
+            f"SAL is defined for precipitation only; got param '{args.param}'. "
+            "Use a TOT_PREC* parameter (e.g. TOT_PREC6, or TOT_PREC for "
+            "cumulative-from-start)."
+        )
     # The accumulation period is encoded in the param name (e.g. TOT_PREC6 → 6h).
     _, accum_h = parse_aggregated_param(args.param)
     if accum_h is not None:
