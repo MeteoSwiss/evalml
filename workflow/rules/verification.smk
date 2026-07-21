@@ -270,3 +270,98 @@ rule verification_scoremaps_baseline:
             --member "{params.member}" \
             --output {output} >{log} 2>&1
         """
+
+
+# ----------------------------------------------------- #
+# SAL precipitation verification (Structure–Amplitude–Location)            #
+# Compute-only: one NetCDF per (participant, param, lead time), keyed by    #
+# truth hash. Plotting lives in the publication-figures workflow.           #
+# ----------------------------------------------------- #
+
+# SAL settings are experiment-level (not per-participant); read them from the
+# validated config, falling back to the SalConfig defaults so a rule invoked
+# directly (evalml make ...) still works. These rules only fire when
+# experiment.sal.enabled is true (gated in the Snakefile target rule).
+_SAL_CONFIG = config.get("experiment", {}).get("sal") or {}
+_SAL_GRID_EXTENT = _SAL_CONFIG.get("grid_extent", [-1.0, 18.0, 42.0, 50.5])
+_SAL_ARGS = (
+    f"--thr-factor {_SAL_CONFIG.get('thr_factor', 0.067)} "
+    f"--thr-quantile {_SAL_CONFIG.get('thr_quantile', 0.95)} "
+    f"--grid-extent {' '.join(str(x) for x in _SAL_GRID_EXTENT)} "
+    f"--grid-step-lat {_SAL_CONFIG.get('grid_step_lat', 0.01)} "
+    f"--grid-step-lon {_SAL_CONFIG.get('grid_step_lon', 0.0145)}"
+)
+
+
+rule verification_sal:
+    input:
+        "src/verification/sal.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/verification_sal.py",
+        inference_okfiles=lambda wc: expand(
+            rules.inference_execute.output.okfile,
+            init_time=_restrict_reftimes_to_hours(REFTIMES),
+            allow_missing=True,
+        ),
+        truth=config["truth"]["root"],
+    output:
+        OUT_ROOT / f"data/runs/{{run_id}}/sal/{{param}}_{{leadtime}}_{TRUTH_HASH}.csv",
+    log:
+        OUT_ROOT
+        / f"logs/verification_sal/{{run_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
+    resources:
+        cpus_per_task=2,
+        mem_mb=50_000,
+        runtime="60m",
+    params:
+        reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
+        run_root=lambda wc: (Path(OUT_ROOT) / f"data/runs/{wc.run_id}").resolve(),
+        sal_args=_SAL_ARGS,
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run {input.script} \
+            --run_root {params.run_root} \
+            --reftimes {params.reftimes} \
+            --truth {input.truth} \
+            --step {wildcards.leadtime} \
+            --param {wildcards.param} \
+            {params.sal_args} \
+            --output {output} >{log} 2>&1
+        """
+
+
+rule verification_sal_baseline:
+    input:
+        "src/verification/sal.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/verification_sal.py",
+        forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
+        truth=config["truth"]["root"],
+    output:
+        OUT_ROOT
+        / f"data/baselines/{{baseline_id}}/sal/{{param}}_{{leadtime}}_{TRUTH_HASH}.csv",
+    log:
+        OUT_ROOT
+        / f"logs/verification_sal_baseline/{{baseline_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
+    resources:
+        cpus_per_task=24,
+        mem_mb=50_000,
+        runtime="60m",
+    params:
+        member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
+        reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
+        sal_args=_SAL_ARGS,
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run {input.script} \
+            --baseline_root {input.forecast} \
+            --reftimes {params.reftimes} \
+            --truth {input.truth} \
+            --step {wildcards.leadtime} \
+            --param {wildcards.param} \
+            --member "{params.member}" \
+            {params.sal_args} \
+            --output {output} >{log} 2>&1
+        """

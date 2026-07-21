@@ -107,6 +107,20 @@ experiment:
           - "TOT_PREC6:RMSE,R2,ETS"
   scoremaps:
     enabled: false
+  # SAL (Structure–Amplitude–Location) precipitation verification. Computed for
+  # every run and baseline; one CSV per (participant, param, lead time), one row
+  # per init. Requires a gridded (zarr) truth — leave disabled when truth is
+  # station data (jretrieve), as configured above.
+  sal:
+    enabled: false
+    params:
+      - TOT_PREC6
+    leadtimes: [6, 12, 18, 24, 30]
+    # thr_factor: 0.067      # pysteps default detection-threshold factor
+    # thr_quantile: 0.95
+    # grid_extent: [-1.0, 18.0, 42.0, 50.5]  # lon_min, lon_max, lat_min, lat_max
+    # grid_step_lat: 0.01    # ~1.1 km, near-square pixels at ~46.5°N
+    # grid_step_lon: 0.0145
 
 showcase:
   params:
