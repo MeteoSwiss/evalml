@@ -25,6 +25,26 @@ _SCORE_REDS_PA = {
 _SCORE_REDS_PRECIP = {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 1, 1.5, 2, 3, 4]}
 
 
+def _precip_score_map(accum_h: int) -> dict:
+    """Score-map config for period-accumulated precip, levels scaled by accum_h / 2."""
+    scale = accum_h / 2
+    return {
+        "cmap": plt.get_cmap("Reds", 6),
+        "levels": [lev * scale for lev in [0, 1, 1.5, 2, 3, 4]],
+        "units": "mm",
+    }
+
+
+def _precip_bias_map(accum_h: int) -> dict:
+    """BIAS-map config for period-accumulated precip, levels scaled by accum_h / 2."""
+    scale = accum_h / 2
+    return {
+        "cmap": plt.get_cmap("BrBG", 9),
+        "levels": [lev * scale for lev in [-1, -0.5, -0.25, -0.1, 0.1, 0.25, 0.5, 1]],
+        "units": "mm",
+    }
+
+
 _CMAP_DEFAULTS = {
     "SP": {
         "cmap": plt.get_cmap("coolwarm", 11),
@@ -189,6 +209,9 @@ _CMAP_DEFAULTS = {
     "PMSL.score.map": _SCORE_REDS_PA | {"units": "Pa"},
     "PS.score.map": _SCORE_REDS_PA | {"units": "Pa"},
     "TOT_PREC.score.map": _SCORE_REDS_PRECIP | {"units": "mm"},
+    "TOT_PREC1.score.map": _precip_score_map(1),
+    "TOT_PREC6.score.map": _precip_score_map(6),
+    "TOT_PREC24.score.map": _precip_score_map(24),
     # Bias:
     # diverging colour scheme for the Bias to reflect the nature of the data (can be positive or negative, symmetric).
     # Red-Blue colour scheme for all variables except precipitation, where a Brown-Green scheme is more suggestive.
@@ -232,6 +255,9 @@ _CMAP_DEFAULTS = {
         "levels": [-1, -0.5, -0.25, -0.1, 0.1, 0.25, 0.5, 1],
     }
     | {"units": "mm"},
+    "TOT_PREC1.BIAS.map": _precip_bias_map(1),
+    "TOT_PREC6.BIAS.map": _precip_bias_map(6),
+    "TOT_PREC24.BIAS.map": _precip_bias_map(24),
 }
 
 CMAP_DEFAULTS = defaultdict(_fallback, _CMAP_DEFAULTS)
