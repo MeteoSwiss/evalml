@@ -5,7 +5,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import xarray as xr
-from data_import import jretrieve as jr
 
 from data_input import (
     parse_steps,
@@ -115,24 +114,6 @@ def main():
         stations,
         init_time,
     )
-
-    # Load station metadata from DWH
-    LOG.info("Fetching station metadata from jretrieve (SwissMetNet catalog)")
-    _jr_stations, _jr_stage, _jr_seq_type = jr.parse_selection("jretrievedwh:1,2")
-    _catalog = jr.StationCatalog.from_meta(
-        jr.fetch_meta(
-            stations=_jr_stations,
-            params=["rre150h0"],
-            seq_type=_jr_seq_type,
-            stage=_jr_stage,
-        )
-    )
-    catalog_lookup = {
-        abbr: (lat, lon)
-        for abbr, lat, lon in zip(
-            _catalog.nat_abbr, _catalog.latitude, _catalog.longitude
-        )
-    }
 
     LOG.info("Loading analysis data from %s", analysis_root)
     analysis_ds = load_truth_data(
