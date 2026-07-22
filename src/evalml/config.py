@@ -347,7 +347,7 @@ class SalConfig(BaseModel):
                 f"sal.grid_extent latitudes must satisfy -90 <= lat_min < "
                 f"lat_max <= 90; got lat_min={lat_min}, lat_max={lat_max}."
             )
-        if not -180.0 <= lon_min < lon_max <= 360.0:
+        if not -180.0 <= lon_min < lon_max <= 180.0:
             raise ValueError(
                 f"sal.grid_extent longitudes must satisfy -180 <= lon_min < "
                 f"lon_max <= 360; got lon_min={lon_min}, lon_max={lon_max}."
