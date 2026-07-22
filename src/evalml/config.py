@@ -741,9 +741,7 @@ class ConfigModel(BaseModel):
         description="Configuration for the FFV2 scoring pipeline. Required when running with --ffv2.",
     )
 
-    def _reject_unproducible_leadtimes(
-        self, requested: List[int], label: str
-    ) -> None:
+    def _reject_unproducible_leadtimes(self, requested: List[int], label: str) -> None:
         """Fail if any requested lead time is not produced by every participant.
 
         `label` names the originating config block (e.g. "scoremaps", "sal")
