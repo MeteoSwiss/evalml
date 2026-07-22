@@ -1,0 +1,129 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Evaluation of Varda-Single version 1.0.
+
+dates:
+  start: 2025-04-01T00:00
+  end: 2025-12-26T18:00 # to ensure that the full forecasts is in 2025
+  frequency: 30h
+
+runs:
+  - temporal_downscaler:
+      checkpoint: /scratch/mch/miccatta/ICON_interpolator_checkpoints/checkpoint_stage-C-interpolator-n320-6hto1h-reduced-variables/f9279244ed6f4c458597bdcf335ab36f/inference-last.ckpt
+      label: Varda-Single
+      steps: 0/120/1
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
+      extra_requirements:
+        - anemoi-datasets==0.5.35
+      forecaster:
+        checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
+        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+        steps: 0/120/6
+  - forecaster:
+      label: stage-E-with-rollout
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/98d4e297f0164f18a0ad50fb01fbff42
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+      steps: 0/120/6
+  - baseline:
+      label: ICON-CH1-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/33/1
+      member: control
+  - baseline:
+      label: ICON-CH2-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/1
+      member: control
+  - baseline:
+      label: ICON-CH1-EPS mean
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/33/1
+      member: mean
+  - baseline:
+      label: ICON-CH2-EPS mean
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/1
+      member: mean
+
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
+experiment:
+  params:
+    - T_2M
+    - TD_2M
+    - SP_10M
+    - TOT_PREC1
+    - TOT_PREC6
+    - PMSL
+  stratification:
+    regions:
+      - jura
+      - mittelland
+      - alpennordhang
+      - innerealpentaeler
+      - alpensuedseite
+    root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    TOT_PREC1:
+      gt: [0.0, 0.1, 1, 5, 10]
+    TOT_PREC6:
+      gt: [0.0, 0.1, 5, 10, 20, 50]
+    SP_10M:
+      gt: [2.5, 5.0, 10.0]
+    T_2M:
+      lt: [273.15]
+      gt: [288.15, 298.15]
+  dashboard:
+    stratification:
+      # - region
+      # - init_hour
+      - season
+  scorecards:
+    enabled: true
+    sections:
+      short_range:
+        baseline: ICON-CH1-CTRL
+        lead_times: "6/33/6"
+        stratification: region
+        variables:
+          - "U_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2"
+          - "TOT_PREC1:RMSE,R2,ETS"
+      medium_range:
+        baseline: ICON-CH2-CTRL
+        lead_times: "24/120/24"
+        stratification: region
+        variables:
+          - "U_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2"
+          - "TOT_PREC6:RMSE,R2,ETS"
+  scoremaps:
+    enabled: true
+    leadtimes: [6, 24]
+    params: ["T_2M", "SP_10M", "TOT_PREC1", "TOT_PREC6"]
+
+publication:
+  teaser:
+    enabled: true
+    init_time: "202504051200"
+    leadtime: 24
+    dark: false
+    grid: /store_new/mch/msopr/ml/grids/icon_grid_0001_R19B08_mch.nc
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+    slurm_account: s83
+  jobs: 20
