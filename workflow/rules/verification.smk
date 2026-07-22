@@ -274,7 +274,7 @@ rule verification_scoremaps_baseline:
 
 # ----------------------------------------------------- #
 # SAL precipitation verification (Structure–Amplitude–Location)            #
-# Compute-only: one NetCDF per (participant, param, lead time), keyed by    #
+# Compute-only: one CSV per (participant, param, lead time), keyed by    #
 # truth hash. Plotting lives in the publication-figures workflow.           #
 # ----------------------------------------------------- #
 
@@ -313,7 +313,7 @@ rule verification_sal:
         / f"logs/verification_sal/{{run_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
     resources:
         cpus_per_task=2,
-        mem_mb=50_000,
+        mem_mb=4_000,
         runtime="60m",
     params:
         reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
@@ -350,7 +350,7 @@ rule verification_sal_baseline:
         / f"logs/verification_sal_baseline/{{baseline_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
     resources:
         cpus_per_task=2,
-        mem_mb=50_000,
+        mem_mb=4_000,
         runtime="60m",
     params:
         member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
