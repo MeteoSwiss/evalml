@@ -41,7 +41,8 @@ experiment:
       # - init_hour
       - season
   stratification:
-    regions: []
+    regions:
+      - global: [-180, 180, -90, 90]
 
 locations:
   output_root: output/

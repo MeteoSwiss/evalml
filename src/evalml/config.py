@@ -405,10 +405,11 @@ class Stratification(BaseModel):
     regions: List[Union[str, Dict[str, List[float]]]] = Field(
         default_factory=list,
         description=(
-            "List of region specs for spatial stratification. String entries are shapefile names "
-            "(resolved against 'root'). Dict entries map a region name to a bounding box "
-            "[lon_min, lon_max, lat_min, lat_max]. The special key 'all' overrides the default "
-            "full-domain region; any other key adds a named bbox region."
+            "List of region specs for spatial stratification. At least one region is required. "
+            "String entries are shapefile names (resolved against 'root'). Dict entries map a "
+            "region name to a bounding box [lon_min, lon_max, lat_min, lat_max]. "
+            "The first entry is the domain region used by the dashboard when region stratification "
+            "is not active (e.g. {'global': [-180, 180, -90, 90]} or {'icon-ch1': [1.5, 16, 43, 49.5]})."
         ),
     )
     root: Optional[str] = Field(
@@ -421,6 +422,12 @@ class Stratification(BaseModel):
     def validate_regions(
         cls, v: List[Union[str, Dict[str, List[float]]]]
     ) -> List[Union[str, Dict[str, List[float]]]]:
+        if not v:
+            raise ValueError(
+                "At least one region must be specified. "
+                "Add a domain bbox as the first entry, e.g. regions: [{global: [-180, 180, -90, 90]}] "
+                "for global models or [{icon-ch1: [1.5, 16, 43, 49.5]}] for ICON-CH1."
+            )
         for entry in v:
             if isinstance(entry, dict):
                 if len(entry) != 1:

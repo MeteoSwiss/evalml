@@ -79,26 +79,23 @@ def parse_reference_times():
     return times
 
 
-def parse_shp_regions():
-    """Return comma-separated shapefile paths from the regions config."""
+def parse_regions():
+    """Return a JSON list of region specs in config order.
+
+    Each entry is either ``{"type": "bbox", "name": ..., "bbox": [...]}``
+    or ``{"type": "shp", "name": ..., "path": ...}``, preserving the original
+    order so the NetCDF region coordinate matches the config.
+    """
     cfg = config["experiment"]["stratification"]
     root = cfg.get("root", "")
-    return ",".join(
-        f"{root}/{entry}.shp"
-        for entry in cfg.get("regions", [])
-        if isinstance(entry, str)
-    )
-
-
-def parse_bbox_regions():
-    """Return semicolon-separated name:lon_min,lon_max,lat_min,lat_max entries."""
-    cfg = config["experiment"]["stratification"]
-    parts = []
+    result = []
     for entry in cfg.get("regions", []):
-        if isinstance(entry, dict):
-            for name, bbox in entry.items():
-                parts.append(f"{name}:{','.join(str(v) for v in bbox)}")
-    return ";".join(parts)
+        if isinstance(entry, str):
+            result.append({"type": "shp", "name": entry, "path": f"{root}/{entry}.shp"})
+        elif isinstance(entry, dict):
+            name, bbox = next(iter(entry.items()))
+            result.append({"type": "bbox", "name": name, "bbox": bbox})
+    return json.dumps(result)
 
 
 def parse_showcase_regions():
@@ -413,8 +410,7 @@ if "jretrieve" in str(config["truth"]["root"]):
 
 
 TRUTH_HASH = truth_hash(config["truth"])
-SHP_REGIONS = parse_shp_regions()
-BBOX_REGIONS = parse_bbox_regions()
+REGIONS = parse_regions()
 VERIF_HASH = verif_hash(config)
 _showcase = config.get("showcase", {})
 SHOWCASE_CONFIG = {

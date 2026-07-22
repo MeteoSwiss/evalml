@@ -29,8 +29,7 @@ rule verification_metrics_baseline:
         member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
         truth=config["truth"]["root"],
         truth_source_id=f"truth-{TRUTH_HASH}",
-        shp_regions=SHP_REGIONS,
-        bbox_regions=BBOX_REGIONS,
+        regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
         lapse_rate_flag=(
@@ -48,8 +47,7 @@ rule verification_metrics_baseline:
             --steps "{params.baseline_steps}" \
             --source_id "{wildcards.baseline_id}" \
             --truth_source_id "{params.truth_source_id}" \
-            --shp_regions "{params.shp_regions}" \
-            --bbox_regions "{params.bbox_regions}" \
+            --regions '{params.regions}' \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
             --member "{params.member}" \
@@ -87,8 +85,7 @@ rule verification_metrics:
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         truth=config["truth"]["root"],
         truth_source_id=f"truth-{TRUTH_HASH}",
-        shp_regions=SHP_REGIONS,
-        bbox_regions=BBOX_REGIONS,
+        regions=REGIONS,
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
@@ -109,8 +106,7 @@ rule verification_metrics:
             --steps "{params.fcst_steps}" \
             --source_id "{wildcards.run_id}" \
             --truth_source_id "{params.truth_source_id}" \
-            --shp_regions "{params.shp_regions}" \
-            --bbox_regions "{params.bbox_regions}" \
+            --regions '{params.regions}' \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
             {params.lapse_rate_flag} \

@@ -869,7 +869,7 @@
       "description": "Stratification settings for the analysis.",
       "properties": {
         "regions": {
-          "description": "List of region specs for spatial stratification. String entries are shapefile names (resolved against 'root'). Dict entries map a region name to a bounding box [lon_min, lon_max, lat_min, lat_max]. The special key 'all' overrides the default full-domain region; any other key adds a named bbox region.",
+          "description": "List of region specs for spatial stratification. At least one region is required. String entries are shapefile names (resolved against 'root'). Dict entries map a region name to a bounding box [lon_min, lon_max, lat_min, lat_max]. The first entry is the domain region used by the dashboard when region stratification is not active (e.g. {'global': [-180, 180, -90, 90]} or {'icon-ch1': [1.5, 16, 43, 49.5]}).",
           "items": {
             "anyOf": [
               {
