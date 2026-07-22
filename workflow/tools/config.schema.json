@@ -306,6 +306,18 @@
           ],
           "default": null,
           "description": "Score map plot configuration. Omit or set enabled: false to disable."
+        },
+        "sal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SalConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "SAL precipitation verification. Omit or set enabled: false to disable."
         }
       },
       "required": [
@@ -882,6 +894,84 @@
         }
       },
       "title": "PublicationScoremapsConfig",
+      "type": "object"
+    },
+    "SalConfig": {
+      "additionalProperties": false,
+      "description": "Parameters controlling the SAL precipitation verification computation.\n\nSAL (Structure\u2013Amplitude\u2013Location; Wernli et al. 2008) is a per-init,\nobject-based precipitation score. When enabled it is computed for every run\nand baseline over the requested params and lead times, and written to\nper-participant CSV files (one per param/lead time, one row per\ninitialisation). This is a compute-only capability; plotting the results\nlives in the publication-figures workflow.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to compute SAL scores (requires pysteps + scikit-image).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "params": {
+          "default": [
+            "TOT_PREC6"
+          ],
+          "description": "Accumulated precipitation params to score, the accumulation period encoded in the name (e.g. TOT_PREC1, TOT_PREC6, TOT_PREC24).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "leadtimes": {
+          "default": [
+            6,
+            12,
+            18,
+            24,
+            30
+          ],
+          "description": "List of lead times (hours) to score.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Leadtimes",
+          "type": "array"
+        },
+        "thr_factor": {
+          "default": 0.067,
+          "description": "SAL object-detection threshold factor (Wernli et al. 2008, eq. 1); the detection contour is thr_factor * the thr_quantile-percentile of the wet precipitation. 0.067 is the pysteps default.",
+          "title": "Thr Factor",
+          "type": "number"
+        },
+        "thr_quantile": {
+          "default": 0.95,
+          "description": "Wet quantile (0\u20131) defining the SAL detection threshold.",
+          "title": "Thr Quantile",
+          "type": "number"
+        },
+        "grid_extent": {
+          "default": [
+            -1.0,
+            18.0,
+            42.0,
+            50.5
+          ],
+          "description": "SAL raster extent [lon_min, lon_max, lat_min, lat_max] in degrees (PlateCarree). Both forecast and truth are remapped onto this raster.",
+          "items": {
+            "type": "number"
+          },
+          "title": "Grid Extent",
+          "type": "array"
+        },
+        "grid_step_lat": {
+          "default": 0.01,
+          "description": "SAL raster latitude spacing in degrees.",
+          "title": "Grid Step Lat",
+          "type": "number"
+        },
+        "grid_step_lon": {
+          "default": 0.0145,
+          "description": "SAL raster longitude spacing in degrees. Choose grid_step_lat and grid_step_lon so pixels are metrically near-square at the domain's central latitude (pysteps' Location term assumes square pixels).",
+          "title": "Grid Step Lon",
+          "type": "number"
+        }
+      },
+      "title": "SalConfig",
       "type": "object"
     },
     "ScoreMapsConfig": {

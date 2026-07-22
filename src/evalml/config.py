@@ -262,6 +262,102 @@ class ScoreMapsConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class SalConfig(BaseModel):
+    """Parameters controlling the SAL precipitation verification computation.
+
+    SAL (Structure–Amplitude–Location; Wernli et al. 2008) is a per-init,
+    object-based precipitation score. When enabled it is computed for every run
+    and baseline over the requested params and lead times, and written to
+    per-participant CSV files (one per param/lead time, one row per
+    initialisation). This is a compute-only capability; plotting the results
+    lives in the publication-figures workflow.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to compute SAL scores (requires pysteps + scikit-image).",
+    )
+    params: List[str] = Field(
+        default=["TOT_PREC6"],
+        description=(
+            "Accumulated precipitation params to score, the accumulation period "
+            "encoded in the name (e.g. TOT_PREC1, TOT_PREC6, TOT_PREC24)."
+        ),
+    )
+    leadtimes: List[int] = Field(
+        default=[6, 12, 18, 24, 30],
+        description="List of lead times (hours) to score.",
+    )
+    thr_factor: float = Field(
+        default=0.067,
+        description=(
+            "SAL object-detection threshold factor (Wernli et al. 2008, eq. 1); "
+            "the detection contour is thr_factor * the thr_quantile-percentile of "
+            "the wet precipitation. 0.067 is the pysteps default."
+        ),
+    )
+    thr_quantile: float = Field(
+        default=0.95,
+        description="Wet quantile (0–1) defining the SAL detection threshold.",
+    )
+    grid_extent: List[float] = Field(
+        default=[-1.0, 18.0, 42.0, 50.5],
+        description=(
+            "SAL raster extent [lon_min, lon_max, lat_min, lat_max] in degrees "
+            "(PlateCarree). Both forecast and truth are remapped onto this raster."
+        ),
+    )
+    grid_step_lat: float = Field(
+        default=0.01,
+        description="SAL raster latitude spacing in degrees.",
+    )
+    grid_step_lon: float = Field(
+        default=0.0145,
+        description=(
+            "SAL raster longitude spacing in degrees. Choose grid_step_lat and "
+            "grid_step_lon so pixels are metrically near-square at the domain's "
+            "central latitude (pysteps' Location term assumes square pixels)."
+        ),
+    )
+
+    @field_validator("params")
+    @classmethod
+    def validate_params_are_precip(cls, v: List[str]) -> List[str]:
+        bad = [p for p in v if not p.startswith("TOT_PREC")]
+        if bad:
+            raise ValueError(
+                "sal.params must be precipitation parameters starting with "
+                "'TOT_PREC' (e.g. TOT_PREC1, TOT_PREC6, or bare TOT_PREC for "
+                "cumulative-from-start); SAL is defined for precipitation only. "
+                f"Invalid: {bad}."
+            )
+        return v
+
+    @field_validator("grid_extent")
+    @classmethod
+    def validate_grid_extent(cls, v: List[float]) -> List[float]:
+        if len(v) != 4:
+            raise ValueError(
+                "sal.grid_extent must be [lon_min, lon_max, lat_min, lat_max]."
+            )
+        if any(x != x or x in (float("inf"), float("-inf")) for x in v):
+            raise ValueError(f"sal.grid_extent values must be finite; got {v}.")
+        lon_min, lon_max, lat_min, lat_max = v
+        if not -90.0 <= lat_min < lat_max <= 90.0:
+            raise ValueError(
+                f"sal.grid_extent latitudes must satisfy -90 <= lat_min < "
+                f"lat_max <= 90; got lat_min={lat_min}, lat_max={lat_max}."
+            )
+        if not -180.0 <= lon_min < lon_max <= 180.0:
+            raise ValueError(
+                f"sal.grid_extent longitudes must satisfy -180 <= lon_min < "
+                f"lon_max <= 180; got lon_min={lon_min}, lon_max={lon_max}."
+            )
+        return v
+
+    model_config = {"extra": "forbid"}
+
+
 class DomainConfig(BaseModel):
     """A custom map domain defined by name, extent, and projection."""
 
@@ -527,6 +623,10 @@ class ExperimentConfig(BaseModel):
         default=None,
         description="Score map plot configuration. Omit or set enabled: false to disable.",
     )
+    sal: Optional[SalConfig] = Field(
+        default=None,
+        description="SAL precipitation verification. Omit or set enabled: false to disable.",
+    )
 
     @field_validator("thresholds")
     @classmethod
@@ -741,22 +841,35 @@ class ConfigModel(BaseModel):
         description="Configuration for the FFV2 scoring pipeline. Required when running with --ffv2.",
     )
 
-    @model_validator(mode="after")
-    def validate_scoremap_leadtimes(self) -> "ConfigModel":
-        sm = self.experiment.scoremaps
-        if sm is None or not sm.enabled:
-            return self
-        requested = set(sm.leadtimes)
+    def _reject_unproducible_leadtimes(self, requested: List[int], label: str) -> None:
+        """Fail if any requested lead time is not produced by every participant.
+
+        `label` names the originating config block (e.g. "scoremaps", "sal")
+        and is used only to build the error message.
+        """
         for item in self.runs:
             steps = getattr(item, next(iter(type(item).model_fields))).steps
             start, end, step = map(int, steps.split("/"))
             producible = set(range(start, end + 1, step))
-            unsupported = requested - producible
+            unsupported = set(requested) - producible
             if unsupported:
                 raise ValueError(
-                    f"scoremaps.leadtimes contains {sorted(unsupported)} h which are not "
+                    f"{label}.leadtimes contains {sorted(unsupported)} h which are not "
                     f"produced by participant with steps '{steps}'."
                 )
+
+    @model_validator(mode="after")
+    def validate_scoremap_leadtimes(self) -> "ConfigModel":
+        sm = self.experiment.scoremaps
+        if sm is not None and sm.enabled:
+            self._reject_unproducible_leadtimes(sm.leadtimes, "scoremaps")
+        return self
+
+    @model_validator(mode="after")
+    def validate_sal_leadtimes(self) -> "ConfigModel":
+        sal = self.experiment.sal
+        if sal is not None and sal.enabled:
+            self._reject_unproducible_leadtimes(sal.leadtimes, "sal")
         return self
 
     def _enumerated_init_times(self) -> set[str]:

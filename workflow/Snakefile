@@ -139,6 +139,7 @@ onerror:
 
 
 SCOREMAPS_CONFIGS = config.get("experiment", {}).get("scoremaps") or {}
+SAL_CONFIGS = config.get("experiment", {}).get("sal") or {}
 
 
 rule experiment_all:
@@ -197,6 +198,28 @@ rule experiment_all:
                 experiment=EXPERIMENT_NAME,
             )
             if SCOREMAPS_CONFIGS.get("enabled", False)
+            else []
+        ),
+        # SAL precipitation scores (compute-only: the NetCDFs themselves are the
+        # targets; plotting lives in the publication-figures workflow).
+        (
+            expand(
+                rules.verification_sal.output,
+                run_id=list(CANDIDATES),
+                param=SAL_CONFIGS["params"],
+                leadtime=SAL_CONFIGS["leadtimes"],
+            )
+            if SAL_CONFIGS.get("enabled", False)
+            else []
+        ),
+        (
+            expand(
+                rules.verification_sal_baseline.output,
+                baseline_id=list(BASELINES),
+                param=SAL_CONFIGS["params"],
+                leadtime=SAL_CONFIGS["leadtimes"],
+            )
+            if SAL_CONFIGS.get("enabled", False)
             else []
         ),
 
