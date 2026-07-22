@@ -957,6 +957,12 @@
           ],
           "default": null,
           "description": "Configuration for the forecaster run that this temporal downscaler is based on."
+        },
+        "copy_prognostic_from_forecaster": {
+          "default": false,
+          "description": "If true, the prognostic variables at the overlap steps (the temporal downscaler output steps that coincide with the forecaster's boundary steps, e.g. multiples of 6 h) are overwritten in the downscaler GRIB with the forecaster's values. This makes the forecaster-alone and forecaster+downscaler metrics agree at those steps, at which the downscaler merely re-predicts a state it was given as input. Diagnostic variables (e.g. hourly-accumulated TOT_PREC) are left untouched. Requires `forecaster` to be set.",
+          "title": "Copy Prognostic From Forecaster",
+          "type": "boolean"
         }
       },
       "required": [

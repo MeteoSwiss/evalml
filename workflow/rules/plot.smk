@@ -26,7 +26,7 @@ def _get_available_baselines(wc) -> list[dict[str, str]]:
 rule plot_meteogram:
     input:
         script="workflow/scripts/plot_meteogram.py",
-        inference_okfile=rules.inference_execute.output.okfile,
+        inference_okfile=lambda wc: forecast_okfile(wc.run_id, wc.init_time),
         truth_dep=truth_file_dep,
     output:
         expand(
@@ -97,7 +97,7 @@ rule plot_meteogram:
 rule plot_forecast_frame:
     input:
         script="workflow/scripts/plot_forecast_frame.py",
-        inference_okfile=rules.inference_execute.output.okfile,
+        inference_okfile=lambda wc: forecast_okfile(wc.run_id, wc.init_time),
     output:
         expand(
             OUT_ROOT
