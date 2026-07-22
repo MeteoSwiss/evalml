@@ -3,8 +3,6 @@ import os
 import re
 import time
 
-from pathlib import Path
-
 import cartopy.crs as ccrs
 from cartopy.io.shapereader import Reader
 
