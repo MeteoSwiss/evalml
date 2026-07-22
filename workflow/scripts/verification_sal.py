@@ -72,18 +72,6 @@ DEFAULT_GRID_STEP_LAT = 0.01
 DEFAULT_GRID_STEP_LON = 0.0145
 
 
-def _season_of(dt: datetime) -> str:
-    """Return the meteorological season string for a given datetime."""
-    month = dt.month
-    if month in (12, 1, 2):
-        return "DJF"
-    if month in (3, 4, 5):
-        return "MAM"
-    if month in (6, 7, 8):
-        return "JJA"
-    return "SON"
-
-
 def iter_init_dirs(run_root: Path) -> list[tuple[datetime, Path]]:
     """Return ``(reftime, grib_dir)`` pairs for every complete init time.
 
@@ -338,8 +326,6 @@ def main(args: Namespace) -> None:
         rows.append(
             {
                 "reftime": reftime.strftime(DATETIME_FMT),
-                "season": _season_of(reftime),
-                "init_hour": reftime.hour,
                 "S": s,
                 "A": a,
                 "L": ell,
@@ -359,8 +345,6 @@ def main(args: Namespace) -> None:
         rows,
         columns=[
             "reftime",
-            "season",
-            "init_hour",
             "S",
             "A",
             "L",
