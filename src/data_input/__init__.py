@@ -162,13 +162,17 @@ def _fetch_icon_const_grib(model: str) -> Path:
     asset_id = _ICON_HORIZ_CONST_ASSET[model]
     cached = _ICON_CONST_CACHE / asset_id
     if cached.exists():
+        LOG.info("Using cached %s constants from %s", model, cached)
         return cached
     collection = _ICON_STAC_COLLECTION[model]
     url = _STAC_ASSETS_URL.format(collection=collection)
     LOG.info("Fetching %s constants download URL from %s", model, url)
     with urllib.request.urlopen(url) as resp:
-        assets = json.load(resp)
-    href = assets[asset_id]["href"]
+        assets = json.load(resp)["assets"]
+    for asset in assets:
+        if asset["id"] == asset_id:
+            href = asset["href"]
+            break
     LOG.info("Downloading %s constants to %s", model, cached)
     tmp = cached.with_suffix(".tmp")
     try:
