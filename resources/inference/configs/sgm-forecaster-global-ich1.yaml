@@ -20,6 +20,26 @@ post_processors:
         scale: 1000 # convert units from m to kg m-2
         offset: 0
         param: tp
+  - forward_transform_filter:
+      rescale:
+        scale: 100 # convert cloud cover fraction [0,1] to percent [0,100]
+        offset: 0
+        param: hcc
+  - forward_transform_filter:
+      rescale:
+        scale: 100 # convert cloud cover fraction [0,1] to percent [0,100]
+        offset: 0
+        param: tcc
+  - forward_transform_filter:
+      rescale:
+        scale: 100 # convert cloud cover fraction [0,1] to percent [0,100]
+        offset: 0
+        param: mcc
+  - forward_transform_filter:
+      rescale:
+        scale: 100 # convert cloud cover fraction [0,1] to percent [0,100]
+        offset: 0
+        param: lcc
 
 output:
   tee:
@@ -29,16 +49,44 @@ output:
           typeOfGeneratingProcess: 2
         templates:
           samples: resources/templates_index_icon.yaml
+        variables:
+          - 2t
+          - 2d
+          - 10u
+          - 10v
+          - tp
+          - tcc
+          - hcc
+          - mcc
+          - lcc
         post_processors:
           - extract_mask: # removes global points
               mask: "lam_0/cutout_mask"
               as_slice: true
+        modifiers:
+          - patches:
+            - variable:
+                2t: {"shortName": "T_2M"}
+                2d: {"shortName": "TD_2M"}
+                10u: {"shortName": "U_10M"}
+                10v: {"shortName": "V_10M"}
+                tp: {"shortName": "TOT_PREC"}
+                tcc: {"shortName": "CLCT"}
+                hcc: {"shortName": "CLCH"}
+                mcc: {"shortName": "CLCM"}
+                lcc: {"shortName": "CLCL"}
     - grib:
         path: grib/ifs-{date}{time:04}_{step:03}.grib
         encoding:
           typeOfGeneratingProcess: 2
         templates:
           samples: resources/templates_index_ifs.yaml
+        variables:
+          - 2t
+          - 2d
+          - 10u
+          - 10v
+          - tp
         post_processors:
         - extract_mask: # removes lam points
             mask: "lam_0/cutout_mask"

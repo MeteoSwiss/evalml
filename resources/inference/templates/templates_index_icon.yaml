@@ -6,7 +6,7 @@
 - - {levtype: sfc, param: [T_2M, TD_2M, U_10M, V_10M]}
   - resources/icon-ch1-typeOfLevel=heightAboveGround.grib
 
-- - {levtype: sfc, param: [FR_LAND, PS, FIS, T_G, SKT, SSO_SIGMA,SSO_STDH]}
+- - {levtype: sfc, param: [FR_LAND, PS, FIS, T_G, SKT, SSO_SIGMA,SSO_STDH, CLCT]}
   - resources/icon-ch1-typeOfLevel=surface.grib
 
 - - {levtype: sfc, param: [PMSL]}
@@ -14,3 +14,12 @@
 
 - - {levtype: sfc, param: [TOT_PREC]}
   - resources/icon-ch1-shortName=TOT_PREC.grib
+
+- - {levtype: sfc, param: [CLCH]}
+  - resources/icon-ch1-shortName=CLCH.grib
+
+- - {levtype: sfc, param: [CLCM]}
+  - resources/icon-ch1-shortName=CLCM.grib
+
+- - {levtype: sfc, param: [CLCL]}
+  - resources/icon-ch1-shortName=CLCL.grib

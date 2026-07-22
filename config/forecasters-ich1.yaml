@@ -3,7 +3,7 @@ description: |
   Evaluate skill of ICON-CH1 single.
 
 dates:
-  start: 2024-01-01T00:00
+  start: 2024-01-01T06:00
   end: 2024-01-02T00:00
   frequency: 6h
 
@@ -12,17 +12,17 @@ runs:
       checkpoint: /store_new/mch/msopr/ml/checkpoints/stage_C_icon_1km_cutoff_edges_subgrid_horography/inference-last.ckpt
       label: stage_C_icon_1km
       steps: 0/120/6
-      config: /store_new/mch/msopr/ml/configs/stage_C_icon_1km_cutoff_edges_subgrid_horography.yaml
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
       extra_requirements:
         - earthkit-utils<0.2.0
         - earthkit-data<0.19.0
         - anemoi-inference==0.11.1
 
   - forecaster:
-      checkpoint: https://mlflow.ecmwf.int#/experiments/680/runs/74a5065b65614d1283cc07aec92a891a
-      label: stage_C_icon_1km_cutoff_edges_subgrid_horography_cloudcover
+      checkpoint: /scratch/mch/huppd/varda/checkpoints/stage_C_icon_1km_cutoff_edges_subgrid_horography_cloudcover/inference-last.ckpt
+      label: stage_C_icon_1km_w_cloudcover
       steps: 0/120/6
-      config: /scratch/mch/huppd/varda/devml/configs/training/stage_C_icon_1km_cutoff_edges_subgrid_horography.yaml
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
       extra_requirements:
         - earthkit-utils<0.2.0
         - earthkit-data<0.19.0
@@ -55,6 +55,10 @@ experiment:
     - U_10M
     - V_10M
     - TOT_PREC
+    - CLCT
+    - CLCH
+    - CLCM
+    - CLCL
   stratification:
     regions:
       - jura

@@ -69,7 +69,7 @@ def _fetch_icon_const_grib(model: str) -> Path:
     url = _STAC_ASSETS_URL.format(collection=collection)
     LOG.info("Fetching %s constants download URL from %s", model, url)
     with urllib.request.urlopen(url) as resp:
-        assets = json.load(resp)
+        assets = {asset["id"]: asset for asset in json.load(resp)["assets"]}
     href = assets[asset_id]["href"]
     LOG.info("Downloading %s constants to %s", model, cached)
     tmp = cached.with_suffix(".tmp")
@@ -320,10 +320,12 @@ def load_from_grib_file(file: str | list[str], sel_kwargs):
 
 
 def variable_name_profile(
-    level_type: Literal["height_above_ground_level", "mean_sea", "surface", "pressure"],
+    level_type: Literal[
+        "height_above_ground_level", "mean_sea", "surface", "pressure", "pressure_layer"
+    ],
 ) -> dict[str, Any]:
     """Resolve variable name profile based on the level type."""
-    if level_type in ["height_above_ground_level", "mean_sea", "surface"]:
+    if level_type in ["height_above_ground_level", "mean_sea", "surface", "pressure_layer"]:
         return {}
     elif level_type == "pressure":
         return {
@@ -344,7 +346,7 @@ def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
         profile = XARRAY_ENGINE_PROFILE | variable_name_profile(level_type)
         _ds = level_type_group.to_xarray(**profile, allow_holes=True)
         ds = ds.merge(
-            _ds, compat="no_conflicts", combine_attrs="no_conflicts", join="outer"
+            _ds, compat="no_conflicts", combine_attrs="drop_conflicts", join="outer"
         )
     return ds
 
