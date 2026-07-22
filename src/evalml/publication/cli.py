@@ -295,5 +295,129 @@ def scoremaps(
     )
 
 
+@publication.command("sal-scatter")
+@manifest_option
+@truth_option
+@click.option("--candidate", default=None, help="Candidate label (required if >1).")
+@click.option("--param", default=None, help="Accumulated precip param (e.g. TOT_PREC6).")
+@click.option(
+    "--leadtime",
+    "leadtimes",
+    type=int,
+    multiple=True,
+    help="Lead time (hours) to aggregate per init (repeat; default = all SAL lead times).",
+)
+@click.option("--baseline", "baselines", multiple=True, help="Baseline label (repeat).")
+@click.option("--season-split", default=None, help="Named season split (e.g. jja-novdec).")
+@click.option("--min-truth-mm", type=float, default=None, help="Wet-case filter (mm).")
+@click.option(
+    "--output", default=None, help="Output directory (default figures/<truth>/sal_scatter)."
+)
+@_friendly_errors
+def sal_scatter(
+    manifest, truth, candidate, param, leadtimes, baselines, season_split, min_truth_mm, output
+):
+    """SAL Structure–Amplitude scatter (candidate + baselines, coloured by season)."""
+    m = _load(manifest, truth)
+    output = output or _fig_dir(m, "sal_scatter")
+    cfg = m.publication.get("sal_scatter") or {}
+    param = param or cfg.get("param", "TOT_PREC6")
+    lt_list = (
+        list(leadtimes)
+        or cfg.get("leadtimes")
+        or m.experiment_sal.get("leadtimes")
+        or [6, 12, 18, 24, 30]
+    )
+    base_labels = list(baselines) or cfg.get("baselines", ["ICON-CH1-CTRL", "ICON-CH2-CTRL"])
+    season_split = season_split or cfg.get("season_split", "jja-novdec")
+    if min_truth_mm is None:
+        min_truth_mm = cfg.get("min_truth_mm", 2.0)
+    annotate = cfg.get("annotate", {})
+
+    m.validate_request(
+        "sal_scatter", candidate=candidate, baselines=base_labels, leadtimes=lt_list
+    )
+    cand = m.get_candidate(candidate)
+    bases = [m.resolve_baseline(b) for b in base_labels]
+
+    cmd = [
+        sys.executable,
+        SCRIPTS / "publication_sal_scatter.py",
+        "--param",
+        param,
+        "--leadtimes",
+        ",".join(str(x) for x in lt_list),
+        "--season-split",
+        season_split,
+        "--min-truth-mm",
+        str(min_truth_mm),
+        "--output",
+        output,
+    ]
+    # Candidate panel first (annotations apply to it), then baseline panels.
+    for p in [cand, *bases]:
+        csvs = ",".join(m.sal_path(p, param, lt) for lt in lt_list)
+        cmd += ["--participant", p.label, csvs]
+    if annotate:
+        cmd += ["--annotate", ",".join(f"{k}={v}" for k, v in annotate.items())]
+    _run(cmd)
+
+
+@publication.command("case-snapshots")
+@manifest_option
+@truth_option
+@click.option("--candidate", default=None, help="Candidate label (required if >1).")
+@click.option(
+    "--output",
+    default=None,
+    help="Output directory (default figures/<truth>/case_snapshots).",
+)
+@_friendly_errors
+def case_snapshots(manifest, truth, candidate, output):
+    """Precipitation map snapshots (candidate vs truth) for hand-picked cases."""
+    m = _load(manifest, truth)
+    output = output or _fig_dir(m, "case_snapshots")
+    cfg = m.publication.get("case_snapshots") or {}
+    cases = list(cfg.get("cases", []))
+    if not cases:
+        raise click.ClickException(
+            "No cases configured (publication.case_snapshots.cases is empty)."
+        )
+    param = cfg.get("param", "TOT_PREC")
+    leadtime = int(cfg.get("leadtime", 12))
+    accumulation = int(cfg.get("accumulation", 6))
+    domain = cfg.get("domain", "centraleurope")
+    sal_param = f"TOT_PREC{accumulation}"
+
+    m.validate_request(
+        "case_snapshots", candidate=candidate, leadtime=leadtime, cases=cases
+    )
+    cand = m.get_candidate(candidate)
+
+    cmd = [
+        sys.executable,
+        SCRIPTS / "publication_case_snapshots.py",
+        "--candidate-label",
+        cand.label,
+        "--truth",
+        m.truth.get("root"),
+        "--truth-label",
+        m.truth.get("label"),
+        "--param",
+        param,
+        "--leadtime",
+        str(leadtime),
+        "--accumulation",
+        str(accumulation),
+        "--domain",
+        domain,
+        "--output",
+        output,
+    ]
+    for init in cases:
+        cmd += ["--case", init, m.grib_dir(cand, init), m.sal_path(cand, sal_param, leadtime)]
+    _run(cmd, env=_eccodes_env())
+
+
 if __name__ == "__main__":
     publication()
