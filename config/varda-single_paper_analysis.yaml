@@ -104,6 +104,14 @@ experiment:
     leadtimes: [6, 24]
     params: ["T_2M", "SP_10M", "TOT_PREC1", "TOT_PREC6"]
 
+publication:
+  teaser:
+    enabled: true
+    init_time: "202504051200"
+    leadtime: 24
+    dark: false
+    grid: /store_new/mch/msopr/ml/grids/icon_grid_0001_R19B08_mch.nc
+
 locations:
   output_root: output/
 

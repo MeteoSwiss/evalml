@@ -187,3 +187,57 @@ rule publication_scoremaps:
             --manifest {input.manifest} \
             --output {output} >{log} 2>&1
         """
+
+
+def _pub_teaser_cfg():
+    return (config.get("publication", {}) or {}).get("teaser") or {}
+
+
+rule publication_teaser:
+    """Publication teaser (hero) figure: global forecast + nested regional zooms.
+
+Standalone renderer (workflow/scripts/publication_teaser.py); the case and
+style (incl. the dark variant) come from config.publication.teaser. Depends on
+the candidate's aggregated verification file so inference has run for the
+requested init_time before the GRIB is resolved.
+"""
+    input:
+        "workflow/scripts/publication_teaser.py",
+        "workflow/scripts/publication.mplstyle",
+        manifest=rules.publication_manifest.output,
+        verif=_meteogram_data_dep,
+    output:
+        report(
+            directory(OUT_ROOT / f"figures/{TRUTH_SLUG}/teaser"),
+            htmlindex="publication_teaser.html",
+        ),
+    log:
+        OUT_ROOT / "logs/figures/publication_teaser.log",
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=8,
+        mem_mb=32000,
+        runtime="60m",
+    params:
+        grib_dir=lambda wc: str(
+            OUT_ROOT
+            / f"data/runs/{_pub_candidate_run_id()}"
+            / f"{_pub_teaser_cfg().get('init_time', '')}/grib"
+        ),
+        init_time=lambda wc: _pub_teaser_cfg().get("init_time", ""),
+        leadtime=lambda wc: _pub_teaser_cfg().get("leadtime", 24),
+        grid_flag=lambda wc: (
+            f"--grid {_pub_teaser_cfg()['grid']}"
+            if _pub_teaser_cfg().get("grid")
+            else ""
+        ),
+        dark_flag=lambda wc: "--dark" if _pub_teaser_cfg().get("dark", False) else "",
+    shell:
+        """
+        set -euo pipefail
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        python workflow/scripts/publication_teaser.py \
+            --input {params.grib_dir:q} --date {params.init_time:q} \
+            --leadtime {params.leadtime} {params.grid_flag} {params.dark_flag} \
+            --output {output} >{log} 2>&1
+        """

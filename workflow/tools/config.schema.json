@@ -748,6 +748,18 @@
           ],
           "default": null,
           "description": "Publication scoremap figure settings (omit to skip). Requires a gridded (zarr) truth source."
+        },
+        "teaser": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicationTeaserConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Publication teaser (hero) figure settings (omit to skip)."
         }
       },
       "title": "PublicationConfig",
@@ -882,6 +894,55 @@
         }
       },
       "title": "PublicationScoremapsConfig",
+      "type": "object"
+    },
+    "PublicationTeaserConfig": {
+      "additionalProperties": false,
+      "description": "Case selection and styling for the publication teaser ('hero') figure.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate the publication teaser figure.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "init_time": {
+          "description": "Initialisation time (YYYYMMDDHHMM) of the case to plot.",
+          "pattern": "^\\d{12}$",
+          "title": "Init Time",
+          "type": "string"
+        },
+        "leadtime": {
+          "default": 24,
+          "description": "Lead time in hours for the plotted forecast frame.",
+          "minimum": 0,
+          "title": "Leadtime",
+          "type": "integer"
+        },
+        "dark": {
+          "default": false,
+          "description": "Dark variant: black background, white text/ticks, glow.",
+          "title": "Dark",
+          "type": "boolean"
+        },
+        "grid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ICON grid file for the true-mesh (tripcolor) zoom. Falls back to a Delaunay mesh when omitted.",
+          "title": "Grid"
+        }
+      },
+      "required": [
+        "init_time"
+      ],
+      "title": "PublicationTeaserConfig",
       "type": "object"
     },
     "ScoreMapsConfig": {
