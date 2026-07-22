@@ -1111,7 +1111,9 @@ class ConfigModel(BaseModel):
                     f"publication.sal_scatter.param {ss.param!r} is not in "
                     f"experiment.sal.params {sal_cfg.params}."
                 )
-            missing = sorted(set(ss.leadtimes or sal_cfg.leadtimes) - set(sal_cfg.leadtimes))
+            missing = sorted(
+                set(ss.leadtimes or sal_cfg.leadtimes) - set(sal_cfg.leadtimes)
+            )
             if missing:
                 raise ValueError(
                     f"publication.sal_scatter.leadtimes {missing} are not in "

@@ -299,7 +299,9 @@ def scoremaps(
 @manifest_option
 @truth_option
 @click.option("--candidate", default=None, help="Candidate label (required if >1).")
-@click.option("--param", default=None, help="Accumulated precip param (e.g. TOT_PREC6).")
+@click.option(
+    "--param", default=None, help="Accumulated precip param (e.g. TOT_PREC6)."
+)
 @click.option(
     "--leadtime",
     "leadtimes",
@@ -308,14 +310,26 @@ def scoremaps(
     help="Lead time (hours) to aggregate per init (repeat; default = all SAL lead times).",
 )
 @click.option("--baseline", "baselines", multiple=True, help="Baseline label (repeat).")
-@click.option("--season-split", default=None, help="Named season split (e.g. jja-novdec).")
+@click.option(
+    "--season-split", default=None, help="Named season split (e.g. jja-novdec)."
+)
 @click.option("--min-truth-mm", type=float, default=None, help="Wet-case filter (mm).")
 @click.option(
-    "--output", default=None, help="Output directory (default figures/<truth>/sal_scatter)."
+    "--output",
+    default=None,
+    help="Output directory (default figures/<truth>/sal_scatter).",
 )
 @_friendly_errors
 def sal_scatter(
-    manifest, truth, candidate, param, leadtimes, baselines, season_split, min_truth_mm, output
+    manifest,
+    truth,
+    candidate,
+    param,
+    leadtimes,
+    baselines,
+    season_split,
+    min_truth_mm,
+    output,
 ):
     """SAL Structure–Amplitude scatter (candidate + baselines, coloured by season)."""
     m = _load(manifest, truth)
@@ -328,7 +342,9 @@ def sal_scatter(
         or m.experiment_sal.get("leadtimes")
         or [6, 12, 18, 24, 30]
     )
-    base_labels = list(baselines) or cfg.get("baselines", ["ICON-CH1-CTRL", "ICON-CH2-CTRL"])
+    base_labels = list(baselines) or cfg.get(
+        "baselines", ["ICON-CH1-CTRL", "ICON-CH2-CTRL"]
+    )
     season_split = season_split or cfg.get("season_split", "jja-novdec")
     if min_truth_mm is None:
         min_truth_mm = cfg.get("min_truth_mm", 2.0)
@@ -415,7 +431,12 @@ def case_snapshots(manifest, truth, candidate, output):
         output,
     ]
     for init in cases:
-        cmd += ["--case", init, m.grib_dir(cand, init), m.sal_path(cand, sal_param, leadtime)]
+        cmd += [
+            "--case",
+            init,
+            m.grib_dir(cand, init),
+            m.sal_path(cand, sal_param, leadtime),
+        ]
     _run(cmd, env=_eccodes_env())
 
 
