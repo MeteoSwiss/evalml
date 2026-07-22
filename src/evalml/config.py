@@ -545,6 +545,121 @@ class PublicationScoremapsConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class PublicationSalScatterConfig(BaseModel):
+    """Configuration for the publication SAL Structure–Amplitude scatter figure.
+
+    Plots per-init SAL (Structure vs Amplitude) for the candidate and the listed
+    baselines, one panel each, coloured by season, marker size = Location. It
+    consumes the per-init SAL CSVs written by the SAL verification, so the chosen
+    `param` and `leadtimes` must be enabled under `experiment.sal`. Requires a
+    gridded (zarr) truth source.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate the publication SAL scatter figure.",
+    )
+    param: str = Field(
+        default="TOT_PREC6",
+        description=(
+            "Accumulated precipitation param to plot; must be one of "
+            "experiment.sal.params."
+        ),
+    )
+    leadtimes: Optional[List[int]] = Field(
+        default=None,
+        description=(
+            "Lead times (hours) aggregated per init as a median. Each must be in "
+            "experiment.sal.leadtimes. Defaults to experiment.sal.leadtimes."
+        ),
+    )
+    baselines: List[str] = Field(
+        default=["ICON-CH1-CTRL", "ICON-CH2-CTRL"],
+        description="Baseline labels to show as additional scatter panels.",
+    )
+    season_split: str = Field(
+        default="jja-novdec",
+        description="Named season split (currently 'jja-novdec': JJA vs Nov–Dec).",
+    )
+    min_truth_mm: float = Field(
+        default=2.0,
+        description=(
+            "Wet-case filter: keep an init only if summed truth precipitation over "
+            "the aggregated lead times is at least this many mm."
+        ),
+    )
+    annotate: Dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Optional {init_time: label} annotations on the candidate panel, e.g. "
+            "{'202512020600': 'Dec 02'}."
+        ),
+    )
+
+    @field_validator("param")
+    @classmethod
+    def validate_param_is_precip(cls, v: str) -> str:
+        if not v.startswith("TOT_PREC"):
+            raise ValueError(
+                "publication.sal_scatter.param must be a precipitation parameter "
+                f"starting with 'TOT_PREC'; got {v!r}."
+            )
+        return v
+
+    model_config = {"extra": "forbid"}
+
+
+class PublicationCaseSnapshotsConfig(BaseModel):
+    """Configuration for the publication case-snapshot map figure.
+
+    Renders precipitation maps (candidate forecast vs gridded truth) for a small
+    set of hand-picked cases at one lead time, with the case's SAL values
+    annotated. Requires a gridded (zarr) truth source and the matching SAL scores
+    (``TOT_PREC{accumulation}`` at ``leadtime``) enabled under ``experiment.sal``.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate the publication case-snapshot figure.",
+    )
+    cases: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Initialisation times (YYYYMMDDHHMM) to show, one row each; each must "
+            "be one of the configured `dates`."
+        ),
+    )
+    param: str = Field(
+        default="TOT_PREC",
+        description="Precipitation parameter to map.",
+    )
+    leadtime: int = Field(
+        default=12,
+        description="Forecast lead time (hours) shown for every case.",
+    )
+    accumulation: int = Field(
+        default=6,
+        description="Accumulation window (hours) for the mapped precipitation field.",
+    )
+    domain: str = Field(
+        default="centraleurope",
+        description="Named plotting domain.",
+    )
+
+    @field_validator("cases")
+    @classmethod
+    def validate_case_format(cls, v: List[str]) -> List[str]:
+        bad = [c for c in v if not (len(c) == 12 and c.isdigit())]
+        if bad:
+            raise ValueError(
+                "publication.case_snapshots.cases entries must be 12-digit "
+                f"YYYYMMDDHHMM strings; invalid: {bad}."
+            )
+        return v
+
+    model_config = {"extra": "forbid"}
+
+
 class PublicationConfig(BaseModel):
     """Configuration for the publication workflow."""
 
@@ -560,6 +675,16 @@ class PublicationConfig(BaseModel):
         default=None,
         description="Publication scoremap figure settings (omit to skip). "
         "Requires a gridded (zarr) truth source.",
+    )
+    sal_scatter: Optional[PublicationSalScatterConfig] = Field(
+        default=None,
+        description="Publication SAL scatter figure settings (omit to skip). "
+        "Requires a gridded (zarr) truth source and experiment.sal enabled.",
+    )
+    case_snapshots: Optional[PublicationCaseSnapshotsConfig] = Field(
+        default=None,
+        description="Publication case-snapshot map figure settings (omit to skip). "
+        "Requires a gridded (zarr) truth source and experiment.sal enabled.",
     )
 
     model_config = {"extra": "forbid"}
@@ -961,6 +1086,85 @@ class ConfigModel(BaseModel):
                         f"publication.scoremaps leadtime {leadtime}h is not produced by "
                         f"baseline {sm.baseline_label!r} (steps '{base_steps}')."
                     )
+
+        def _require_gridded_truth(figure: str) -> None:
+            if self.truth is None or "jretrieve" in str(self.truth.root):
+                truth_label = self.truth.label if self.truth else "<none>"
+                raise ValueError(
+                    f"publication.{figure} requires a gridded (zarr) truth source; "
+                    f"configured truth {truth_label!r} is jretrieve/obs."
+                )
+
+        sal_cfg = self.experiment.sal
+
+        # SAL scatter: gridded truth + matching per-init SAL scores + known baselines.
+        ss = pub.sal_scatter
+        if ss is not None and ss.enabled:
+            _require_gridded_truth("sal_scatter")
+            if sal_cfg is None or not sal_cfg.enabled:
+                raise ValueError(
+                    "publication.sal_scatter requires experiment.sal.enabled: true "
+                    "(it plots the per-init SAL scores)."
+                )
+            if ss.param not in sal_cfg.params:
+                raise ValueError(
+                    f"publication.sal_scatter.param {ss.param!r} is not in "
+                    f"experiment.sal.params {sal_cfg.params}."
+                )
+            missing = sorted(set(ss.leadtimes or sal_cfg.leadtimes) - set(sal_cfg.leadtimes))
+            if missing:
+                raise ValueError(
+                    f"publication.sal_scatter.leadtimes {missing} are not in "
+                    f"experiment.sal.leadtimes {sal_cfg.leadtimes}."
+                )
+            for label in ss.baselines:
+                if label not in baseline_steps:
+                    raise ValueError(
+                        f"publication.sal_scatter.baselines contains {label!r}, not a "
+                        f"configured baseline. Available: {list(baseline_steps)}."
+                    )
+
+        # Case snapshots: gridded truth, cases in `dates`, producible lead time, and
+        # the annotated SAL scores (TOT_PREC{accumulation} @ leadtime) available.
+        cs = pub.case_snapshots
+        if cs is not None and cs.enabled:
+            _require_gridded_truth("case_snapshots")
+            if not cs.cases:
+                raise ValueError(
+                    "publication.case_snapshots.cases must list at least one "
+                    "initialisation time."
+                )
+            valid_init = self._enumerated_init_times()
+            outside = [c for c in cs.cases if c not in valid_init]
+            if outside:
+                raise ValueError(
+                    f"publication.case_snapshots.cases {outside} are not in the "
+                    f"configured initialisation times (check `dates`)."
+                )
+            for steps in candidate_steps:
+                if not leadtime_producible(steps, cs.leadtime):
+                    raise ValueError(
+                        f"publication.case_snapshots.leadtime {cs.leadtime}h is not "
+                        f"produced by candidate run with steps '{steps}'."
+                    )
+            if sal_cfg is None or not sal_cfg.enabled:
+                raise ValueError(
+                    "publication.case_snapshots requires experiment.sal.enabled: true "
+                    "(it annotates the maps with SAL scores)."
+                )
+            sal_param = f"TOT_PREC{cs.accumulation}"
+            if sal_param not in sal_cfg.params:
+                raise ValueError(
+                    f"publication.case_snapshots needs SAL scores for {sal_param!r} "
+                    f"(accumulation={cs.accumulation}h), not in experiment.sal.params "
+                    f"{sal_cfg.params}."
+                )
+            if cs.leadtime not in sal_cfg.leadtimes:
+                raise ValueError(
+                    f"publication.case_snapshots.leadtime {cs.leadtime}h is not in "
+                    f"experiment.sal.leadtimes {sal_cfg.leadtimes} (needed for the SAL "
+                    f"annotation)."
+                )
         return self
 
     model_config = {
