@@ -320,6 +320,20 @@ rule publication_all:
                 "enabled", False
             )
             else []
+        )
+        + (
+            [rules.publication_sal_scatter.output]
+            if ((config.get("publication") or {}).get("sal_scatter") or {}).get(
+                "enabled", False
+            )
+            else []
+        )
+        + (
+            [rules.publication_case_snapshots.output]
+            if ((config.get("publication") or {}).get("case_snapshots") or {}).get(
+                "enabled", False
+            )
+            else []
         ),
 
 

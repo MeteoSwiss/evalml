@@ -39,6 +39,7 @@ changes — without re-running on a no-op file touch.
             reftimes=REFTIMES,
             output_root=str(OUT_ROOT),
             publication_cfg=config.get("publication", {}),
+            experiment_cfg=config.get("experiment", {}),
             master_hash=params.master_hash,
         )
         write_manifest(output[0], manifest)
@@ -184,6 +185,129 @@ rule publication_scoremaps:
     shell:
         """
         python -m evalml.publication scoremaps \
+            --manifest {input.manifest} \
+            --output {output} >{log} 2>&1
+        """
+
+
+def _pub_sal_scatter_cfg():
+    return (config.get("publication", {}) or {}).get("sal_scatter") or {}
+
+
+def _pub_sal_leadtimes(cfg):
+    """Lead times (hours) aggregated in the scatter: publication.sal_scatter.leadtimes
+    when set, otherwise experiment.sal.leadtimes.
+    """
+    lts = cfg.get("leadtimes")
+    if lts is not None:
+        return [int(s) for s in lts]
+    return list(
+        config.get("experiment", {})
+        .get("sal", {})
+        .get("leadtimes", [6, 12, 18, 24, 30])
+    )
+
+
+def _pub_sal_scatter_inputs(wc):
+    """Per-init SAL CSVs for the candidate and the scatter baselines (DAG dependency).
+
+    Built from the in-memory globals with the same template the CLI resolves from
+    the manifest, so the declared inputs always match what the CLI plots.
+    """
+    cfg = _pub_sal_scatter_cfg()
+    param = cfg.get("param", "TOT_PREC6")
+    leadtimes = _pub_sal_leadtimes(cfg)
+    baselines = cfg.get("baselines", ["ICON-CH1-CTRL", "ICON-CH2-CTRL"])
+    cand_id = _pub_candidate_run_id()
+    files = [
+        str(OUT_ROOT / f"data/runs/{cand_id}/sal/{param}_{lt}_{TRUTH_HASH}.csv")
+        for lt in leadtimes
+    ]
+    for label in baselines:
+        base_id = resolve_baseline_id(label)
+        files += [
+            str(
+                OUT_ROOT / f"data/baselines/{base_id}/sal/{param}_{lt}_{TRUTH_HASH}.csv"
+            )
+            for lt in leadtimes
+        ]
+    return files
+
+
+rule publication_sal_scatter:
+    input:
+        _pub_sal_scatter_inputs,
+        "workflow/scripts/publication_sal_scatter.py",
+        "workflow/scripts/publication.mplstyle",
+        manifest=rules.publication_manifest.output,
+    output:
+        report(
+            directory(OUT_ROOT / f"figures/{TRUTH_SLUG}/sal_scatter"),
+            htmlindex="publication_sal_scatter.html",
+        ),
+    log:
+        OUT_ROOT / "logs/figures/publication_sal_scatter.log",
+    localrule: True
+    shell:
+        """
+        python -m evalml.publication sal-scatter \
+            --manifest {input.manifest} \
+            --output {output} >{log} 2>&1
+        """
+
+
+def _pub_case_snapshots_cfg():
+    return (config.get("publication", {}) or {}).get("case_snapshots") or {}
+
+
+def _pub_case_snapshots_inputs(wc):
+    """DAG dependencies for the case-snapshot maps.
+
+    Depends on the candidate's aggregated verification file (forces inference for
+    every reftime — including the cases — like the meteogram) and on the SAL CSV
+    the annotation reads. The candidate GRIB directories are resolved from the
+    manifest by the CLI.
+    """
+    cfg = _pub_case_snapshots_cfg()
+    accumulation = int(cfg.get("accumulation", 6))
+    leadtime = int(cfg.get("leadtime", 12))
+    sal_param = f"TOT_PREC{accumulation}"
+    cand_id = _pub_candidate_run_id()
+    return {
+        "verif": str(
+            OUT_ROOT / f"data/runs/{cand_id}/verif_aggregated_{TRUTH_HASH}.nc"
+        ),
+        "sal": str(
+            OUT_ROOT
+            / f"data/runs/{cand_id}/sal/{sal_param}_{leadtime}_{TRUTH_HASH}.csv"
+        ),
+    }
+
+
+rule publication_case_snapshots:
+    input:
+        unpack(_pub_case_snapshots_inputs),
+        "workflow/scripts/publication_case_snapshots.py",
+        "workflow/scripts/publication_style.py",
+        "workflow/scripts/publication.mplstyle",
+        manifest=rules.publication_manifest.output,
+    output:
+        report(
+            directory(OUT_ROOT / f"figures/{TRUTH_SLUG}/case_snapshots"),
+            htmlindex="publication_case_snapshots.html",
+        ),
+    log:
+        OUT_ROOT / "logs/figures/publication_case_snapshots.log",
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=8,
+        mem_mb=32000,
+        runtime="60m",
+    shell:
+        """
+        set -euo pipefail
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        python -m evalml.publication case-snapshots \
             --manifest {input.manifest} \
             --output {output} >{log} 2>&1
         """
