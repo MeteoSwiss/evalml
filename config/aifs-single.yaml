@@ -22,9 +22,10 @@ runs:
         - anemoi-models==0.5.0
         - https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiFALSE-cp312-cp312-linux_x86_64.whl
       disable_local_eccodes_definitions: true
+
 truth:
-  label: KENDA-CH1
-  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+  label: ERA5-o96
+  root: /store_new/mch/msopr/ml/datasets/aifs-ea-an-oper-0001-mars-o96-1979-2024-1h-v3-with-era51.zarr
 
 lapse_rate_correction: false
 
@@ -33,7 +34,7 @@ experiment:
     - T_2M
     - TD_2M
     - SP_10M
-    - TOT_PREC6
+    - TOT_PREC
   dashboard:
     stratification:
       # - region

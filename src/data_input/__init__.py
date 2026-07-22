@@ -35,7 +35,7 @@ _IFS_TO_ICON = {
     # added there, this needs the same cumulative-since-start handling tp
     # gets, or verification/plots will silently be wrong.
     "ssrd": "SSRD",
-    "z": "FSI",
+    "z": "FIS",
 }
 _ICON_TO_IFS = {v: k for k, v in _IFS_TO_ICON.items()}
 
