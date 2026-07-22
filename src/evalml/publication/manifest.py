@@ -18,7 +18,7 @@ import os
 import re
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Publication outputs (manifest + figures) are namespaced by the truth label so
 # station-based and analysis-based runs don't overwrite each other:
@@ -45,8 +45,10 @@ PATH_TEMPLATES = {
     "run_verif": "data/runs/{run_id}/verif_aggregated_{truth_hash}.nc",
     "run_grib": "data/runs/{run_id}/{init_time}/grib",
     "run_scoremap": "data/runs/{run_id}/scoremaps/{param}_{leadtime}_{truth_hash}.nc",
+    "run_sal": "data/runs/{run_id}/sal/{param}_{leadtime}_{truth_hash}.csv",
     "baseline_verif": "data/baselines/{baseline_id}/verif_aggregated_{truth_hash}.nc",
     "baseline_scoremap": "data/baselines/{baseline_id}/scoremaps/{param}_{leadtime}_{truth_hash}.nc",
+    "baseline_sal": "data/baselines/{baseline_id}/sal/{param}_{leadtime}_{truth_hash}.csv",
 }
 
 
@@ -70,14 +72,15 @@ def build_manifest(
     output_root: str,
     publication_cfg: dict | None,
     master_hash: str,
+    experiment_cfg: dict | None = None,
     generated_at: str | None = None,
 ) -> dict:
     """Assemble the manifest dict from the in-memory workflow globals.
 
     Parameters mirror the globals defined in ``workflow/rules/common.smk``:
     ``RUN_CONFIGS``, ``BASELINE_CONFIGS``, ``config["truth"]``, ``TRUTH_HASH``,
-    ``REFTIMES`` (list of datetimes), ``str(OUT_ROOT)``, ``config["publication"]``
-    and ``master_hash()``.
+    ``REFTIMES`` (list of datetimes), ``str(OUT_ROOT)``, ``config["publication"]``,
+    ``config["experiment"]`` and ``master_hash()``.
     """
     output_root = str(output_root)
     truth_root = (truth_cfg or {}).get("root", "")
@@ -109,6 +112,15 @@ def build_manifest(
                     "scoremap_template": _join(
                         output_root,
                         PATH_TEMPLATES["baseline_scoremap"].format(
+                            baseline_id=baseline_id,
+                            truth_hash=truth_hash,
+                            param="{param}",
+                            leadtime="{leadtime}",
+                        ),
+                    ),
+                    "sal_template": _join(
+                        output_root,
+                        PATH_TEMPLATES["baseline_sal"].format(
                             baseline_id=baseline_id,
                             truth_hash=truth_hash,
                             param="{param}",
@@ -154,6 +166,15 @@ def build_manifest(
                             leadtime="{leadtime}",
                         ),
                     ),
+                    "sal_template": _join(
+                        output_root,
+                        PATH_TEMPLATES["run_sal"].format(
+                            run_id=run_id,
+                            truth_hash=truth_hash,
+                            param="{param}",
+                            leadtime="{leadtime}",
+                        ),
+                    ),
                 },
             }
         )
@@ -178,6 +199,9 @@ def build_manifest(
         "participants": participants,
         "path_templates": PATH_TEMPLATES,
         "publication": publication_cfg or {},
+        # SAL verification settings the figures need to resolve defaults (the
+        # standalone CLI has only the manifest, not the experiment config).
+        "experiment_sal": (experiment_cfg or {}).get("sal") or {},
     }
     if generated_at is not None:
         manifest["generated_at"] = generated_at

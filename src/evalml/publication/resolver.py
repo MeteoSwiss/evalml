@@ -75,6 +75,11 @@ class Manifest:
     def publication(self) -> dict:
         return self._data.get("publication", {})
 
+    @property
+    def experiment_sal(self) -> dict:
+        """SAL verification settings (params/leadtimes) carried from the config."""
+        return self._data.get("experiment_sal", {})
+
     # -- participant queries ---------------------------------------------
     def participants(self, role: str | None = None) -> list[Participant]:
         if role is None:
@@ -146,6 +151,14 @@ class Manifest:
             )
         return template.format(param=param, leadtime=leadtime)
 
+    def sal_path(self, participant: Participant, param: str, leadtime: int) -> str:
+        template = participant.paths.get("sal_template")
+        if template is None:
+            raise ResolutionError(
+                f"Participant {participant.label!r} has no SAL template."
+            )
+        return template.format(param=param, leadtime=leadtime)
+
     def meteogram_baseline_specs(self) -> str:
         """Rebuild the ``root|steps|member|label;...`` spec for the meteogram overlay.
 
@@ -207,6 +220,45 @@ class Manifest:
                         f"scoremaps leadtime {leadtime}h is not produced by "
                         f"{p.label!r} (steps '{p.steps}')."
                     )
+            return
+
+        if figure == "sal_scatter":
+            if self.truth.get("type") != "zarr":
+                raise ResolutionError(
+                    f"sal_scatter requires a gridded (zarr) truth; manifest truth "
+                    f"{self.truth.get('label')!r} is {self.truth.get('type')}."
+                )
+            cand = self.get_candidate(opts.get("candidate"))
+            baselines = [self.resolve_baseline(b) for b in opts.get("baselines", [])]
+            leadtimes = [int(lt) for lt in opts.get("leadtimes") or []]
+            for p in [cand, *baselines]:
+                for lt in leadtimes:
+                    if p.steps and not leadtime_producible(p.steps, lt):
+                        raise ResolutionError(
+                            f"sal_scatter leadtime {lt}h is not produced by "
+                            f"{p.label!r} (steps '{p.steps}')."
+                        )
+            return
+
+        if figure == "case_snapshots":
+            if self.truth.get("type") != "zarr":
+                raise ResolutionError(
+                    f"case_snapshots requires a gridded (zarr) truth; manifest truth "
+                    f"{self.truth.get('label')!r} is {self.truth.get('type')}."
+                )
+            cand = self.get_candidate(opts.get("candidate"))
+            leadtime = int(opts["leadtime"])
+            if cand.steps and not leadtime_producible(cand.steps, leadtime):
+                raise ResolutionError(
+                    f"case_snapshots leadtime {leadtime}h is not produced by "
+                    f"{cand.label!r} (steps '{cand.steps}')."
+                )
+            outside = [c for c in opts.get("cases", []) if c not in self.init_times]
+            if outside:
+                raise ResolutionError(
+                    f"case_snapshots cases {outside} are not in the manifest's "
+                    f"initialisation times."
+                )
             return
 
         raise ResolutionError(f"Unknown figure type {figure!r}.")
