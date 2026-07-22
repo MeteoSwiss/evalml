@@ -1,4 +1,6 @@
-input: test
+input:
+  test:
+    use_original_paths: true
 
 allow_nans: true
 

@@ -18,16 +18,15 @@ runs:
       config: resources/inference/configs/aifs-single-forecaster.yaml
       extra_requirements:
         - torch-geometric==2.4.0
-        - anemoi-inference==0.6.3
+        - anemoi-inference==0.11.1
         - anemoi-models==0.5.0
         - https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiFALSE-cp312-cp312-linux_x86_64.whl
       disable_local_eccodes_definitions: true
-      inference_resources:
-        slurm_partition: preemptible
-        gpus: 1
 truth:
   label: KENDA-CH1
   root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
+lapse_rate_correction: false
 
 experiment:
   params:
