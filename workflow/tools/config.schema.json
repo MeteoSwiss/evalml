@@ -306,6 +306,18 @@
           ],
           "default": null,
           "description": "Score map plot configuration. Omit or set enabled: false to disable."
+        },
+        "sal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SalConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "SAL precipitation verification. Omit or set enabled: false to disable."
         }
       },
       "required": [
@@ -709,6 +721,397 @@
       "title": "Profile",
       "type": "object"
     },
+    "PublicationCaseSnapshotsConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for the publication case-snapshot map figure.\n\nRenders precipitation maps (candidate forecast vs gridded truth) for a small\nset of hand-picked cases at one lead time, with the case's SAL values\nannotated. Requires a gridded (zarr) truth source and the matching SAL scores\n(``TOT_PREC{accumulation}`` at ``leadtime``) enabled under ``experiment.sal``.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate the publication case-snapshot figure.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "cases": {
+          "description": "Initialisation times (YYYYMMDDHHMM) to show, one row each; each must be one of the configured `dates`.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Cases",
+          "type": "array"
+        },
+        "param": {
+          "default": "TOT_PREC",
+          "description": "Precipitation parameter to map.",
+          "title": "Param",
+          "type": "string"
+        },
+        "leadtime": {
+          "default": 12,
+          "description": "Forecast lead time (hours) shown for every case.",
+          "title": "Leadtime",
+          "type": "integer"
+        },
+        "accumulation": {
+          "default": 6,
+          "description": "Accumulation window (hours) for the mapped precipitation field.",
+          "title": "Accumulation",
+          "type": "integer"
+        },
+        "domain": {
+          "default": "centraleurope",
+          "description": "Named plotting domain.",
+          "title": "Domain",
+          "type": "string"
+        }
+      },
+      "title": "PublicationCaseSnapshotsConfig",
+      "type": "object"
+    },
+    "PublicationConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for the publication workflow.",
+      "properties": {
+        "leadtimes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicationLeadtimesConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Lead-time score figure settings (omit to skip)."
+        },
+        "meteogram": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicationMeteogramConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Publication meteogram case selection (omit to skip)."
+        },
+        "scoremaps": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicationScoremapsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Publication scoremap figure settings (omit to skip). Requires a gridded (zarr) truth source."
+        },
+        "sal_scatter": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicationSalScatterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Publication SAL scatter figure settings (omit to skip). Requires a gridded (zarr) truth source and experiment.sal enabled."
+        },
+        "case_snapshots": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicationCaseSnapshotsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Publication case-snapshot map figure settings (omit to skip). Requires a gridded (zarr) truth source and experiment.sal enabled."
+        }
+      },
+      "title": "PublicationConfig",
+      "type": "object"
+    },
+    "PublicationLeadtimesConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for the publication lead-time figure.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate the lead-time score figures.",
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "PublicationLeadtimesConfig",
+      "type": "object"
+    },
+    "PublicationMeteogramConfig": {
+      "additionalProperties": false,
+      "description": "Case selection for the publication meteogram figure.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate the publication meteogram figure.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "init_time": {
+          "description": "Initialisation time (YYYYMMDDHHMM) of the case to plot.",
+          "pattern": "^\\d{12}$",
+          "title": "Init Time",
+          "type": "string"
+        },
+        "station": {
+          "description": "PeakWeather station ID to plot (e.g. KLO, GVE, LUG).",
+          "minLength": 1,
+          "title": "Station",
+          "type": "string"
+        },
+        "params": {
+          "default": [
+            "T_2M",
+            "TOT_PREC",
+            "SP_10M",
+            "DD_10M"
+          ],
+          "description": "Display parameters (one panel each); SP_10M/DD_10M are derived.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Params",
+          "type": "array"
+        }
+      },
+      "required": [
+        "init_time",
+        "station"
+      ],
+      "title": "PublicationMeteogramConfig",
+      "type": "object"
+    },
+    "PublicationSalScatterConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for the publication SAL Structure\u2013Amplitude scatter figure.\n\nPlots per-init SAL (Structure vs Amplitude) for the candidate and the listed\nbaselines, one panel each, coloured by season, marker size = Location. It\nconsumes the per-init SAL CSVs written by the SAL verification, so the chosen\n`param` and `leadtimes` must be enabled under `experiment.sal`. Requires a\ngridded (zarr) truth source.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate the publication SAL scatter figure.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "param": {
+          "default": "TOT_PREC6",
+          "description": "Accumulated precipitation param to plot; must be one of experiment.sal.params.",
+          "title": "Param",
+          "type": "string"
+        },
+        "leadtimes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Lead times (hours) aggregated per init as a median. Each must be in experiment.sal.leadtimes. Defaults to experiment.sal.leadtimes.",
+          "title": "Leadtimes"
+        },
+        "baselines": {
+          "default": [
+            "ICON-CH1-CTRL",
+            "ICON-CH2-CTRL"
+          ],
+          "description": "Baseline labels to show as additional scatter panels.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Baselines",
+          "type": "array"
+        },
+        "season_split": {
+          "default": "jja-novdec",
+          "description": "Named season split (currently 'jja-novdec': JJA vs Nov\u2013Dec).",
+          "title": "Season Split",
+          "type": "string"
+        },
+        "min_truth_mm": {
+          "default": 2.0,
+          "description": "Wet-case filter: keep an init only if summed truth precipitation over the aggregated lead times is at least this many mm.",
+          "title": "Min Truth Mm",
+          "type": "number"
+        },
+        "annotate": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Optional {init_time: label} annotations on the candidate panel, e.g. {'202512020600': 'Dec 02'}.",
+          "title": "Annotate",
+          "type": "object"
+        }
+      },
+      "title": "PublicationSalScatterConfig",
+      "type": "object"
+    },
+    "PublicationScoremapsConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for the publication scoremap figures.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate the publication scoremap figures.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "steps": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Lead times in hours to produce one scoremap figure each. Defaults to experiment.scoremaps.leadtimes when omitted.",
+          "title": "Steps"
+        },
+        "params": {
+          "default": [
+            "T_2M",
+            "SP_10M"
+          ],
+          "description": "Parameters to show as rows in the scoremap panel.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "scores": {
+          "default": [
+            "MSE_SKILL",
+            "BIAS_CONTRIB"
+          ],
+          "description": "Score columns to show in the scoremap panel.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Scores",
+          "type": "array"
+        },
+        "baseline_label": {
+          "default": "ICON-CH1-CTRL",
+          "description": "Label of the baseline run to compare against.",
+          "title": "Baseline Label",
+          "type": "string"
+        },
+        "season": {
+          "default": "all",
+          "description": "Season filter passed to the scoremap script.",
+          "title": "Season",
+          "type": "string"
+        },
+        "region": {
+          "default": "switzerland",
+          "description": "Geographic region for the scoremap plot.",
+          "title": "Region",
+          "type": "string"
+        }
+      },
+      "title": "PublicationScoremapsConfig",
+      "type": "object"
+    },
+    "SalConfig": {
+      "additionalProperties": false,
+      "description": "Parameters controlling the SAL precipitation verification computation.\n\nSAL (Structure\u2013Amplitude\u2013Location; Wernli et al. 2008) is a per-init,\nobject-based precipitation score. When enabled it is computed for every run\nand baseline over the requested params and lead times, and written to\nper-participant CSV files (one per param/lead time, one row per\ninitialisation). This is a compute-only capability; plotting the results\nlives in the publication-figures workflow.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to compute SAL scores (requires pysteps + scikit-image).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "params": {
+          "default": [
+            "TOT_PREC6"
+          ],
+          "description": "Accumulated precipitation params to score, the accumulation period encoded in the name (e.g. TOT_PREC1, TOT_PREC6, TOT_PREC24).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "leadtimes": {
+          "default": [
+            6,
+            12,
+            18,
+            24,
+            30
+          ],
+          "description": "List of lead times (hours) to score.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Leadtimes",
+          "type": "array"
+        },
+        "thr_factor": {
+          "default": 0.067,
+          "description": "SAL object-detection threshold factor (Wernli et al. 2008, eq. 1); the detection contour is thr_factor * the thr_quantile-percentile of the wet precipitation. 0.067 is the pysteps default.",
+          "title": "Thr Factor",
+          "type": "number"
+        },
+        "thr_quantile": {
+          "default": 0.95,
+          "description": "Wet quantile (0\u20131) defining the SAL detection threshold.",
+          "title": "Thr Quantile",
+          "type": "number"
+        },
+        "grid_extent": {
+          "default": [
+            -1.0,
+            18.0,
+            42.0,
+            50.5
+          ],
+          "description": "SAL raster extent [lon_min, lon_max, lat_min, lat_max] in degrees (PlateCarree). Both forecast and truth are remapped onto this raster.",
+          "items": {
+            "type": "number"
+          },
+          "title": "Grid Extent",
+          "type": "array"
+        },
+        "grid_step_lat": {
+          "default": 0.01,
+          "description": "SAL raster latitude spacing in degrees.",
+          "title": "Grid Step Lat",
+          "type": "number"
+        },
+        "grid_step_lon": {
+          "default": 0.0145,
+          "description": "SAL raster longitude spacing in degrees. Choose grid_step_lat and grid_step_lon so pixels are metrically near-square at the domain's central latitude (pysteps' Location term assumes square pixels).",
+          "title": "Grid Step Lon",
+          "type": "number"
+        }
+      },
+      "title": "SalConfig",
+      "type": "object"
+    },
     "ScoreMapsConfig": {
       "additionalProperties": false,
       "description": "Parameters controlling which score map plots are produced.",
@@ -1081,6 +1484,10 @@
     "showcase": {
       "$ref": "#/$defs/ShowcaseConfig",
       "description": "Settings for the showcase workflow."
+    },
+    "publication": {
+      "$ref": "#/$defs/PublicationConfig",
+      "description": "Settings for the publication workflow."
     },
     "mec": {
       "anyOf": [

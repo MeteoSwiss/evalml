@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
 
@@ -261,6 +262,102 @@ class ScoreMapsConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class SalConfig(BaseModel):
+    """Parameters controlling the SAL precipitation verification computation.
+
+    SAL (Structure–Amplitude–Location; Wernli et al. 2008) is a per-init,
+    object-based precipitation score. When enabled it is computed for every run
+    and baseline over the requested params and lead times, and written to
+    per-participant CSV files (one per param/lead time, one row per
+    initialisation). This is a compute-only capability; plotting the results
+    lives in the publication-figures workflow.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to compute SAL scores (requires pysteps + scikit-image).",
+    )
+    params: List[str] = Field(
+        default=["TOT_PREC6"],
+        description=(
+            "Accumulated precipitation params to score, the accumulation period "
+            "encoded in the name (e.g. TOT_PREC1, TOT_PREC6, TOT_PREC24)."
+        ),
+    )
+    leadtimes: List[int] = Field(
+        default=[6, 12, 18, 24, 30],
+        description="List of lead times (hours) to score.",
+    )
+    thr_factor: float = Field(
+        default=0.067,
+        description=(
+            "SAL object-detection threshold factor (Wernli et al. 2008, eq. 1); "
+            "the detection contour is thr_factor * the thr_quantile-percentile of "
+            "the wet precipitation. 0.067 is the pysteps default."
+        ),
+    )
+    thr_quantile: float = Field(
+        default=0.95,
+        description="Wet quantile (0–1) defining the SAL detection threshold.",
+    )
+    grid_extent: List[float] = Field(
+        default=[-1.0, 18.0, 42.0, 50.5],
+        description=(
+            "SAL raster extent [lon_min, lon_max, lat_min, lat_max] in degrees "
+            "(PlateCarree). Both forecast and truth are remapped onto this raster."
+        ),
+    )
+    grid_step_lat: float = Field(
+        default=0.01,
+        description="SAL raster latitude spacing in degrees.",
+    )
+    grid_step_lon: float = Field(
+        default=0.0145,
+        description=(
+            "SAL raster longitude spacing in degrees. Choose grid_step_lat and "
+            "grid_step_lon so pixels are metrically near-square at the domain's "
+            "central latitude (pysteps' Location term assumes square pixels)."
+        ),
+    )
+
+    @field_validator("params")
+    @classmethod
+    def validate_params_are_precip(cls, v: List[str]) -> List[str]:
+        bad = [p for p in v if not p.startswith("TOT_PREC")]
+        if bad:
+            raise ValueError(
+                "sal.params must be precipitation parameters starting with "
+                "'TOT_PREC' (e.g. TOT_PREC1, TOT_PREC6, or bare TOT_PREC for "
+                "cumulative-from-start); SAL is defined for precipitation only. "
+                f"Invalid: {bad}."
+            )
+        return v
+
+    @field_validator("grid_extent")
+    @classmethod
+    def validate_grid_extent(cls, v: List[float]) -> List[float]:
+        if len(v) != 4:
+            raise ValueError(
+                "sal.grid_extent must be [lon_min, lon_max, lat_min, lat_max]."
+            )
+        if any(x != x or x in (float("inf"), float("-inf")) for x in v):
+            raise ValueError(f"sal.grid_extent values must be finite; got {v}.")
+        lon_min, lon_max, lat_min, lat_max = v
+        if not -90.0 <= lat_min < lat_max <= 90.0:
+            raise ValueError(
+                f"sal.grid_extent latitudes must satisfy -90 <= lat_min < "
+                f"lat_max <= 90; got lat_min={lat_min}, lat_max={lat_max}."
+            )
+        if not -180.0 <= lon_min < lon_max <= 180.0:
+            raise ValueError(
+                f"sal.grid_extent longitudes must satisfy -180 <= lon_min < "
+                f"lon_max <= 180; got lon_min={lon_min}, lon_max={lon_max}."
+            )
+        return v
+
+    model_config = {"extra": "forbid"}
+
+
 class DomainConfig(BaseModel):
     """A custom map domain defined by name, extent, and projection."""
 
@@ -373,6 +470,226 @@ class ShowcaseConfig(BaseModel):
     )
 
 
+class PublicationLeadtimesConfig(BaseModel):
+    """Configuration for the publication lead-time figure."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate the lead-time score figures.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class PublicationMeteogramConfig(BaseModel):
+    """Case selection for the publication meteogram figure."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate the publication meteogram figure.",
+    )
+    init_time: str = Field(
+        ...,
+        pattern=r"^\d{12}$",
+        description="Initialisation time (YYYYMMDDHHMM) of the case to plot.",
+    )
+    station: str = Field(
+        ...,
+        min_length=1,
+        description="PeakWeather station ID to plot (e.g. KLO, GVE, LUG).",
+    )
+    params: List[str] = Field(
+        default=["T_2M", "TOT_PREC", "SP_10M", "DD_10M"],
+        min_length=1,
+        description="Display parameters (one panel each); SP_10M/DD_10M are derived.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class PublicationScoremapsConfig(BaseModel):
+    """Configuration for the publication scoremap figures."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate the publication scoremap figures.",
+    )
+    steps: Optional[List[int]] = Field(
+        default=None,
+        description=(
+            "Lead times in hours to produce one scoremap figure each. "
+            "Defaults to experiment.scoremaps.leadtimes when omitted."
+        ),
+    )
+    params: List[str] = Field(
+        default=["T_2M", "SP_10M"],
+        description="Parameters to show as rows in the scoremap panel.",
+    )
+    scores: List[str] = Field(
+        default=["MSE_SKILL", "BIAS_CONTRIB"],
+        description="Score columns to show in the scoremap panel.",
+    )
+    baseline_label: str = Field(
+        default="ICON-CH1-CTRL",
+        description="Label of the baseline run to compare against.",
+    )
+    season: str = Field(
+        default="all",
+        description="Season filter passed to the scoremap script.",
+    )
+    region: str = Field(
+        default="switzerland",
+        description="Geographic region for the scoremap plot.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class PublicationSalScatterConfig(BaseModel):
+    """Configuration for the publication SAL Structure–Amplitude scatter figure.
+
+    Plots per-init SAL (Structure vs Amplitude) for the candidate and the listed
+    baselines, one panel each, coloured by season, marker size = Location. It
+    consumes the per-init SAL CSVs written by the SAL verification, so the chosen
+    `param` and `leadtimes` must be enabled under `experiment.sal`. Requires a
+    gridded (zarr) truth source.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate the publication SAL scatter figure.",
+    )
+    param: str = Field(
+        default="TOT_PREC6",
+        description=(
+            "Accumulated precipitation param to plot; must be one of "
+            "experiment.sal.params."
+        ),
+    )
+    leadtimes: Optional[List[int]] = Field(
+        default=None,
+        description=(
+            "Lead times (hours) aggregated per init as a median. Each must be in "
+            "experiment.sal.leadtimes. Defaults to experiment.sal.leadtimes."
+        ),
+    )
+    baselines: List[str] = Field(
+        default=["ICON-CH1-CTRL", "ICON-CH2-CTRL"],
+        description="Baseline labels to show as additional scatter panels.",
+    )
+    season_split: str = Field(
+        default="jja-novdec",
+        description="Named season split (currently 'jja-novdec': JJA vs Nov–Dec).",
+    )
+    min_truth_mm: float = Field(
+        default=2.0,
+        description=(
+            "Wet-case filter: keep an init only if summed truth precipitation over "
+            "the aggregated lead times is at least this many mm."
+        ),
+    )
+    annotate: Dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Optional {init_time: label} annotations on the candidate panel, e.g. "
+            "{'202512020600': 'Dec 02'}."
+        ),
+    )
+
+    @field_validator("param")
+    @classmethod
+    def validate_param_is_precip(cls, v: str) -> str:
+        if not v.startswith("TOT_PREC"):
+            raise ValueError(
+                "publication.sal_scatter.param must be a precipitation parameter "
+                f"starting with 'TOT_PREC'; got {v!r}."
+            )
+        return v
+
+    model_config = {"extra": "forbid"}
+
+
+class PublicationCaseSnapshotsConfig(BaseModel):
+    """Configuration for the publication case-snapshot map figure.
+
+    Renders precipitation maps (candidate forecast vs gridded truth) for a small
+    set of hand-picked cases at one lead time, with the case's SAL values
+    annotated. Requires a gridded (zarr) truth source and the matching SAL scores
+    (``TOT_PREC{accumulation}`` at ``leadtime``) enabled under ``experiment.sal``.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate the publication case-snapshot figure.",
+    )
+    cases: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Initialisation times (YYYYMMDDHHMM) to show, one row each; each must "
+            "be one of the configured `dates`."
+        ),
+    )
+    param: str = Field(
+        default="TOT_PREC",
+        description="Precipitation parameter to map.",
+    )
+    leadtime: int = Field(
+        default=12,
+        description="Forecast lead time (hours) shown for every case.",
+    )
+    accumulation: int = Field(
+        default=6,
+        description="Accumulation window (hours) for the mapped precipitation field.",
+    )
+    domain: str = Field(
+        default="centraleurope",
+        description="Named plotting domain.",
+    )
+
+    @field_validator("cases")
+    @classmethod
+    def validate_case_format(cls, v: List[str]) -> List[str]:
+        bad = [c for c in v if not (len(c) == 12 and c.isdigit())]
+        if bad:
+            raise ValueError(
+                "publication.case_snapshots.cases entries must be 12-digit "
+                f"YYYYMMDDHHMM strings; invalid: {bad}."
+            )
+        return v
+
+    model_config = {"extra": "forbid"}
+
+
+class PublicationConfig(BaseModel):
+    """Configuration for the publication workflow."""
+
+    leadtimes: Optional[PublicationLeadtimesConfig] = Field(
+        default=None,
+        description="Lead-time score figure settings (omit to skip).",
+    )
+    meteogram: Optional[PublicationMeteogramConfig] = Field(
+        default=None,
+        description="Publication meteogram case selection (omit to skip).",
+    )
+    scoremaps: Optional[PublicationScoremapsConfig] = Field(
+        default=None,
+        description="Publication scoremap figure settings (omit to skip). "
+        "Requires a gridded (zarr) truth source.",
+    )
+    sal_scatter: Optional[PublicationSalScatterConfig] = Field(
+        default=None,
+        description="Publication SAL scatter figure settings (omit to skip). "
+        "Requires a gridded (zarr) truth source and experiment.sal enabled.",
+    )
+    case_snapshots: Optional[PublicationCaseSnapshotsConfig] = Field(
+        default=None,
+        description="Publication case-snapshot map figure settings (omit to skip). "
+        "Requires a gridded (zarr) truth source and experiment.sal enabled.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class Locations(BaseModel):
     """Locations of data and services used in the workflow."""
 
@@ -430,6 +747,10 @@ class ExperimentConfig(BaseModel):
     scoremaps: Optional[ScoreMapsConfig] = Field(
         default=None,
         description="Score map plot configuration. Omit or set enabled: false to disable.",
+    )
+    sal: Optional[SalConfig] = Field(
+        default=None,
+        description="SAL precipitation verification. Omit or set enabled: false to disable.",
     )
 
     @field_validator("thresholds")
@@ -632,6 +953,10 @@ class ConfigModel(BaseModel):
         default_factory=ShowcaseConfig,
         description="Settings for the showcase workflow.",
     )
+    publication: PublicationConfig = Field(
+        default_factory=PublicationConfig,
+        description="Settings for the publication workflow.",
+    )
     mec: MecConfig | None = Field(
         None,
         description="Input observation paths for the MEC verification step. Required when running with --mec.",
@@ -641,21 +966,206 @@ class ConfigModel(BaseModel):
         description="Configuration for the FFV2 scoring pipeline. Required when running with --ffv2.",
     )
 
+    def _reject_unproducible_leadtimes(self, requested: List[int], label: str) -> None:
+        """Fail if any requested lead time is not produced by every participant.
+
+        `label` names the originating config block (e.g. "scoremaps", "sal")
+        and is used only to build the error message.
+        """
+        for item in self.runs:
+            steps = getattr(item, next(iter(type(item).model_fields))).steps
+            start, end, step = map(int, steps.split("/"))
+            producible = set(range(start, end + 1, step))
+            unsupported = set(requested) - producible
+            if unsupported:
+                raise ValueError(
+                    f"{label}.leadtimes contains {sorted(unsupported)} h which are not "
+                    f"produced by participant with steps '{steps}'."
+                )
+
     @model_validator(mode="after")
     def validate_scoremap_leadtimes(self) -> "ConfigModel":
         sm = self.experiment.scoremaps
-        if sm is None or not sm.enabled:
+        if sm is not None and sm.enabled:
+            self._reject_unproducible_leadtimes(sm.leadtimes, "scoremaps")
+        return self
+
+    @model_validator(mode="after")
+    def validate_sal_leadtimes(self) -> "ConfigModel":
+        sal = self.experiment.sal
+        if sal is not None and sal.enabled:
+            self._reject_unproducible_leadtimes(sal.leadtimes, "sal")
+        return self
+
+    def _enumerated_init_times(self) -> set[str]:
+        """All initialisation times as YYYYMMDDHHMM strings (post-blacklist)."""
+        fmt_in = "%Y-%m-%dT%H:%M"
+        fmt_out = "%Y%m%d%H%M"
+        if isinstance(self.dates, ExplicitDates):
+            return {
+                datetime.strptime(t, fmt_in).strftime(fmt_out) for t in self.dates.root
+            }
+        start = datetime.strptime(self.dates.start, fmt_in)
+        end = datetime.strptime(self.dates.end, fmt_in)
+        magnitude, unit = int(self.dates.frequency[:-1]), self.dates.frequency[-1]
+        freq = timedelta(days=magnitude) if unit == "d" else timedelta(hours=magnitude)
+        blacklist = {datetime.strptime(t, fmt_in) for t in self.dates.blacklist}
+        out: set[str] = set()
+        t = start
+        while t <= end:
+            if t not in blacklist:
+                out.add(t.strftime(fmt_out))
+            t += freq
+        return out
+
+    @model_validator(mode="after")
+    def validate_publication(self) -> "ConfigModel":
+        """Coherence checks for the publication workflow (only when enabled).
+
+        Catches config mistakes that would otherwise surface as cryptic Snakemake
+        graph-expansion errors: a meteogram case outside the date range, scoremaps
+        against a non-gridded truth, an unknown baseline label, or a lead time that
+        no participant produces.
+        """
+        from evalml.resolution import leadtime_producible
+
+        pub = self.publication
+        if pub is None:
             return self
-        requested = set(sm.leadtimes)
+
+        # Split runs into candidate runs (forecaster/temporal_downscaler) and baselines.
+        candidate_steps: list[str] = []
+        baseline_steps: dict[str, str] = {}
         for item in self.runs:
-            steps = getattr(item, next(iter(item.model_fields))).steps
-            start, end, step = map(int, steps.split("/"))
-            producible = set(range(start, end + 1, step))
-            unsupported = requested - producible
-            if unsupported:
+            field = next(iter(item.model_fields))
+            inner = getattr(item, field)
+            if field == "baseline":
+                baseline_steps[inner.label] = inner.steps
+            else:
+                candidate_steps.append(inner.steps)
+
+        # (c) meteogram init_time must be one of the configured initialisation times.
+        if pub.meteogram is not None and pub.meteogram.enabled:
+            valid_init = self._enumerated_init_times()
+            if pub.meteogram.init_time not in valid_init:
                 raise ValueError(
-                    f"scoremaps.leadtimes contains {sorted(unsupported)} h which are not "
-                    f"produced by participant with steps '{steps}'."
+                    f"publication.meteogram.init_time {pub.meteogram.init_time!r} is not "
+                    f"in the configured initialisation times (check `dates`)."
+                )
+
+        sm = pub.scoremaps
+        if sm is not None and sm.enabled:
+            # (a) scoremaps need a gridded (zarr) truth, not station/jretrieve obs.
+            if self.truth is None or "jretrieve" in str(self.truth.root):
+                truth_label = self.truth.label if self.truth else "<none>"
+                raise ValueError(
+                    f"publication.scoremaps requires a gridded (zarr) truth source; "
+                    f"configured truth {truth_label!r} is jretrieve/obs and has no "
+                    f"spatial scoremaps."
+                )
+            # (d) the named baseline must exist.
+            if sm.baseline_label not in baseline_steps:
+                raise ValueError(
+                    f"publication.scoremaps.baseline_label {sm.baseline_label!r} not found. "
+                    f"Available baseline labels: {list(baseline_steps)}."
+                )
+            # (b) each lead time must be produced by every candidate AND the baseline.
+            # Lead times come from scoremaps.steps, else experiment.scoremaps.leadtimes.
+            base_steps = baseline_steps[sm.baseline_label]
+            exp_sm = self.experiment.scoremaps
+            leadtimes = sm.steps or (exp_sm.leadtimes if exp_sm else None) or [24]
+            for leadtime in leadtimes:
+                for steps in candidate_steps:
+                    if not leadtime_producible(steps, leadtime):
+                        raise ValueError(
+                            f"publication.scoremaps leadtime {leadtime}h is not produced "
+                            f"by candidate run with steps '{steps}'."
+                        )
+                if not leadtime_producible(base_steps, leadtime):
+                    raise ValueError(
+                        f"publication.scoremaps leadtime {leadtime}h is not produced by "
+                        f"baseline {sm.baseline_label!r} (steps '{base_steps}')."
+                    )
+
+        def _require_gridded_truth(figure: str) -> None:
+            if self.truth is None or "jretrieve" in str(self.truth.root):
+                truth_label = self.truth.label if self.truth else "<none>"
+                raise ValueError(
+                    f"publication.{figure} requires a gridded (zarr) truth source; "
+                    f"configured truth {truth_label!r} is jretrieve/obs."
+                )
+
+        sal_cfg = self.experiment.sal
+
+        # SAL scatter: gridded truth + matching per-init SAL scores + known baselines.
+        ss = pub.sal_scatter
+        if ss is not None and ss.enabled:
+            _require_gridded_truth("sal_scatter")
+            if sal_cfg is None or not sal_cfg.enabled:
+                raise ValueError(
+                    "publication.sal_scatter requires experiment.sal.enabled: true "
+                    "(it plots the per-init SAL scores)."
+                )
+            if ss.param not in sal_cfg.params:
+                raise ValueError(
+                    f"publication.sal_scatter.param {ss.param!r} is not in "
+                    f"experiment.sal.params {sal_cfg.params}."
+                )
+            missing = sorted(
+                set(ss.leadtimes or sal_cfg.leadtimes) - set(sal_cfg.leadtimes)
+            )
+            if missing:
+                raise ValueError(
+                    f"publication.sal_scatter.leadtimes {missing} are not in "
+                    f"experiment.sal.leadtimes {sal_cfg.leadtimes}."
+                )
+            for label in ss.baselines:
+                if label not in baseline_steps:
+                    raise ValueError(
+                        f"publication.sal_scatter.baselines contains {label!r}, not a "
+                        f"configured baseline. Available: {list(baseline_steps)}."
+                    )
+
+        # Case snapshots: gridded truth, cases in `dates`, producible lead time, and
+        # the annotated SAL scores (TOT_PREC{accumulation} @ leadtime) available.
+        cs = pub.case_snapshots
+        if cs is not None and cs.enabled:
+            _require_gridded_truth("case_snapshots")
+            if not cs.cases:
+                raise ValueError(
+                    "publication.case_snapshots.cases must list at least one "
+                    "initialisation time."
+                )
+            valid_init = self._enumerated_init_times()
+            outside = [c for c in cs.cases if c not in valid_init]
+            if outside:
+                raise ValueError(
+                    f"publication.case_snapshots.cases {outside} are not in the "
+                    f"configured initialisation times (check `dates`)."
+                )
+            for steps in candidate_steps:
+                if not leadtime_producible(steps, cs.leadtime):
+                    raise ValueError(
+                        f"publication.case_snapshots.leadtime {cs.leadtime}h is not "
+                        f"produced by candidate run with steps '{steps}'."
+                    )
+            if sal_cfg is None or not sal_cfg.enabled:
+                raise ValueError(
+                    "publication.case_snapshots requires experiment.sal.enabled: true "
+                    "(it annotates the maps with SAL scores)."
+                )
+            sal_param = f"TOT_PREC{cs.accumulation}"
+            if sal_param not in sal_cfg.params:
+                raise ValueError(
+                    f"publication.case_snapshots needs SAL scores for {sal_param!r} "
+                    f"(accumulation={cs.accumulation}h), not in experiment.sal.params "
+                    f"{sal_cfg.params}."
+                )
+            if cs.leadtime not in sal_cfg.leadtimes:
+                raise ValueError(
+                    f"publication.case_snapshots.leadtime {cs.leadtime}h is not in "
+                    f"experiment.sal.leadtimes {sal_cfg.leadtimes} (needed for the SAL "
+                    f"annotation)."
                 )
         return self
 

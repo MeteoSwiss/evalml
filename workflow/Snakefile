@@ -19,6 +19,7 @@ include: "rules/inference.smk"
 include: "rules/verification.smk"
 include: "rules/report.smk"
 include: "rules/plot.smk"
+include: "rules/publication.smk"
 include: "rules/verif_obs.smk"
 
 
@@ -138,6 +139,7 @@ onerror:
 
 
 SCOREMAPS_CONFIGS = config.get("experiment", {}).get("scoremaps") or {}
+SAL_CONFIGS = config.get("experiment", {}).get("sal") or {}
 
 
 rule experiment_all:
@@ -196,6 +198,28 @@ rule experiment_all:
                 experiment=EXPERIMENT_NAME,
             )
             if SCOREMAPS_CONFIGS.get("enabled", False)
+            else []
+        ),
+        # SAL precipitation scores (compute-only: the NetCDFs themselves are the
+        # targets; plotting lives in the publication-figures workflow).
+        (
+            expand(
+                rules.verification_sal.output,
+                run_id=list(CANDIDATES),
+                param=SAL_CONFIGS["params"],
+                leadtime=SAL_CONFIGS["leadtimes"],
+            )
+            if SAL_CONFIGS.get("enabled", False)
+            else []
+        ),
+        (
+            expand(
+                rules.verification_sal_baseline.output,
+                baseline_id=list(BASELINES),
+                param=SAL_CONFIGS["params"],
+                leadtime=SAL_CONFIGS["leadtimes"],
+            )
+            if SAL_CONFIGS.get("enabled", False)
             else []
         ),
 
@@ -270,6 +294,46 @@ rule verification_metrics_plot_all:
         expand(
             rules.verification_metrics_plot.output,
             experiment=EXPERIMENT_NAME,
+        ),
+
+
+rule publication_all:
+    """Target rule for publication figures workflow."""
+    input:
+        (
+            [rules.publication_figures.output]
+            if ((config.get("publication") or {}).get("leadtimes") or {}).get(
+                "enabled", False
+            )
+            else []
+        )
+        + (
+            [rules.publication_scoremaps.output]
+            if ((config.get("publication") or {}).get("scoremaps") or {}).get(
+                "enabled", False
+            )
+            else []
+        )
+        + (
+            [rules.publication_meteogram.output]
+            if ((config.get("publication") or {}).get("meteogram") or {}).get(
+                "enabled", False
+            )
+            else []
+        )
+        + (
+            [rules.publication_sal_scatter.output]
+            if ((config.get("publication") or {}).get("sal_scatter") or {}).get(
+                "enabled", False
+            )
+            else []
+        )
+        + (
+            [rules.publication_case_snapshots.output]
+            if ((config.get("publication") or {}).get("case_snapshots") or {}).get(
+                "enabled", False
+            )
+            else []
         ),
 
 
