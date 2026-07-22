@@ -264,20 +264,14 @@ def collect_all_baselines():
 
 
 def resolve_baseline_id(label: str) -> str:
-    """Resolve a baseline label to its hash-based ID.
+    """Resolve a baseline label to its hash-based ID against BASELINE_CONFIGS.
 
-    Scorecard configs reference baselines by human-readable label (e.g. 'IFS').
-    This finds the matching baseline_id in BASELINE_CONFIGS.
-    Raises ValueError if the label doesn't match any registered baseline.
+    Thin wrapper over evalml.resolution.resolve_baseline_id (the pure, importable
+    implementation) bound to the in-memory BASELINE_CONFIGS global.
     """
-    for baseline_id, cfg in BASELINE_CONFIGS.items():
-        if cfg.get("label") == label:
-            return baseline_id
-    available = [cfg.get("label") for cfg in BASELINE_CONFIGS.values()]
-    raise ValueError(
-        f"No baseline with label {label!r} found. "
-        f"Available baseline labels: {available}"
-    )
+    from evalml.resolution import resolve_baseline_id as _resolve_baseline_id
+
+    return _resolve_baseline_id(label, BASELINE_CONFIGS)
 
 
 def collect_experiment_participants():
@@ -414,37 +408,7 @@ SCORECARD_CONFIGS = (
 )
 
 
-# Period-accumulated params verify a [lead - period, lead] window, so they have
-# no value at lead times shorter than one step spacing (e.g. no 0h precip map).
-# Short and canonical names both appear across the workflow (showcases vs maps).
-ACCUMULATED_PARAMS = {"TOT_PREC", "tp"}
-
-
-def resolve_leadtimes(steps_spec, requested="all", param=None):
-    """Lead times to compute for a single participant.
-
-    A run or baseline produces only the lead times in its own ``steps`` spec
-    (``start/stop/step``, hours). This returns those of the ``requested``
-    selection that the participant actually produces — the literal ``"all"``
-    (every produced lead time) or an explicit list of ints — so a 36h lead is
-    never requested of an ICON-CH1 baseline (steps ``0/33/6``), nor a >120h
-    lead of ICON-CH2. Explicitly requested lead times the participant cannot
-    produce are skipped with a warning. For accumulated ``param``s, lead times
-    shorter than one step spacing are dropped (no accumulation window).
-    """
-    start, end, step = map(int, steps_spec.split("/"))
-    supported = set(range(start, end + 1, step))
-    wanted = supported if requested == "all" else set(requested)
-
-    unsupported = sorted(wanted - supported)
-    if unsupported:
-        logging.getLogger("snakemake").warning(
-            "Skipping lead time(s) %sh: not produced by forecast steps '%s'.",
-            unsupported,
-            steps_spec,
-        )
-
-    valid = wanted & supported
-    if param in ACCUMULATED_PARAMS:
-        valid = {lt for lt in valid if lt >= step}
-    return sorted(valid)
+# Period-accumulated params and the lead-time producibility logic now live in the
+# importable evalml.resolution module so the standalone publication tooling can reuse
+# the exact same logic. Re-exported here under their historical names.
+from evalml.resolution import ACCUMULATED_PARAMS, resolve_leadtimes  # noqa: E402,F401
