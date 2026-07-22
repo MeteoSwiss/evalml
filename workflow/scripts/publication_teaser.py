@@ -71,9 +71,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 OUTLINE_COLOR = "#e8e8e8"
 CALLOUT_COLOR = "#4d4d4d"
 CAPTION_COLOR = "#333333"
-BG_COLOR = "white"          # figure/axes background (overridden by --dark)
-DARK_BG = "black"           # background for the dark variant
-GLOW = False                # soft halo around each panel (enabled by --dark)
+BG_COLOR = "white"  # figure/axes background (overridden by --dark)
+DARK_BG = "black"  # background for the dark variant
+GLOW = False  # soft halo around each panel (enabled by --dark)
 ekp.schema.borders["edgecolor"] = "none"  # off everywhere; added manually on regional
 ekp.schema.coastlines["resolution"] = "high"
 ekp.schema.coastlines["edgecolor"] = OUTLINE_COLOR
@@ -259,11 +259,19 @@ def _add_column_colorbar(mpl_fig, ax, key: str, *, is_regional: bool):
     sm = ScalarMappable(cmap=_field_cmap(key), norm=Normalize(vmin=lo, vmax=hi))
     sm.set_array([])
     cbar = mpl_fig.colorbar(
-        sm, ax=ax, orientation="horizontal", location="bottom",
-        fraction=0.05, pad=0.03, aspect=22, extend=cfg["extend"],
+        sm,
+        ax=ax,
+        orientation="horizontal",
+        location="bottom",
+        fraction=0.05,
+        pad=0.03,
+        aspect=22,
+        extend=cfg["extend"],
     )
     cbar.set_ticks(_round_ticks(key, lo, hi))
-    cbar.set_label(UNIT_LABEL.get(cfg["units"], f"({cfg['units']})"), color=CAPTION_COLOR)
+    cbar.set_label(
+        UNIT_LABEL.get(cfg["units"], f"({cfg['units']})"), color=CAPTION_COLOR
+    )
     cbar.ax.tick_params(colors=CAPTION_COLOR)
     cbar.outline.set_edgecolor(CAPTION_COLOR)
     return cbar
@@ -309,8 +317,10 @@ def _tripcolor_panel(
             cx = icon_tri.x[icon_tri.triangles].mean(axis=1)
             cy = icon_tri.y[icon_tri.triangles].mean(axis=1)
             m = (
-                (cx >= lon0 - dlon) & (cx <= lon1 + dlon)
-                & (cy >= lat0 - dlat) & (cy <= lat1 + dlat)
+                (cx >= lon0 - dlon)
+                & (cx <= lon1 + dlon)
+                & (cy >= lat0 - dlat)
+                & (cy <= lat1 + dlat)
             )
             tri = mtri.Triangulation(icon_tri.x, icon_tri.y, icon_tri.triangles[m])
             f = f[m]
@@ -328,9 +338,16 @@ def _tripcolor_panel(
         triang, mask = plotter._orthographic_tri
         fm = f[mask]
         mappable = subplot.ax.tripcolor(
-            triang.x, triang.y, fm, triangles=triang.triangles,
-            shading="flat", cmap=cmap, norm=norm,
-            transform=subplot._crs, zorder=1, rasterized=True,
+            triang.x,
+            triang.y,
+            fm,
+            triangles=triang.triangles,
+            shading="flat",
+            cmap=cmap,
+            norm=norm,
+            transform=subplot._crs,
+            zorder=1,
+            rasterized=True,
         )
     subplot.standard_layers()
     return mappable
@@ -363,12 +380,14 @@ def _strip_chrome(ax) -> None:
             geo.set_visible(True)
             geo.set_edgecolor("white")
             geo.set_linewidth(0.8)
-            geo.set_path_effects([
-                pe.Stroke(linewidth=9, foreground="white", alpha=0.06),
-                pe.Stroke(linewidth=6, foreground="white", alpha=0.10),
-                pe.Stroke(linewidth=3, foreground="white", alpha=0.20),
-                pe.Normal(),
-            ])
+            geo.set_path_effects(
+                [
+                    pe.Stroke(linewidth=9, foreground="white", alpha=0.06),
+                    pe.Stroke(linewidth=6, foreground="white", alpha=0.10),
+                    pe.Stroke(linewidth=3, foreground="white", alpha=0.20),
+                    pe.Normal(),
+                ]
+            )
 
 
 # Orthographic projection center (see plotting._PROJECTIONS["orthographic"]).
@@ -383,7 +402,18 @@ def _angular_distance_deg(lon, lat, lon0, lat0):
 
 
 def _add_wind_arrows(
-    ax, lon, lat, u, v, *, extent, nx, ny, center=None, radius_deg=70.0, pad=0.0,
+    ax,
+    lon,
+    lat,
+    u,
+    v,
+    *,
+    extent,
+    nx,
+    ny,
+    center=None,
+    radius_deg=70.0,
+    pad=0.0,
     scale=95.0,
 ) -> None:
     """Overlay thinned wind vectors sampled onto a regular lon/lat grid.
@@ -448,7 +478,9 @@ def _draw_extent_box(ax, extent, *, color: str, linewidth: float) -> None:
     )
 
 
-def _add_zoom_callout(mpl_fig, global_ax, reg_ax, extent, *, color: str, linewidth: float):
+def _add_zoom_callout(
+    mpl_fig, global_ax, reg_ax, extent, *, color: str, linewidth: float
+):
     """Connect the zoom box on the globe to the regional panel (magnifier effect)."""
     proj = global_ax.projection
     _, lon1, lat0, lat1 = extent
@@ -475,7 +507,9 @@ def make_teaser(
 ) -> Path:
     """Render the nested-zoom teaser figure and return the PNG path."""
     output.mkdir(parents=True, exist_ok=True)
-    g_plotter = StatePlotter(global_state["longitudes"], global_state["latitudes"], output)
+    g_plotter = StatePlotter(
+        global_state["longitudes"], global_state["latitudes"], output
+    )
     l_plotter = StatePlotter(lam_state["longitudes"], lam_state["latitudes"], output)
 
     projection = DOMAINS[GLOBAL_DOMAIN]["projection"]  # orthographic for all columns
@@ -485,22 +519,34 @@ def make_teaser(
     # drawn on this panel and connected to the next panel by a callout.
     columns = [
         dict(
-            label="Global", zoom=False, extent=None, box=switzerland_extent,
+            label="Global",
+            zoom=False,
+            extent=None,
+            box=switzerland_extent,
             # Full longitude span so the far-side longitudes visible around the
             # pole get arrows too, but cap the latitude below the pole where the
             # meridians converge and the arrows would bunch into a tight ring.
             arrows=dict(
-                extent=[-180, 180, -40, 72], nx=60, ny=22,
-                center=_ORTHO_CENTER, radius_deg=84, scale=160.0,
+                extent=[-180, 180, -40, 72],
+                nx=60,
+                ny=22,
+                center=_ORTHO_CENTER,
+                radius_deg=84,
+                scale=160.0,
             ),
         ),
         dict(
-            label="Switzerland", zoom=True, extent=switzerland_extent,
+            label="Switzerland",
+            zoom=True,
+            extent=switzerland_extent,
             box=VAL_CALANCA_EXTENT,
             arrows=dict(extent=switzerland_extent, nx=26, ny=19, pad=0.12),
         ),
         dict(
-            label="Val Calanca", zoom=True, extent=VAL_CALANCA_EXTENT, box=None,
+            label="Val Calanca",
+            zoom=True,
+            extent=VAL_CALANCA_EXTENT,
+            box=None,
             arrows=dict(extent=VAL_CALANCA_EXTENT, nx=14, ny=16, pad=0.12),
             tripcolor=True,
         ),
@@ -532,13 +578,15 @@ def make_teaser(
             if colcfg.get("tripcolor"):
                 lv = _field_levels(spec["key"], is_regional=True)
                 _tripcolor_panel(
-                    subplot, field,
-                    cmap=_field_cmap(spec["key"]), levels=lv,
-                    icon_tri=icon_tri, plotter=plotter, extent=colcfg["extent"],
+                    subplot,
+                    field,
+                    cmap=_field_cmap(spec["key"]),
+                    levels=lv,
+                    icon_tri=icon_tri,
+                    plotter=plotter,
+                    extent=colcfg["extent"],
                 )
-                _add_column_colorbar(
-                    mpl_fig, subplot.ax, spec["key"], is_regional=True
-                )
+                _add_column_colorbar(mpl_fig, subplot.ax, spec["key"], is_regional=True)
             else:
                 plotter.plot_field(subplot, field, colorbar=False, **style)
                 _add_column_colorbar(
@@ -562,8 +610,14 @@ def make_teaser(
                 )
             if col == 1:
                 subplot.ax.text(
-                    0.0, 1.02, spec["label"], transform=subplot.ax.transAxes,
-                    ha="left", va="bottom", fontsize=12, color=CAPTION_COLOR,
+                    0.0,
+                    1.02,
+                    spec["label"],
+                    transform=subplot.ax.transAxes,
+                    ha="left",
+                    va="bottom",
+                    fontsize=12,
+                    color=CAPTION_COLOR,
                 )
             _strip_chrome(subplot.ax)
             axes.append(subplot.ax)
@@ -571,18 +625,32 @@ def make_teaser(
         # Callouts chain each zoom to the next (globe -> CH -> Val Calanca).
         for src in range(len(columns) - 1):
             _add_zoom_callout(
-                mpl_fig, axes[src], axes[src + 1], columns[src]["box"],
-                color=CALLOUT_COLOR, linewidth=1.3,
+                mpl_fig,
+                axes[src],
+                axes[src + 1],
+                columns[src]["box"],
+                color=CALLOUT_COLOR,
+                linewidth=1.3,
             )
 
     valid = lam_state["valid_time"].strftime("%Y-%m-%d %H:%M UTC")
     mpl_fig.text(
-        0.015, 0.985, "Varda-Single", ha="left", va="top",
-        fontsize=14, color=CAPTION_COLOR,
+        0.015,
+        0.985,
+        "Varda-Single",
+        ha="left",
+        va="top",
+        fontsize=14,
+        color=CAPTION_COLOR,
     )
     mpl_fig.text(
-        0.015, 0.955, f"valid {valid}  ·  +{lead_time} h", ha="left", va="top",
-        fontsize=10, color=CAPTION_COLOR,
+        0.015,
+        0.955,
+        f"valid {valid}  ·  +{lead_time} h",
+        ha="left",
+        va="top",
+        fontsize=10,
+        color=CAPTION_COLOR,
     )
 
     # earthkit uses a constrained layout engine; tighten via its padding, and
@@ -591,7 +659,10 @@ def make_teaser(
     if engine is not None:
         try:
             engine.set(
-                w_pad=0.005, h_pad=0.01, wspace=0.0, hspace=0.02,
+                w_pad=0.005,
+                h_pad=0.01,
+                wspace=0.0,
+                hspace=0.02,
                 rect=(0, 0, 1, 0.93),
             )
         except (AttributeError, TypeError):
@@ -604,7 +675,7 @@ def make_teaser(
     LOG.info("Saved %s", out_png)
 
     (output / "publication_teaser.html").write_text(
-        '<!doctype html><html><body>'
+        "<!doctype html><html><body>"
         '<img src="publication_teaser.png" style="max-width:100%"></body></html>'
     )
     return out_png
@@ -616,9 +687,13 @@ def main() -> None:
         "--input", required=True, help="Inference-sandbox GRIB dir for one init_time."
     )
     parser.add_argument(
-        "--date", required=True, help="Reference datetime (init_time), e.g. 202505111200."
+        "--date",
+        required=True,
+        help="Reference datetime (init_time), e.g. 202505111200.",
     )
-    parser.add_argument("--leadtime", type=int, required=True, help="Lead time in hours.")
+    parser.add_argument(
+        "--leadtime", type=int, required=True, help="Lead time in hours."
+    )
     parser.add_argument("--output", type=Path, required=True, help="Output directory.")
     parser.add_argument(
         "--grid",
@@ -628,7 +703,8 @@ def main() -> None:
         "Delaunay mesh if the file is missing.",
     )
     parser.add_argument(
-        "--dark", action="store_true",
+        "--dark",
+        action="store_true",
         help="Dark variant: grey background, white text/ticks, white locator "
         "boxes and connector lines.",
     )
@@ -640,23 +716,29 @@ def main() -> None:
         CAPTION_COLOR = "white"
         CALLOUT_COLOR = "white"
         GLOW = True
-        plt.rcParams.update({
-            "text.color": "white",
-            "axes.labelcolor": "white",
-            "xtick.color": "white",
-            "ytick.color": "white",
-            "figure.facecolor": DARK_BG,
-            "axes.facecolor": DARK_BG,
-            "savefig.facecolor": DARK_BG,
-        })
+        plt.rcParams.update(
+            {
+                "text.color": "white",
+                "axes.labelcolor": "white",
+                "xtick.color": "white",
+                "ytick.color": "white",
+                "figure.facecolor": DARK_BG,
+                "axes.facecolor": DARK_BG,
+                "savefig.facecolor": DARK_BG,
+            }
+        )
 
-    LOG.info("Teaser: input=%s date=%s leadtime=%s", args.input, args.date, args.leadtime)
+    LOG.info(
+        "Teaser: input=%s date=%s leadtime=%s", args.input, args.date, args.leadtime
+    )
     icon_tri = None
     if args.grid and args.grid.exists():
         LOG.info("Loading ICON grid %s", args.grid)
         icon_tri = load_icon_triangulation(args.grid)
     else:
-        LOG.warning("ICON grid %s not found; Val Calanca uses a Delaunay mesh.", args.grid)
+        LOG.warning(
+            "ICON grid %s not found; Val Calanca uses a Delaunay mesh.", args.grid
+        )
     global_state, lam_state = load_states(Path(args.input), args.leadtime)
     make_teaser(global_state, lam_state, args.leadtime, args.output, icon_tri=icon_tri)
 

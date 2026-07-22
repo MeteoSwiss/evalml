@@ -279,17 +279,23 @@ rule publication_all:
     input:
         (
             [rules.publication_figures.output]
-            if ((config.get("publication") or {}).get("leadtimes") or {}).get("enabled", False)
+            if ((config.get("publication") or {}).get("leadtimes") or {}).get(
+                "enabled", False
+            )
             else []
         )
         + (
             [rules.publication_scoremaps.output]
-            if ((config.get("publication") or {}).get("scoremaps") or {}).get("enabled", False)
+            if ((config.get("publication") or {}).get("scoremaps") or {}).get(
+                "enabled", False
+            )
             else []
         )
         + (
             [rules.publication_meteogram.output]
-            if ((config.get("publication") or {}).get("meteogram") or {}).get("enabled", False)
+            if ((config.get("publication") or {}).get("meteogram") or {}).get(
+                "enabled", False
+            )
             else []
         )
         + (

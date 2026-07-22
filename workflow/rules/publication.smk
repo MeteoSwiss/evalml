@@ -196,11 +196,11 @@ def _pub_teaser_cfg():
 rule publication_teaser:
     """Publication teaser (hero) figure: global forecast + nested regional zooms.
 
-    Standalone renderer (workflow/scripts/publication_teaser.py); the case and
-    style (incl. the dark variant) come from config.publication.teaser. Depends on
-    the candidate's aggregated verification file so inference has run for the
-    requested init_time before the GRIB is resolved.
-    """
+Standalone renderer (workflow/scripts/publication_teaser.py); the case and
+style (incl. the dark variant) come from config.publication.teaser. Depends on
+the candidate's aggregated verification file so inference has run for the
+requested init_time before the GRIB is resolved.
+"""
     input:
         "workflow/scripts/publication_teaser.py",
         "workflow/scripts/publication.mplstyle",
@@ -213,6 +213,11 @@ rule publication_teaser:
         ),
     log:
         OUT_ROOT / "logs/figures/publication_teaser.log",
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=8,
+        mem_mb=32000,
+        runtime="60m",
     params:
         grib_dir=lambda wc: str(
             OUT_ROOT
@@ -222,14 +227,11 @@ rule publication_teaser:
         init_time=lambda wc: _pub_teaser_cfg().get("init_time", ""),
         leadtime=lambda wc: _pub_teaser_cfg().get("leadtime", 24),
         grid_flag=lambda wc: (
-            f"--grid {_pub_teaser_cfg()['grid']}" if _pub_teaser_cfg().get("grid") else ""
+            f"--grid {_pub_teaser_cfg()['grid']}"
+            if _pub_teaser_cfg().get("grid")
+            else ""
         ),
         dark_flag=lambda wc: "--dark" if _pub_teaser_cfg().get("dark", False) else "",
-    resources:
-        slurm_partition="postproc",
-        cpus_per_task=8,
-        mem_mb=32000,
-        runtime="60m",
     shell:
         """
         set -euo pipefail
