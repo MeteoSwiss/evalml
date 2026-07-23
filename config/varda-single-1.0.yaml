@@ -107,6 +107,11 @@ experiment:
           - "TOT_PREC6:RMSE,R2,ETS"
   scoremaps:
     enabled: false
+  sal:
+    enabled: false
+    params:
+      - TOT_PREC1
+    leadtimes: [1, 2, 3, 4, 5, 6]
 
 showcase:
   params:
