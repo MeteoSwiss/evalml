@@ -40,4 +40,4 @@ integration_test_job:
       UV_HOME="$VENV_DIR" uv sync
       source "$VENV_DIR/bin/activate"
   script:
-    - pytest tests/integration -m longtest
+    - ./ci/run-longtest-coverage.sh tests/integration
