@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=../../../workflow/tools/config.schema.json
+description: |
+  Integration-test fixture: minimal experiment run exercising the score-map
+  pipeline (verification_scoremaps.py + plot_scoremaps.mo.py) with the score
+  maps AGGREGATED over more than one init time. Baseline data only (no
+  inference), gridded zarr truth. Params cover both the instantaneous path
+  (T_2M) and the de-accumulation path (TOT_PREC6). Everything else is kept to a
+  single value so the fixture stays small. Driven by
+  tests/integration/test_experiment.py.
+config_label: scoremaps-test
+
+# Two init times (00 and 06 UTC on the same day) so the score maps aggregate
+# over more than one reference time. Both are MAM, so only that season bucket
+# and init-hour buckets '00'/'06' receive samples.
+dates:
+  start: 2025-04-01T00:00
+  end: 2025-04-01T06:00
+  frequency: 6h
+
+# Baseline only: ICON-CH2-CTRL is the control member (000) of the ICON-CH2-EPS
+# archive. Score-map lead times must be producible from `steps`; 0/6/6 yields
+# {0, 6}, so the configured leadtime of 6 h is valid. TOT_PREC6 de-accumulates
+# over [0, 6] (the whole forecast), exercising the step-0 zero-IC synthesis.
+runs:
+  - baseline:
+      label: ICON-CH2-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/6/6
+
+# Score maps require a gridded (zarr) analysis, not station observations.
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
+experiment:
+  # Kept to a single param: the score-map targets are driven solely by the
+  # `scoremaps` block below, so the standard dashboard/metrics surface stays
+  # minimal.
+  params:
+    - T_2M
+  stratification:
+    regions: []
+  dashboard:
+    stratification:
+      - season
+  scoremaps:
+    enabled: true
+    params:
+      - T_2M
+      - TOT_PREC6
+    leadtimes:
+      - 6
+    scores:
+      - BIAS
+    regions:
+      - switzerland
+    seasons:
+      - all
+    init_hours:
+      - all
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  # Baseline-only test: no inference, so no job requests a GPU. This is just a
+  # never-hit concurrency ceiling (schema requires >= 1); it reserves nothing.
+  global_resources:
+    gpus: 1
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50

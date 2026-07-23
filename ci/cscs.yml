@@ -40,4 +40,10 @@ integration_test_job:
       UV_HOME="$VENV_DIR" uv sync
       source "$VENV_DIR/bin/activate"
   script:
-    - pytest tests/integration -m longtest
+    # Temporarily restricted to the scoremaps integration test. The meteogram
+    # longtest needs GPU/MLflow/DWH and is excluded for now; broaden back to
+    # `pytest tests/integration -m longtest` to run all integration longtests.
+    - pytest tests/integration/test_experiment.py -m longtest
+  variables:
+    # Explicitly request more time from Slurm, tests aren't running fast enough.
+    SLURM_TIMELIMIT: "01:00:00"
