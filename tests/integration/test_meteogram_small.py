@@ -8,7 +8,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG = Path(__file__).resolve().parent / "configs" / "meteogram.yaml"
 
 # Parameters the fixture config plots meteograms for (temperature and wind speed).
-EXPECTED_PARAMS = ["T_2M", "SP_10M"]
+EXPECTED_PARAMS = ["T_2M", "SP_10M", "TOT_PREC6"]
+EXPECTED_STATIONS = ["GVE", "SAE"]
 
 
 @pytest.mark.longtest
@@ -34,13 +35,17 @@ def test_showcase_meteogram():
     )
 
     for param in EXPECTED_PARAMS:
-        pngs = glob.glob(
-            str(PROJECT_ROOT / f"output/results/**/202401010000_{param}_GVE.png"),
-            recursive=True,
-        )
-        assert pngs, (
-            f"expected meteogram PNG (202401010000_{param}_GVE.png) was not produced"
-        )
-        assert all(Path(p).stat().st_size > 0 for p in pngs), (
-            f"meteogram PNG for {param} is empty"
-        )
+        for station in EXPECTED_STATIONS:
+            pngs = glob.glob(
+                str(
+                    PROJECT_ROOT
+                    / f"output/results/**/202503010000_{param}_{station}.png"
+                ),
+                recursive=True,
+            )
+            assert pngs, (
+                f"expected meteogram PNG (202503010000_{param}_{station}.png) was not produced"
+            )
+            assert all(Path(p).stat().st_size > 0 for p in pngs), (
+                f"meteogram PNG for {param} in {station} is empty"
+            )
