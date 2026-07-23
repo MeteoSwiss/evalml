@@ -39,12 +39,12 @@ def test_showcase_meteogram(mock_jretrieve):
             pngs = glob.glob(
                 str(
                     PROJECT_ROOT
-                    / f"output/results/**/202503010000_{param}_{station}.png"
+                    / f"output/results/**/202408010000_{param}_{station}.png"
                 ),
                 recursive=True,
             )
             assert pngs, (
-                f"expected meteogram PNG (202503010000_{param}_{station}.png) was not produced"
+                f"expected meteogram PNG (202408010000_{param}_{station}.png) was not produced"
             )
             assert all(Path(p).stat().st_size > 0 for p in pngs), (
                 f"meteogram PNG for {param} in {station} is empty"

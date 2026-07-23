@@ -22,7 +22,7 @@ import data_input
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "jretrieve"
 ROOT = "jretrievedwh:1,2"
-REFTIME = datetime(2025, 3, 1, 0, 0)
+REFTIME = datetime(2024, 8, 1, 0, 0)
 STEPS = [0, 6, 12]
 PARAMS = ["T_2M", "SP_10M", "TOT_PREC6"]
 
