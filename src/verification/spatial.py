@@ -16,7 +16,8 @@ def spherical_nearest_neighbor_indices(
     source_longitude: np.ndarray,
     target_latitude: np.ndarray,
     target_longitude: np.ndarray,
-) -> np.ndarray:
+    return_distances: bool = False,
+) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """Return indices of nearest source points for each target point.
 
     Distances are computed in 3D Cartesian space after projecting latitude and
@@ -29,11 +30,15 @@ def spherical_nearest_neighbor_indices(
         Latitude and longitude of source points in degrees.
     target_latitude, target_longitude
         Latitude and longitude of target points in degrees.
+    return_distances
+        If True, also return the 3-D chord distances to the nearest source
+        point for each target point.
 
     Returns
     -------
-    np.ndarray
+    np.ndarray or tuple[np.ndarray, np.ndarray]
         Integer indices into source points, one index per target point.
+        When *return_distances* is True, returns ``(indices, chord_distances)``.
     """
 
     source_latitude = np.asarray(source_latitude).ravel()
@@ -58,8 +63,11 @@ def spherical_nearest_neighbor_indices(
     ]
 
     tree = cKDTree(source_xyz)
-    _, nearest_idx = tree.query(target_xyz, k=1)
-    return np.asarray(nearest_idx, dtype=int)
+    chord_dist, nearest_idx = tree.query(target_xyz, k=1)
+    nearest_idx = np.asarray(nearest_idx, dtype=int)
+    if return_distances:
+        return nearest_idx, chord_dist
+    return nearest_idx
 
 
 def nearest_grid_yx_indices(
@@ -103,7 +111,37 @@ def nearest_grid_yx_indices(
     return np.asarray(y_idx, dtype=int), np.asarray(x_idx, dtype=int)
 
 
-def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
+def _estimate_native_spacing_chord(lat: np.ndarray, lon: np.ndarray) -> float:
+    """Estimate the native grid spacing as a 3-D chord distance on the unit sphere.
+
+    For 2-D ``(y, x)`` arrays the median of adjacent-cell chord distances (both
+    y- and x-direction neighbours) is used. For flat/scattered arrays the median
+    nearest-neighbour distance within the source points is used.
+    """
+    lat_rad = np.deg2rad(lat)
+    lon_rad = np.deg2rad(lon)
+    xyz = np.stack(
+        [
+            np.cos(lat_rad) * np.cos(lon_rad),
+            np.cos(lat_rad) * np.sin(lon_rad),
+            np.sin(lat_rad),
+        ],
+        axis=-1,
+    )
+    if lat.ndim == 2:
+        dy = np.linalg.norm(xyz[1:] - xyz[:-1], axis=-1)
+        dx = np.linalg.norm(xyz[:, 1:] - xyz[:, :-1], axis=-1)
+        return float(np.median(np.concatenate([dy.ravel(), dx.ravel()])))
+    else:
+        pts = xyz.reshape(-1, 3)
+        tree = cKDTree(pts)
+        dists, _ = tree.query(pts, k=2)  # k=2 to skip the self-match (dist=0)
+        return float(np.median(dists[:, 1]))
+
+
+def map_forecast_to_truth(
+    fcst: xr.Dataset, truth: xr.Dataset, extrapolate: bool = False
+) -> xr.Dataset:
     """Map forecast points to truth locations using nearest-neighbor matching.
 
     The forecast is flattened to a single spatial `values` dimension (when
@@ -119,6 +157,13 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
     truth
         Reference dataset with `latitude` and `longitude` coordinates on either
         `(y, x)` or `values`.
+    extrapolate
+        If False (default), truth points whose nearest forecast point is farther
+        away than the estimated native grid spacing of the forecast are set to
+        missing in the returned dataset. The native spacing is the median
+        adjacent-cell chord distance for 2-D grids and the median
+        nearest-neighbour chord distance within the source for scattered points.
+        Set to True to reproduce the unconstrained nearest-neighbor behaviour.
 
     Returns
     -------
@@ -147,19 +192,37 @@ def map_forecast_to_truth(fcst: xr.Dataset, truth: xr.Dataset) -> xr.Dataset:
 
     truth_is_grid = "y" in truth.dims and "x" in truth.dims
 
+    # Preserve original source shape for the spacing estimate before stacking.
+    fcst_lat_raw = fcst_lat
+    fcst_lon_raw = fcst_lon
+
     if "y" in fcst.dims and "x" in fcst.dims:
         fcst = fcst.stack(values=("y", "x"))
     if truth_is_grid:
         truth = truth.stack(values=("y", "x"))
 
-    nearest_idx = spherical_nearest_neighbor_indices(
+    nearest_idx, chord_dist = spherical_nearest_neighbor_indices(
         source_latitude=fcst["latitude"].values,
         source_longitude=fcst["longitude"].values,
         target_latitude=truth["latitude"].values,
         target_longitude=truth["longitude"].values,
+        return_distances=True,
     )
 
+    if extrapolate:
+        outside = None
+    else:
+        native_spacing = _estimate_native_spacing_chord(fcst_lat_raw, fcst_lon_raw)
+        outside = chord_dist > native_spacing
+
     fcst = fcst.isel(values=nearest_idx)
+
+    if outside is not None and np.any(outside):
+        keep = xr.DataArray(~outside, dims=["values"])
+        fcst = fcst.where(keep)
+        if "elevation" in fcst.coords:
+            fcst = fcst.assign_coords(elevation=fcst["elevation"].where(keep))
+
     fcst = fcst.drop_vars(["x", "y", "values"], errors="ignore")
     fcst = fcst.assign_coords(longitude=("values", truth["longitude"].data))
     fcst = fcst.assign_coords(latitude=("values", truth["latitude"].data))
