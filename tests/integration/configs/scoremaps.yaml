@@ -64,8 +64,10 @@ locations:
 
 profile:
   executor: slurm
+  # Baseline-only test: no inference, so no job requests a GPU. This is just a
+  # never-hit concurrency ceiling (schema requires >= 1); it reserves nothing.
   global_resources:
-    gpus: 16
+    gpus: 1
   default_resources:
     slurm_partition: "postproc"
     cpus_per_task: 1
