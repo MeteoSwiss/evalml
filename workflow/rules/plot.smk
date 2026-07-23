@@ -90,7 +90,7 @@ rule plot_meteogram:
             CMD_ARGS+=(--baseline_label "${{BASELINE_LABELS[$i]}}")
         done
 
-        python {input.script} "${{CMD_ARGS[@]}}" >{log} 2>&1
+        uv run python {input.script} "${{CMD_ARGS[@]}}" >{log} 2>&1
         """
 
 
