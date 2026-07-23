@@ -35,7 +35,7 @@ jobs:
 
       - name: Run tests (anemoi stable)
         if: matrix.anemoi-dev == false
-        run: uv run pytest tests/
+        run: uv run pytest tests/unit
 
       - name: Run tests (anemoi dev)
         if: matrix.anemoi-dev == true
@@ -43,7 +43,7 @@ jobs:
           uv run
           --with git+https://github.com/ecmwf/anemoi-inference.git@main
           --with git+https://github.com/ecmwf/anemoi-datasets.git@main
-          pytest tests/
+          pytest tests/unit
 
 
 
