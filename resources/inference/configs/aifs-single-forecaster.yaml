@@ -6,7 +6,7 @@ patch_metadata:
   config:
     dataloader:
       test:
-        dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2025-6h-v1-combined-land.zarr
+        dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2026-6h-v1-combined-land.zarr
 
 post_processors:
   - accumulate_from_start_of_forecast:
