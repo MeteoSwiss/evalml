@@ -49,7 +49,7 @@ dev = [
 [tool.pytest.ini_options]
 # Skip longtests (GPU/credential/data-dependent integration tests) by default,
 # in CI and locally. Run them explicitly with `pytest -m longtest`.
-addopts = "-m 'not longtest' -m 'not heavytest' "
+addopts = "-m 'not longtest and not heavytest' "
 markers = [
     "longtest: mark tests that take a longer to run but are run on PRs",
     "heavytest: mark tests that take a long time to run, and are run in a weekly plan",
