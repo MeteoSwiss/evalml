@@ -34,7 +34,7 @@ experiment:
     - T_2M
     - TD_2M
     - SP_10M
-    - TOT_PREC
+    - TOT_PREC6
   dashboard:
     stratification:
       # - region
