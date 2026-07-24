@@ -8,26 +8,15 @@ dates:
   frequency: 30h
 
 runs:
-  - temporal_downscaler:
-      checkpoint: /scratch/mch/miccatta/ICON_interpolator_checkpoints/checkpoint_stage-C-interpolator-n320-6hto1h-reduced-variables/f9279244ed6f4c458597bdcf335ab36f/inference-last.ckpt
+  - forecaster:
       label: Varda-Single
-      steps: 0/120/1
-      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
-      extra_requirements:
-        - anemoi-datasets==0.5.35
-      forecaster:
-        checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
-        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
-        steps: 0/120/6
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+      steps: 0/120/6
   - baseline:
       label: ICON-CH1-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
-      steps: 0/33/1
-      member: control
-  - baseline:
-      label: ICON-CH2-CTRL
-      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
-      steps: 0/120/1
+      steps: 0/33/6
       member: control
 
 truth:
@@ -39,7 +28,6 @@ experiment:
     - T_2M
     - TD_2M
     - SP_10M
-    - TOT_PREC1
     - TOT_PREC6
     - PMSL
   stratification:
@@ -51,8 +39,6 @@ experiment:
       - alpensuedseite
     root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
   thresholds:
-    TOT_PREC1:
-      gt: [0.0, 0.1, 1, 5, 10]
     TOT_PREC6:
       gt: [0.0, 0.1, 5, 10, 20, 50]
     SP_10M:
@@ -75,7 +61,7 @@ experiment:
         variables:
           - "U_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2"
-          - "TOT_PREC1:RMSE,R2,ETS"
+          - "TOT_PREC6:RMSE,R2,ETS"
       medium_range:
         baseline: ICON-CH2-CTRL
         lead_times: "24/120/24"
@@ -85,9 +71,10 @@ experiment:
           - "T_2M:RMSE,R2"
           - "TOT_PREC6:RMSE,R2,ETS"
   scoremaps:
-    enabled: false
+    enabled: true
     leadtimes: [6, 24]
-    params: ["T_2M", "SP_10M", "TOT_PREC1", "TOT_PREC6"]
+    params: ["T_2M", "SP_10M", "TOT_PREC6", "PMSL"]
+
 
 locations:
   output_root: output/
