@@ -425,8 +425,8 @@ class Stratification(BaseModel):
         if not v:
             raise ValueError(
                 "At least one region must be specified. "
-                "Add a domain bbox as the first entry, e.g. regions: [{global: [-180, 180, -90, 90]}] "
-                "for global models or [{icon: [1.5, 16, 43, 49.5]}] for ICON-CH1."
+                "Add a domain region as the first entry, either a bbox dict "
+                "(e.g. {global: [-180, 180, -90, 90]}) or a shapefile name."
             )
         for entry in v:
             if isinstance(entry, dict):
