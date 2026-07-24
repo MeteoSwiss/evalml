@@ -120,7 +120,6 @@ include:
   script:
     - |
       banner "Reuse environment from setup ($WORK)"
-      test -d "$WS"                   || { echo "workspace missing at $WS — did setup run?"; exit 1; }
       test -x "$WS/.venv/bin/python"  || { echo "venv missing at $WS/.venv — did setup sync succeed?"; exit 1; }
       cd "$EVALML"
       echo "reusing evalml=$EVALML  workspace=$WS  venv=$WS/.venv"
