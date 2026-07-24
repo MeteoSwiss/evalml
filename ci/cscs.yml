@@ -11,17 +11,31 @@ include:
     SLURM_JOB_NUM_NODES: 1
     SLURM_NTASKS: 1
 
-integration_test_job:
-  extends: [.baremetal-runner-balfrin]
-  before_script:
+
+# Install uv (doesn't exist on the bare-metal runner)
+.install_uv:
+  script:
+    - |
+      banner "Install uv"
+      # uv: bare metal assumes a user-managed env so evalml ships no installer
+      export UV_INSTALL_DIR="$HOME/.local/bin"
+      curl -LsSf https://astral.sh/uv/install.sh | env INSTALLER_NO_MODIFY_PATH=1 sh
+      uv --version
+
+.install_evalmll
+  sscript:
     - |
       echo "Setting up environment for integration tests on $(hostname)"
       VENV_DIR="$(pwd)/.venv"
-      echo "uv installed at: $(which uv)"
-      uv --version
       echo "will install evalml at: $VENV_DIR"
       UV_HOME="$VENV_DIR" uv sync
       source "$VENV_DIR/bin/activate"
+
+integration_test_job:
+  extends: [.baremetal-runner-balfrin]
+  before_script:
+    - !reference [.install_uv, script]
+    - !reference [.install_evalmll, script]
   script:
     - ./ci/run-longtest-coverage.sh tests/integration
   variables:
