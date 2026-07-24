@@ -6,7 +6,7 @@ description: |
 config_label: meteogram-test
 
 dates:
-  - 2025-03-01T00:00
+  - 2024-08-01T00:00
 
 runs:
   - forecaster:
