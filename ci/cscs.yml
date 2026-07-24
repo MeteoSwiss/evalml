@@ -120,11 +120,11 @@ include:
   script:
     - |
       banner "Reuse environment from setup ($WORK)"
-      test -x "$HOME/.local/bin/just" || { echo "no just under $HOME — did setup run?"; exit 1; }
       test -d "$WS"                   || { echo "workspace missing at $WS — did setup run?"; exit 1; }
       test -x "$WS/.venv/bin/python"  || { echo "venv missing at $WS/.venv — did setup sync succeed?"; exit 1; }
       cd "$EVALML"
       echo "reusing evalml=$EVALML  workspace=$WS  venv=$WS/.venv"
+      source "$WS/.venv/bin/activate"
   
 # Remove the per-pipeline workdir. The uv wheel cache ($SCRATCH/.cache/uv) is
 # deliberately left in place for the next pipeline.
