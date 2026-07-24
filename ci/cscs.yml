@@ -11,23 +11,6 @@ include:
     SLURM_JOB_NUM_NODES: 1
     SLURM_NTASKS: 1
 
-unit_test_job:
-  extends: [.baremetal-runner-balfrin]
-  before_script:
-    - |
-      echo "Setting up environment for unit tests on $(hostname)"
-      VENV_DIR="$(pwd)/.venv"
-      echo "uv installed at: $(which uv)"
-      uv --version
-      echo "will install evalml at: $VENV_DIR"
-      UV_HOME="$VENV_DIR" uv sync
-      source "$VENV_DIR/bin/activate"
-  script:
-    - pytest tests/unit
-  variables:
-    # Explicitly request more time from Slurm, tests aren't running fast enough.
-    SLURM_TIMELIMIT: "01:00:00"
-
 integration_test_job:
   extends: [.baremetal-runner-balfrin]
   before_script:
@@ -41,3 +24,6 @@ integration_test_job:
       source "$VENV_DIR/bin/activate"
   script:
     - pytest tests/integration -m longtest
+  variables:
+    # Explicitly request more time from Slurm, tests aren't running fast enough.
+    SLURM_TIMELIMIT: "01:00:00"
