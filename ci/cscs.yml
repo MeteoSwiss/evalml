@@ -12,6 +12,16 @@ include:
     SLURM_NTASKS: 1
 
 
+# Strict mode + a banner() helper for section headers. Referenced first so both
+# are in scope for every fragment that follows.
+.sh_preamble:
+  script:
+    - |
+      set -euo pipefail
+      banner() { printf '\n\033[1;36m==== %s ====\033[0m\n' "$*"; }
+
+      # Print CI context up front so the log is self-explanatory. The build-dir/slot
+
 # Install uv (doesn't exist on the bare-metal runner)
 .install_uv:
   script:
@@ -34,6 +44,7 @@ include:
 integration_test_job:
   extends: [.baremetal-runner-balfrin]
   before_script:
+    - !reference [.preamble, script]
     - !reference [.install_uv, script]
     - !reference [.install_evalml, script]
   script:
