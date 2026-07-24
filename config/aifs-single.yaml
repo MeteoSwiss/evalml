@@ -42,7 +42,7 @@ experiment:
       - season
   stratification:
     regions:
-      - global: [-180, 180, -90, 90]
+      - global
 
 locations:
   output_root: output/

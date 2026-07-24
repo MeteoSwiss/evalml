@@ -44,7 +44,7 @@ experiment:
     - TOT_PREC
   stratification:
     regions:
-      - icon: [1.5, 16, 43, 49.5]
+      - icon
       - jura
     root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
   thresholds:

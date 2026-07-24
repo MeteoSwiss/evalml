@@ -81,7 +81,7 @@ truth:
 experiment:
   stratification:
     regions:
-      - icon: [1.5, 16, 43, 49.5]  # domain region — must be first
+      - icon  # first item will be used as default verification region
       - jura
       - mittelland
       - voralpen

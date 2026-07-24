@@ -5,6 +5,11 @@ from pydantic import BaseModel, Field, RootModel, field_validator, model_validat
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
+PREDEFINED_REGIONS: Dict[str, List[float]] = {
+    "global": [-180, 180, -90, 90],
+    "icon": [1.5, 16, 43, 49.5],
+}
+
 
 class Dates(BaseModel):
     """Start/stop of the hindcast period and the launch frequency."""
@@ -406,10 +411,10 @@ class Stratification(BaseModel):
         default_factory=list,
         description=(
             "List of region specs for spatial stratification. At least one region is required. "
-            "String entries are shapefile names (resolved against 'root'). Dict entries map a "
-            "region name to a bounding box [lon_min, lon_max, lat_min, lat_max]. "
-            "The first entry is the domain region used by the dashboard when region stratification "
-            "is not active (e.g. {'global': [-180, 180, -90, 90]} or {'icon-ch1': [1.5, 16, 43, 49.5]})."
+            f"String entries are either predefined region names ({list(PREDEFINED_REGIONS)}) or "
+            "shapefile names resolved against 'root'. Predefined names take precedence over shapefiles. "
+            "Dict entries map a custom region name to a bounding box [lon_min, lon_max, lat_min, lat_max]. "
+            "The first entry is the domain region used by the dashboard when region stratification is not active."
         ),
     )
     root: Optional[str] = Field(
@@ -425,8 +430,8 @@ class Stratification(BaseModel):
         if not v:
             raise ValueError(
                 "At least one region must be specified. "
-                "Add a domain region as the first entry, either a bbox dict "
-                "(e.g. {global: [-180, 180, -90, 90]}) or a shapefile name."
+                f"Add a domain region as the first entry, e.g. a predefined name "
+                f"({list(PREDEFINED_REGIONS)}), a custom bbox dict, or a shapefile name."
             )
         for entry in v:
             if isinstance(entry, dict):
