@@ -44,7 +44,7 @@ include:
 integration_test_job:
   extends: [.baremetal-runner-balfrin]
   before_script:
-    - !reference [.preamble, script]
+    - !reference [.sh_preamble, script]
     - !reference [.install_uv, script]
     - !reference [.install_evalml, script]
   script:
