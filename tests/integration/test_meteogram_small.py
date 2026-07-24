@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-CONFIG = Path(__file__).resolve().parent / "configs" / "meteogram.yaml"
+CONFIG = Path(__file__).resolve().parent / "configs" / "meteogram_small.yaml"
 
 # Parameters the fixture config plots meteograms for (temperature and wind speed).
 EXPECTED_PARAMS = ["T_2M", "SP_10M", "TOT_PREC6"]
