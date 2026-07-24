@@ -337,7 +337,7 @@ def verify(
         Label for the forecast source (used in output dataset).
     obs_label : str
         Label for the observation source (used in output dataset).
-    regions : list[dict] or None, optional
+    regions : list[dict]
         Ordered list of region specs. Each entry is either
         ``{"type": "bbox", "name": ..., "bbox": [lon_min, lon_max, lat_min, lat_max]}`` or
         ``{"type": "shp", "name": ..., "path": ...}``. The list order is preserved in the
