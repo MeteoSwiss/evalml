@@ -12,27 +12,6 @@ include:
     SLURM_NTASKS: 1
 
 
-
-
-#unit_test_job:
-#  extends: [.baremetal-runner-balfrin]
-#  before_script:
-#    - |
-#      echo "Setting up environment for unit tests on $(hostname)"
-#      VENV_DIR="$(pwd)/.venv"
-#      echo "uv installed at: $(which uv)"
-#      uv --version
-#      echo "will install evalml at: $VENV_DIR"
-#      UV_HOME="$VENV_DIR" uv sync
-#      source "$VENV_DIR/bin/activate"
-#  script:
-#    - pytest tests/unit
-#  variables:
-#    # Explicitly request more time from Slurm, tests aren't running fast enough.
-#    SLURM_TIMELIMIT: "01:00:00"
-
-# ── reusable script fragments (hidden jobs) ──────────────────────────────────
-
 # Strict mode + a banner() helper for section headers. Referenced first so both
 # are in scope for every fragment that follows.
 .sh_preamble:
@@ -43,108 +22,36 @@ include:
 
       # Print CI context up front so the log is self-explanatory. The build-dir/slot
 
-# vars are logged as evidence: if CI_PROJECT_DIR and CI_CONCURRENT_ID turn out
-# identical across the setup and inference jobs, reuse could be simplified to
-# the default build dir; if they differ, the $SCRATCH workdir was necessary.
-.log_ci_context:
+# Install uv (doesn't exist on the bare-metal runner)
+.install_uv:
   script:
     - |
-      banner "CI context"
-      echo "host=$(hostname -f 2>/dev/null || hostname)  user=$(whoami)"
-      echo "project=${CI_PROJECT_PATH:-?}  ref=${CI_COMMIT_REF_NAME:-?}  sha=${CI_COMMIT_SHA:-?}"
-      echo "server=${CI_SERVER_URL:-?}"
-      echo "pipeline=${CI_PIPELINE_ID:-?}  job=${CI_JOB_ID:-?}  concurrent_id=${CI_CONCURRENT_ID:-?}"
-      echo "CI_PROJECT_DIR=${CI_PROJECT_DIR:-?}"
-      echo "PWD=$PWD"
-
-
-# Shared per-pipeline paths on $SCRATCH — referenced by every job so all three
-# agree on where the environment lives. The compute node has no mounted home,
-# so HOME points into the workdir; that also makes just/uv and the venv's
-# managed Python path-stable across the setup and inference allocations.
-.env_paths:
-  script:
-    - |
-      banner "Environment paths"
-      export WORK="$SCRATCH/evalml-ci/$CI_PIPELINE_ID"
-      export HOME="$WORK/home"                  # just/uv + venv's managed Python; reused across jobs
-      export PATH="$HOME/.local/bin:$PATH"
+      banner "Install uv"
       export UV_CACHE_DIR="$SCRATCH/.cache/uv"  # wheel cache, persistent across pipelines
-      export EVALML="$WORK/evalml"                # evalml checkout (venv at $EVALML/.venv)
-      mkdir -p "$HOME" "$UV_CACHE_DIR"          # $HOME (= $WORK/home) also creates $WORK
-      echo "WORK=$WORK"
-      echo "HOME=$HOME"
-      echo "EVALML=$EVALML  UV_CACHE_DIR=$UV_CACHE_DIR"
-
-# Clone evalml into $EVALML and enter it.
-.clone_evalml:
-  script:
-    - |
-      banner "Clone evalml"
-      # TEMPORARY: clone the feat/workspaces dev branch — the workspace tooling
-      # used below is not on evalml's main yet (matches [tool.evalml] dev-ref).
-      # Drop --branch once it merges: a bare clone of main will then carry the
-      # tooling and .install_workspace resolves devml to a release tag instead.
-      # Use HTTPS (public repo) so the bare-metal runner needs no SSH keys.
-      git clone --branch feat/workspaces \
-        https://github.com/MeteoSwiss/evalml.git "$EVALML"
-      cd "$EVALML"
-
-# Install just + uv, and write anemoi's dataset-catalog settings. Neither just
-# nor uv is on the bare-metal runner; the anemoi settings
-# (~/.config/anemoi/settings.toml, from hpc/anemoi_settings.toml) give the
-# [datasets] search paths that let anemoi-inference resolve datasets by name
-# (e.g. mch-realch1-fdb-1km-…). All land under $HOME, so inference inherits them.
-.install_tooling:
-  script:
-    - |
-      banner "Install just + uv, write anemoi settings"
-      # uv: bare metal assumes a user-managed env so evalml ships no installer,
-      # but `just sync` needs uv to build the venv from the balfrin-gpu group.
-      export UV_INSTALL_DIR="$HOME/.local/bin"
+      export HOME="$PWD/home"
+      export PATH="$PWD/.local/bin:$PATH"
+      # uv: bare metal assumes a user-managed env so evalml ships no installer
+      export UV_INSTALL_DIR="$PWD/.local/bin"
       curl -LsSf https://astral.sh/uv/install.sh | env INSTALLER_NO_MODIFY_PATH=1 sh
       uv --version
 
-# Fetch the workspace at the tested commit, pin devml to the ref the workspace
-# declares compatible, then validate the contract and build the venv.
-.install_workspace:
+.install_evalml:
   script:
     - |
-      banner "Install workspace"
-      cd $EVALML && uv sync
-
-# Reuse the environment the setup job built at $WORK. Fail clearly if it is
-# missing (e.g. setup did not run, or ran on a pipeline with a different id).
-.activate_env:
-  script:
-    - |
-      banner "Reuse environment from setup ($WORK)"
-      test -x "$EVALML/.venv/bin/python"  || { echo "venv missing at $EVALML/.venv — did setup sync succeed?"; exit 1; }
-      cd "$EVALML"
-      echo "reusing evalml=$EVALML venv=$EVALML/.venv"
-      source "$EVALML/.venv/bin/activate"
-  
-# Remove the per-pipeline workdir. The uv wheel cache ($SCRATCH/.cache/uv) is
-# deliberately left in place for the next pipeline.
-.cleanup:
-  script:
-    - |
-      banner "Clean up pipeline workdir"
-      echo "removing $WORK"
-      rm -rf "${WORK:?}"
+      banner "Install evalml"
+      echo $PWD
+      echo "Setting up environment for integration tests on $(hostname)"
+      VENV_DIR="$(pwd)/.venv"
+      echo "will install evalml at: $VENV_DIR"
+      UV_HOME="$VENV_DIR" uv sync
+      source "$VENV_DIR/bin/activate"
 
 integration_test_job:
   extends: [.baremetal-runner-balfrin]
   before_script:
     - !reference [.sh_preamble, script]
-    - !reference [.log_ci_context, script]
-    - !reference [.env_paths, script]
-#    - !reference [.log_tool_versions, script]
-#    - !reference [.setup_git_auth, script]
-#    - !reference [.clone_evalml, script]
-    - !reference [.install_tooling, script]
-    - !reference [.install_workspace, script]
-    - !reference [.activate_env, script]
+    - !reference [.install_uv, script]
+    - !reference [.install_evalml, script]
   script:
     - pytest tests/integration -m heavytest
   after_script:
