@@ -22,20 +22,20 @@ include:
       curl -LsSf https://astral.sh/uv/install.sh | env INSTALLER_NO_MODIFY_PATH=1 sh
       uv --version
 
-# .install_evalmll
-#   sscript:
-#     - |
-#       echo "Setting up environment for integration tests on $(hostname)"
-#       VENV_DIR="$(pwd)/.venv"
-#       echo "will install evalml at: $VENV_DIR"
-#       UV_HOME="$VENV_DIR" uv sync
-#       source "$VENV_DIR/bin/activate"
+.install_evalml:
+  script:
+    - |
+      echo "Setting up environment for integration tests on $(hostname)"
+      VENV_DIR="$(pwd)/.venv"
+      echo "will install evalml at: $VENV_DIR"
+      UV_HOME="$VENV_DIR" uv sync
+      source "$VENV_DIR/bin/activate"
 
 integration_test_job:
-  extends: [.baremetal-runner-balfrin]
-#  before_script:
-#    - !reference [.install_uv, script]
-#    - !reference [.install_evalmll, script]
+   extends: [.baremetal-runner-balfrin]
+  before_script:
+    - !reference [.install_uv, script]
+    - !reference [.install_evalmll, script]
   script:
     - ./ci/run-longtest-coverage.sh tests/integration
   variables:
