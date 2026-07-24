@@ -146,7 +146,7 @@ integration_test_job:
     - !reference [.env_paths, script]
 #    - !reference [.log_tool_versions, script]
 #    - !reference [.setup_git_auth, script]
-    - !reference [.clone_evalml, script]
+#    - !reference [.clone_evalml, script]
     - !reference [.install_tooling, script]
     - !reference [.install_workspace, script]
     - !reference [.activate_env, script]
