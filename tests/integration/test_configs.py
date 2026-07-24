@@ -22,25 +22,25 @@ CONFIGS = [
 # Values are step-averaged over the fully aggregated slice (region=all, season=all, init_hour=-999).
 EXPECTED = {
     "varda-single-1.0.yaml": {
-        "T_2M.RMSE":      pytest.approx(1.613003, abs=1e-6),
-        "T_2M.BIAS":      pytest.approx(0.093322, abs=1e-6),
-        "T_2M.MAE":       pytest.approx(1.076129, abs=1e-6),
-        "T_2M.CORR":      pytest.approx(0.938171, abs=1e-6),
-        "TD_2M.RMSE":     pytest.approx(2.146990, abs=1e-6),
-        "TD_2M.BIAS":     pytest.approx(0.657801, abs=1e-6),
-        "TD_2M.MAE":      pytest.approx(1.379343, abs=1e-6),
-        "TD_2M.CORR":     pytest.approx(0.949576, abs=1e-6),
-        "SP_10M.RMSE":    pytest.approx(1.697493, abs=1e-6),
-        "SP_10M.BIAS":    pytest.approx(-0.404315, abs=1e-6),
-        "SP_10M.MAE":     pytest.approx(1.235294, abs=1e-6),
-        "SP_10M.CORR":    pytest.approx(0.680784, abs=1e-6),
-        "PMSL.RMSE":      pytest.approx(41.761943, abs=1e-6),
-        "PMSL.BIAS":      pytest.approx(5.627536, abs=1e-6),
-        "PMSL.MAE":       pytest.approx(32.933578, abs=1e-6),
-        "PMSL.CORR":      pytest.approx(0.928961, abs=1e-6),
+        "T_2M.RMSE": pytest.approx(1.613003, abs=1e-6),
+        "T_2M.BIAS": pytest.approx(0.093322, abs=1e-6),
+        "T_2M.MAE": pytest.approx(1.076129, abs=1e-6),
+        "T_2M.CORR": pytest.approx(0.938171, abs=1e-6),
+        "TD_2M.RMSE": pytest.approx(2.146990, abs=1e-6),
+        "TD_2M.BIAS": pytest.approx(0.657801, abs=1e-6),
+        "TD_2M.MAE": pytest.approx(1.379343, abs=1e-6),
+        "TD_2M.CORR": pytest.approx(0.949576, abs=1e-6),
+        "SP_10M.RMSE": pytest.approx(1.697493, abs=1e-6),
+        "SP_10M.BIAS": pytest.approx(-0.404315, abs=1e-6),
+        "SP_10M.MAE": pytest.approx(1.235294, abs=1e-6),
+        "SP_10M.CORR": pytest.approx(0.680784, abs=1e-6),
+        "PMSL.RMSE": pytest.approx(41.761943, abs=1e-6),
+        "PMSL.BIAS": pytest.approx(5.627536, abs=1e-6),
+        "PMSL.MAE": pytest.approx(32.933578, abs=1e-6),
+        "PMSL.CORR": pytest.approx(0.928961, abs=1e-6),
         "TOT_PREC6.RMSE": pytest.approx(0.450449, abs=1e-6),
         "TOT_PREC6.BIAS": pytest.approx(0.077970, abs=1e-6),
-        "TOT_PREC6.MAE":  pytest.approx(0.112071, abs=1e-6),
+        "TOT_PREC6.MAE": pytest.approx(0.112071, abs=1e-6),
         "TOT_PREC6.CORR": pytest.approx(0.720550, abs=1e-6),
     },
 }
@@ -69,7 +69,9 @@ def test_experiment_metrics(config_name):
         str(PROJECT_ROOT / "output/data/runs/**/verif_aggregated_*.nc"),
         recursive=True,
     )
-    assert nc_files, f"No verif_aggregated_*.nc found in output/data/runs/ for {config_name}"
+    assert nc_files, (
+        f"No verif_aggregated_*.nc found in output/data/runs/ for {config_name}"
+    )
 
     ds = xr.open_dataset(nc_files[0])
 
