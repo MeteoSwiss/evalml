@@ -81,58 +81,47 @@ rule inference_extract_requirements:
         """
 
 
-# Create a virtual environment for inference, using the pyproject.toml created above.
-# The virtual environment is managed with uv. The created virtual environment is relocatable,
-# so it can be squashed later. Pre-compilation to bytecode is done to speed up imports.
-rule inference_create_venv:
+# Prepare the inference environment for a specific checkpoint. The venv is built
+# in /dev/shm (RAM) to avoid heavy IO on the parallel filesystem, then squashed
+# to a .squashfs image tracked directly as the rule output.
+# See https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
+rule inference_prepare_env:
     input:
         metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
         requirements=OUT_ROOT / "data/runs/{env_id}/requirements.txt",
     output:
-        venv=temp(directory(OUT_ROOT / "data/runs/{env_id}/.venv")),
+        image=OUT_ROOT / "data/runs/{env_id}/venv.squashfs",
     log:
-        OUT_ROOT / "logs/inference_create_venv/{env_id}.log",
+        OUT_ROOT / "logs/inference_prepare_env/{env_id}.log",
     localrule: True
     shell:
         """
         (
+            VENV_DIR=$(mktemp -d /dev/shm/evalml_XXXXXXXX)
+            trap "rm -rf $VENV_DIR" EXIT
+            VENV=$VENV_DIR/.venv
 
             PYTHON_VERSION=$(cat {input.metadata} | jq -r ".provenance_training.python")
-            echo "[$(date)] Creating virtual environment with Python $PYTHON_VERSION..."
-            uv venv --managed-python --python $PYTHON_VERSION --relocatable --link-mode=copy {output.venv}
-            source {output.venv}/bin/activate
+            echo "[$(date)] Creating virtual environment with Python $PYTHON_VERSION in RAM (/dev/shm)..."
+            uv venv --managed-python --python $PYTHON_VERSION --relocatable --link-mode=copy $VENV
+            source $VENV/bin/activate
 
             echo "[$(date)] Installing requirements from {input.requirements}..."
             uv pip install -r {input.requirements}
 
             echo "[$(date)] Compiling Python bytecode..."
-            python -m compileall -j 8 -o 0 -o 1 -o 2 {output.venv}/lib/python*/site-packages
+            python -m compileall -j 8 -o 0 -o 1 -o 2 $VENV/lib/python*/site-packages
             echo "[$(date)] Testing that eccodes is working..."
             if ! python -c "import eccodes" &>/dev/null; then
                 echo "[$(date)] ERROR: eccodes is not installed correctly in the virtual environment."
-                echo "[$(date)] Please check the installation and try again."
                 exit 1
             fi
-            echo "[$(date)] Inference virtual environment successfully created at {output.venv}"
+
+            echo "[$(date)] Creating squashfs image from RAM-based venv..."
+            mksquashfs $(realpath $VENV) {output.image} -no-recovery -noappend -Xcompression-level 3
+            echo "[$(date)] Squashfs image created at {output.image}"
         ) >{log} 2>&1
         """
-
-
-# Create a squashfs image for the inference virtual environment of
-# a specific checkpoint. Find more about this at
-# https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
-rule inference_make_squashfs_image:
-    input:
-        venv=rules.inference_create_venv.output.venv,
-    output:
-        image=OUT_ROOT / "data/runs/{env_id}/venv.squashfs",
-    log:
-        OUT_ROOT / "logs/inference_make_squashfs_image/{env_id}.log",
-    localrule: True
-    shell:
-        "mksquashfs $(realpath {input.venv}) {output.image}"
-        " -no-recovery -noappend -Xcompression-level 3"
-        " > {log} 2>/dev/null"
 
 
 # Create a zipped directory that, when extracted, can be used as a sandbox
@@ -272,11 +261,8 @@ def _inference_routing_fn(wc):
 rule inference_execute:
     input:
         okfile=_inference_routing_fn,
-        env=lambda wc: (
-            OUT_ROOT / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs"
-            if RUN_CONFIGS[wc.run_id].get("squash_venv", True)
-            else OUT_ROOT / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/.venv"
-        ),
+        image=lambda wc: OUT_ROOT
+        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
     output:
         okfile=OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok",
     log:
@@ -291,8 +277,7 @@ rule inference_execute:
         ntasks=lambda wc: get_resource(wc, "tasks", 1),
         gpus=lambda wc: get_resource(wc, "gpu", 1),
     params:
-        env_path=lambda wc, input: f"{Path(input.env).resolve()}",
-        squash_venv=lambda wc: RUN_CONFIGS[wc.run_id].get("squash_venv", True),
+        env_path=lambda wc, input: f"{Path(input.image).resolve()}",
         workdir=lambda wc: (
             OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
         ).resolve(),
@@ -334,11 +319,7 @@ rule inference_execute:
             }}
             export -f _run_inference
 
-            if [ "{params.squash_venv}" = "True" ]; then
-                squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
-            else
-                _run_inference "{params.env_path}"
-            fi
+            squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
         ) >{log} 2>&1
         touch {output.okfile}
         """
