@@ -70,6 +70,7 @@ profile:
     gpus: 1
   default_resources:
     slurm_partition: "postproc"
+    slurm_account: s83
     cpus_per_task: 1
     mem_mb_per_cpu: 1800
     runtime: "1h"
