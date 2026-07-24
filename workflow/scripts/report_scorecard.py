@@ -25,7 +25,7 @@ from verification import decode_metric
 
 # Sentinel values that select the "aggregate over all" slice for each
 # stratification dimension that is not the active stratification axis.
-_STRAT_ALL_VALUES = {"region": "all", "season": "all", "init_hour": -999}
+_STRAT_ALL_VALUES = {"season": "all", "init_hour": -999}
 
 DEFAULT_PLOT_CFG = {
     "rcparams": {
@@ -227,6 +227,9 @@ def _load_relative_diff(cfg: dict) -> xr.Dataset:
 
     model_ds = xr.open_dataset(cfg["model"]["path"])
     baseline_ds = xr.open_dataset(cfg["baseline"]["path"])
+
+    if strat_dim != "region":
+        sel_coords["region"] = model_ds["region"].values[0]
 
     for label, ds in [("model", model_ds), ("baseline", baseline_ds)]:
         if "n_samples" not in ds.data_vars:
