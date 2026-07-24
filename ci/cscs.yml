@@ -27,8 +27,10 @@ include:
   script:
     - |
       banner "Install uv"
+      export UV_CACHE_DIR="$SCRATCH/.cache/uv"  # wheel cache, persistent across pipelines
+      export PATH="$PWD/.local/bin:$PATH"
       # uv: bare metal assumes a user-managed env so evalml ships no installer
-      export UV_INSTALL_DIR="$HOME/.local/bin"
+      export UV_INSTALL_DIR="$PWD/.local/bin"
       curl -LsSf https://astral.sh/uv/install.sh | env INSTALLER_NO_MODIFY_PATH=1 sh
       uv --version
 
