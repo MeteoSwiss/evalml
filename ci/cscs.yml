@@ -86,7 +86,9 @@ include:
       # used below is not on evalml's main yet (matches [tool.evalml] dev-ref).
       # Drop --branch once it merges: a bare clone of main will then carry the
       # tooling and .install_workspace resolves devml to a release tag instead.
-      git clone --branch feat/workspaces git@github.com:MeteoSwiss/evalml.git "$EVALML"
+      # Use HTTPS (public repo) so the bare-metal runner needs no SSH keys.
+      git clone --branch feat/workspaces \
+        https://github.com/MeteoSwiss/evalml.git "$EVALML"
       cd "$EVALML"
 
 # Install just + uv, and write anemoi's dataset-catalog settings. Neither just
