@@ -70,12 +70,11 @@ include:
       export HOME="$WORK/home"                  # just/uv + venv's managed Python; reused across jobs
       export PATH="$HOME/.local/bin:$PATH"
       export UV_CACHE_DIR="$SCRATCH/.cache/uv"  # wheel cache, persistent across pipelines
-      export EVALML="$WORK/evalml"                # evalml checkout
-      export WS="$WORK/evalml/workspace"         # the fetched workspace (venv at $WS/.venv)
+      export EVALML="$WORK/evalml"                # evalml checkout (venv at $EVALML/.venv)
       mkdir -p "$HOME" "$UV_CACHE_DIR"          # $HOME (= $WORK/home) also creates $WORK
       echo "WORK=$WORK"
       echo "HOME=$HOME"
-      echo "EVALML=$EVALML  WS=$WS  UV_CACHE_DIR=$UV_CACHE_DIR"
+      echo "EVALML=$EVALML  UV_CACHE_DIR=$UV_CACHE_DIR"
 
 # Clone evalml into $EVALML and enter it.
 .clone_evalml:
@@ -112,7 +111,7 @@ include:
   script:
     - |
       banner "Install workspace"
-      WORKSPACE_DIR="$WS" uv sync
+      cd $EVALML && uv sync
 
 # Reuse the environment the setup job built at $WORK. Fail clearly if it is
 # missing (e.g. setup did not run, or ran on a pipeline with a different id).
@@ -120,10 +119,10 @@ include:
   script:
     - |
       banner "Reuse environment from setup ($WORK)"
-      test -x "$WS/.venv/bin/python"  || { echo "venv missing at $WS/.venv — did setup sync succeed?"; exit 1; }
+      test -x $EVALML/.venv/bin/python"  || { echo "venv missing at $EVALML/.venv — did setup sync succeed?"; exit 1; }
       cd "$EVALML"
-      echo "reusing evalml=$EVALML  workspace=$WS  venv=$WS/.venv"
-      source "$WS/.venv/bin/activate"
+      echo "reusing evalml=$EVALML venv=$EVALML/.venv"
+      source "$EVALML/.venv/bin/activate"
   
 # Remove the per-pipeline workdir. The uv wheel cache ($SCRATCH/.cache/uv) is
 # deliberately left in place for the next pipeline.
