@@ -31,6 +31,32 @@ include:
 #    # Explicitly request more time from Slurm, tests aren't running fast enough.
 #    SLURM_TIMELIMIT: "01:00:00"
 
+# ── reusable script fragments (hidden jobs) ──────────────────────────────────
+
+# Strict mode + a banner() helper for section headers. Referenced first so both
+# are in scope for every fragment that follows.
+.sh_preamble:
+  script:
+    - |
+      set -euo pipefail
+      banner() { printf '\n\033[1;36m==== %s ====\033[0m\n' "$*"; }
+
+      # Print CI context up front so the log is self-explanatory. The build-dir/slot
+
+# vars are logged as evidence: if CI_PROJECT_DIR and CI_CONCURRENT_ID turn out
+# identical across the setup and inference jobs, reuse could be simplified to
+# the default build dir; if they differ, the $SCRATCH workdir was necessary.
+.log_ci_context:
+  script:
+    - |
+      banner "CI context"
+      echo "host=$(hostname -f 2>/dev/null || hostname)  user=$(whoami)"
+      echo "project=${CI_PROJECT_PATH:-?}  ref=${CI_COMMIT_REF_NAME:-?}  sha=${CI_COMMIT_SHA:-?}"
+      echo "server=${CI_SERVER_URL:-?}"
+      echo "pipeline=${CI_PIPELINE_ID:-?}  job=${CI_JOB_ID:-?}  concurrent_id=${CI_CONCURRENT_ID:-?}"
+      echo "CI_PROJECT_DIR=${CI_PROJECT_DIR:-?}"
+      echo "PWD=$PWD"
+
 
 # Shared per-pipeline paths on $SCRATCH — referenced by every job so all three
 # agree on where the environment lives. The compute node has no mounted home,
@@ -113,8 +139,8 @@ include:
 integration_test_job:
   extends: [.baremetal-runner-balfrin]
   before_script:
-#    - !reference [.sh_preamble, script]
-#    - !reference [.log_ci_context, script]
+    - !reference [.sh_preamble, script]
+    - !reference [.log_ci_context, script]
     - !reference [.env_paths, script]
 #    - !reference [.log_tool_versions, script]
 #    - !reference [.setup_git_auth, script]
@@ -125,6 +151,7 @@ integration_test_job:
   script:
     - pytest tests/integration -m heavytest
   after_script:
+    - !reference [.sh_preamble, script]
     - !reference [.cleanup, script]
   variables:
     # Explicitly request more time from Slurm, so that the long tests can complete.
