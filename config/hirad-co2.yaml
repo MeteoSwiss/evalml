@@ -14,8 +14,8 @@ runs:
       steps: 0/120/6
   - baseline:
       label: HiRAD
-      root: /users/mmcgloho/hirad-gen/HiRAD-Gen/outputs/generation/generation_era_real_test/outputs/evaluation/era_real_test
-      steps: 0
+      root: /scratch/mch/mmcgloho/grib/
+      steps: "0/0/1"
 
 truth:
   label: KENDA-CH1
@@ -24,5 +24,21 @@ truth:
 locations:
   output_root: output/
 
+experiment:
+  stratification:
+    regions: []
+  dashboard:
+    stratification:
+      - season
+
 profile:
   executor: slurm
+  global_resources:
+    gpus: 1
+  default_resources:
+    slurm_partition: postproc
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 10
