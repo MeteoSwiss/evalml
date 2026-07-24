@@ -11,19 +11,121 @@ include:
     SLURM_JOB_NUM_NODES: 1
     SLURM_NTASKS: 1
 
+
+
+
+#unit_test_job:
+#  extends: [.baremetal-runner-balfrin]
+#  before_script:
+#    - |
+#      echo "Setting up environment for unit tests on $(hostname)"
+#      VENV_DIR="$(pwd)/.venv"
+#      echo "uv installed at: $(which uv)"
+#      uv --version
+#      echo "will install evalml at: $VENV_DIR"
+#      UV_HOME="$VENV_DIR" uv sync
+#      source "$VENV_DIR/bin/activate"
+#  script:
+#    - pytest tests/unit
+#  variables:
+#    # Explicitly request more time from Slurm, tests aren't running fast enough.
+#    SLURM_TIMELIMIT: "01:00:00"
+
+
+# Shared per-pipeline paths on $SCRATCH — referenced by every job so all three
+# agree on where the environment lives. The compute node has no mounted home,
+# so HOME points into the workdir; that also makes just/uv and the venv's
+# managed Python path-stable across the setup and inference allocations.
+.env_paths:
+  script:
+    - |
+      banner "Environment paths"
+      export WORK="$SCRATCH/evalml-ci/$CI_PIPELINE_ID"
+      export HOME="$WORK/home"                  # just/uv + venv's managed Python; reused across jobs
+      export PATH="$HOME/.local/bin:$PATH"
+      export UV_CACHE_DIR="$SCRATCH/.cache/uv"  # wheel cache, persistent across pipelines
+      export EVALML="$WORK/evalml"                # evalml checkout
+      export WS="$WORK/evalml/workspace"         # the fetched workspace (venv at $WS/.venv)
+      mkdir -p "$HOME" "$UV_CACHE_DIR"          # $HOME (= $WORK/home) also creates $WORK
+      echo "WORK=$WORK"
+      echo "HOME=$HOME"
+      echo "EVALML=$EVALML  WS=$WS  UV_CACHE_DIR=$UV_CACHE_DIR"
+
+# Clone evalml into $EVALML and enter it.
+.clone_evalml:
+  script:
+    - |
+      banner "Clone evalml"
+      # TEMPORARY: clone the feat/workspaces dev branch — the workspace tooling
+      # used below is not on evalml's main yet (matches [tool.evalml] dev-ref).
+      # Drop --branch once it merges: a bare clone of main will then carry the
+      # tooling and .install_workspace resolves devml to a release tag instead.
+      git clone --branch feat/workspaces git@github.com:MeteoSwiss/evalml.git "$EVALML"
+      cd "$EVALML"
+
+# Install just + uv, and write anemoi's dataset-catalog settings. Neither just
+# nor uv is on the bare-metal runner; the anemoi settings
+# (~/.config/anemoi/settings.toml, from hpc/anemoi_settings.toml) give the
+# [datasets] search paths that let anemoi-inference resolve datasets by name
+# (e.g. mch-realch1-fdb-1km-…). All land under $HOME, so inference inherits them.
+.install_tooling:
+  script:
+    - |
+      banner "Install just + uv, write anemoi settings"
+      # just + anemoi settings, the devml way (PATH already has ~/.local/bin).
+      ./hpc/bin/setup.sh --just --anemoi-settings --yes
+      just --version
+      # uv: bare metal assumes a user-managed env so evalml ships no installer,
+      # but `just sync` needs uv to build the venv from the balfrin-gpu group.
+      export UV_INSTALL_DIR="$HOME/.local/bin"
+      curl -LsSf https://astral.sh/uv/install.sh | env INSTALLER_NO_MODIFY_PATH=1 sh
+      uv --version
+
+# Fetch the workspace at the tested commit, pin devml to the ref the workspace
+# declares compatible, then validate the contract and build the venv.
+.install_workspace:
+  script:
+    - |
+      banner "Install workspace"
+      WORKSPACE_DIR="$WS" uv sync
+
+# Reuse the environment the setup job built at $WORK. Fail clearly if it is
+# missing (e.g. setup did not run, or ran on a pipeline with a different id).
+.activate_env:
+  script:
+    - |
+      banner "Reuse environment from setup ($WORK)"
+      test -x "$HOME/.local/bin/just" || { echo "no just under $HOME — did setup run?"; exit 1; }
+      test -d "$WS"                   || { echo "workspace missing at $WS — did setup run?"; exit 1; }
+      test -x "$WS/.venv/bin/python"  || { echo "venv missing at $WS/.venv — did setup sync succeed?"; exit 1; }
+      cd "$EVALML"
+      echo "reusing evalml=$EVALML  workspace=$WS  venv=$WS/.venv"
+  
+# Remove the per-pipeline workdir. The uv wheel cache ($SCRATCH/.cache/uv) is
+# deliberately left in place for the next pipeline.
+.cleanup:
+  script:
+    - |
+      banner "Clean up pipeline workdir"
+      echo "removing $WORK"
+      rm -rf "${WORK:?}"
+
 integration_test_job:
   extends: [.baremetal-runner-balfrin]
   before_script:
-    - |
-      echo "Setting up environment for integration tests on $(hostname)"
-      VENV_DIR="$(pwd)/.venv"
-      echo "uv installed at: $(which uv)"
-      uv --version
-      echo "will install evalml at: $VENV_DIR"
-      UV_HOME="$VENV_DIR" uv sync
-      source "$VENV_DIR/bin/activate"
+#    - !reference [.sh_preamble, script]
+#    - !reference [.log_ci_context, script]
+    - !reference [.env_paths, script]
+#    - !reference [.log_tool_versions, script]
+#    - !reference [.setup_git_auth, script]
+    - !reference [.clone_evalml, script]
+    - !reference [.install_tooling, script]
+    - !reference [.install_workspace, script]
+    - !reference [.activate_env, script]
   script:
     - pytest tests/integration -m heavytest
+  after_script:
+    - !reference [.cleanup, script]
   variables:
     # Explicitly request more time from Slurm, so that the long tests can complete.
     SLURM_TIMELIMIT: "10:00:00"
