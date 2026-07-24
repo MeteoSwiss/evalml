@@ -101,6 +101,11 @@ class RunConfig(BaseModel):
         False,
         description="If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
     )
+    squash_venv: bool = Field(
+        True,
+        description="If true (default), package the virtual environment as a squashfs image before running inference. "
+        "Set to false to activate the virtual environment directly and skip the squashfs build step.",
+    )
 
     config: Dict[str, Any] | str
 
