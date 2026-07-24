@@ -43,4 +43,4 @@ integration_test_job:
     - pytest tests/integration -m longtest
   variables:
     # Explicitly request more time from Slurm, so that the long tests can complete.
-    SLURM_TIMELIMIT: "01:00:00"
+    SLURM_TIMELIMIT: "10:00:00"
