@@ -81,6 +81,7 @@ truth:
 experiment:
   stratification:
     regions:
+      - icon-ch1: [1.5, 16, 43, 49.5]  # domain region — must be first
       - jura
       - mittelland
       - voralpen

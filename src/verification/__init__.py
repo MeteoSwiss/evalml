@@ -3,8 +3,6 @@ import os
 import re
 import time
 
-from pathlib import Path
-
 import cartopy.crs as ccrs
 from cartopy.io.shapereader import Reader
 
@@ -112,27 +110,26 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
     regions: dict[str, list[Polygon]]
 
     def __init__(
-        self, shp: str | list[str], src_crs=ccrs.epsg(2056), dst_crs=ccrs.PlateCarree()
+        self,
+        regions: list[dict],
+        src_crs=ccrs.epsg(2056),
+        dst_crs=ccrs.PlateCarree(),
     ):
         proj = pyproj.Transformer.from_crs(
             src_crs.proj4_init, dst_crs.proj4_init, always_xy=True
         ).transform
 
-        regions = {}
-        # add inner region for ML evaluation
-        # this is the extent of the largest lat/lon box that is fully within the radar/INCA domain
-        regions["all"] = [
-            Polygon(list(zip([1.5, 16, 16, 1.5, 1.5], [43, 43, 49.5, 49.5, 43])))
-        ]
-        if shp and shp != [""]:
-            shp = [shp] if isinstance(shp, str) else shp
-            for shapefile in shp:
-                region_name = Path(shapefile).stem
-                reader = Reader(shapefile)
-                regions[region_name] = [
+        self.regions = {}
+        for spec in regions:
+            name = spec["name"]
+            if spec["type"] == "bbox":
+                lon_min, lon_max, lat_min, lat_max = spec["bbox"]
+                self.regions[name] = [_bbox_polygon(lon_min, lon_max, lat_min, lat_max)]
+            elif spec["type"] == "shp":
+                reader = Reader(spec["path"])
+                self.regions[name] = [
                     transform(proj, record.geometry) for record in reader.records()
                 ]
-        self.regions = regions
 
     def get_masks(self, lat: xr.DataArray, lon: xr.DataArray) -> xr.DataArray:
         masks = []
@@ -301,12 +298,24 @@ def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
     return out
 
 
+def _bbox_polygon(lon_min, lon_max, lat_min, lat_max) -> Polygon:
+    return Polygon(
+        [
+            (lon_min, lat_min),
+            (lon_max, lat_min),
+            (lon_max, lat_max),
+            (lon_min, lat_max),
+            (lon_min, lat_min),
+        ]
+    )
+
+
 def verify(
     fcst: xr.Dataset,
     obs: xr.Dataset,
     fcst_label: str,
     obs_label: str,
-    regions: list[str] | None = None,
+    regions: list[dict] | None = None,
     dim: list[str] | None = None,
     threshold_dict: dict[str, dict[str, list[float]]] | None = None,
     num_workers: int | None = None,
@@ -328,8 +337,12 @@ def verify(
         Label for the forecast source (used in output dataset).
     obs_label : str
         Label for the observation source (used in output dataset).
-    regions : list[str] or None, optional
-        List of shapefile paths or region names to use for spatial aggregation. If None, uses default region ('all').
+    regions : list[dict] or None, optional
+        Ordered list of region specs. Each entry is either
+        ``{"type": "bbox", "name": ..., "bbox": [lon_min, lon_max, lat_min, lat_max]}`` or
+        ``{"type": "shp", "name": ..., "path": ...}``. The list order is preserved in the
+        output NetCDF region coordinate; the first entry is the domain region used by
+        dashboards and scorecards when region stratification is not active.
     dim : list[str] or None, optional
         List of dimension names to reduce over when computing metrics/statistics. If None, tries to infer from fcst.
     threshold_dict : dict[str, dict[str, list[float]]] or None, optional
@@ -361,8 +374,14 @@ def verify(
         else:
             dim = ["values"]
 
+    if not regions:
+        raise ValueError(
+            "At least one region must be specified. "
+            "Provide an ordered list of region specs via the 'regions' argument."
+        )
+
     fcst_aligned, obs_aligned = xr.align(fcst, obs, join="inner", copy=False)
-    region_polygons = ShapefileSpatialAggregationMasks(shp=regions)
+    region_polygons = ShapefileSpatialAggregationMasks(regions=regions)
     masks = region_polygons.get_masks(
         lon=obs_aligned["longitude"], lat=obs_aligned["latitude"]
     )

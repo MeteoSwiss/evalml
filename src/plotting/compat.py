@@ -15,6 +15,9 @@ PARAMS_MAP = {
     "PS": "sp",
     "PMSL": "msl",
     "TOT_PREC": "tp",
+    "CLCT": "tcc",
+    "CLCL": "lcc",
+    "SSRD": "ssrd",
 }
 
 PARAMS_MAP_INV = {v: k for k, v in PARAMS_MAP.items()}
@@ -35,6 +38,11 @@ def load_state_from_grib(
     }
     if ifs_rename:
         ds = ds.rename(ifs_rename)
+        # TODO check if needed
+    # if "tp" in ifs_rename and "TOT_PREC" in ds:
+    #     # IFS/ECMWF convention: "tp" is accumulated precip in meters.
+    #     # Convert to kg m-2 (mm) to match the ICON-native convention.
+    #     ds["TOT_PREC"] = ds["TOT_PREC"] * 1000
     state = {}
     ref_param = next((p for p in (paramlist or []) if p in ds), None)
     if ref_param is None:

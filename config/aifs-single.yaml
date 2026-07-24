@@ -18,30 +18,31 @@ runs:
       config: resources/inference/configs/aifs-single-forecaster.yaml
       extra_requirements:
         - torch-geometric==2.4.0
-        - anemoi-inference==0.6.3
+        - anemoi-inference==0.11.1
         - anemoi-models==0.5.0
         - https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiFALSE-cp312-cp312-linux_x86_64.whl
       disable_local_eccodes_definitions: true
-      inference_resources:
-        slurm_partition: preemptible
-        gpus: 1
+
 truth:
-  label: KENDA-CH1
-  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+  label: ERA5-o96
+  root: /store_new/mch/msopr/ml/datasets/aifs-ea-an-oper-0001-mars-o96-1979-2024-1h-v3-with-era51.zarr
+
+lapse_rate_correction: false
 
 experiment:
   params:
     - T_2M
     - TD_2M
     - SP_10M
-    - TOT_PREC6
+    - TOT_PREC
   dashboard:
     stratification:
       # - region
       # - init_hour
       - season
   stratification:
-    regions: []
+    regions:
+      - global: [-180, 180, -90, 90]
 
 locations:
   output_root: output/

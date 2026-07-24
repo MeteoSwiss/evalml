@@ -44,7 +44,7 @@ def _make_verif_dataset(forecast_reference_times):
         },
         coords={
             "forecast_reference_time": forecast_reference_times,
-            "region": ["all"],
+            "region": ["global"],
             "source": ["fcst"],
         },
     )

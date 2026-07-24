@@ -1,3 +1,4 @@
+import json
 import logging
 from argparse import ArgumentParser
 from argparse import Namespace
@@ -94,7 +95,7 @@ def main(args: ScriptConfig):
         truth,
         args.source_id,
         args.truth_source_id,
-        args.regions,
+        regions=args.regions,
         threshold_dict=args.threshold_dict,
     )
     LOG.info(
@@ -172,9 +173,13 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--regions",
-        type=lambda x: [r for r in x.split(",") if r],
-        help="Comma-separated list of shapefile paths defining regions for stratification.",
-        default="",
+        type=json.loads,
+        help=(
+            "JSON list of region specs in config order. "
+            'Each entry is {"type": "bbox", "name": ..., "bbox": [...]} '
+            'or {"type": "shp", "name": ..., "path": ...}.'
+        ),
+        default="[]",
     )
     parser.add_argument(
         "--threshold_dict",

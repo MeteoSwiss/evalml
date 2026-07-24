@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
+from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
@@ -278,8 +278,28 @@ class DomainConfig(BaseModel):
         "orthographic",
         description="Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
     )
+    rotate: bool = Field(
+        False,
+        description=(
+            "Rotate the viewpoint across animation frames as lead time advances. "
+            "Only valid for full-globe domains (extent: null)."
+        ),
+    )
+    hours_per_revolution: float = Field(
+        96.0,
+        gt=0,
+        description="Simulated lead-time hours for one full 360° rotation, when rotate is enabled.",
+    )
 
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _rotate_requires_globe(self):
+        if self.rotate and self.extent is not None:
+            raise ValueError(
+                "rotate: true is only valid for full-globe domains (extent: null)."
+            )
+        return self
 
 
 class MeteogramConfig(BaseModel):
@@ -387,14 +407,44 @@ class Locations(BaseModel):
 class Stratification(BaseModel):
     """Stratification settings for the analysis."""
 
-    regions: List[str] = Field(
+    regions: List[Union[str, Dict[str, List[float]]]] = Field(
         default_factory=list,
-        description="List of region names for stratification. Empty list means no spatial stratification.",
+        description=(
+            "List of region specs for spatial stratification. At least one region is required. "
+            "String entries are shapefile names (resolved against 'root'). Dict entries map a "
+            "region name to a bounding box [lon_min, lon_max, lat_min, lat_max]. "
+            "The first entry is the domain region used by the dashboard when region stratification "
+            "is not active (e.g. {'global': [-180, 180, -90, 90]} or {'icon-ch1': [1.5, 16, 43, 49.5]})."
+        ),
     )
     root: Optional[str] = Field(
         None,
-        description="Root directory where the region shapefiles are stored. Required when regions is non-empty.",
+        description="Root directory where the region shapefiles are stored. Required when regions contains string entries.",
     )
+
+    @field_validator("regions")
+    @classmethod
+    def validate_regions(
+        cls, v: List[Union[str, Dict[str, List[float]]]]
+    ) -> List[Union[str, Dict[str, List[float]]]]:
+        if not v:
+            raise ValueError(
+                "At least one region must be specified. "
+                "Add a domain bbox as the first entry, e.g. regions: [{global: [-180, 180, -90, 90]}] "
+                "for global models or [{icon-ch1: [1.5, 16, 43, 49.5]}] for ICON-CH1."
+            )
+        for entry in v:
+            if isinstance(entry, dict):
+                if len(entry) != 1:
+                    raise ValueError(
+                        f"Each bbox region dict must have exactly one key, got: {list(entry.keys())}"
+                    )
+                name, bbox = next(iter(entry.items()))
+                if len(bbox) != 4:
+                    raise ValueError(
+                        f"Bbox for region '{name}' must have exactly 4 values [lon_min, lon_max, lat_min, lat_max], got {len(bbox)}."
+                    )
+        return v
 
 
 class Dashboard(BaseModel):

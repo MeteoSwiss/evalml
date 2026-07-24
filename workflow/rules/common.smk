@@ -80,22 +80,33 @@ def parse_reference_times():
 
 
 def parse_regions():
-    """Parse regions from the configuration."""
+    """Return a JSON list of region specs in config order.
+
+    Each entry is either ``{"type": "bbox", "name": ..., "bbox": [...]}``
+    or ``{"type": "shp", "name": ..., "path": ...}``, preserving the original
+    order so the NetCDF region coordinate matches the config.
+    """
     cfg = config["experiment"]["stratification"]
-    region_names = cfg.get("regions", [])
-    if not region_names:
-        return ""
-    regions = [f"{cfg['root']}/{region}.shp" for region in region_names]
-    return ",".join(regions)
+    root = cfg.get("root", "")
+    result = []
+    for entry in cfg.get("regions", []):
+        if isinstance(entry, str):
+            result.append({"type": "shp", "name": entry, "path": f"{root}/{entry}.shp"})
+        elif isinstance(entry, dict):
+            name, bbox = next(iter(entry.items()))
+            result.append({"type": "bbox", "name": name, "bbox": bbox})
+    return json.dumps(result)
 
 
 def parse_showcase_regions():
     """Parse showcase domains from config.
 
-    Returns a dict mapping domain name -> {extent, projection}.
+    Returns a dict mapping domain name -> {extent, projection, rotate, hours_per_revolution}.
     Named domains (strings) have extent=None and projection=None,
     meaning the plot script will fall back to the DOMAINS lookup.
     Custom domains carry their explicit extent and projection.
+    rotate/hours_per_revolution only take effect when extent is None
+    (full-globe domains).
     """
     result = {}
     for r in (
@@ -104,11 +115,18 @@ def parse_showcase_regions():
         .get("domains", ["globe", "europe", "switzerland"])
     ):
         if isinstance(r, str):
-            result[r] = {"extent": None, "projection": None}
+            result[r] = {
+                "extent": None,
+                "projection": None,
+                "rotate": False,
+                "hours_per_revolution": 96.0,
+            }
         else:
             result[r["name"]] = {
                 "extent": r.get("extent"),
                 "projection": r.get("projection", "orthographic"),
+                "rotate": r.get("rotate", False),
+                "hours_per_revolution": r.get("hours_per_revolution", 96.0),
             }
     return result
 
@@ -392,8 +410,8 @@ if "jretrieve" in str(config["truth"]["root"]):
 
 
 TRUTH_HASH = truth_hash(config["truth"])
-VERIF_HASH = verif_hash(config)
 REGIONS = parse_regions()
+VERIF_HASH = verif_hash(config)
 _showcase = config.get("showcase", {})
 SHOWCASE_CONFIG = {
     "regions": parse_showcase_regions(),
@@ -414,10 +432,23 @@ SCORECARD_CONFIGS = (
 )
 
 
-# Period-accumulated params verify a [lead - period, lead] window, so they have
-# no value at lead times shorter than one step spacing (e.g. no 0h precip map).
+# Params with no value at lead time 0. Two distinct reasons land here:
+# - period-accumulated params (TOT_PREC/tp) verify a [lead - period, lead]
+#   window, so they have no value at lead times shorter than one step spacing
+#   (e.g. no 0h precip map).
+# - diagnostic params (e.g. CLCT/tcc) aren't part of the model's input state,
+#   so they're simply absent from the initial-state GRIB file written at step 0.
 # Short and canonical names both appear across the workflow (showcases vs maps).
-ACCUMULATED_PARAMS = {"TOT_PREC", "tp"}
+PARAMS_WITHOUT_STEP_ZERO_VALUE = {
+    "TOT_PREC",
+    "tp",
+    "CLCT",
+    "tcc",
+    "CLCL",
+    "lcc",
+    "SSRD",
+    "ssrd",
+}
 
 
 def resolve_leadtimes(steps_spec, requested="all", param=None):
@@ -445,6 +476,6 @@ def resolve_leadtimes(steps_spec, requested="all", param=None):
         )
 
     valid = wanted & supported
-    if param in ACCUMULATED_PARAMS:
+    if param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
         valid = {lt for lt in valid if lt >= step}
     return sorted(valid)
