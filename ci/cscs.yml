@@ -100,9 +100,6 @@ include:
   script:
     - |
       banner "Install just + uv, write anemoi settings"
-      # just + anemoi settings, the devml way (PATH already has ~/.local/bin).
-      ./hpc/bin/setup.sh --just --anemoi-settings --yes
-      just --version
       # uv: bare metal assumes a user-managed env so evalml ships no installer,
       # but `just sync` needs uv to build the venv from the balfrin-gpu group.
       export UV_INSTALL_DIR="$HOME/.local/bin"
