@@ -41,3 +41,6 @@ integration_test_job:
       source "$VENV_DIR/bin/activate"
   script:
     - ./ci/run-longtest-coverage.sh tests/integration
+  variables:
+    # Explicitly request more time from Slurm, tests aren't running fast enough.
+    SLURM_TIMELIMIT: "01:00:00"
