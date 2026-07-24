@@ -54,9 +54,6 @@ integration_test_job:
     - !reference [.install_evalml, script]
   script:
     - pytest tests/integration -m heavytest
-  after_script:
-    - !reference [.sh_preamble, script]
-    - !reference [.cleanup, script]
   variables:
     # Explicitly request more time from Slurm, so that the long tests can complete.
     SLURM_TIMELIMIT: "10:00:00"
