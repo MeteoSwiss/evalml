@@ -13,14 +13,14 @@ include:
 
 
 # Install uv (doesn't exist on the bare-metal runner)
-# .install_uv:
-#   script:
-#     - |
-#       banner "Install uv"
-#       # uv: bare metal assumes a user-managed env so evalml ships no installer
-#       export UV_INSTALL_DIR="$HOME/.local/bin"
-#       curl -LsSf https://astral.sh/uv/install.sh | env INSTALLER_NO_MODIFY_PATH=1 sh
-#       uv --version
+.install_uv:
+  script:
+    - |
+      banner "Install uv"
+      # uv: bare metal assumes a user-managed env so evalml ships no installer
+      export UV_INSTALL_DIR="$HOME/.local/bin"
+      curl -LsSf https://astral.sh/uv/install.sh | env INSTALLER_NO_MODIFY_PATH=1 sh
+      uv --version
 
 # .install_evalmll
 #   sscript:
