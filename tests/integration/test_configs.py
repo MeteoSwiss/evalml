@@ -48,7 +48,7 @@ EXPECTED = {
 SEL = {"region": "all", "season": "all", "init_hour": -999}
 
 
-@pytest.mark.longtest
+@pytest.mark.heavytest
 @pytest.mark.parametrize("config_name", CONFIGS)
 def test_experiment_metrics(config_name):
     expected = EXPECTED[config_name]

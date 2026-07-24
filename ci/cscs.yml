@@ -40,7 +40,7 @@ integration_test_job:
       UV_HOME="$VENV_DIR" uv sync
       source "$VENV_DIR/bin/activate"
   script:
-    - pytest tests/integration -m longtest
+    - pytest tests/integration -m heavytest
   variables:
     # Explicitly request more time from Slurm, so that the long tests can complete.
     SLURM_TIMELIMIT: "10:00:00"
