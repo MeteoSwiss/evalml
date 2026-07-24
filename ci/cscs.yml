@@ -33,9 +33,9 @@ include:
 
 integration_test_job:
   extends: [.baremetal-runner-balfrin]
-  before_script:
-    - !reference [.install_uv, script]
-    - !reference [.install_evalmll, script]
+#  before_script:
+#    - !reference [.install_uv, script]
+#    - !reference [.install_evalmll, script]
   script:
     - ./ci/run-longtest-coverage.sh tests/integration
   variables:
