@@ -28,6 +28,7 @@ include:
     - |
       banner "Install uv"
       export UV_CACHE_DIR="$SCRATCH/.cache/uv"  # wheel cache, persistent across pipelines
+      export HOME="$PWD/home"
       export PATH="$PWD/.local/bin:$PATH"
       # uv: bare metal assumes a user-managed env so evalml ships no installer
       export UV_INSTALL_DIR="$PWD/.local/bin"
@@ -37,6 +38,8 @@ include:
 .install_evalml:
   script:
     - |
+      banner "Install evalml"
+      echo $PWD
       echo "Setting up environment for integration tests on $(hostname)"
       VENV_DIR="$(pwd)/.venv"
       echo "will install evalml at: $VENV_DIR"
