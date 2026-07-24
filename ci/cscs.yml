@@ -32,7 +32,7 @@ include:
       source "$VENV_DIR/bin/activate"
 
 integration_test_job:
-   extends: [.baremetal-runner-balfrin]
+  extends: [.baremetal-runner-balfrin]
   before_script:
     - !reference [.install_uv, script]
     - !reference [.install_evalmll, script]
