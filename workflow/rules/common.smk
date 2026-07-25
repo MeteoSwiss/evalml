@@ -86,12 +86,17 @@ def parse_regions():
     or ``{"type": "shp", "name": ..., "path": ...}``, preserving the original
     order so the NetCDF region coordinate matches the config.
     """
+    from evalml.config import PREDEFINED_REGIONS
+
     cfg = config["experiment"]["stratification"]
     root = cfg.get("root", "")
     result = []
     for entry in cfg.get("regions", []):
         if isinstance(entry, str):
-            result.append({"type": "shp", "name": entry, "path": f"{root}/{entry}.shp"})
+            if entry in PREDEFINED_REGIONS:
+                result.append({"type": "bbox", "name": entry, "bbox": PREDEFINED_REGIONS[entry]})
+            else:
+                result.append({"type": "shp", "name": entry, "path": f"{root}/{entry}.shp"})
         elif isinstance(entry, dict):
             name, bbox = next(iter(entry.items()))
             result.append({"type": "bbox", "name": name, "bbox": bbox})
