@@ -94,9 +94,13 @@ def parse_regions():
     for entry in cfg.get("regions", []):
         if isinstance(entry, str):
             if entry in PREDEFINED_REGIONS:
-                result.append({"type": "bbox", "name": entry, "bbox": PREDEFINED_REGIONS[entry]})
+                result.append(
+                    {"type": "bbox", "name": entry, "bbox": PREDEFINED_REGIONS[entry]}
+                )
             else:
-                result.append({"type": "shp", "name": entry, "path": f"{root}/{entry}.shp"})
+                result.append(
+                    {"type": "shp", "name": entry, "path": f"{root}/{entry}.shp"}
+                )
         elif isinstance(entry, dict):
             name, bbox = next(iter(entry.items()))
             result.append({"type": "bbox", "name": name, "bbox": bbox})
