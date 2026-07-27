@@ -66,7 +66,17 @@ integration_test_longtest_job:
     # Temporarily restricted to the scoremaps test. test_meteogram_small was
     # inherited from upstream and is not the focus of this branch; broaden back
     # to `pytest tests/integration -m longtest` to run all longtests here.
-    - pytest tests/integration/test_scoremaps.py -m longtest
+    #
+    # Run with -s (no output capture) + -v -ra so the test's progress and a
+    # per-test verdict appear live in the log, and echo the real pytest exit
+    # code explicitly so a runner-side reporting quirk can't hide it.
+    - |
+      set +e
+      pytest -v -s -ra tests/integration/test_scoremaps.py -m longtest
+      code=$?
+      set -e
+      echo "==== pytest exit code: $code ===="
+      exit $code
   variables:
     # Explicitly request more time from Slurm, tests aren't running fast enough.
     SLURM_TIMELIMIT: "01:00:00"
