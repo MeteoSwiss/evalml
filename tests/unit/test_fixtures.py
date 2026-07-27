@@ -1,6 +1,13 @@
 from pathlib import Path
+
 import yaml
-from evalml.fixtures import fixture_grib_dir
+
+from evalml.fixtures import (
+    capture_fixture,
+    fixture_grib_dir,
+    iter_grib_dirs,
+    write_manifest,
+)
 
 
 def test_fixture_grib_dir_mirrors_output_layout():
@@ -9,17 +16,12 @@ def test_fixture_grib_dir_mirrors_output_layout():
 
 
 def test_fixture_grib_dir_accepts_path_and_int_init():
-    got = fixture_grib_dir(Path("/fx"), "temporal-x-on-forecaster-abcd/1a2b", 202503010000)
-    assert got == Path("/fx/data/runs/temporal-x-on-forecaster-abcd/1a2b/202503010000/grib")
-
-
-import yaml
-from evalml.fixtures import (
-    fixture_grib_dir,
-    iter_grib_dirs,
-    capture_fixture,
-    write_manifest,
-)
+    got = fixture_grib_dir(
+        Path("/fx"), "temporal-x-on-forecaster-abcd/1a2b", 202503010000
+    )
+    assert got == Path(
+        "/fx/data/runs/temporal-x-on-forecaster-abcd/1a2b/202503010000/grib"
+    )
 
 
 def _fake_run(output_root: Path, run_id: str, init_time: str):
