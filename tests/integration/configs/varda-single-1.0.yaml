@@ -18,7 +18,7 @@ runs:
         - anemoi-datasets==0.5.35
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
-        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper-test.yaml
+        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/12/6
   - baseline:
       label: INCA

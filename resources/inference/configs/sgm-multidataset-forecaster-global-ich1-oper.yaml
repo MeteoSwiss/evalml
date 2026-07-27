@@ -1,4 +1,4 @@
-lead_time: 120h
+lead_time: 12h
 write_initial_state: true
 allow_nans: true
 
