@@ -1,7 +1,7 @@
 include:
   - ci/cscs.yml
 
-longtest:
+heavytest:
   extends: [.baremetal-runner-balfrin]
   before_script:
     - !reference [.sh_preamble, script]
