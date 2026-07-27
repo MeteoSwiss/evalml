@@ -1,5 +1,4 @@
 import glob
-import math
 import subprocess
 from pathlib import Path
 
@@ -23,6 +22,7 @@ def load_expected(config_name):
     path = EXPECTED_DIR / config_name
     with open(path) as f:
         return yaml.safe_load(f)
+
 
 # ---------------------------------------------------------------------------
 # run from the project root after a reference experiment to
