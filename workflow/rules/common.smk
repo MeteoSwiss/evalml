@@ -9,6 +9,12 @@ from urllib.parse import urlparse
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
 
+from evalml.fixtures import fixture_grib_dir
+
+# Opt-in inference replay: when set, inference_execute stages frozen GRIB from
+# here instead of running anemoi-inference (see inference.smk).
+FIXTURE_ROOT = config.get("fixture_root")
+
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
 HASH_LENGTH = 4
 
