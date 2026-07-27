@@ -244,6 +244,46 @@ def showcase(
     )
 
 
+@cli.command(
+    "capture-fixture",
+    help="Snapshot inference GRIB output into a test fixture directory for replay.",
+)
+@click.argument(
+    "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
+@click.argument("fixture_root", type=click.Path(file_okay=False, path_type=Path))
+def capture_fixture_cmd(configfile: Path, fixture_root: Path) -> None:
+    import datetime
+
+    import yaml
+
+    from evalml.fixtures import capture_fixture, write_manifest
+
+    cfg = yaml.safe_load(configfile.read_text())
+    output_root = Path(cfg.get("locations", {}).get("output_root", "output"))
+
+    copied = capture_fixture(output_root, fixture_root)
+    if not copied:
+        raise click.ClickException(
+            f"No inference GRIB dirs found under {output_root}/data/runs. "
+            "Run the pipeline once (with a GPU) before capturing."
+        )
+
+    checkpoints = [
+        next(iter(entry.values())).get("checkpoint")
+        for entry in cfg.get("runs", [])
+        if "baseline" not in entry
+    ]
+    write_manifest(
+        fixture_root,
+        config_label=cfg.get("config_label"),
+        checkpoints=checkpoints,
+        captured_at=datetime.datetime.now().isoformat(timespec="seconds"),
+        grib_dirs=copied,
+    )
+    click.echo(f"Captured {len(copied)} GRIB dir(s) into {fixture_root}")
+
+
 @cli.command(help="Generate a sandbox for inference runs in the YAML config file.")
 @click.argument(
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
