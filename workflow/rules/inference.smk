@@ -308,7 +308,9 @@ else:
             OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
         localrule: True
         resources:
-            slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
+            slurm_partition=lambda wc: get_resource(
+                wc, "slurm_partition", "short-shared"
+            ),
             cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
             mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
             runtime=lambda wc: get_resource(wc, "runtime", "40m"),
