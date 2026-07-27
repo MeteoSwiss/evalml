@@ -283,7 +283,7 @@ if FIXTURE_ROOT:
             workdir=lambda wc: (
                 OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
             ).resolve(),
-            fixture_grib=_fixture_grib,
+            fixture_grib=lambda wc, input: input.grib,
         shell:
             """
             (
