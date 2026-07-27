@@ -11,22 +11,55 @@ include:
     SLURM_JOB_NUM_NODES: 1
     SLURM_NTASKS: 1
 
-.integration_env: &integration_env
-  extends: [.baremetal-runner-balfrin]
-  before_script:
+
+# Strict mode + a banner() helper for section headers. Referenced first so both
+# are in scope for every fragment that follows.
+.sh_preamble:
+  script:
     - |
+      set -euo pipefail
+      banner() { printf '\n\033[1;36m==== %s ====\033[0m\n' "$*"; }
+
+      # Print CI context up front so the log is self-explanatory. The build-dir/slot
+
+# Install uv (doesn't exist on the bare-metal runner)
+.install_uv:
+  script:
+    - |
+      banner "Install uv"
+      export UV_CACHE_DIR="$SCRATCH/.cache/uv"  # wheel cache, persistent across pipelines
+      export HOME="$PWD/home"
+      export PATH="$PWD/.local/bin:$PATH"
+      # uv: bare metal assumes a user-managed env so evalml ships no installer
+      export UV_INSTALL_DIR="$PWD/.local/bin"
+      curl -LsSf https://astral.sh/uv/install.sh | env INSTALLER_NO_MODIFY_PATH=1 sh
+      uv --version
+
+.install_evalml:
+  script:
+    - |
+      banner "Install evalml"
+      echo $PWD
       echo "Setting up environment for integration tests on $(hostname)"
       VENV_DIR="$(pwd)/.venv"
-      echo "uv installed at: $(which uv)"
-      uv --version
       echo "will install evalml at: $VENV_DIR"
       UV_HOME="$VENV_DIR" uv sync
       source "$VENV_DIR/bin/activate"
 
+# Shared base for the integration jobs: bare-metal runner + full environment
+# install. The two jobs below differ only in marker selection, schedule, and
+# time limit.
+.integration_test_base:
+  extends: [.baremetal-runner-balfrin]
+  before_script:
+    - !reference [.sh_preamble, script]
+    - !reference [.install_uv, script]
+    - !reference [.install_evalml, script]
+
 # Longtests run on every regular CI trigger (a trusted user's "cscs-ci run" PR
 # comment, or a push to a CI-enabled branch) but NOT on the weekly schedule.
 integration_test_longtest_job:
-  <<: *integration_env
+  extends: [.integration_test_base]
   rules:
     - if: '$CI_PIPELINE_SOURCE != "schedule"'
   script:
@@ -39,7 +72,7 @@ integration_test_longtest_job:
 # as a GitLab pipeline schedule in the CSCS CI admin UI (mch-evalml); scheduled
 # pipelines arrive with CI_PIPELINE_SOURCE == "schedule".
 integration_test_heavytest_job:
-  <<: *integration_env
+  extends: [.integration_test_base]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
   script:
