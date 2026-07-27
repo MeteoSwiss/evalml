@@ -1075,6 +1075,20 @@
     "locations": {
       "$ref": "#/$defs/Locations"
     },
+    "fixture_root": {
+      "anyOf": [
+        {
+          "format": "path",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Opt-in test/dev setting. When set, inference is not run: the workflow replays frozen inference GRIB from this directory (layout: <fixture_root>/data/runs/<run_id>/<init_time>/grib). Populate it with `evalml capture-fixture`. Leave unset in production.",
+      "title": "Fixture Root"
+    },
     "profile": {
       "$ref": "#/$defs/Profile"
     },
