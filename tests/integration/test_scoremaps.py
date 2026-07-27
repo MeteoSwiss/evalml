@@ -174,7 +174,7 @@ def _print_reference_block(recorded: dict[str, dict]) -> None:
 
 
 @pytest.mark.longtest
-def test_experiment_scoremaps():
+def test_scoremaps():
     """Run the experiment workflow on the minimal scoremaps config and check that
     the score maps it produces are *meaningful*, not merely present.
 

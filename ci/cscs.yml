@@ -11,24 +11,7 @@ include:
     SLURM_JOB_NUM_NODES: 1
     SLURM_NTASKS: 1
 
-unit_test_job:
-  extends: [.baremetal-runner-balfrin]
-  before_script:
-    - |
-      echo "Setting up environment for unit tests on $(hostname)"
-      VENV_DIR="$(pwd)/.venv"
-      echo "uv installed at: $(which uv)"
-      uv --version
-      echo "will install evalml at: $VENV_DIR"
-      UV_HOME="$VENV_DIR" uv sync
-      source "$VENV_DIR/bin/activate"
-  script:
-    - pytest tests/unit
-  variables:
-    # Explicitly request more time from Slurm, tests aren't running fast enough.
-    SLURM_TIMELIMIT: "01:00:00"
-
-integration_test_job:
+.integration_env: &integration_env
   extends: [.baremetal-runner-balfrin]
   before_script:
     - |
@@ -39,11 +22,28 @@ integration_test_job:
       echo "will install evalml at: $VENV_DIR"
       UV_HOME="$VENV_DIR" uv sync
       source "$VENV_DIR/bin/activate"
+
+# Longtests run on every regular CI trigger (a trusted user's "cscs-ci run" PR
+# comment, or a push to a CI-enabled branch) but NOT on the weekly schedule.
+integration_test_longtest_job:
+  <<: *integration_env
+  rules:
+    - if: '$CI_PIPELINE_SOURCE != "schedule"'
   script:
-    # Temporarily restricted to the scoremaps integration test. The meteogram
-    # longtest needs GPU/MLflow/DWH and is excluded for now; broaden back to
-    # `pytest tests/integration -m longtest` to run all integration longtests.
-    - pytest tests/integration/test_experiment.py -m longtest
+    - pytest tests/integration -m longtest
   variables:
     # Explicitly request more time from Slurm, tests aren't running fast enough.
     SLURM_TIMELIMIT: "01:00:00"
+
+# Heavytests run only on the weekly scheduled pipeline. Configure the schedule
+# as a GitLab pipeline schedule in the CSCS CI admin UI (mch-evalml); scheduled
+# pipelines arrive with CI_PIPELINE_SOURCE == "schedule".
+integration_test_heavytest_job:
+  <<: *integration_env
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  script:
+    - pytest tests/integration -m heavytest
+  variables:
+    # Explicitly request more time from Slurm, so that the heavy tests can complete.
+    SLURM_TIMELIMIT: "10:00:00"
