@@ -1,0 +1,117 @@
+- sel:
+    region: all
+    season: all
+    init_hour: -999
+  metrics:
+    T_2M.RMSE: 1.611747
+    T_2M.BIAS: 0.092753
+    T_2M.MAE: 1.075605
+    T_2M.CORR: 0.938292
+    TD_2M.RMSE: 2.145868
+    TD_2M.BIAS: 0.657530
+    TD_2M.MAE: 1.378000
+    TD_2M.CORR: 0.949596
+    SP_10M.RMSE: 1.696772
+    SP_10M.BIAS: -0.399737
+    SP_10M.MAE: 1.233097
+    SP_10M.CORR: 0.680623
+    PMSL.RMSE: 41.649109
+    PMSL.BIAS: 5.384452
+    PMSL.MAE: 32.770433
+    PMSL.CORR: 0.929027
+    TOT_PREC6.RMSE: 0.449400
+    TOT_PREC6.BIAS: 0.077549
+    TOT_PREC6.MAE: 0.111717
+    TOT_PREC6.CORR: 0.720677
+    # T_2M threshold metrics (gt_288p15 / gt_298p15 are NaN — only 2 dates in March)
+    T_2M.ETS_lt_273p15: 0.736541
+    T_2M.POD_lt_273p15: 0.889075
+    T_2M.FAR_lt_273p15: 0.049425
+    T_2M.FBI_lt_273p15: 0.936333
+    # SP_10M threshold metrics (FAR_gt_10p0 is NaN)
+    SP_10M.ETS_gt_2p5: 0.387069
+    SP_10M.ETS_gt_5p0: 0.258426
+    SP_10M.ETS_gt_10p0: 0.000000
+    SP_10M.POD_gt_2p5: 0.705256
+    SP_10M.POD_gt_5p0: 0.436008
+    SP_10M.POD_gt_10p0: 0.000000
+    SP_10M.FAR_gt_2p5: 0.206813
+    SP_10M.FAR_gt_5p0: 0.441614
+    # SP_10M.FAR_gt_10p0 is NaN — skipped
+    SP_10M.FBI_gt_2p5: 0.896507
+    SP_10M.FBI_gt_5p0: 0.779540
+    SP_10M.FBI_gt_10p0: 0.000000
+    # TOT_PREC6 threshold metrics (gt_50p0 and some high-threshold FAR/FBI are NaN)
+    TOT_PREC6.ETS_gt_0p0: 0.156563
+    TOT_PREC6.ETS_gt_0p1: 0.278809
+    TOT_PREC6.ETS_gt_5p0: 0.463557
+    TOT_PREC6.ETS_gt_10p0: 0.488005
+    TOT_PREC6.ETS_gt_20p0: 0.000000
+    TOT_PREC6.POD_gt_0p0: 0.929660
+    TOT_PREC6.POD_gt_0p1: 0.918232
+    TOT_PREC6.POD_gt_5p0: 0.717857
+    TOT_PREC6.POD_gt_10p0: 0.488889
+    TOT_PREC6.POD_gt_20p0: 0.000000
+    TOT_PREC6.FAR_gt_0p0: 0.804066
+    TOT_PREC6.FAR_gt_0p1: 0.680339
+    TOT_PREC6.FAR_gt_5p0: 0.492778
+    TOT_PREC6.FAR_gt_10p0: 0.000000
+    # TOT_PREC6.FAR_gt_20p0 / FAR_gt_50p0 are NaN — skipped
+    TOT_PREC6.FBI_gt_0p0: 4.846663
+    TOT_PREC6.FBI_gt_0p1: 3.032086
+    TOT_PREC6.FBI_gt_5p0: 1.703571
+    TOT_PREC6.FBI_gt_10p0: 0.488889
+    TOT_PREC6.FBI_gt_20p0: 0.000000
+    # TOT_PREC6.FBI_gt_50p0 is NaN — skipped
+
+- sel:
+    region: mittelland
+    season: all
+    init_hour: -999
+  metrics:
+    T_2M.RMSE: 0.828009
+    T_2M.BIAS: 0.057105
+    T_2M.MAE: 0.628740
+    T_2M.CORR: 0.913702
+    TD_2M.RMSE: 0.989164
+    TD_2M.BIAS: 0.129622
+    TD_2M.MAE: 0.764716
+    TD_2M.CORR: 0.537654
+    SP_10M.RMSE: 1.588304
+    SP_10M.BIAS: 0.269079
+    SP_10M.MAE: 1.266803
+    SP_10M.CORR: 0.529139
+    PMSL.RMSE: 37.365382
+    PMSL.BIAS: 14.113738
+    PMSL.MAE: 30.696915
+    PMSL.CORR: 0.964590
+    TOT_PREC6.RMSE: 0.047306
+    TOT_PREC6.BIAS: 0.010906
+    TOT_PREC6.MAE: 0.010906
+    # TOT_PREC6.CORR is NaN for this slice — skipped
+
+- sel:
+    region: berge
+    season: MAM
+    init_hour: -999
+  metrics:
+    T_2M.RMSE: 1.953728
+    T_2M.BIAS: 0.109933
+    T_2M.MAE: 1.344072
+    T_2M.CORR: 0.903028
+    TD_2M.RMSE: 2.715898
+    TD_2M.BIAS: 0.966444
+    TD_2M.MAE: 1.841392
+    TD_2M.CORR: 0.927391
+    SP_10M.RMSE: 1.854596
+    SP_10M.BIAS: -0.735502
+    SP_10M.MAE: 1.304851
+    SP_10M.CORR: 0.692568
+    PMSL.RMSE: 51.910924
+    PMSL.BIAS: -19.917067
+    PMSL.MAE: 41.043029
+    PMSL.CORR: 0.683732
+    TOT_PREC6.RMSE: 0.451276
+    TOT_PREC6.BIAS: 0.099134
+    TOT_PREC6.MAE: 0.136898
+    TOT_PREC6.CORR: 0.721876
