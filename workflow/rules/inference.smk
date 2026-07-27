@@ -289,6 +289,7 @@ if FIXTURE_ROOT:
             (
                 set -euo pipefail
                 mkdir -p {params.workdir}
+                [ -L {params.workdir}/grib ] || rm -rf {params.workdir}/grib
                 ln -sfn {params.fixture_grib} {params.workdir}/grib
             ) >{log} 2>&1
             touch {output.okfile}

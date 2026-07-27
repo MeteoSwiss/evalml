@@ -43,8 +43,8 @@ the filesystem (not in the repo), at a configurable path:
 
 ```
 <fixture_root>/                                            # /store_new/mch/msopr/cmerker/evalml_test_fixtures/meteogram-small/
-  data/runs/<run_id>/<env_id>/<init_time>/grib/*.grib      # frozen forecaster inference (GBs)
-  data/runs/<run_id>/<env_id>/<init_time>/config.yaml      # the anemoi run config produced alongside
+  data/runs/<run_id>/<init_time>/grib/*.grib               # frozen forecaster inference (GBs)
+  data/runs/<run_id>/<init_time>/config.yaml               # the anemoi run config produced alongside
   MANIFEST.yaml                                            # checkpoint id, config_label, capture date, run_ids
 ```
 
