@@ -112,7 +112,9 @@ def main(args: Namespace) -> None:
     metrics = all_df["metric"].unique()
     params = all_df["param"].unique()
     seasons = all_df["season"].unique() if args.stratify else ["all"]
-    regions = all_df["region"].unique() if args.stratify else ["all"]
+    regions = (
+        all_df["region"].unique() if args.stratify else [all_df["region"].unique()[0]]
+    )
     init_hours = (
         all_df["init_hour"].unique() if args.stratify else [-999]
     )  # numeric code to indicate all init hours

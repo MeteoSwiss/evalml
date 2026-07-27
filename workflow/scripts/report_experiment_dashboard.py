@@ -84,7 +84,7 @@ def main(args):
     # retain only rows relevant for the active stratifications
     stratification = args.stratification
     if "region" not in stratification:
-        df = df[df["region"] == "all"]
+        df = df[df["region"] == df["region"].unique()[0]]
     if "season" not in stratification:
         df = df[df["season"] == "all"]
     if "init_hour" not in stratification:
