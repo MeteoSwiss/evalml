@@ -8,8 +8,12 @@ heavytest:
     - !reference [.install_uv, script]
     - !reference [.install_evalml, script]
   script:
+    # SLURM PAM resets HOME from /etc/passwd at job startup, overriding any GitLab
+    # CI variable. Re-set it here so eckit/earthkit-data can create their cache dirs.
+    - export HOME="$SCRATCH/.ci_home" && mkdir -p "$HOME"
     - pytest tests/integration -m heavytest
   after_script:
+    - export HOME="$SCRATCH/.ci_home" && mkdir -p "$HOME"
     - mkdir -p tests/log
     - python3 tools/summarize_logs.py || true
   artifacts:
@@ -20,6 +24,3 @@ heavytest:
   variables:
     # Explicitly request more time from Slurm, so that the long tests can complete.
     SLURM_TIMELIMIT: "10:00:00"
-    # /users/svc_mlforecasting_devt does not exist on compute nodes; redirect HOME so
-    # that eckit/earthkit-data can create their cache directories under the job workspace.
-    HOME: "$CI_PROJECT_DIR/home"
