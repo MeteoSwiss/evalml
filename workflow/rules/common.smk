@@ -86,12 +86,30 @@ def parse_regions():
     or ``{"type": "shp", "name": ..., "path": ...}``, preserving the original
     order so the NetCDF region coordinate matches the config.
     """
+    from evalml.config import PREDEFINED_REGIONS
+
     cfg = config["experiment"]["stratification"]
     root = cfg.get("root", "")
     result = []
     for entry in cfg.get("regions", []):
         if isinstance(entry, str):
-            result.append({"type": "shp", "name": entry, "path": f"{root}/{entry}.shp"})
+            if entry in PREDEFINED_REGIONS:
+                logging.getLogger("snakemake").info(
+                    "Region %s found among the predefined regions (rectangles in lon/lat).  The evaluation will happen on the bounding box %s",
+                    entry,
+                    PREDEFINED_REGIONS[entry],
+                )
+                result.append(
+                    {"type": "bbox", "name": entry, "bbox": PREDEFINED_REGIONS[entry]}
+                )
+            else:
+                path = f"{root}/{entry}.shp"
+                logging.getLogger("snakemake").info(
+                    "Region %s not found in the predefined regions. Will try to locate file %s.",
+                    entry,
+                    path,
+                )
+                result.append({"type": "shp", "name": entry, "path": path})
         elif isinstance(entry, dict):
             name, bbox = next(iter(entry.items()))
             result.append({"type": "bbox", "name": name, "bbox": bbox})

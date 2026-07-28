@@ -1353,7 +1353,18 @@ def load_forecast_data(
             files=_collect_ml_grib_files(root, load_steps),
             params=load_params,
         )
-        ds = _try_assign_elevation(ds)
+        # Try to derive elevation from surface geopotential (FIS/z at step 0)
+        # before falling back to ICON grid constants lookup.
+        fis_files = _collect_ml_grib_files(root, [0])
+        if fis_files:
+            fis_ds = _load_forecast_data_from_grib(fis_files, ["FIS"])
+            if "FIS" in fis_ds:
+                elevation = ekdv.geopotential_height_from_geopotential(
+                    fis_ds["FIS"].isel(step=0, drop=True).squeeze(drop=True)
+                )
+                ds = ds.assign_coords(elevation=elevation)
+        if "elevation" not in ds.coords:
+            ds = _try_assign_elevation(ds)
     elif "INCA" in root.parts:
         LOG.info("Loading INCA baseline from NetCDF files...")
         # INCA provides wind speed natively (FF), so don't expand SP_10M → U_10M/V_10M.
