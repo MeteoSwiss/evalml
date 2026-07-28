@@ -9,6 +9,9 @@ longtest:
     - !reference [.install_evalml, script]
   script:
     - pytest tests/integration -m longtest
+  after_script:
+    - mkdir -p tests/log
+    - python3 tools/summarize_logs.py || true
   variables:
     # Explicitly request more time from Slurm, so that the long tests can complete.
     SLURM_TIMELIMIT: "04:00:00"
