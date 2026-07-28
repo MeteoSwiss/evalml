@@ -25,6 +25,14 @@ def test_fixture_grib_dir_accepts_path_and_int_init():
     )
 
 
+def test_fixture_grib_dir_is_absolute_for_relative_root():
+    # A relative fixture_root must still yield an absolute path, else the replay
+    # rule's `ln -sfn` (run from a deep workdir) creates a dangling symlink.
+    got = fixture_grib_dir("relfx", "forecaster-abcd/6640", "202503010000")
+    assert got.is_absolute()
+    assert str(got).endswith("relfx/data/runs/forecaster-abcd/6640/202503010000/grib")
+
+
 def _fake_run(output_root: Path, run_id: str, init_time: str):
     grib = output_root / "data" / "runs" / run_id / init_time / "grib"
     grib.mkdir(parents=True)

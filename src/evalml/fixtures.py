@@ -55,8 +55,15 @@ def fixture_grib_dir(fixture_root, run_id: str, init_time) -> Path:
     """Return the frozen GRIB directory for one run/init inside a fixture.
 
     ``run_id`` contains a '/' (``<env_id>/<run_hash>``) and is used verbatim.
+
+    The result is absolute (``.resolve()``): the replay rule symlinks this path
+    into a deep workdir, so a relative ``fixture_root`` would otherwise produce a
+    dangling link (``exists()`` resolves against the launch cwd, ``ln -sfn``
+    against the workdir).
     """
-    return Path(fixture_root) / "data" / "runs" / run_id / str(init_time) / "grib"
+    return (
+        Path(fixture_root) / "data" / "runs" / run_id / str(init_time) / "grib"
+    ).resolve()
 
 
 def iter_grib_dirs(output_root) -> list[Path]:
@@ -91,7 +98,7 @@ def capture_fixture(output_root, fixture_root, *, init_times=None) -> list[Path]
     for grib in iter_grib_dirs(output_root):
         if init_times is not None and grib.parent.name not in init_times:
             continue
-        dest = fixture_root / grib.relative_to(output_root)
+        dest = (fixture_root / grib.relative_to(output_root)).resolve()
         # Defensive: never delete-then-copy a source that already resolves to
         # its own destination (e.g. capturing onto the fixture itself), which
         # would wipe the source before the copy.
