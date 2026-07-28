@@ -12,3 +12,19 @@ heavytest:
   variables:
     # Explicitly request more time from Slurm, so that the long tests can complete.
     SLURM_TIMELIMIT: "10:00:00"
+
+collect-logs:
+  extends: [.baremetal-runner-balfrin]
+  stage: summary
+  when: always
+  needs: [heavytest]
+  before_script:
+    - !reference [.sh_preamble, script]
+  script:
+    - mkdir -p tests/log
+    - python3 tools/summarize_logs.py || true
+  artifacts:
+    paths:
+      - tests/log/**/*
+    when: always
+    expire_in: 1 week
