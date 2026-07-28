@@ -138,16 +138,27 @@ experiment:
     enabled: true
     params:
       - T_2M
+      - U_10M
+      - SP_10M
+      - PMSL
+      - TOT_PREC6
     leadtimes:
-      [6]
+      [6, 12]
     scores:
       - BIAS
+      - RMSE
+      - STDE
     regions:
+      - icon-ch
       - switzerland
     seasons:
       - all
+      - MAM
+      - JJA
     init_hours:
       - all
+      - "00"
+      - "06"
 
 locations:
   output_root: output/
