@@ -17,8 +17,14 @@ changes — requires a GPU node):
    `evalml showcase tests/integration/configs/meteogram_small.yaml`
 2. Capture it:
    `evalml capture-fixture tests/integration/configs/meteogram_small.yaml <FIXTURE_ROOT>`
+3. Clear the real inference output the capture run produced, so replay does not
+   collide with it: `rm -rf output/data/runs/<forecaster-run> output/logs/inference_execute/<forecaster-run>`
+   (or just start replay from a clean `output/`). Replay deliberately refuses to
+   overwrite a real, Snakemake-owned `grib/` directory.
 
-Subsequent longtest runs replay from the fixture automatically.
+Subsequent longtest runs replay from the fixture automatically (CI checks out a
+clean tree, so this only matters when capturing and replaying in the same
+`output/`).
 
 `capture-fixture` only snapshots GRIB dirs whose init time matches the config's
 `dates`, so an unrelated experiment sharing the same `output/` tree is not swept
