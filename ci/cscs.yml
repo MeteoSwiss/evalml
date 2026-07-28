@@ -30,7 +30,7 @@ include:
       export UV_CACHE_DIR="$SCRATCH/.cache/uv"  # wheel cache, persistent across pipelines
       # Set eckit ECKIT_GEO_CACHE_PATH for grid downloads
       # We could use $SCRATCH/.cache/eckit if we wanted a persistent location.
-      export ECKIT_GEO_CACHE_PATH="$TMPDIR/eckit"
+      export ECKIT_GEO_CACHE_PATH="$PWD/.cache/eckit"
       export HOME="$PWD/home"
       export PATH="$PWD/.local/bin:$PATH"
       # uv: bare metal assumes a user-managed env so evalml ships no installer
