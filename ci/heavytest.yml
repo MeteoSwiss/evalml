@@ -20,3 +20,6 @@ heavytest:
   variables:
     # Explicitly request more time from Slurm, so that the long tests can complete.
     SLURM_TIMELIMIT: "10:00:00"
+    # /users/svc_mlforecasting_devt does not exist on compute nodes; redirect HOME so
+    # that eckit/earthkit-data can create their cache directories under the job workspace.
+    HOME: "$CI_PROJECT_DIR/home"
