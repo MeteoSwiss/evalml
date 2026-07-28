@@ -5,6 +5,7 @@ The fixture mirrors the pipeline's own output layout
 fixture from a real run) and replay (reading it back) agree by construction.
 """
 
+import hashlib
 import os
 import shutil
 from datetime import datetime, timedelta
@@ -14,6 +15,52 @@ import yaml
 
 _DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
 _INIT_TIME_FORMAT = "%Y%m%d%H%M"
+_CHUNK = 1 << 20  # 1 MiB
+
+
+def grib_checksum(grib_dir) -> str:
+    """Deterministic SHA-256 over a GRIB directory's file names + contents.
+
+    Order-independent (files are sorted) and content-sensitive, so it detects a
+    corrupted, partial, or hand-modified fixture. Files are read in chunks so a
+    multi-GB GRIB dir is not loaded into memory.
+    """
+    grib_dir = Path(grib_dir)
+    h = hashlib.sha256()
+    for f in sorted(p for p in grib_dir.rglob("*") if p.is_file()):
+        h.update(f.relative_to(grib_dir).as_posix().encode())
+        h.update(b"\0")
+        with open(f, "rb") as fh:
+            for chunk in iter(lambda: fh.read(_CHUNK), b""):
+                h.update(chunk)
+    return h.hexdigest()
+
+
+def verify_fixture(fixture_root, grib_dir) -> None:
+    """Raise ``ValueError`` if ``grib_dir`` disagrees with the manifest checksum.
+
+    A no-op when there is no ``MANIFEST.yaml`` or no recorded checksum for
+    ``grib_dir`` (fixtures captured before checksums existed, or built by hand),
+    so it never blocks a legitimate replay — it only fails a fixture that was
+    checksummed at capture and has since drifted.
+    """
+    fixture_root = Path(fixture_root)
+    manifest_path = fixture_root / "MANIFEST.yaml"
+    if not manifest_path.exists():
+        return
+    manifest = yaml.safe_load(manifest_path.read_text()) or {}
+    checksums = manifest.get("grib_checksums") or {}
+    rel = Path(grib_dir).resolve().relative_to(fixture_root.resolve()).as_posix()
+    expected = checksums.get(rel)
+    if expected is None:
+        return
+    actual = grib_checksum(grib_dir)
+    if actual != expected:
+        raise ValueError(
+            f"Fixture GRIB at {grib_dir} does not match its recorded checksum "
+            f"(expected {expected[:12]}…, got {actual[:12]}…). The fixture is "
+            "corrupted or stale; re-capture it with `evalml capture-fixture`."
+        )
 
 
 def _parse_timedelta(td: str) -> timedelta:
@@ -120,18 +167,40 @@ def capture_fixture(output_root, fixture_root, *, init_times=None) -> list[Path]
 
 
 def write_manifest(
-    fixture_root, *, config_label, checkpoints, captured_at, grib_dirs, dates=None
+    fixture_root,
+    *,
+    config_label,
+    checkpoints,
+    captured_at,
+    grib_dirs,
+    dates=None,
+    evalml_commit=None,
 ) -> Path:
-    """Write MANIFEST.yaml recording what was frozen (provenance only)."""
+    """Write MANIFEST.yaml: provenance plus per-GRIB checksums for replay-time
+    integrity checks.
+
+    ``grib_checksums`` maps each captured GRIB dir's path relative to
+    ``fixture_root`` to its :func:`grib_checksum`, which :func:`verify_fixture`
+    re-checks at replay. ``evalml_commit`` is recorded as provenance only.
+    """
+    fixture_root = Path(fixture_root)
+    grib_checksums = {
+        Path(d).resolve().relative_to(fixture_root.resolve()).as_posix(): grib_checksum(
+            d
+        )
+        for d in grib_dirs
+    }
     manifest = {
         "config_label": config_label,
         "checkpoints": list(checkpoints),
         "captured_at": captured_at,
+        "evalml_commit": evalml_commit,
         "grib_dirs": [str(p) for p in grib_dirs],
+        "grib_checksums": grib_checksums,
     }
     if dates is not None:
         manifest["dates"] = sorted(dates)
-    path = Path(fixture_root) / "MANIFEST.yaml"
+    path = fixture_root / "MANIFEST.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(manifest, sort_keys=True))
     return path

@@ -262,7 +262,9 @@ if FIXTURE_ROOT:
 
     from snakemake.exceptions import WorkflowError
 
-    from evalml.fixtures import fixture_grib_dir
+    from evalml.fixtures import fixture_grib_dir, verify_fixture
+
+    _verified_fixtures = set()
 
     def _fixture_grib(wc):
         p = fixture_grib_dir(FIXTURE_ROOT, wc.run_id, wc.init_time)
@@ -271,6 +273,15 @@ if FIXTURE_ROOT:
                 f"Fixture GRIB not found at {p}. Capture it once from a real run "
                 f"with: evalml capture-fixture <config> {FIXTURE_ROOT}"
             )
+        # Validate against the manifest checksum once per dir (input functions
+        # can be called repeatedly during DAG building; hashing GBs each time
+        # would be wasteful). No-op for fixtures without recorded checksums.
+        if str(p) not in _verified_fixtures:
+            try:
+                verify_fixture(FIXTURE_ROOT, p)
+            except ValueError as exc:
+                raise WorkflowError(str(exc))
+            _verified_fixtures.add(str(p))
         return str(p)
 
     rule inference_execute:

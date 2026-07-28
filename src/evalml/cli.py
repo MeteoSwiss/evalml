@@ -257,6 +257,18 @@ def capture_fixture_cmd(configfile: Path, fixture_root: Path) -> None:
 
     from evalml.fixtures import capture_fixture, config_init_times, write_manifest
 
+    def _evalml_commit() -> str | None:
+        try:
+            out = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=Path(__file__).resolve().parent,
+                capture_output=True,
+                text=True,
+            )
+            return out.stdout.strip() if out.returncode == 0 else None
+        except OSError:
+            return None
+
     # Load and validate via the same path the workflow uses, so the CLI and the
     # workflow cannot disagree on output_root.
     raw = load_yaml(configfile)
@@ -295,6 +307,7 @@ def capture_fixture_cmd(configfile: Path, fixture_root: Path) -> None:
         captured_at=datetime.now().astimezone().isoformat(timespec="seconds"),
         grib_dirs=copied,
         dates=init_times,
+        evalml_commit=_evalml_commit(),
     )
     click.echo(f"Captured {len(copied)} GRIB dir(s) into {fixture_root}")
 

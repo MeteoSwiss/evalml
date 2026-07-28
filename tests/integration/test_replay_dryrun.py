@@ -106,3 +106,30 @@ def test_replay_uses_fixture_and_skips_env_build(tmp_path):
         assert rule not in combined, (
             f"{rule} must not run in replay mode\n{combined[-2000:]}"
         )
+
+
+@pytest.mark.longtest
+def test_replay_rejects_checksum_mismatch(tmp_path):
+    """A manifest recording a checksum that no longer matches the fixture GRIB
+    fails DAG building — proving verify_fixture fires through _fixture_grib."""
+    config = _hermetic_config(tmp_path)
+    fixture_root = tmp_path / "fixture"
+
+    probe = _dry_run(config, fixture_root)
+    match = re.search(
+        r"Fixture GRIB not found at (\S+/grib)", probe.stdout + probe.stderr
+    )
+    assert match, (probe.stdout + probe.stderr)[-2000:]
+
+    grib = Path(match.group(1))
+    grib.mkdir(parents=True)
+    (grib / "dummy.grib").touch()
+    rel = grib.resolve().relative_to(fixture_root.resolve()).as_posix()
+    (fixture_root / "MANIFEST.yaml").write_text(
+        yaml.safe_dump({"grib_checksums": {rel: "deadbeef-not-the-real-checksum"}})
+    )
+
+    result = _dry_run(config, fixture_root)
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, combined[-2000:]
+    assert "does not match its recorded checksum" in combined, combined[-2000:]

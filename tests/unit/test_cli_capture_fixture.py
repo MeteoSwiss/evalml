@@ -44,6 +44,10 @@ def test_capture_fixture_command(tmp_path):
     assert manifest["config_label"] == "meteogram-test"
     assert checkpoint in manifest["checkpoints"]
     assert manifest["dates"] == [INIT_TIME]
+    # A checksum is recorded for the captured GRIB dir (validated at replay).
+    rel = f"data/runs/forecaster-abcd/6640/{INIT_TIME}/grib"
+    assert rel in manifest["grib_checksums"]
+    assert "evalml_commit" in manifest
 
 
 def test_capture_fixture_errors_when_no_grib(tmp_path):

@@ -2,11 +2,15 @@ from pathlib import Path
 
 import yaml
 
+import pytest
+
 from evalml.fixtures import (
     capture_fixture,
     config_init_times,
     fixture_grib_dir,
+    grib_checksum,
     iter_grib_dirs,
+    verify_fixture,
     write_manifest,
 )
 
@@ -138,14 +142,72 @@ def test_capture_overwrites_existing(tmp_path):
 
 
 def test_write_manifest(tmp_path):
+    grib = tmp_path / "data/runs/forecaster-abcd/6640/202503010000/grib"
+    grib.mkdir(parents=True)
+    (grib / "f.grib").write_bytes(b"GRIB")
     path = write_manifest(
         tmp_path,
         config_label="meteogram-test",
         checkpoints=["https://.../runs/b30a"],
         captured_at="2026-07-27T10:00:00",
-        grib_dirs=[tmp_path / "data/runs/forecaster-abcd/6640/202503010000/grib"],
+        grib_dirs=[grib],
+        evalml_commit="deadbeef",
     )
     data = yaml.safe_load(path.read_text())
     assert data["config_label"] == "meteogram-test"
     assert data["checkpoints"] == ["https://.../runs/b30a"]
     assert data["captured_at"] == "2026-07-27T10:00:00"
+    assert data["evalml_commit"] == "deadbeef"
+    rel = "data/runs/forecaster-abcd/6640/202503010000/grib"
+    assert data["grib_checksums"][rel] == grib_checksum(grib)
+
+
+def test_grib_checksum_is_content_sensitive(tmp_path):
+    a = tmp_path / "a" / "grib"
+    b = tmp_path / "b" / "grib"
+    for d in (a, b):
+        d.mkdir(parents=True)
+        (d / "f.grib").write_bytes(b"same")
+    assert grib_checksum(a) == grib_checksum(b)
+    (b / "f.grib").write_bytes(b"different")
+    assert grib_checksum(a) != grib_checksum(b)
+
+
+def test_verify_fixture_passes_for_intact_fixture(tmp_path):
+    grib = tmp_path / "data/runs/forecaster-abcd/6640/202503010000/grib"
+    grib.mkdir(parents=True)
+    (grib / "f.grib").write_bytes(b"GRIB")
+    write_manifest(
+        tmp_path,
+        config_label="c",
+        checkpoints=[],
+        captured_at="t",
+        grib_dirs=[grib],
+    )
+    verify_fixture(tmp_path, grib)  # must not raise
+
+
+def test_verify_fixture_raises_on_drift(tmp_path):
+    grib = tmp_path / "data/runs/forecaster-abcd/6640/202503010000/grib"
+    grib.mkdir(parents=True)
+    (grib / "f.grib").write_bytes(b"GRIB")
+    write_manifest(
+        tmp_path,
+        config_label="c",
+        checkpoints=[],
+        captured_at="t",
+        grib_dirs=[grib],
+    )
+    (grib / "f.grib").write_bytes(b"TAMPERED")  # drift after capture
+    with pytest.raises(ValueError, match="does not match its recorded checksum"):
+        verify_fixture(tmp_path, grib)
+
+
+def test_verify_fixture_noop_without_manifest_or_checksum(tmp_path):
+    grib = tmp_path / "data/runs/forecaster-abcd/6640/202503010000/grib"
+    grib.mkdir(parents=True)
+    (grib / "f.grib").write_bytes(b"GRIB")
+    verify_fixture(tmp_path, grib)  # no MANIFEST -> no-op
+    # MANIFEST without a checksum for this dir -> still a no-op
+    (tmp_path / "MANIFEST.yaml").write_text("config_label: c\n")
+    verify_fixture(tmp_path, grib)

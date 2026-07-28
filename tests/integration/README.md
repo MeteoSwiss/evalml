@@ -35,5 +35,8 @@ clean tree, so this only matters when capturing and replaying in the same
 
 `capture-fixture` only snapshots GRIB dirs whose init time matches the config's
 `dates`, so an unrelated experiment sharing the same `output/` tree is not swept
-in. `MANIFEST.yaml` in the fixture records the checkpoint(s), the captured
-dates, and the capture time.
+in. `MANIFEST.yaml` records the checkpoint(s), captured dates, capture time, the
+`evalml` commit, and a **SHA-256 per GRIB dir**. At replay the workflow
+re-checks each fixture GRIB against its recorded checksum and fails loudly if it
+has drifted (corrupted, partial, or hand-edited); fixtures captured before
+checksums existed simply skip the check.
