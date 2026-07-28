@@ -9,6 +9,14 @@ heavytest:
     - !reference [.install_evalml, script]
   script:
     - bash ci/run-integration-coverage.sh heavytest tests/integration
+  after_script:
+    - mkdir -p tests/log
+    - python3 tools/summarize_logs.py || true
+  artifacts:
+    paths:
+      - tests/log/**/*
+    when: always
+    expire_in: 1 week
   variables:
     # Explicitly request more time from Slurm, so that the long tests can complete.
     SLURM_TIMELIMIT: "10:00:00"
