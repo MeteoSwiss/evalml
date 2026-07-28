@@ -5,6 +5,7 @@ The fixture mirrors the pipeline's own output layout
 fixture from a real run) and replay (reading it back) agree by construction.
 """
 
+import os
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -108,6 +109,12 @@ def capture_fixture(output_root, fixture_root, *, init_times=None) -> list[Path]
         if dest.exists():
             shutil.rmtree(dest)
         shutil.copytree(grib, dest)
+        # copytree preserves the source mtime, which would leave the fixture
+        # older than the capture run's .ok file and make snakemake's rerun
+        # decisions depend on capture history. Freshen to "now" for determinism.
+        os.utime(dest, None)
+        for child in dest.rglob("*"):
+            os.utime(child, None)
         copied.append(dest)
     return copied
 

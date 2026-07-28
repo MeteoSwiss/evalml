@@ -10,6 +10,12 @@ capture. The fixture path is the `FIXTURE_ROOT` constant in
 When `fixture_root` is active, the workflow's start banner prints
 `Inference: REPLAYED FROM FIXTURE <path>`.
 
+**Scope:** replay covers the showcase path only. The MEC verification path
+(`--mec`, `verif_obs.smk`) depends on GRIB at *derived* source init times
+(`init_time − lead`), which a showcase fixture does not contain, so with `--mec`
+enabled fixture mode would still trigger a real inference (checkpoint download).
+Replaying MEC/FFV2 runs is out of scope for this fixture.
+
 **Create/refresh the fixture** (needed once, or whenever the checkpoint/config
 changes — requires a GPU node):
 

@@ -262,6 +262,8 @@ if FIXTURE_ROOT:
 
     from snakemake.exceptions import WorkflowError
 
+    from evalml.fixtures import fixture_grib_dir
+
     def _fixture_grib(wc):
         p = fixture_grib_dir(FIXTURE_ROOT, wc.run_id, wc.init_time)
         if not p.exists():
@@ -283,7 +285,6 @@ if FIXTURE_ROOT:
             workdir=lambda wc: (
                 OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
             ).resolve(),
-            fixture_grib=lambda wc, input: input.grib,
         shell:
             """
             (
@@ -298,7 +299,7 @@ if FIXTURE_ROOT:
                     echo "ERROR: {params.workdir}/grib is a real directory (Snakemake-owned inference output), not a fixture symlink. Refusing to delete it; move it aside and retry." >&2
                     exit 1
                 fi
-                ln -sfn {params.fixture_grib} {params.workdir}/grib
+                ln -sfn {input.grib} {params.workdir}/grib
             ) >{log} 2>&1
             touch {output.okfile}
             """

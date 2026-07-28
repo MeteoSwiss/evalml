@@ -253,18 +253,19 @@ def showcase(
 )
 @click.argument("fixture_root", type=click.Path(file_okay=False, path_type=Path))
 def capture_fixture_cmd(configfile: Path, fixture_root: Path) -> None:
-    import datetime
-
-    import yaml
+    from datetime import datetime
 
     from evalml.fixtures import capture_fixture, config_init_times, write_manifest
 
-    cfg = yaml.safe_load(configfile.read_text())
-    output_root = Path(cfg.get("locations", {}).get("output_root", "output"))
+    # Load and validate via the same path the workflow uses, so the CLI and the
+    # workflow cannot disagree on output_root.
+    raw = load_yaml(configfile)
+    model = ConfigModel.model_validate(raw)
+    output_root = model.locations.output_root
 
     # Scope capture to this config's dates so an unrelated experiment sharing
     # the same output/ tree is not swept into the fixture.
-    init_times = config_init_times(cfg["dates"])
+    init_times = config_init_times(raw["dates"])
 
     copied = capture_fixture(output_root, fixture_root, init_times=init_times)
     if not copied:
@@ -274,16 +275,24 @@ def capture_fixture_cmd(configfile: Path, fixture_root: Path) -> None:
             "Run the pipeline once (with a GPU) before capturing."
         )
 
-    checkpoints = [
-        next(iter(entry.values())).get("checkpoint")
-        for entry in cfg.get("runs", [])
-        if "baseline" not in entry
-    ]
+    # Record every checkpoint the config references, including the nested
+    # forecaster.checkpoint of a temporal_downscaler run.
+    checkpoints: list[str] = []
+    for entry in raw.get("runs", []):
+        for kind, run in entry.items():
+            if kind == "baseline" or not isinstance(run, dict):
+                continue
+            if run.get("checkpoint"):
+                checkpoints.append(run["checkpoint"])
+            nested = run.get("forecaster")
+            if isinstance(nested, dict) and nested.get("checkpoint"):
+                checkpoints.append(nested["checkpoint"])
+
     write_manifest(
         fixture_root,
-        config_label=cfg.get("config_label"),
+        config_label=model.config_label,
         checkpoints=checkpoints,
-        captured_at=datetime.datetime.now().isoformat(timespec="seconds"),
+        captured_at=datetime.now().astimezone().isoformat(timespec="seconds"),
         grib_dirs=copied,
         dates=init_times,
     )
