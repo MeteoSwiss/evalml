@@ -52,7 +52,6 @@ experiment:
     - PMSL
   stratification:
     regions:
-      - icon
       - mittelland
       - berge
       - alpennordseite
