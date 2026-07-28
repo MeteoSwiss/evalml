@@ -18,7 +18,7 @@ def _minimal_config(**overrides):
         "truth": {"label": "SwissMetNet", "root": "jretrievedwh:1,2"},
         "experiment": {
             "params": ["T_2M"],
-            "stratification": {"regions": []},
+            "stratification": {"regions": ["icon"]},
             "dashboard": {"stratification": []},
         },
         "locations": {"output_root": "output/"},
