@@ -283,7 +283,7 @@ rule mec_all:
         ),
 
 
-if config["mec"] is not None:
+if config["mec"] is not None and config["ffv2"] is not None:
 
     rule ffv2_all:
         """Target rule for FFV2 scoring pipeline (consumes fdbk_files, produces shiny scores)."""
