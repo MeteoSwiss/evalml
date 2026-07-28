@@ -8,7 +8,7 @@ heavytest:
     - !reference [.install_uv, script]
     - !reference [.install_evalml, script]
   script:
-    - pytest tests/integration -m heavytest
+    - bash ci/run-integration-coverage.sh heavytest tests/integration
   after_script:
     - mkdir -p tests/log
     - python3 tools/summarize_logs.py || true
