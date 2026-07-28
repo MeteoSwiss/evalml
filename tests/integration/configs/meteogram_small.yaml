@@ -5,12 +5,10 @@ description: |
   animations disabled. Driven by tests/integration/test_showcase.py.
 config_label: meteogram-test
 
-# Replay frozen inference GRIB instead of running it (no GPU / MLflow / sandbox
-# build). Populate once with:
-#   evalml capture-fixture tests/integration/configs/meteogram_small.yaml \
-#     /store_new/mch/msopr/cmerker/evalml_test_fixtures/meteogram-small
-# after a real (GPU) showcase run. Truth still comes live from the DWH.
-fixture_root: /store_new/mch/msopr/cmerker/evalml_test_fixtures/meteogram-small
+# Note: this config runs real inference by default. The longtest replays a
+# frozen fixture instead by passing `--config fixture_root=<path>` at invocation
+# (see tests/integration/test_meteogram_small.py); it is deliberately NOT set
+# here so a plain `evalml showcase` of this config still does a real run.
 
 dates:
   - 2024-08-01T00:00
