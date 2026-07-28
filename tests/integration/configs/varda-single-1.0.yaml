@@ -5,8 +5,10 @@ description: |
 config_label: varda-single-1.0
 
 dates:
-  - 2025-03-01T00:00
-  - 2025-03-02T00:00
+  - 2025-01-01T00:00
+  - 2025-04-01T00:00
+  - 2025-07-01T00:00
+  - 2025-10-01T00:00
 
 runs:
   - temporal_downscaler:
@@ -24,14 +26,14 @@ runs:
       label: INCA
       root: /store_new/mch/msclim/INCA
       steps: 0/6/1
-  - baseline:
-      label: ICON-CH2-CTRL
-      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
-      steps: 0/12/1
-  - baseline:
-      label: ICON-CH1-CTRL
-      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
-      steps: 0/12/1
+  # - baseline:
+  #     label: ICON-CH2-CTRL
+  #     root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+  #     steps: 0/12/1
+  # - baseline:
+  #     label: ICON-CH1-CTRL
+  #     root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+  #     steps: 0/12/1
 
 truth:
   label: SwissMetNet
@@ -85,15 +87,15 @@ experiment:
           - "V_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2,ETS"
           - "TOT_PREC1:RMSE,R2,ETS"
-      short_range:
-        baseline: ICON-CH1-CTRL
-        lead_times: "6/12/6"
-        stratification: region
-        variables:
-          - "U_10M:RMSE,R2,ETS"
-          - "V_10M:RMSE,R2,ETS"
-          - "T_2M:RMSE,R2,ETS"
-          - "TOT_PREC6:RMSE,R2,ETS"
+      # short_range:
+      #   baseline: ICON-CH1-CTRL
+      #   lead_times: "6/12/6"
+      #   stratification: region
+      #   variables:
+      #     - "U_10M:RMSE,R2,ETS"
+      #     - "V_10M:RMSE,R2,ETS"
+      #     - "T_2M:RMSE,R2,ETS"
+      #     - "TOT_PREC6:RMSE,R2,ETS"
   scoremaps:
     enabled: false
 
