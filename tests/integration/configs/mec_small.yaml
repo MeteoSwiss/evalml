@@ -6,24 +6,17 @@ description: |
   Driven by tests/integration/test_mec.py.
 config_label: mec-test
 
-# TODO: narrow this further if even 2 days is too slow/expensive for the chosen
-# marker (see test_mec.py). REFTIMES_MEC additionally requires reftimes to be
-# at least max(steps) after the first date, so keep at least 2 entries with
-# enough spacing relative to `steps` below, or MEC will have nothing to verify.
 dates:
-  start: 2025-08-01T00:00
+  start: 2025-08-01T12:00
   end: 2025-08-02T00:00
-  frequency: 24h
+  frequency: 12h
 
 runs:
   - forecaster:
       # Reusing a known-good checkpoint from config/forecasters-ich1_mec_ffv2.yaml.
       checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/9f4626a7562a4eb49700aaaaa8607230
       label: icon_1km_hierarchical_2_level_proc_from_scratch
-      # TODO: shorten steps to the minimum lead time MEC needs for one valid
-      # time (check _reftimes_mec()/link_mec_input in workflow/rules/verif_obs.smk
-      # for how max(steps) constrains which reftimes are eligible).
-      steps: 0/12/6
+      steps: 0/12/12
       config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
       extra_requirements:
         - anemoi-inference==0.11.1
@@ -46,7 +39,7 @@ locations:
   output_root: output/
 
 # Required for --mec: prepare_mec_input reads observations from these three roots.
-# Values copied as-is from config/forecasters-ich1_mec_ffv2.yaml (known-good paths).
+# Only ekf_root is used by this test.
 mec:
   ekf_root: /store_new/mch/msopr/osm/KENDA-CH1/EKF
   mon_synop_root: /scratch/mch/paa/mec/MEC_ML_input/monFiles2025

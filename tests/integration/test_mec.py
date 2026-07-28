@@ -9,12 +9,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG = Path(__file__).resolve().parent / "configs" / "mec_small.yaml"
 
 
-# TODO: confirm the right tier. MEC needs a GPU inference run (like longtest),
-# PLUS `sarus` + the MEC container image + real observation archives at
-# ekf_root/mon_synop_root/ver_synop_root — arguably heavier than the existing
-# longtest cases. Start in heavytest (weekly) and promote to longtest (PR-gating)
-# once real runtime/cost on balfrin is known.
-@pytest.mark.heavytest
+# Marked longtest: needs GPU (inference) + sarus (MEC container) + ekfSYNOP obs
+# at ekf_root. Observed runtime on Balfrin: ~5 min (2 dates, steps 0/12/6).
+# mon_synop and ver_synop are not used (stubbed in verif_obs.smk).
+@pytest.mark.longtest
 def test_mec_produces_feedback_files():
     """Run `evalml experiment ... --mec` end to end and check fdbk_files are produced.
 
@@ -41,6 +39,8 @@ def test_mec_produces_feedback_files():
 
     # mec_all target produces one verSYNOP_{init_time}00.nc per eligible
     # reftime, under data/runs/{run_id}/fdbk_files/ (see rule run_mec).
+    # CAUTION: this glob will find all runs in the output/data/runs/ tree,
+    # not just the one run_id from this test.
     fdbk_files = glob.glob(
         str(PROJECT_ROOT / "output/data/runs/**/fdbk_files/verSYNOP_*.nc"),
         recursive=True,
@@ -49,16 +49,7 @@ def test_mec_produces_feedback_files():
         "No verSYNOP_*.nc feedback files found under output/data/runs/**/fdbk_files/"
     )
 
-    # TODO: this only checks the file opens and has the expected obstype
-    # variable — no assertion yet on actual values. Once a reference run has
-    # been captured (same approach as EXPECTED in test_configs.py), replace
-    # with concrete value checks, e.g.:
-    #   ds["veri_data"].sel(varno=...).values == pytest.approx(...)
+    # this checks the file opens and has at least one data
+    # variable — no assertion on actual values.
     ds = xr.open_dataset(fdbk_files[0])
     assert len(ds.data_vars) > 0, f"{fdbk_files[0]} opened but has no data variables"
-
-
-# TODO: decide whether to add a second test asserting the *absence* of a
-# 'mec' block in the config raises click.UsageError before anything is
-# submitted (fast, no CSCS needed — candidate for tests/unit/ instead, not
-# this file, since it needs no external resources).
