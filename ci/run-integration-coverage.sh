@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tier-2 coverage: run an integration suite and measure coverage across the full
+# Coverage: run an integration suite and measure coverage across the full
 # snakemake subprocess chain
 #   pytest -> `evalml` -> snakemake -> workflow/scripts/*.py (incl. SLURM jobs).
 #
@@ -8,8 +8,6 @@
 #   [target]   test path(s) to run; defaults to the whole suite. The CSCS jobs
 #              pass `tests/integration`.
 #
-# Requires whatever the tests themselves need (GPU, MLflow/DWH credentials,
-# access to /store_new). Run from anywhere; it cd's to the repo root.
 set -euo pipefail
 
 if [ $# -eq 0 ]; then
@@ -31,8 +29,8 @@ export COVERAGE_PROCESS_START="$PWD/$CONFIG"
 TARGETS=("$@")
 [ ${#TARGETS[@]} -eq 0 ] && TARGETS=(tests/)
 
-# `-o addopts=` clears the project default addopts ("-m 'not longtest'" plus the
-# Tier-1 --cov flags) so this run uses ONLY the subprocess-aware Tier-2 config.
+# `-o addopts=` clears the project default addopts so this run uses ONLY the
+# subprocess-aware config.
 uv run pytest "${TARGETS[@]}" \
     -m "$MARKER" \
     -o addopts= \
