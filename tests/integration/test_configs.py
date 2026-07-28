@@ -1,5 +1,4 @@
 import glob
-import math
 import subprocess
 from pathlib import Path
 
@@ -23,6 +22,7 @@ def load_expected(config_name):
     path = EXPECTED_DIR / config_name
     with open(path) as f:
         return yaml.safe_load(f)
+
 
 # ---------------------------------------------------------------------------
 # run from the project root after a reference experiment to
@@ -66,7 +66,8 @@ def test_experiment_metrics(config_name):
     assert result.returncode == 0, (
         f"evalml experiment failed for {config_name} (exit {result.returncode}).\n"
         f"stdout:\n{result.stdout[-2000:]}\n"
-        f"stderr:\n{result.stderr[-2000:]}"
+        f"stderr (first 2000):\n{result.stderr[:2000]}\n"
+        f"stderr (last 2000):\n{result.stderr[-2000:]}"
     )
 
     nc_files = glob.glob(

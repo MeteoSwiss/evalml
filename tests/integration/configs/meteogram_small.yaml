@@ -28,7 +28,6 @@ runs:
       label: ICON-CH2-EPS
       root: /store_new/mch/msopr/osm/ICON-CH2-EPS
       steps: 0/6/6
-
 truth:
   label: SwissMetNet
   root: jretrievedwh:1,2
@@ -39,7 +38,8 @@ experiment:
   params:
     - T_2M
   stratification:
-    regions: []
+    regions:
+      - icon
   dashboard:
     stratification:
       - season

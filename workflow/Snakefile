@@ -25,14 +25,18 @@ include: "rules/verif_obs.smk"
 # about workflow
 # -----------------------------------------------------
 
+CANDIDATES = collect_all_candidates()
+BASELINES = collect_all_baselines()
+
 RUN_CMD = Path(".evalml_snakemake_cmd.txt").read_text().strip()
 CONFIG_HASH = master_hash()
 WHEN = datetime.now().strftime("%Y%m%d")
 CONFIG_FILE = workflow.config_settings.configfiles[0]
 CONFIG_LABEL = config["config_label"] or CONFIG_FILE.stem
 EXPERIMENT_NAME = f"{WHEN}_{CONFIG_LABEL}_{CONFIG_HASH}"
-CANDIDATES = collect_all_candidates()
-BASELINES = collect_all_baselines()
+CANDIDATE_LABELS = ", ".join(v.get("label", k) for k, v in CANDIDATES.items())
+BASELINE_LABELS = ", ".join(v.get("label", k) for k, v in BASELINES.items())
+GROUNDTRUTH_LABEL = config["truth"].get("label", config["truth"]["root"])
 
 DATA_DIR = OUT_ROOT / "data"
 LOGS_DIR = OUT_ROOT / "logs"
@@ -102,6 +106,7 @@ onstart:
             "90",
         )
     )
+    print(_c(f"   Ground truth: {GROUNDTRUTH_LABEL}", "90"))
     print(_c(f"   Data dir:    {DATA_DIR}", "90"))
     print(_c(f"   Logs dir:    {LOGS_DIR}", "90"))
     print(_c(f"   Results dir: {RESULTS_DIR}", "90"))
