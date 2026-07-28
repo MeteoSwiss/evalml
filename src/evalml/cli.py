@@ -257,15 +257,20 @@ def capture_fixture_cmd(configfile: Path, fixture_root: Path) -> None:
 
     import yaml
 
-    from evalml.fixtures import capture_fixture, write_manifest
+    from evalml.fixtures import capture_fixture, config_init_times, write_manifest
 
     cfg = yaml.safe_load(configfile.read_text())
     output_root = Path(cfg.get("locations", {}).get("output_root", "output"))
 
-    copied = capture_fixture(output_root, fixture_root)
+    # Scope capture to this config's dates so an unrelated experiment sharing
+    # the same output/ tree is not swept into the fixture.
+    init_times = config_init_times(cfg["dates"])
+
+    copied = capture_fixture(output_root, fixture_root, init_times=init_times)
     if not copied:
         raise click.ClickException(
-            f"No inference GRIB dirs found under {output_root}/data/runs. "
+            f"No inference GRIB dirs found under {output_root}/data/runs for the "
+            f"config's dates ({', '.join(sorted(init_times))}). "
             "Run the pipeline once (with a GPU) before capturing."
         )
 
@@ -280,6 +285,7 @@ def capture_fixture_cmd(configfile: Path, fixture_root: Path) -> None:
         checkpoints=checkpoints,
         captured_at=datetime.datetime.now().isoformat(timespec="seconds"),
         grib_dirs=copied,
+        dates=init_times,
     )
     click.echo(f"Captured {len(copied)} GRIB dir(s) into {fixture_root}")
 

@@ -6,9 +6,49 @@ fixture from a real run) and replay (reading it back) agree by construction.
 """
 
 import shutil
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import yaml
+
+_DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
+_INIT_TIME_FORMAT = "%Y%m%d%H%M"
+
+
+def _parse_timedelta(td: str) -> timedelta:
+    magnitude, unit = int(td[:-1]), td[-1]
+    if unit == "d":
+        return timedelta(days=magnitude)
+    if unit == "h":
+        return timedelta(hours=magnitude)
+    raise ValueError(f"Unsupported time unit: {unit!r} (only 'd' and 'h')")
+
+
+def config_init_times(dates_cfg) -> set[str]:
+    """Init-time path segments (``YYYYMMDDHHMM``) for a config's ``dates`` block.
+
+    Accepts either an explicit list of ``YYYY-MM-DDTHH:MM`` strings or a
+    ``{start, end, frequency, blacklist?}`` range, mirroring the workflow's
+    reference-time parsing so that capture can be scoped to the dates the
+    given config actually produces.
+    """
+    if isinstance(dates_cfg, list):
+        times = [datetime.strptime(t, _DATETIME_FORMAT) for t in dates_cfg]
+    else:
+        start = datetime.strptime(dates_cfg["start"], _DATETIME_FORMAT)
+        end = datetime.strptime(dates_cfg["end"], _DATETIME_FORMAT)
+        freq = _parse_timedelta(dates_cfg["frequency"])
+        blacklist = {
+            datetime.strptime(t, _DATETIME_FORMAT)
+            for t in dates_cfg.get("blacklist", [])
+        }
+        times = []
+        t = start
+        while t <= end:
+            if t not in blacklist:
+                times.append(t)
+            t += freq
+    return {t.strftime(_INIT_TIME_FORMAT) for t in times}
 
 
 def fixture_grib_dir(fixture_root, run_id: str, init_time) -> Path:
@@ -33,17 +73,24 @@ def iter_grib_dirs(output_root) -> list[Path]:
     return sorted(p for p in runs.rglob("grib") if p.is_dir() and not p.is_symlink())
 
 
-def capture_fixture(output_root, fixture_root) -> list[Path]:
-    """Copy every inference GRIB dir under ``output_root`` into ``fixture_root``.
+def capture_fixture(output_root, fixture_root, *, init_times=None) -> list[Path]:
+    """Copy inference GRIB dirs under ``output_root`` into ``fixture_root``.
 
     Preserves the relative path so the result is readable via
     :func:`fixture_grib_dir`. Overwrites any existing destination. Returns the
     list of destination directories.
+
+    ``init_times``: when given (a set of ``YYYYMMDDHHMM`` strings, e.g. from
+    :func:`config_init_times`), only GRIB dirs for those init times are
+    captured. This scopes capture to one config's dates so an unrelated
+    experiment sharing the same ``output/`` tree is not swept in.
     """
     output_root = Path(output_root)
     fixture_root = Path(fixture_root)
     copied: list[Path] = []
     for grib in iter_grib_dirs(output_root):
+        if init_times is not None and grib.parent.name not in init_times:
+            continue
         dest = fixture_root / grib.relative_to(output_root)
         # Defensive: never delete-then-copy a source that already resolves to
         # its own destination (e.g. capturing onto the fixture itself), which
@@ -59,7 +106,7 @@ def capture_fixture(output_root, fixture_root) -> list[Path]:
 
 
 def write_manifest(
-    fixture_root, *, config_label, checkpoints, captured_at, grib_dirs
+    fixture_root, *, config_label, checkpoints, captured_at, grib_dirs, dates=None
 ) -> Path:
     """Write MANIFEST.yaml recording what was frozen (provenance only)."""
     manifest = {
@@ -68,6 +115,8 @@ def write_manifest(
         "captured_at": captured_at,
         "grib_dirs": [str(p) for p in grib_dirs],
     }
+    if dates is not None:
+        manifest["dates"] = sorted(dates)
     path = Path(fixture_root) / "MANIFEST.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(manifest, sort_keys=True))

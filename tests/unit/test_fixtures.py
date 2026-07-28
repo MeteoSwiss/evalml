@@ -4,6 +4,7 @@ import yaml
 
 from evalml.fixtures import (
     capture_fixture,
+    config_init_times,
     fixture_grib_dir,
     iter_grib_dirs,
     write_manifest,
@@ -37,6 +38,39 @@ def test_iter_grib_dirs_finds_all_runs(tmp_path):
     found = iter_grib_dirs(out)
     assert len(found) == 2
     assert all(p.name == "grib" for p in found)
+
+
+def test_config_init_times_explicit_list():
+    assert config_init_times(["2024-08-01T00:00", "2024-08-02T12:00"]) == {
+        "202408010000",
+        "202408021200",
+    }
+
+
+def test_config_init_times_range_with_blacklist():
+    got = config_init_times(
+        {
+            "start": "2024-01-01T00:00",
+            "end": "2024-01-03T00:00",
+            "frequency": "1d",
+            "blacklist": ["2024-01-02T00:00"],
+        }
+    )
+    assert got == {"202401010000", "202401030000"}
+
+
+def test_capture_scoped_by_init_times_excludes_other_dates(tmp_path):
+    """Regression: capture must not sweep in an unrelated experiment that
+    shares output/ but uses different dates."""
+    out = tmp_path / "output"
+    fx = tmp_path / "fixture"
+    _fake_run(out, "forecaster-b30a/6640", "202408010000")  # the config's run/date
+    _fake_run(out, "forecaster-sruc/94fd", "202503010000")  # unrelated experiment
+
+    copied = capture_fixture(out, fx, init_times={"202408010000"})
+
+    assert copied == [fixture_grib_dir(fx, "forecaster-b30a/6640", "202408010000")]
+    assert not fixture_grib_dir(fx, "forecaster-sruc/94fd", "202503010000").exists()
 
 
 def _replay_symlink(output_root: Path, run_id: str, init_time: str, target: Path):

@@ -14,4 +14,7 @@ changes — requires a GPU node):
    `evalml capture-fixture tests/integration/configs/meteogram_small.yaml <fixture_root>`
 4. Restore `fixture_root`. Subsequent longtest runs replay from the fixture.
 
-`MANIFEST.yaml` in the fixture records the checkpoint(s) and capture date.
+`capture-fixture` only snapshots GRIB dirs whose init time matches the config's
+`dates`, so an unrelated experiment sharing the same `output/` tree is not swept
+in. `MANIFEST.yaml` in the fixture records the checkpoint(s), the captured
+dates, and the capture time.

@@ -9,6 +9,7 @@ def _write_config(path: Path, output_root: Path):
         yaml.safe_dump(
             {
                 "config_label": "meteogram-test",
+                "dates": ["2025-03-01T00:00"],
                 "locations": {"output_root": str(output_root)},
                 "runs": [
                     {"forecaster": {"checkpoint": "https://x/runs/b30a"}},
@@ -28,12 +29,12 @@ def test_capture_fixture_command(tmp_path):
     _write_config(cfg, output_root)
     fixture_root = tmp_path / "fixture"
 
-    result = CliRunner().invoke(
-        cli, ["capture-fixture", str(cfg), str(fixture_root)]
-    )
+    result = CliRunner().invoke(cli, ["capture-fixture", str(cfg), str(fixture_root)])
 
     assert result.exit_code == 0, result.output
-    assert (fixture_root / "data/runs/forecaster-abcd/6640/202503010000/grib/f.grib").exists()
+    assert (
+        fixture_root / "data/runs/forecaster-abcd/6640/202503010000/grib/f.grib"
+    ).exists()
     manifest = yaml.safe_load((fixture_root / "MANIFEST.yaml").read_text())
     assert manifest["config_label"] == "meteogram-test"
     assert manifest["checkpoints"] == ["https://x/runs/b30a"]
