@@ -20,11 +20,17 @@ def fixture_grib_dir(fixture_root, run_id: str, init_time) -> Path:
 
 
 def iter_grib_dirs(output_root) -> list[Path]:
-    """Every ``grib/`` directory under ``<output_root>/data/runs``."""
+    """Every real ``grib/`` directory under ``<output_root>/data/runs``.
+
+    Symlinked ``grib`` dirs are skipped: after a replay run, the workdir's
+    ``grib`` is a symlink *into the fixture*, and capturing it would resolve
+    back onto (and destroy) the fixture it points at. Only genuine inference
+    output is ever a real directory here.
+    """
     runs = Path(output_root) / "data" / "runs"
     if not runs.is_dir():
         return []
-    return sorted(p for p in runs.rglob("grib") if p.is_dir())
+    return sorted(p for p in runs.rglob("grib") if p.is_dir() and not p.is_symlink())
 
 
 def capture_fixture(output_root, fixture_root) -> list[Path]:
@@ -39,6 +45,11 @@ def capture_fixture(output_root, fixture_root) -> list[Path]:
     copied: list[Path] = []
     for grib in iter_grib_dirs(output_root):
         dest = fixture_root / grib.relative_to(output_root)
+        # Defensive: never delete-then-copy a source that already resolves to
+        # its own destination (e.g. capturing onto the fixture itself), which
+        # would wipe the source before the copy.
+        if grib.resolve() == dest.resolve():
+            continue
         dest.parent.mkdir(parents=True, exist_ok=True)
         if dest.exists():
             shutil.rmtree(dest)

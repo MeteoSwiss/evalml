@@ -39,6 +39,40 @@ def test_iter_grib_dirs_finds_all_runs(tmp_path):
     assert all(p.name == "grib" for p in found)
 
 
+def _replay_symlink(output_root: Path, run_id: str, init_time: str, target: Path):
+    """Mimic replay: workdir/grib is a symlink into the fixture, not a real dir."""
+    workdir = output_root / "data" / "runs" / run_id / init_time
+    workdir.mkdir(parents=True)
+    (workdir / "grib").symlink_to(target, target_is_directory=True)
+
+
+def test_iter_grib_dirs_skips_replay_symlinks(tmp_path):
+    out = tmp_path / "output"
+    fx = tmp_path / "fixture"
+    _fake_run(fx, "forecaster-abcd/6640", "202503010000")  # a fixture grib dir
+    fixture_grib = fixture_grib_dir(fx, "forecaster-abcd/6640", "202503010000")
+    _replay_symlink(out, "forecaster-abcd/6640", "202503010000", fixture_grib)
+    # The only "grib" under output is a symlink into the fixture -> skipped.
+    assert iter_grib_dirs(out) == []
+
+
+def test_capture_after_replay_does_not_delete_fixture(tmp_path):
+    """Regression: capturing while a replay symlink is in place must NOT
+    resolve back onto and destroy the fixture it points at."""
+    out = tmp_path / "output"
+    fx = tmp_path / "fixture"
+    # 1) a real captured fixture already exists
+    _fake_run(fx, "forecaster-abcd/6640", "202503010000")
+    fixture_grib = fixture_grib_dir(fx, "forecaster-abcd/6640", "202503010000")
+    # 2) output/ holds only the replay symlink pointing into that fixture
+    _replay_symlink(out, "forecaster-abcd/6640", "202503010000", fixture_grib)
+
+    copied = capture_fixture(out, fx)  # must not raise, must not delete fixture
+
+    assert copied == []  # nothing real to capture
+    assert (fixture_grib / "202503010_0.grib").read_bytes() == b"GRIB-DATA"
+
+
 def test_capture_then_replay_paths_match(tmp_path):
     out = tmp_path / "output"
     fx = tmp_path / "fixture"

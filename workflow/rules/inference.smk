@@ -289,7 +289,15 @@ if FIXTURE_ROOT:
             (
                 set -euo pipefail
                 mkdir -p {params.workdir}
-                [ -L {params.workdir}/grib ] || rm -rf {params.workdir}/grib
+                # Replace a stale fixture symlink, but never delete a real grib
+                # directory: that is Snakemake-owned inference output, and a
+                # bare `ln -sfn` would otherwise nest the link inside it.
+                if [ -L {params.workdir}/grib ]; then
+                    rm -f {params.workdir}/grib
+                elif [ -e {params.workdir}/grib ]; then
+                    echo "ERROR: {params.workdir}/grib is a real directory (Snakemake-owned inference output), not a fixture symlink. Refusing to delete it; move it aside and retry." >&2
+                    exit 1
+                fi
                 ln -sfn {params.fixture_grib} {params.workdir}/grib
             ) >{log} 2>&1
             touch {output.okfile}
