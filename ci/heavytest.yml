@@ -15,7 +15,7 @@ heavytest:
 
 collect-logs:
   extends: [.baremetal-runner-balfrin]
-  stage: summary
+  stage: .post
   when: always
   needs: [heavytest]
   before_script:
