@@ -258,69 +258,130 @@ def _inference_routing_fn(wc):
     return OUT_ROOT / input_path
 
 
-rule inference_execute:
-    input:
-        okfile=_inference_routing_fn,
-        image=lambda wc: OUT_ROOT
-        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
-    output:
-        okfile=OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok",
-    log:
-        OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
-    localrule: True
-    resources:
-        slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
-        cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
-        mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
-        runtime=lambda wc: get_resource(wc, "runtime", "40m"),
-        gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
-        ntasks=lambda wc: get_resource(wc, "tasks", 1),
-        gpus=lambda wc: get_resource(wc, "gpu", 1),
-    params:
-        env_path=lambda wc, input: f"{Path(input.image).resolve()}",
-        workdir=lambda wc: (
-            OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
-        ).resolve(),
-        disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
-            "disable_local_eccodes_definitions", False
-        ),
-    # fmt: off
-    shell:
-        """
-        (
-            set -euo pipefail
+if FIXTURE_ROOT:
 
-            cd {params.workdir}
+    from snakemake.exceptions import WorkflowError
 
-            _run_inference() {{
-                local VENV=$1
-                source "$VENV/bin/activate"
+    from evalml.fixtures import fixture_grib_dir, verify_fixture
 
-                if [ "{params.disable_local_definitions}" = "False" ]; then
-                    export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
+    _verified_fixtures = set()
+
+    def _fixture_grib(wc):
+        p = fixture_grib_dir(FIXTURE_ROOT, wc.run_id, wc.init_time)
+        if not p.exists():
+            raise WorkflowError(
+                f"Fixture GRIB not found at {p}. Capture it once from a real run "
+                f"with: evalml capture-fixture <config> {FIXTURE_ROOT}"
+            )
+        # Validate against the manifest checksum once per dir (input functions
+        # can be called repeatedly during DAG building; hashing GBs each time
+        # would be wasteful). No-op for fixtures without recorded checksums.
+        if str(p) not in _verified_fixtures:
+            try:
+                verify_fixture(FIXTURE_ROOT, p)
+            except ValueError as exc:
+                raise WorkflowError(str(exc))
+            _verified_fixtures.add(str(p))
+        return str(p)
+
+    rule inference_execute:
+        input:
+            grib=_fixture_grib,
+        output:
+            okfile=OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok",
+        log:
+            OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
+        localrule: True
+        params:
+            workdir=lambda wc: (
+                OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
+            ).resolve(),
+        shell:
+            """
+            (
+                set -euo pipefail
+                mkdir -p {params.workdir}
+                # Replace a stale fixture symlink, but never delete a real grib
+                # directory: that is Snakemake-owned inference output, and a
+                # bare `ln -sfn` would otherwise nest the link inside it.
+                if [ -L {params.workdir}/grib ]; then
+                    rm -f {params.workdir}/grib
+                elif [ -e {params.workdir}/grib ]; then
+                    echo "ERROR: {params.workdir}/grib is a real directory (Snakemake-owned inference output), not a fixture symlink. Refusing to delete it; move it aside and retry." >&2
+                    exit 1
                 fi
+                ln -sfn {input.grib} {params.workdir}/grib
+            ) >{log} 2>&1
+            touch {output.okfile}
+            """
 
-                CMD_ARGS=()
+else:
 
-                # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
-                if [ {resources.gpus} -gt 1 ]; then
-                    CMD_ARGS+=(runner.parallel.cluster=slurm)
-                fi
+    rule inference_execute:
+        input:
+            okfile=_inference_routing_fn,
+            image=lambda wc: OUT_ROOT
+            / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
+        output:
+            okfile=OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok",
+        log:
+            OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
+        localrule: True
+        resources:
+            slurm_partition=lambda wc: get_resource(
+                wc, "slurm_partition", "short-shared"
+            ),
+            cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
+            mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
+            runtime=lambda wc: get_resource(wc, "runtime", "40m"),
+            gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
+            ntasks=lambda wc: get_resource(wc, "tasks", 1),
+            gpus=lambda wc: get_resource(wc, "gpu", 1),
+        params:
+            env_path=lambda wc, input: f"{Path(input.image).resolve()}",
+            workdir=lambda wc: (
+                OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
+            ).resolve(),
+            disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
+                "disable_local_eccodes_definitions", False
+            ),
+        # fmt: off
+        shell:
+            """
+            (
+                set -euo pipefail
 
-                srun \
-                    --unbuffered \
-                    --partition={resources.slurm_partition} \
-                    --cpus-per-task={resources.cpus_per_task} \
-                    --mem-per-cpu={resources.mem_mb_per_cpu} \
-                    --time={resources.runtime} \
-                    --gres={resources.gres} \
-                    --ntasks={resources.ntasks} \
-                    anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
-            }}
-            export -f _run_inference
+                cd {params.workdir}
 
-            squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
-        ) >{log} 2>&1
-        touch {output.okfile}
-        """
-# fmt: on
+                _run_inference() {{
+                    local VENV=$1
+                    source "$VENV/bin/activate"
+
+                    if [ "{params.disable_local_definitions}" = "False" ]; then
+                        export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
+                    fi
+
+                    CMD_ARGS=()
+
+                    # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
+                    if [ {resources.gpus} -gt 1 ]; then
+                        CMD_ARGS+=(runner.parallel.cluster=slurm)
+                    fi
+
+                    srun \
+                        --unbuffered \
+                        --partition={resources.slurm_partition} \
+                        --cpus-per-task={resources.cpus_per_task} \
+                        --mem-per-cpu={resources.mem_mb_per_cpu} \
+                        --time={resources.runtime} \
+                        --gres={resources.gres} \
+                        --ntasks={resources.ntasks} \
+                        anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+                }}
+                export -f _run_inference
+
+                squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
+            ) >{log} 2>&1
+            touch {output.okfile}
+            """
+        # fmt: on
