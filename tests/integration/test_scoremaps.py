@@ -7,10 +7,20 @@ from pathlib import Path
 import numpy as np
 import pytest
 import xarray as xr
+import yaml
 from PIL import Image
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG = Path(__file__).resolve().parent / "configs" / "scoremaps.yaml"
+
+# This test reads the baseline archive and gridded truth live from /store_new
+# (no inference / fixture: the ICON-CH2-CTRL baseline is static archive data).
+# Read the input paths from the config so the test and config never disagree,
+# and skip cleanly when they are absent (e.g. off balfrin) rather than failing
+# deep inside snakemake — the analog of the meteogram test's fixture skip.
+_CFG = yaml.safe_load(CONFIG.read_text())
+BASELINE_ROOT = Path(next(r["baseline"] for r in _CFG["runs"] if "baseline" in r)["root"])
+TRUTH_ROOT = Path(_CFG["truth"]["root"])
 
 # The scoremaps block plots one map per (param, score, region, season, init_hour,
 # leadtime). The fixture requests both an instantaneous param (T_2M) and a
@@ -199,6 +209,15 @@ def test_scoremaps():
     maths), so this test checks end-to-end wiring + sane, stable output rather than
     re-deriving values.
     """
+    # Skip cleanly when the baseline archive / gridded truth are not reachable
+    # (keyed off the paths in the config), instead of failing inside snakemake.
+    missing = [p for p in (BASELINE_ROOT, TRUTH_ROOT) if not p.exists()]
+    if missing:
+        pytest.skip(
+            "scoremaps inputs not accessible (need /store_new access, e.g. on "
+            "balfrin): " + ", ".join(str(p) for p in missing)
+        )
+
     result = subprocess.run(
         ["evalml", "experiment", str(CONFIG)],
         cwd=PROJECT_ROOT,
