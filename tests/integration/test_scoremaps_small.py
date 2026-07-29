@@ -19,7 +19,9 @@ CONFIG = Path(__file__).resolve().parent / "configs" / "scoremaps_small.yaml"
 # and skip cleanly when they are absent (e.g. off balfrin) rather than failing
 # deep inside snakemake — the analog of the meteogram test's fixture skip.
 _CFG = yaml.safe_load(CONFIG.read_text())
-BASELINE_ROOT = Path(next(r["baseline"] for r in _CFG["runs"] if "baseline" in r)["root"])
+BASELINE_ROOT = Path(
+    next(r["baseline"] for r in _CFG["runs"] if "baseline" in r)["root"]
+)
 TRUTH_ROOT = Path(_CFG["truth"]["root"])
 
 # The scoremaps block plots one map per (param, score, region, season, init_hour,
@@ -184,7 +186,7 @@ def _print_reference_block(recorded: dict[str, dict]) -> None:
 
 
 @pytest.mark.longtest
-def test_scoremaps():
+def test_scoremaps_small():
     """Run the experiment workflow on the minimal scoremaps config and check that
     the score maps it produces are *meaningful*, not merely present.
 
