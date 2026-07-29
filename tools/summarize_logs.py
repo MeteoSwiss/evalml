@@ -23,6 +23,7 @@ ERROR_KEYWORDS = {"error", "exception", "traceback", "failed", "oom", "killed"}
 # already gone by the time it tries to clean it up afterward — harmless.
 BENIGN_PATTERNS = ("unlink failed",)
 
+
 def copy(src: Path, dest_root: Path) -> Path:
     rel = src.relative_to(ROOT)
     dst = dest_root / rel
@@ -51,6 +52,7 @@ def has_error(path: Path) -> bool:
         return any(kw in text for kw in ERROR_KEYWORDS)
     except Exception:
         return False
+
 
 # --- collect ---
 
