@@ -5,6 +5,13 @@ description: |
 
 config_label: dashboard-test
 
+# Always replay inference from this frozen fixture (no GPU / MLflow / sandbox
+# build); truth still comes live from the DWH. To (re)capture the fixture you
+# must run real inference, so temporarily comment this line out, run
+# `evalml experiment <this config>`, then `evalml capture-fixture <this config>
+# <path>`, and restore it (see tests/integration/README.md).
+#fixture_root: /scratch/mch/mmcgloho/evalml_test_fixtures/dashboard-small
+
 dates:
   - 2024-08-01T00:00
 
