@@ -40,3 +40,52 @@ in. `MANIFEST.yaml` records the checkpoint(s), captured dates, capture time, the
 re-checks each fixture GRIB against its recorded checksum and fails loudly if it
 has drifted (corrupted, partial, or hand-edited); fixtures captured before
 checksums existed simply skip the check.
+
+## Versioning and multiple fixtures
+
+A fixture is **per-config**, not global: each fixture-backed test reads
+`fixture_root` from its own config (there is no shared fixture constant). To add
+another fixture-backed test, add a config with its own `fixture_root` and a test
+that reads it, reusing the skip-if-no-`MANIFEST.yaml` pattern.
+
+**Layout** — one directory per test-config under a shared parent, with each
+capture in a dated subfolder:
+
+```
+/store_new/mch/msopr/cmerker/evalml_test_fixtures/
+  meteogram-small/
+    v_20240801_b30a/   # MANIFEST.yaml + data/runs/<run_id>/<init_time>/grib
+    v_20260729_b30a/
+  <other-test>/
+    v_<date>_<ckpt>/
+```
+
+Each config's `fixture_root` points at its own `<test>/<version>` directory.
+
+Versioning needs **no code change**: `fixture_root` is a self-contained,
+relocatable bundle — `MANIFEST.yaml`, the `data/` tree, and the per-GRIB
+checksums are all anchored relative to `fixture_root`. To refresh, capture into a
+new `v_<date>` directory and bump the `fixture_root` line; the old version stays
+for rollback. The pointer lives in git (the config), the data lives in
+`/store_new` — so the commit that bumps `fixture_root` is tied to the
+code/checkpoint change that required re-capturing.
+
+The version tag is a **human pointer only**; a fixture's true identity
+(checkpoint, dates, `evalml` commit) is recorded in `MANIFEST.yaml`. Date-only
+(`v_20260729`) is fine for infrequent captures — append the checkpoint
+short-hash (`v_20260729_b30a`) if you capture more than once a day or want the
+reason visible at a glance.
+
+Notes as this grows:
+
+- **Isolation.** `run_id` is a hash of the forecaster config, so tests with
+  different checkpoints/configs get different `run_id`s and never collide.
+  Prefer one bundle per test — re-capturing a shared bundle would silently
+  affect every test pointing at it.
+- **Capture scope.** `capture-fixture` only snapshots GRIB dirs whose init time
+  matches the config's `dates`, so capturing one fixture from a shared `output/`
+  tree will not sweep in another config's runs. Refreshing all fixtures means
+  running `capture-fixture` once per config.
+- **Storage.** N tests x M versions of GRIB adds up on `/store_new`; prune stale
+  versions. The git history of the `fixture_root` bumps shows which versions
+  were ever active.

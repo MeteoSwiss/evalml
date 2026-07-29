@@ -10,7 +10,7 @@ config_label: meteogram-test
 # must run real inference, so temporarily comment this line out, run
 # `evalml showcase <this config>`, then `evalml capture-fixture <this config>
 # <path>`, and restore it (see tests/integration/README.md).
-fixture_root: /store_new/mch/msopr/cmerker/evalml_test_fixtures/meteogram-small
+fixture_root: /store_new/mch/msopr/cmerker/evalml_test_fixtures/meteogram-small/v_20240801_b30a
 
 dates:
   - 2024-08-01T00:00
@@ -25,6 +25,11 @@ runs:
         - earthkit-utils<0.2.0
         - earthkit-data<0.19.0
         - anemoi-inference==0.11.1
+
+  - baseline:
+      label: ICON-CH1-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/6/6
 
   - baseline:
       label: ICON-CH2-EPS
