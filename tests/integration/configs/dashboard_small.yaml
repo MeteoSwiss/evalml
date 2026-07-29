@@ -32,10 +32,6 @@ runs:
       root: /store_new/mch/msclim/INCA
       steps: 0/6/1
   - baseline:
-      label: ICON-CH2-CTRL
-      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
-      steps: 0/12/1
-  - baseline:
       label: ICON-CH1-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
       steps: 0/12/1
@@ -58,18 +54,15 @@ experiment:
     regions:
       - mittelland
       - berge
-      - alpennordseite
-      - alpensuedseite
-      - jura
     root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
   thresholds:
     TOT_PREC6:
-      gt: [0.0, 0.1, 5, 10, 20, 50]
+      gt: [0.0, 0.1]
     SP_10M:
-      gt: [2.5, 5.0, 10.0]
+      gt: [2.5, 10.0]
     T_2M:
       lt: [273.15]
-      gt: [288.15, 298.15]
+      gt: [288.15]
   dashboard:
     stratification:
       # - region
@@ -83,18 +76,16 @@ experiment:
         lead_times: "0/6/1"
         stratification: region
         variables:
-          - "U_10M:RMSE,R2,ETS"
-          - "V_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2,ETS"
-          - "TOT_PREC1:RMSE,R2,ETS"
+          - "SP_10M:RMSE,R2,ETS"
+          - "TOT_PREC6:RMSE,R2,ETS"
       short_range:
         baseline: ICON-CH1-CTRL
         lead_times: "6/12/6"
         stratification: region
         variables:
-          - "U_10M:RMSE,R2,ETS"
-          - "V_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2,ETS"
+          - "SP_10M:RMSE,R2,ETS"
           - "TOT_PREC6:RMSE,R2,ETS"
   scoremaps:
     enabled: false
