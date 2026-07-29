@@ -11,7 +11,7 @@ import yaml
 from PIL import Image
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-CONFIG = Path(__file__).resolve().parent / "configs" / "scoremaps.yaml"
+CONFIG = Path(__file__).resolve().parent / "configs" / "scoremaps_small.yaml"
 
 # This test reads the baseline archive and gridded truth live from /store_new
 # (no inference / fixture: the ICON-CH2-CTRL baseline is static archive data).
