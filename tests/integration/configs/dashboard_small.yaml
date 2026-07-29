@@ -15,7 +15,7 @@ fixture_root: /store_new/mch/msopr/ml/evalml/test_fixtures/dashboard-small
 dates:
   - 2024-08-01T00:00
 
-runs:`
+runs:
   - temporal_downscaler:
       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
       label: Varda-single-1.0
