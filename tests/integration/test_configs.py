@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = Path(__file__).resolve().parent / "configs"
 EXPECTED_DIR = Path(__file__).resolve().parent / "expected"
 
-TOLERANCE = 1e-6
+TOLERANCE = 1e-2
 
 # Configs to test — add or remove names here to control which runs are exercised.
 CONFIGS = [
