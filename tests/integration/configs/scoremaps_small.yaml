@@ -6,7 +6,7 @@ description: |
   inference), gridded zarr truth. Params cover both the instantaneous path
   (T_2M) and the de-accumulation path (TOT_PREC6). Everything else is kept to a
   single value so the fixture stays small. Driven by
-  tests/integration/test_experiment.py.
+  tests/integration/test_scoremaps_small.py.
 config_label: scoremaps-test
 
 # Two init times (00 and 06 UTC on the same day) so the score maps aggregate
