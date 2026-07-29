@@ -5,8 +5,10 @@ description: |
 config_label: varda-single-1.0
 
 dates:
-  - 2025-03-01T00:00
-  - 2025-03-02T00:00
+  - 2025-01-01T00:00
+  - 2025-04-01T00:00
+  - 2025-07-01T00:00
+  - 2025-10-01T00:00
 
 runs:
   - temporal_downscaler:
