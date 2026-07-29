@@ -18,6 +18,21 @@ DEST.mkdir(exist_ok=True)
 
 ERROR_KEYWORDS = {"error", "exception", "traceback", "failed", "oom", "killed"}
 
+# Lines that contain an ERROR_KEYWORDS substring but do not indicate a real
+# failure. Each entry is a tuple of substrings that must ALL appear (lowercased)
+# in a line for it to be skipped by has_error().
+ERROR_ALLOWLIST: tuple[tuple[str, ...], ...] = (
+    # After downloading a grid to its cache, eckit removes the lockfile and logs
+    # "Unlink failed <path>.ek.lock (No such file or directory)" when another
+    # worker already removed it — a harmless cleanup race in eckit's own cache.
+    ("unlink failed", "no such file or directory"),
+)
+
+
+def _is_benign(line: str) -> bool:
+    """True if a log line matches a known-benign ERROR_ALLOWLIST pattern."""
+    return any(all(sub in line for sub in entry) for entry in ERROR_ALLOWLIST)
+
 
 def copy(src: Path, dest_root: Path) -> Path:
     rel = src.relative_to(ROOT)
@@ -41,11 +56,15 @@ def read(path: Path, max_lines: int = 300) -> str:
 
 def has_error(path: Path) -> bool:
     try:
-        return any(
-            kw in path.read_text(errors="replace").lower() for kw in ERROR_KEYWORDS
-        )
+        lines = path.read_text(errors="replace").lower().splitlines()
     except Exception:
         return False
+    return any(
+        kw in line
+        for line in lines
+        if not _is_benign(line)
+        for kw in ERROR_KEYWORDS
+    )
 
 
 # --- collect ---
