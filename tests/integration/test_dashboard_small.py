@@ -18,10 +18,10 @@ def test_experiment_dashboard():
     """Run the experiment workflow on a minimal config and check dashboard is produced.
 
     Drives the ``evalml experiment`` pipeline post-inference.
-    Marked ``longtest`` because it needs a GPU, MLflow credentials, DWH
-    (jretrievedwh) credentials, and access to the /store_new datasets, so it is
-    skipped in ordinary test runs. PNG existence is not checked explicitly because
-    snakemake fails if they are not produced.
+    Marked ``longtest`` because it needs DWH (jretrievedwh) credentials and
+    access to the /store_new datasets, so it is skipped in ordinary test runs.
+    PNG/HTML existence is not checked explicitly because snakemake fails if they
+    are not produced.
     """
     # A completed capture writes MANIFEST.yaml; keying off that (not mere
     # directory existence) avoids running against an empty/partial fixture.
