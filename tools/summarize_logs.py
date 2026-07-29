@@ -18,6 +18,11 @@ DEST.mkdir(exist_ok=True)
 
 ERROR_KEYWORDS = {"error", "exception", "traceback", "failed", "oom", "killed"}
 
+# Known-benign noise that happens to contain an ERROR_KEYWORDS substring.
+# eckit prints this directly (no logger prefix) when a grid-cache lock file is
+# already gone by the time it tries to clean it up afterward — harmless.
+BENIGN_PATTERNS = ("unlink failed",)
+
 
 def copy(src: Path, dest_root: Path) -> Path:
     rel = src.relative_to(ROOT)
@@ -41,9 +46,10 @@ def read(path: Path, max_lines: int = 300) -> str:
 
 def has_error(path: Path) -> bool:
     try:
-        return any(
-            kw in path.read_text(errors="replace").lower() for kw in ERROR_KEYWORDS
-        )
+        text = path.read_text(errors="replace").lower()
+        for pattern in BENIGN_PATTERNS:
+            text = text.replace(pattern, "")
+        return any(kw in text for kw in ERROR_KEYWORDS)
     except Exception:
         return False
 

@@ -1,8 +1,6 @@
 import json
 import logging
-import os
 import re
-import tempfile
 import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -176,15 +174,10 @@ def _fetch_icon_const_grib(model: str) -> Path:
             href = asset["href"]
             break
     LOG.info("Downloading %s constants to %s", model, cached)
-    # Unique-per-process tmp file: concurrent Snakemake rules can race here on a
-    # cold cache, and a shared tmp path means whichever process renames first
-    # leaves the other's `tmp.rename()` targeting an already-moved file.
-    fd, tmp_name = tempfile.mkstemp(dir=_ICON_CONST_CACHE, prefix=f"{asset_id}.")
-    os.close(fd)  # mkstemp's fd only reserves the unique name; urlretrieve writes by path
-    tmp = Path(tmp_name)
+    tmp = cached.with_suffix(".tmp")
     try:
         urllib.request.urlretrieve(href, tmp)
-        tmp.replace(cached)  # atomic; safe even if another process just wrote `cached`
+        tmp.rename(cached)
     except Exception:
         tmp.unlink(missing_ok=True)
         raise
