@@ -16,6 +16,7 @@ TOLERANCE = 1e-6
 # Configs to test — add or remove names here to control which runs are exercised.
 CONFIGS = [
     "varda-single-1.0.yaml",
+    "forecasters-ich1.yaml",
 ]
 
 
