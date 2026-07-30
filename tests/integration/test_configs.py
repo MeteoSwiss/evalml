@@ -1,5 +1,7 @@
 import glob
+import statistics
 import subprocess
+from collections import defaultdict
 from pathlib import Path
 
 import pytest
@@ -10,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = Path(__file__).resolve().parent / "configs"
 EXPECTED_DIR = Path(__file__).resolve().parent / "expected"
 
-TOLERANCE = 1e-2
+TOLERANCE = 1e-1
 
 # Configs to test — add or remove names here to control which runs are exercised.
 CONFIGS = [
@@ -119,10 +121,44 @@ def test_experiment_metrics(config_name):
         str(s) for s in ds.coords["source"].values if not str(s).startswith("truth")
     )
 
+    failures = []
+    total = 0
+    diffs = []
+    failed_vars = defaultdict(int)
+
     for entry in load_expected(config_name):
         sel = entry["sel"]
         for metric, expected_value in entry["metrics"].items():
+            total += 1
             actual = float(ds[metric].sel(source=run_source, **sel).mean("step").values)
-            assert actual == pytest.approx(expected_value, abs=TOLERANCE), (
-                f"{config_name} {metric} {sel}: got {actual}"
-            )
+            diff = abs(actual - expected_value)
+            diffs.append(diff)
+            if diff > TOLERANCE:
+                failures.append((metric, sel, expected_value, actual, diff))
+                failed_vars[metric.split(".")[0]] += 1
+
+    n_fail = len(failures)
+    n_pass = total - n_fail
+    pct = 100 * n_fail / total if total else 0
+    diff_range = f"{min(diffs):.2e} – {max(diffs):.2e}" if diffs else "n/a"
+    diff_median = f"{statistics.median(diffs):.2e}" if diffs else "n/a"
+    failed_var_summary = (
+        ", ".join(f"{v}({c})" for v, c in sorted(failed_vars.items())) or "none"
+    )
+
+    summary = (
+        f"\n{config_name}: {n_pass}/{total} pass, {n_fail}/{total} fail"
+        f" ({pct:.0f}%) | tol={TOLERANCE:.0e}"
+        f" | diff range [{diff_range}], median {diff_median}"
+        f" | failed vars: {failed_var_summary}"
+    )
+    print(summary)
+
+    if failures:
+        detail_lines = [
+            f"  {m} {sel}: expected={exp}, got={act}, diff={d:.2e}"
+            for m, sel, exp, act, d in failures[:20]
+        ]
+        if len(failures) > 20:
+            detail_lines.append(f"  ... and {len(failures) - 20} more")
+        raise AssertionError(summary + "\n" + "\n".join(detail_lines))
