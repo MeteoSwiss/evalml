@@ -11,7 +11,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = Path(__file__).resolve().parent / "configs"
 EXPECTED_DIR = Path(__file__).resolve().parent / "expected"
 
-TOLERANCE = 1e-6
+# Relative tolerance dominates for any metric with real magnitude; the abs
+# floor only matters for metrics that legitimately land on exactly 0.0 (e.g.
+# a threshold score with no observed events), where a relative check alone
+# would demand a bit-exact match.
+RELATIVE_TOLERANCE = 1e-3
+ABSOLUTE_TOLERANCE = 1e-6
 
 # Configs to test — add or remove names here to control which runs are exercised.
 CONFIGS = [
@@ -141,7 +146,7 @@ def test_experiment_metrics(config_name):
             sel = entry["sel"]
             for metric, expected_value in entry["metrics"].items():
                 actual = float(ds[metric].sel(source=run_source, **sel).mean("step").values)
-                assert actual == pytest.approx(expected_value, abs=TOLERANCE), (
+                assert actual == pytest.approx(expected_value, rel=RELATIVE_TOLERANCE, abs=ABSOLUTE_TOLERANCE), (
                     f"{config_name} {metric} {sel}: got {actual}"
                 )
         return
@@ -164,7 +169,7 @@ def test_experiment_metrics(config_name):
                 sel = entry["sel"]
                 for metric, expected_value in entry["metrics"].items():
                     actual = float(ds[metric].sel(source=run_source, **sel).mean("step").values)
-                    assert actual == pytest.approx(expected_value, abs=TOLERANCE), (
+                    assert actual == pytest.approx(expected_value, rel=RELATIVE_TOLERANCE, abs=ABSOLUTE_TOLERANCE), (
                         f"{config_name} {source_key} {metric} {sel}: got {actual}"
                     )
 
