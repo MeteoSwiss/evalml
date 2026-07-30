@@ -18,6 +18,11 @@ DEST.mkdir(exist_ok=True)
 
 ERROR_KEYWORDS = {"error", "exception", "traceback", "failed", "oom", "killed"}
 
+# Known-benign noise that happens to contain an ERROR_KEYWORDS substring.
+# eckit prints this directly (no logger prefix) when a grid-cache lock file is
+# already gone by the time it tries to clean it up afterward — harmless.
+BENIGN_PATTERNS = ("unlink failed",)
+
 
 def copy(src: Path, dest_root: Path) -> Path:
     rel = src.relative_to(ROOT)
@@ -31,7 +36,9 @@ def read(path: Path, max_lines: int = 300) -> str:
     try:
         lines = path.read_text(errors="replace").splitlines()
         if len(lines) > max_lines:
-            lines = [f"... ({len(lines) - max_lines} lines omitted) ...", ""] + lines[-max_lines:]
+            lines = [f"... ({len(lines) - max_lines} lines omitted) ...", ""] + lines[
+                -max_lines:
+            ]
         return "\n".join(lines)
     except Exception as e:
         return f"(could not read: {e})"
@@ -39,7 +46,10 @@ def read(path: Path, max_lines: int = 300) -> str:
 
 def has_error(path: Path) -> bool:
     try:
-        return any(kw in path.read_text(errors="replace").lower() for kw in ERROR_KEYWORDS)
+        text = path.read_text(errors="replace").lower()
+        for pattern in BENIGN_PATTERNS:
+            text = text.replace(pattern, "")
+        return any(kw in text for kw in ERROR_KEYWORDS)
     except Exception:
         return False
 
@@ -50,7 +60,8 @@ snakemake_logs = sorted(ROOT.glob(".snakemake/log/*.snakemake.log"))
 latest_snakemake = [snakemake_logs[-1]] if snakemake_logs else []
 
 rule_logs = [
-    p for p in sorted(ROOT.glob("output/logs/**/*.log"), key=lambda p: p.stat().st_mtime)
+    p
+    for p in sorted(ROOT.glob("output/logs/**/*.log"), key=lambda p: p.stat().st_mtime)
     if p.suffix == ".log"
 ]
 
@@ -83,7 +94,7 @@ def details(label: str, path: Path, *, open_by_default: bool = False) -> str:
     tag = "<details open>" if open_by_default else "<details>"
     return (
         f'<div class="{css}">'
-        f'{tag}<summary>{icon} {escape(label)}</summary>'
+        f"{tag}<summary>{icon} {escape(label)}</summary>"
         f"<pre>{escape(read(path))}</pre>"
         f"</details></div>"
     )
@@ -99,7 +110,13 @@ parts = [
 
 if latest_snakemake:
     parts.append("<h2>Snakemake Log</h2>")
-    parts.append(details(".snakemake/log/" + latest_snakemake[0].name, DEST / latest_snakemake[0].relative_to(ROOT), open_by_default=True))
+    parts.append(
+        details(
+            ".snakemake/log/" + latest_snakemake[0].name,
+            DEST / latest_snakemake[0].relative_to(ROOT),
+            open_by_default=True,
+        )
+    )
 
 if rule_logs:
     parts.append("<h2>Rule Logs</h2>")

@@ -1,14 +1,19 @@
 # yaml-language-server: $schema=../../../workflow/tools/config.schema.json
 description: |
-  Evaluate skill of Varda-single-1.0 against ground observations.
+  Test the dashboard functionality on a minimal config. One reference date, short lead times,
+  animations disabled. Driven by tests/integration/test_dashboard_small.py.
 
-config_label: varda-single-1.0
+config_label: dashboard-test
+
+# Always replay inference from this frozen fixture (no GPU / MLflow / sandbox
+# build); truth still comes live from the DWH. To (re)capture the fixture you
+# must run real inference, so temporarily comment this line out, run
+# `evalml experiment <this config>`, then `evalml capture-fixture <this config>
+# <path>`, and restore it (see tests/integration/README.md).
+fixture_root: /store_new/mch/msopr/ml/evalml/test_fixtures/dashboard-small
 
 dates:
-  - 2025-01-01T00:00
-  - 2025-04-01T00:00
-  - 2025-07-01T00:00
-  - 2025-10-01T00:00
+  - 2024-08-01T00:00
 
 runs:
   - temporal_downscaler:
@@ -26,10 +31,6 @@ runs:
       label: INCA
       root: /store_new/mch/msclim/INCA
       steps: 0/6/1
-  - baseline:
-      label: ICON-CH2-CTRL
-      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
-      steps: 0/12/1
   - baseline:
       label: ICON-CH1-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
@@ -98,24 +99,6 @@ experiment:
           - "TOT_PREC6:RMSE,R2,ETS"
   scoremaps:
     enabled: false
-
-showcase:
-  params:
-    - T_2M
-    - SP_10M
-    - TOT_PREC1
-  meteograms:
-    enabled: false
-    stations: [JUN] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
-  animations:
-    enabled: true
-    frames_per_second: 5
-    domains:
-      # - globe
-      - europe
-      # - alps
-      - icon-ch
-      - switzerland
 
 locations:
   output_root: output/
