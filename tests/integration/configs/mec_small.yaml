@@ -40,11 +40,11 @@ locations:
   output_root: /store_new/mch/msopr/ml/evalml/test_fixtures/mec-small/
 
 # Required for --mec: prepare_mec_input reads observations from these three roots.
-# Only ekf_root is used by this test.
+# Only ver_synop_root is used by this test.
 mec:
   ekf_root: /store_new/mch/msopr/osm/KENDA-CH1/EKF
   mon_synop_root: /scratch/mch/paa/mec/MEC_ML_input/monFiles2025
-  ver_synop_root: /scratch/mch/paa/mec/MEC25_I-CH1
+  ver_synop_root: /store_new/mch/msopr/ml/evalml/test_fixtures/mec-small/data/runs/forecaster-9f46-a697/6ec6/obs
 
 profile:
   executor: slurm

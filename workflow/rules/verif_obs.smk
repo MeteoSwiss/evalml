@@ -45,8 +45,6 @@ if config["mec"] is not None:
             ),
         output:
             obs=directory(OUT_ROOT / "data/runs/{run_id}/mec/{init_time}/input_obs"),
-            ekf_file=OUT_ROOT
-            / "data/runs/{run_id}/mec/{init_time}/input_obs/ekfSYNOP.nc",
             obs_file=OUT_ROOT
             / "data/runs/{run_id}/mec/{init_time}/input_obs/obsSYNOP.nc",
         log:
@@ -67,13 +65,10 @@ if config["mec"] is not None:
                 ym="${{init:0:6}}"
                 echo "init time: ${{init}}"
 
-                # collect observations (ekfSYNOP) and/or (monSYNOP from DWD; includes precip) files
-                cp {params.ekf_root}/${{ym}}/ekfSYNOP_${{init}}00.nc {output.ekf_file}
+                # collect observation files
                 # TODO: copy monSYNOP once a shared path is available
                 # cp {params.mon_synop_root}/${{init:0:10}}/monSYNOP.nc {output.obs}/monSYNOP.nc
-                # TODO: copy verSYNOP once a shared path is available; touch keeps obs_file as a declared output
-                # cp {params.ver_synop_root}/verSYNOP_${{init}}00.nc {output.obs_file}
-                touch {output.obs_file}
+                cp {params.ver_synop_root}/verSYNOP_${{init}}00.nc {output.obs_file}
                 echo "Copied obs files to {output.obs}"
 
             ) >{log} 2>&1

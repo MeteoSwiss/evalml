@@ -27,14 +27,17 @@ def test_mec_produces_feedback_files():
 
     Exercises the full MEC chain: prepare_mec_input -> link_mec_input ->
     generate_mec_namelist -> sarus_pull_mec -> run_mec (see
-    workflow/rules/verif_obs.smk). Inference GRIB is pre-staged in output_root
-    so no GPU/MLflow is needed. Still requires `sarus` and ekfSYNOP obs, so
-    this can only run on the CSCS baremetal-runner-balfrin runner.
+    workflow/rules/verif_obs.smk). Inference GRIB and obs files are pre-staged
+    in output_root so no GPU/MLflow is needed. Still requires `sarus`, so this
+    can only run on the CSCS baremetal-runner-balfrin runner.
     """
     output_root = _output_root()
 
-    # Remove fdbk_files before running so MEC is forced to re-run on every test,
-    # even if a previous run left verSYNOP_*.nc behind.
+    # Remove the mec/ tree before running to force all MEC rules to re-run.
+    # Inference GRIB and the obs source file are staged outside mec/ so they
+    # are unaffected. fdbk_files/ is also outside mec/ and gets removed too.
+    for mec_dir in output_root.glob("data/runs/**/mec"):
+        shutil.rmtree(mec_dir)
     for fdbk_dir in output_root.glob("data/runs/**/fdbk_files"):
         shutil.rmtree(fdbk_dir)
 
