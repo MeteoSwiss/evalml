@@ -36,6 +36,13 @@ def load_expected(config_name):
 # a degenerate score like FBI when no events are forecast).
 # Per-source statistics (.max / .mean / .min / .std) are excluded — they are
 # not verification metrics and would need separate truth-source selection.
+#
+# A config may produce several verif_aggregated_*.nc files (one per
+# forecaster/baseline run). Each non-truth source found across all of them is
+# written under its own key, keyed by the run's hash-prefix (the part of the
+# source name before the "/", e.g. "forecaster-b30a-4d02") so every run gets
+# its own expected entries instead of only the first one glob() happens to
+# return.
 # ---------------------------------------------------------------------------
 # if __name__ == "__main__":
 #     nc_files = glob.glob(
@@ -43,52 +50,57 @@ def load_expected(config_name):
 #         recursive=True,
 #     )
 #     assert nc_files, "No verif_aggregated_*.nc found — run an experiment first."
-#     ds = xr.open_dataset(nc_files[0])
-#     run_src = next(
-#         str(s) for s in ds.coords["source"].values if not str(s).startswith("truth")
-#     )
 #
 #     skip_suffixes = (".max", ".mean", ".min", ".std")
-#     metrics = [
-#         v for v in sorted(ds.data_vars)
-#         if "source" in ds[v].dims and not any(v.endswith(s) for s in skip_suffixes)
-#     ]
-#     regions   = ds.coords["region"].values.tolist()
-#     seasons   = ds.coords["season"].values.tolist()
-#     init_hrs  = ds.coords["init_hour"].values.tolist()
 #
 #     for config_name in CONFIGS:
-#         entries = []
-#         for region in regions:
-#             for season in seasons:
-#                 for init_hour in init_hrs:
-#                     row_metrics = {}
-#                     for metric in metrics:
-#                         try:
-#                             val = float(
-#                                 ds[metric]
-#                                 .sel(source=run_src, region=region,
-#                                      season=season, init_hour=init_hour)
-#                                 .mean("step")
-#                                 .values
-#                             )
-#                         except Exception:
-#                             continue
-#                         if math.isfinite(val):
-#                             row_metrics[metric] = round(val, 6)
-#                     if row_metrics:
-#                         entries.append({
-#                             "sel": {
-#                                 "region": region,
-#                                 "season": season,
-#                                 "init_hour": int(init_hour),
-#                             },
-#                             "metrics": row_metrics,
-#                         })
+#         by_source = {}
+#         for nc_file in nc_files:
+#             ds = xr.open_dataset(nc_file)
+#             run_sources = [
+#                 str(s) for s in ds.coords["source"].values if not str(s).startswith("truth")
+#             ]
+#             metrics = [
+#                 v for v in sorted(ds.data_vars)
+#                 if "source" in ds[v].dims and not any(v.endswith(s) for s in skip_suffixes)
+#             ]
+#             regions   = ds.coords["region"].values.tolist()
+#             seasons   = ds.coords["season"].values.tolist()
+#             init_hrs  = ds.coords["init_hour"].values.tolist()
+#
+#             for run_src in run_sources:
+#                 entries = by_source.setdefault(run_src.split("/")[0], [])
+#                 for region in regions:
+#                     for season in seasons:
+#                         for init_hour in init_hrs:
+#                             row_metrics = {}
+#                             for metric in metrics:
+#                                 try:
+#                                     val = float(
+#                                         ds[metric]
+#                                         .sel(source=run_src, region=region,
+#                                              season=season, init_hour=init_hour)
+#                                         .mean("step")
+#                                         .values
+#                                     )
+#                                 except Exception:
+#                                     continue
+#                                 if math.isfinite(val):
+#                                     row_metrics[metric] = round(val, 6)
+#                             if row_metrics:
+#                                 entries.append({
+#                                     "sel": {
+#                                         "region": region,
+#                                         "season": season,
+#                                         "init_hour": int(init_hour),
+#                                     },
+#                                     "metrics": row_metrics,
+#                                 })
 #         out_path = EXPECTED_DIR / config_name
 #         with open(out_path, "w") as f:
-#             yaml.dump(entries, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-#         print(f"Updated {out_path} ({len(entries)} entries)")
+#             yaml.dump(by_source, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+#         n_entries = sum(len(v) for v in by_source.values())
+#         print(f"Updated {out_path} ({n_entries} entries across {len(by_source)} source(s))")
 
 
 @pytest.mark.heavytest
@@ -115,15 +127,47 @@ def test_experiment_metrics(config_name):
         f"No verif_aggregated_*.nc found in output/data/runs/ for {config_name}"
     )
 
-    ds = xr.open_dataset(nc_files[0])
-    run_source = next(
-        str(s) for s in ds.coords["source"].values if not str(s).startswith("truth")
-    )
+    expected = load_expected(config_name)
 
-    for entry in load_expected(config_name):
-        sel = entry["sel"]
-        for metric, expected_value in entry["metrics"].items():
-            actual = float(ds[metric].sel(source=run_source, **sel).mean("step").values)
-            assert actual == pytest.approx(expected_value, abs=TOLERANCE), (
-                f"{config_name} {metric} {sel}: got {actual}"
-            )
+    # Legacy format: a flat list of {sel, metrics}, checked against the first
+    # non-truth source found — correct only when a config has a single run.
+    if isinstance(expected, list):
+        ds = xr.open_dataset(nc_files[0])
+        run_source = next(
+            str(s) for s in ds.coords["source"].values if not str(s).startswith("truth")
+        )
+        for entry in expected:
+            sel = entry["sel"]
+            for metric, expected_value in entry["metrics"].items():
+                actual = float(ds[metric].sel(source=run_source, **sel).mean("step").values)
+                assert actual == pytest.approx(expected_value, abs=TOLERANCE), (
+                    f"{config_name} {metric} {sel}: got {actual}"
+                )
+        return
+
+    # Current format: entries keyed by source hash-prefix, so every
+    # forecaster/baseline run produced by the config gets checked, not just
+    # whichever nc file glob() happens to return first.
+    checked_sources = set()
+    for nc_file in nc_files:
+        ds = xr.open_dataset(nc_file)
+        run_sources = [
+            str(s) for s in ds.coords["source"].values if not str(s).startswith("truth")
+        ]
+        for run_source in run_sources:
+            source_key = run_source.split("/")[0]
+            if source_key not in expected:
+                continue
+            checked_sources.add(source_key)
+            for entry in expected[source_key]:
+                sel = entry["sel"]
+                for metric, expected_value in entry["metrics"].items():
+                    actual = float(ds[metric].sel(source=run_source, **sel).mean("step").values)
+                    assert actual == pytest.approx(expected_value, abs=TOLERANCE), (
+                        f"{config_name} {source_key} {metric} {sel}: got {actual}"
+                    )
+
+    assert checked_sources == set(expected), (
+        f"{config_name}: expected entries for sources {sorted(expected)} but only "
+        f"found {sorted(checked_sources)} among this run's verif_aggregated_*.nc outputs"
+    )
