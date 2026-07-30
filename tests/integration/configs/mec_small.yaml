@@ -30,7 +30,8 @@ experiment:
   params:
     - T_2M
   stratification:
-    regions: []
+    regions:
+      - icon
   dashboard:
     stratification:
       - season
