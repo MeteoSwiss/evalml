@@ -2,7 +2,7 @@
 description: |
   Integration-test fixture: minimal --mec run exercising the MEC feedback-file
   path (prepare_mec_input -> link_mec_input -> generate_mec_namelist -> run_mec).
-  One short reference window so only a small number of fdbk_files get built.
+  Inference GRIB is pre-staged in output_root so no GPU/MLflow is needed.
   Driven by tests/integration/test_mec.py.
 config_label: mec-test
 
@@ -37,7 +37,7 @@ experiment:
       - season
 
 locations:
-  output_root: output/
+  output_root: /store_new/mch/msopr/ml/evalml/test_fixtures/mec-small/
 
 # Required for --mec: prepare_mec_input reads observations from these three roots.
 # Only ekf_root is used by this test.
