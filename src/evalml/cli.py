@@ -255,7 +255,12 @@ def showcase(
 def capture_fixture_cmd(configfile: Path, fixture_root: Path) -> None:
     from datetime import datetime
 
-    from evalml.fixtures import capture_fixture, config_init_times, write_manifest
+    from evalml.fixtures import (
+        capture_fixture,
+        config_init_times,
+        expected_run_prefixes,
+        write_manifest,
+    )
 
     def _evalml_commit() -> str | None:
         try:
@@ -275,11 +280,15 @@ def capture_fixture_cmd(configfile: Path, fixture_root: Path) -> None:
     model = ConfigModel.model_validate(raw)
     output_root = model.locations.output_root
 
-    # Scope capture to this config's dates so an unrelated experiment sharing
-    # the same output/ tree is not swept into the fixture.
+    # Scope capture to this config's dates and its own run directories so an
+    # unrelated experiment sharing the same output/ tree is not swept into the
+    # fixture.
     init_times = config_init_times(raw["dates"])
+    run_prefixes = expected_run_prefixes(raw.get("runs", []))
 
-    copied = capture_fixture(output_root, fixture_root, init_times=init_times)
+    copied = capture_fixture(
+        output_root, fixture_root, init_times=init_times, run_prefixes=run_prefixes
+    )
     if not copied:
         raise click.ClickException(
             f"No inference GRIB dirs found under {output_root}/data/runs for the "

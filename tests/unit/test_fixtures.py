@@ -7,6 +7,7 @@ import pytest
 from evalml.fixtures import (
     capture_fixture,
     config_init_times,
+    expected_run_prefixes,
     fixture_grib_dir,
     grib_checksum,
     iter_grib_dirs,
@@ -83,6 +84,68 @@ def test_capture_scoped_by_init_times_excludes_other_dates(tmp_path):
 
     assert copied == [fixture_grib_dir(fx, "forecaster-b30a/6640", "202408010000")]
     assert not fixture_grib_dir(fx, "forecaster-sruc/94fd", "202503010000").exists()
+
+
+def test_capture_scoped_by_run_prefixes_excludes_same_date_other_run(tmp_path):
+    """Regression: capture must not sweep in a leftover run dir from an
+    unrelated config that shares output/ *and* the same init_time."""
+    out = tmp_path / "output"
+    fx = tmp_path / "fixture"
+    _fake_run(out, "forecaster-b30a-8fd4/6640", "202408010000")  # this config's run
+    _fake_run(out, "forecaster-sruc-94fd/1a2b", "202408010000")  # unrelated, same date
+
+    copied = capture_fixture(
+        out,
+        fx,
+        init_times={"202408010000"},
+        run_prefixes={"forecaster-b30a-"},
+    )
+
+    assert copied == [
+        fixture_grib_dir(fx, "forecaster-b30a-8fd4/6640", "202408010000")
+    ]
+    assert not fixture_grib_dir(
+        fx, "forecaster-sruc-94fd/1a2b", "202408010000"
+    ).exists()
+
+
+def test_expected_run_prefixes_forecaster():
+    runs = [
+        {
+            "forecaster": {
+                "checkpoint": "https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4",
+                "steps": "0/12/6",
+                "config": "resources/inference/configs/forecaster.yaml",
+            }
+        }
+    ]
+    assert expected_run_prefixes(runs) == {"forecaster-sruc-"}
+
+
+def test_expected_run_prefixes_includes_nested_forecaster():
+    runs = [
+        {
+            "temporal_downscaler": {
+                "checkpoint": "https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3",
+                "steps": "0/12/1",
+                "config": "resources/inference/configs/downscaler.yaml",
+                "forecaster": {
+                    "checkpoint": "https://servicedepl.meteoswiss.ch/mlstore#/experiments/409/runs/b30acf68520a4bbd8324c44666561696",
+                    "steps": "0/12/6",
+                    "config": "resources/inference/configs/forecaster.yaml",
+                },
+            }
+        }
+    ]
+    assert expected_run_prefixes(runs) == {
+        "temporal_downscaler-sruc-",
+        "forecaster-b30a-",
+    }
+
+
+def test_expected_run_prefixes_skips_baseline():
+    runs = [{"baseline": {"label": "INCA", "root": "/store_new/mch/msclim/INCA"}}]
+    assert expected_run_prefixes(runs) == set()
 
 
 def _replay_symlink(output_root: Path, run_id: str, init_time: str, target: Path):

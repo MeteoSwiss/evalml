@@ -10,6 +10,7 @@ import os
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 import yaml
 
@@ -128,7 +129,57 @@ def iter_grib_dirs(output_root) -> list[Path]:
     return sorted(p for p in runs.rglob("grib") if p.is_dir() and not p.is_symlink())
 
 
-def capture_fixture(output_root, fixture_root, *, init_times=None) -> list[Path]:
+def _checkpoint_model_id(checkpoint_uri: str) -> str:
+    """Short checkpoint id, mirroring ``model_id()`` in workflow/rules/common.smk.
+
+    Only used to recognize a run directory's name (``<model_type>-<model_id>-...``)
+    as belonging to a given config's checkpoint; kept independent from the
+    workflow's own hashing so fixture capture has no dependency on it.
+    """
+    parsed = urlparse(checkpoint_uri)
+    if parsed.netloc in (
+        "mlflow.ecmwf.int",
+        "service.meteoswiss.ch",
+        "servicedepl.meteoswiss.ch",
+    ):
+        fragment = checkpoint_uri.split("#")[-1]
+        if "/models/" in fragment:
+            parts = fragment.strip("/").split("/")
+            if len(parts) >= 4 and parts[2] == "versions":
+                return f"{parts[1]}-v{parts[3]}"[:4]
+            return f"{parts[1]}-latest"[:4]
+        return checkpoint_uri.split("/")[-1][:4]
+    elif parsed.netloc == "huggingface.co":
+        return checkpoint_uri.split("/")[-1].split(".")[0]
+    else:
+        return checkpoint_uri.split("/")[-2][:4]
+
+
+def expected_run_prefixes(runs_cfg: list) -> set[str]:
+    """Directory-name prefixes a config's ``runs:`` block should produce.
+
+    Each ML run directory is named ``<model_type>-<model_id>-...`` (see
+    ``register_run()`` in workflow/rules/common.smk); this returns the
+    ``<model_type>-<model_id>-`` prefix for every checkpoint the config
+    references, including a temporal_downscaler's nested forecaster.
+    Baselines are skipped: they read from an archive, not a run directory.
+    """
+    prefixes = set()
+    for run_entry in runs_cfg:
+        model_type = next(iter(run_entry))
+        if model_type == "baseline":
+            continue
+        run_config = run_entry[model_type]
+        prefixes.add(f"{model_type}-{_checkpoint_model_id(run_config['checkpoint'])}-")
+        nested = run_config.get("forecaster")
+        if isinstance(nested, dict) and nested.get("checkpoint"):
+            prefixes.add(f"forecaster-{_checkpoint_model_id(nested['checkpoint'])}-")
+    return prefixes
+
+
+def capture_fixture(
+    output_root, fixture_root, *, init_times=None, run_prefixes=None
+) -> list[Path]:
     """Copy inference GRIB dirs under ``output_root`` into ``fixture_root``.
 
     Preserves the relative path so the result is readable via
@@ -137,15 +188,25 @@ def capture_fixture(output_root, fixture_root, *, init_times=None) -> list[Path]
 
     ``init_times``: when given (a set of ``YYYYMMDDHHMM`` strings, e.g. from
     :func:`config_init_times`), only GRIB dirs for those init times are
-    captured. This scopes capture to one config's dates so an unrelated
-    experiment sharing the same ``output/`` tree is not swept in.
+    captured.
+
+    ``run_prefixes``: when given (from :func:`expected_run_prefixes`), only
+    GRIB dirs whose run directory name starts with one of these prefixes are
+    captured. Combined with ``init_times``, this scopes capture to one
+    config's own runs so leftover output from an unrelated experiment sharing
+    the same ``output/`` tree and init time is not swept in.
     """
     output_root = Path(output_root)
     fixture_root = Path(fixture_root)
+    runs_root = output_root / "data" / "runs"
     copied: list[Path] = []
     for grib in iter_grib_dirs(output_root):
         if init_times is not None and grib.parent.name not in init_times:
             continue
+        if run_prefixes is not None:
+            env_id = grib.relative_to(runs_root).parts[0]
+            if not any(env_id.startswith(p) for p in run_prefixes):
+                continue
         dest = (fixture_root / grib.relative_to(output_root)).resolve()
         # Defensive: never delete-then-copy a source that already resolves to
         # its own destination (e.g. capturing onto the fixture itself), which
