@@ -20,11 +20,8 @@ EXPECTED_DIR = Path(__file__).resolve().parent / "expected"
 TOLERANCE = 0.1
 
 # Configs to test — add or remove names here to control which runs are exercised.
-# varda-single-1.0.yaml verifies against a live DWH truth (jretrievedwh) and is
-# exercised on the base branch; left commented out here so this PR's heavytest
-# runs only the forecasters-ich1 config.
 CONFIGS = [
-    # "varda-single-1.0.yaml",
+    "varda-single-1.0.yaml",
     "forecasters-ich1.yaml",
 ]
 
