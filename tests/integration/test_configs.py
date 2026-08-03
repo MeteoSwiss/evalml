@@ -39,9 +39,15 @@ def load_expected(config_name):
 
 
 def _find_nc_files():
-    return glob.glob(
-        str(PROJECT_ROOT / "output/data/runs/**/verif_aggregated_*.nc"),
-        recursive=True,
+    # Sorted because glob returns filesystem order: regeneration writes the
+    # source keys in the order the files are visited, so an unsorted glob would
+    # reorder the keys of a committed expected file when a multi-run config is
+    # regenerated on a different machine, producing a large meaningless diff.
+    return sorted(
+        glob.glob(
+            str(PROJECT_ROOT / "output/data/runs/**/verif_aggregated_*.nc"),
+            recursive=True,
+        )
     )
 
 
