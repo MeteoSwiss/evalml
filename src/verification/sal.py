@@ -42,13 +42,12 @@ from verification.spatial import spherical_nearest_neighbor_indices
 DEFAULT_THR_FACTOR = 0.067
 DEFAULT_THR_QUANTILE = 0.95
 
-# Minimum truth point density (points per km^2) for SAL to treat the truth as a
-# resolved precipitation field. A gridded analysis packs the domain densely
-# (~1 point/km^2 at 1 km spacing, even on an unstructured mesh); a station
-# network is ~0.005 points/km^2 and cannot form a field once remapped. The cut
-# at 0.05 corresponds to a mean spacing of ~4.5 km — coarser than any analysis
-# used as truth, far denser than any observation network.
-MIN_TRUTH_POINT_DENSITY = 0.05
+# Minimum truth point count for SAL to treat the truth as a resolved field. A
+# gridded analysis over the domain has millions of points; a station network
+# (jretrieve/SwissMetNet) has ~150. The two regimes are orders of magnitude
+# apart, so the exact cut is not critical — 10k warns on the latter, never the
+# former.
+MIN_TRUTH_POINTS = 10_000
 
 
 def build_regular_grid(
@@ -115,35 +114,6 @@ def remap_field(
     flat = np.asarray(field, dtype=float).ravel()
     out = flat[indices].reshape(shape)
     return np.nan_to_num(out, nan=fill)
-
-
-def point_density_per_km2(lat: np.ndarray, lon: np.ndarray) -> float:
-    """Approximate density (points per km²) of scattered lat/lon points.
-
-    Uses an equirectangular area approximation over the points' bounding box
-    (longitude spacing scaled by cos of the mean latitude). This is a coarse
-    but robust discriminator between a resolved analysis field (dense, ~1/km²)
-    and sparse station observations (~0.005/km²) — it does not assume the truth
-    is on a structured ``(y, x)`` grid, which matters because analyses such as
-    KENDA-CH1 are stored on an unstructured mesh. Degenerate inputs (< 2 points,
-    or all collinear so the box has zero area) return 0.0.
-    """
-    lat = np.asarray(lat, dtype=float).ravel()
-    lon = np.asarray(lon, dtype=float).ravel()
-    if lat.size < 2:
-        return 0.0
-    lat_span = float(lat.max() - lat.min())
-    lon_span = float(lon.max() - lon.min())
-    if lat_span <= 0.0 or lon_span <= 0.0:
-        return 0.0
-    km_per_deg = 111.32
-    mean_lat_rad = np.deg2rad((float(lat.max()) + float(lat.min())) / 2.0)
-    height_km = lat_span * km_per_deg
-    width_km = lon_span * km_per_deg * float(np.cos(mean_lat_rad))
-    area_km2 = height_km * width_km
-    if area_km2 <= 0.0:
-        return 0.0
-    return lat.size / area_km2
 
 
 def compute_sal(
