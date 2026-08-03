@@ -165,7 +165,6 @@ class TemporalDownscalerConfig(RunConfig):
     )
 
 
-
 class BaselineConfig(BaseModel):
     """Configuration for a single baseline to include in the verification."""
 

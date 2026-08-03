@@ -369,8 +369,6 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
     return generate_json_hash(configs_to_hash)
 
 
-
-
 def baseline_hash(baseline_config: dict) -> str:
     """Hash of fields that determine baseline identity (excludes display/legacy metadata)."""
     cfg = {k: v for k, v in baseline_config.items() if k not in BASELINE_HASH_EXCLUDE}
