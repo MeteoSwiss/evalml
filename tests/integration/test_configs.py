@@ -1,4 +1,5 @@
 import glob
+import math
 import statistics
 import subprocess
 from collections import defaultdict
@@ -26,88 +27,39 @@ CONFIGS = [
 ]
 
 
+# Per-source statistics are not verification metrics and would need a separate
+# truth-source selection, so they are never compared or written.
+STAT_SUFFIXES = (".max", ".mean", ".min", ".std")
+
+
 def load_expected(config_name):
     path = EXPECTED_DIR / config_name
     with open(path) as f:
         return yaml.safe_load(f)
 
 
-# ---------------------------------------------------------------------------
-# Run from the project root after a reference experiment to regenerate all
-# expected/*.yaml files with fresh values covering every region, season,
-# init_hour combination present in the output:
-#
-#   python tests/integration/test_configs.py
-#
-# Metrics with NaN or ±inf values are silently skipped (too few samples, or
-# a degenerate score like FBI when no events are forecast).
-# Per-source statistics (.max / .mean / .min / .std) are excluded — they are
-# not verification metrics and would need separate truth-source selection.
-#
-# A config may produce several verif_aggregated_*.nc files (one per
-# forecaster/baseline run). Each non-truth source found across all of them is
-# written under its own key, keyed by the run's hash-prefix (the part of the
-# source name before the "/", e.g. "forecaster-b30a-4d02") so every run gets
-# its own expected entries instead of only the first one glob() happens to
-# return.
-# ---------------------------------------------------------------------------
-# if __name__ == "__main__":
-#     nc_files = glob.glob(
-#         str(PROJECT_ROOT / "output/data/runs/**/verif_aggregated_*.nc"),
-#         recursive=True,
-#     )
-#     assert nc_files, "No verif_aggregated_*.nc found — run an experiment first."
-#
-#     skip_suffixes = (".max", ".mean", ".min", ".std")
-#
-#     for config_name in CONFIGS:
-#         by_source = {}
-#         for nc_file in nc_files:
-#             ds = xr.open_dataset(nc_file)
-#             run_sources = [
-#                 str(s) for s in ds.coords["source"].values if not str(s).startswith("truth")
-#             ]
-#             metrics = [
-#                 v for v in sorted(ds.data_vars)
-#                 if "source" in ds[v].dims and not any(v.endswith(s) for s in skip_suffixes)
-#             ]
-#             regions   = ds.coords["region"].values.tolist()
-#             seasons   = ds.coords["season"].values.tolist()
-#             init_hrs  = ds.coords["init_hour"].values.tolist()
-#
-#             for run_src in run_sources:
-#                 entries = by_source.setdefault(run_src.split("/")[0], [])
-#                 for region in regions:
-#                     for season in seasons:
-#                         for init_hour in init_hrs:
-#                             row_metrics = {}
-#                             for metric in metrics:
-#                                 try:
-#                                     val = float(
-#                                         ds[metric]
-#                                         .sel(source=run_src, region=region,
-#                                              season=season, init_hour=init_hour)
-#                                         .mean("step")
-#                                         .values
-#                                     )
-#                                 except Exception:
-#                                     continue
-#                                 if math.isfinite(val):
-#                                     row_metrics[metric] = round(val, 6)
-#                             if row_metrics:
-#                                 entries.append({
-#                                     "sel": {
-#                                         "region": region,
-#                                         "season": season,
-#                                         "init_hour": int(init_hour),
-#                                     },
-#                                     "metrics": row_metrics,
-#                                 })
-#         out_path = EXPECTED_DIR / config_name
-#         with open(out_path, "w") as f:
-#             yaml.dump(by_source, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-#         n_entries = sum(len(v) for v in by_source.values())
-#         print(f"Updated {out_path} ({n_entries} entries across {len(by_source)} source(s))")
+def _find_nc_files():
+    return glob.glob(
+        str(PROJECT_ROOT / "output/data/runs/**/verif_aggregated_*.nc"),
+        recursive=True,
+    )
+
+
+def _mtimes(paths):
+    return {p: Path(p).stat().st_mtime for p in paths}
+
+
+def _run_sources(ds):
+    """Non-truth sources in a dataset, i.e. the forecaster/baseline runs."""
+    return [
+        str(s) for s in ds.coords["source"].values if not str(s).startswith("truth")
+    ]
+
+
+def _metric_value(ds, metric, run_source, sel):
+    """The single number both comparison and regeneration use, so the reference
+    values can never be produced by a different selection than the one checked."""
+    return float(ds[metric].sel(source=run_source, **sel).mean("step").values)
 
 
 def _collect_failures(ds, run_source, entries, label, failures, diffs, failed_vars):
@@ -121,7 +73,7 @@ def _collect_failures(ds, run_source, entries, label, failures, diffs, failed_va
         sel = entry["sel"]
         for metric, expected_value in entry["metrics"].items():
             n += 1
-            actual = float(ds[metric].sel(source=run_source, **sel).mean("step").values)
+            actual = _metric_value(ds, metric, run_source, sel)
             diff = abs(actual - expected_value)
             diffs.append(diff)
             if diff > TOLERANCE:
@@ -130,9 +82,98 @@ def _collect_failures(ds, run_source, entries, label, failures, diffs, failed_va
     return n
 
 
+def _build_expected(nc_files):
+    """Build the expected-metrics mapping from a run's verification output:
+    ``{source_hash_prefix: [{"sel": ..., "metrics": ...}, ...]}``, covering every
+    region/season/init_hour combination present.
+
+    A config may produce several verif_aggregated_*.nc files (one per
+    forecaster/baseline run). Every non-truth source found across them gets its
+    own key — the part of the source name before the "/", e.g.
+    "forecaster-b30a-4d02" — so all runs are recorded, not just the first one
+    glob() happens to return.
+
+    Metrics with NaN or ±inf values are skipped: too few samples, or a
+    degenerate score such as FBI when no events are forecast.
+    """
+    by_source = {}
+    for nc_file in nc_files:
+        ds = xr.open_dataset(nc_file)
+        metrics = [
+            v
+            for v in sorted(ds.data_vars)
+            if "source" in ds[v].dims and not v.endswith(STAT_SUFFIXES)
+        ]
+        regions = ds.coords["region"].values.tolist()
+        seasons = ds.coords["season"].values.tolist()
+        init_hours = ds.coords["init_hour"].values.tolist()
+
+        for run_source in _run_sources(ds):
+            entries = by_source.setdefault(run_source.split("/")[0], [])
+            for region in regions:
+                for season in seasons:
+                    for init_hour in init_hours:
+                        sel = {
+                            "region": region,
+                            "season": season,
+                            "init_hour": int(init_hour),
+                        }
+                        row_metrics = {}
+                        for metric in metrics:
+                            try:
+                                val = _metric_value(ds, metric, run_source, sel)
+                            except Exception:
+                                continue
+                            if math.isfinite(val):
+                                row_metrics[metric] = round(val, 6)
+                        if row_metrics:
+                            entries.append({"sel": sel, "metrics": row_metrics})
+    return by_source
+
+
+def _regenerate_expected(config_name, nc_files, mtimes_before):
+    """Overwrite expected/<config_name> with the values this run produced.
+
+    Only files this run actually (re)wrote are used. `output/data/runs/` is
+    shared across configs — the heavytest job runs every config in CONFIGS into
+    the same tree — so globbing everything would write one config's references
+    into the other's file. If nothing was rewritten, snakemake considered the
+    outputs up to date; that is reported rather than silently regenerating from
+    a stale tree.
+    """
+    fresh = [p for p in nc_files if mtimes_before.get(p) != Path(p).stat().st_mtime]
+    assert fresh, (
+        f"{config_name}: the experiment rewrote no verif_aggregated_*.nc, so the run's own "
+        f"outputs cannot be identified (snakemake likely considered them up to date). "
+        f"Remove the run's directory under output/data/runs/ (or the whole output/ tree) "
+        f"and re-run with --regenerate-expected."
+    )
+
+    by_source = _build_expected(fresh)
+    assert by_source, (
+        f"{config_name}: no finite metrics found in {len(fresh)} freshly written file(s) — "
+        f"refusing to write an empty reference."
+    )
+
+    out_path = EXPECTED_DIR / config_name
+    with open(out_path, "w") as f:
+        yaml.dump(
+            by_source, f, default_flow_style=False, sort_keys=False, allow_unicode=True
+        )
+    n_entries = sum(len(v) for v in by_source.values())
+    print(
+        f"\nREGENERATED {out_path} — {n_entries} entries across "
+        f"{len(by_source)} source(s): {', '.join(sorted(by_source))}"
+    )
+
+
 @pytest.mark.heavytest
 @pytest.mark.parametrize("config_name", CONFIGS)
-def test_experiment_metrics(config_name):
+def test_experiment_metrics(config_name, regenerate_expected):
+    # Snapshot before the run so regeneration can tell this config's freshly
+    # written outputs from other configs' leftovers in the shared output/ tree.
+    mtimes_before = _mtimes(_find_nc_files())
+
     result = subprocess.run(
         ["evalml", "experiment", str(CONFIGS_DIR / config_name)],
         cwd=PROJECT_ROOT,
@@ -146,13 +187,14 @@ def test_experiment_metrics(config_name):
         f"stderr (last 2000):\n{result.stderr[-2000:]}"
     )
 
-    nc_files = glob.glob(
-        str(PROJECT_ROOT / "output/data/runs/**/verif_aggregated_*.nc"),
-        recursive=True,
-    )
+    nc_files = _find_nc_files()
     assert nc_files, (
         f"No verif_aggregated_*.nc found in output/data/runs/ for {config_name}"
     )
+
+    if regenerate_expected:
+        _regenerate_expected(config_name, nc_files, mtimes_before)
+        return
 
     expected = load_expected(config_name)
 
@@ -174,8 +216,13 @@ def test_experiment_metrics(config_name):
             str(s) for s in ds.coords["source"].values if not str(s).startswith("truth")
         )
         total += _collect_failures(
-            ds, run_source, expected, run_source.split("/")[0],
-            failures, diffs, failed_vars,
+            ds,
+            run_source,
+            expected,
+            run_source.split("/")[0],
+            failures,
+            diffs,
+            failed_vars,
         )
     else:
         # Current format: entries keyed by source hash-prefix, so every
@@ -185,7 +232,9 @@ def test_experiment_metrics(config_name):
         for nc_file in nc_files:
             ds = xr.open_dataset(nc_file)
             run_sources = [
-                str(s) for s in ds.coords["source"].values if not str(s).startswith("truth")
+                str(s)
+                for s in ds.coords["source"].values
+                if not str(s).startswith("truth")
             ]
             for run_source in run_sources:
                 source_key = run_source.split("/")[0]
@@ -193,8 +242,13 @@ def test_experiment_metrics(config_name):
                     continue
                 checked_sources.add(source_key)
                 total += _collect_failures(
-                    ds, run_source, expected[source_key], source_key,
-                    failures, diffs, failed_vars,
+                    ds,
+                    run_source,
+                    expected[source_key],
+                    source_key,
+                    failures,
+                    diffs,
+                    failed_vars,
                 )
 
         assert checked_sources == set(expected), (

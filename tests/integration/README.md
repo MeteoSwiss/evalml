@@ -89,3 +89,45 @@ Notes as this grows:
 - **Storage.** N tests x M versions of GRIB adds up on `/store_new`; prune stale
   versions. The git history of the `fixture_root` bumps shows which versions
   were ever active.
+
+## Regenerating expected metrics for `test_experiment_metrics`
+
+`test_configs.py` runs each config in `CONFIGS` and compares every metric
+against `expected/<config>.yaml`. To refresh those references after an
+intentional pipeline change, run the same test with `--regenerate-expected`: it
+runs the experiment as usual, then overwrites the reference file instead of
+asserting.
+
+**Per config**, which is normally what you want — the two configs cost hours of
+GPU time each, and a change rarely invalidates both:
+
+```
+pytest tests/integration/test_configs.py -m heavytest --regenerate-expected -k varda-single
+pytest tests/integration/test_configs.py -m heavytest --regenerate-expected -k forecasters-ich1
+```
+
+Drop `-k` to regenerate every config in `CONFIGS`. The flag defaults to off, so
+CI never regenerates; review the resulting diff before committing it.
+
+**Why it lives in the test rather than a standalone script:** both paths read the
+values through `_metric_value()`, so the references cannot be generated with a
+different selection than the one compared against. A separate generator would
+duplicate the source filter, the `.mean("step")`, and the source-key derivation,
+and drift from the test unnoticed.
+
+**Only the files the run rewrote are used.** `output/data/runs/` is shared across
+configs, so a plain glob would write one config's runs into another's reference
+file. Regeneration snapshots the `verif_aggregated_*.nc` mtimes before the
+experiment and keeps only the files that changed. A consequence: if snakemake
+considers the outputs up to date it rewrites nothing, and regeneration fails with
+that explanation rather than writing references from a stale tree — remove the
+run's directory under `output/data/runs/` (or the whole `output/`) and re-run.
+
+**Format.** The generated file maps each run's source key (the part before the
+`/`, e.g. `forecaster-b30a-4d02`) to its list of `{sel, metrics}` entries, so a
+config defining several runs — `forecasters-ich1.yaml` has two forecasters — gets
+all of them checked. Metrics that are NaN or ±inf (too few samples, or a
+degenerate score such as FBI when no events are forecast) and per-source
+statistics (`.max`/`.mean`/`.min`/`.std`) are excluded. `varda-single-1.0.yaml` is
+still in the older flat-list format, which the test reads for backward
+compatibility; regenerating it converts it to the keyed format.
