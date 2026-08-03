@@ -68,7 +68,7 @@ rule verification_metrics:
         "src/verification/__init__.py",
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_metrics.py",
-        inference_okfile=rules.inference_execute.output.okfile
+        inference_okfile=rules.inference_execute.output.okfile,
         truth_dep=truth_file_dep,
     output:
         OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/verif_{VERIF_HASH}.nc",
