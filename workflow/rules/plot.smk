@@ -170,9 +170,7 @@ rule make_forecast_animation:
 
 
 rule plot_prefetch_natural_earth:
-    """Warm the shared cartopy Natural Earth cache once, before the parallel
-    scoremap plot jobs, so they don't race to download (and corrupt) the same
-    shapefiles into a cold cache. See scripts/prefetch_natural_earth.py."""
+    """Warm the cartopy Natural Earth cache before the parallel plot jobs."""
     input:
         script="workflow/scripts/prefetch_natural_earth.py",
     output:
