@@ -47,7 +47,7 @@ rule verification_metrics_baseline:
             --steps "{params.baseline_steps}" \
             --source_id "{wildcards.baseline_id}" \
             --truth_source_id "{params.truth_source_id}" \
-            --regions "{params.regions}" \
+            --regions '{params.regions}' \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
             --member "{params.member}" \
@@ -106,7 +106,7 @@ rule verification_metrics:
             --steps "{params.fcst_steps}" \
             --source_id "{wildcards.run_id}" \
             --truth_source_id "{params.truth_source_id}" \
-            --regions "{params.regions}" \
+            --regions '{params.regions}' \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
             {params.lapse_rate_flag} \

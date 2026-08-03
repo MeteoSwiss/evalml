@@ -12,6 +12,8 @@ import pandas as pd
 def _get_available_baselines(wc) -> list[dict[str, str]]:
     """Get all available baseline datasets for the given init time."""
     baselines = []
+    if not BASELINE_CONFIGS:
+        return baselines
     for baseline_id in BASELINE_CONFIGS:
         root = BASELINE_CONFIGS[baseline_id].get("root")
         steps = BASELINE_CONFIGS[baseline_id].get("steps")
@@ -90,7 +92,7 @@ rule plot_meteogram:
             CMD_ARGS+=(--baseline_label "${{BASELINE_LABELS[$i]}}")
         done
 
-        python {input.script} "${{CMD_ARGS[@]}}" >{log} 2>&1
+        uv run python {input.script} "${{CMD_ARGS[@]}}" >{log} 2>&1
         """
 
 
