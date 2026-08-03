@@ -98,16 +98,31 @@ intentional pipeline change, run the same test with `--regenerate-expected`: it
 runs the experiment as usual, then overwrites the reference file instead of
 asserting.
 
-**Per config**, which is normally what you want — the two configs cost hours of
-GPU time each, and a change rarely invalidates both:
+The flag **takes the exact config file name** and deselects every other config,
+which is normally what you want — each config costs hours of GPU time and a change
+rarely invalidates all of them:
 
 ```
-pytest tests/integration/test_configs.py -m heavytest --regenerate-expected -k varda-single
-pytest tests/integration/test_configs.py -m heavytest --regenerate-expected -k forecasters-ich1
+pytest tests/integration/test_configs.py -m heavytest --regenerate-expected=varda-single-1.0.yaml
 ```
 
-Drop `-k` to regenerate every config in `CONFIGS`. The flag defaults to off, so
-CI never regenerates; review the resulting diff before committing it.
+Repeat the option to regenerate several, or pass `--regenerate-expected=all` for
+every config in `CONFIGS`. Omitting it — as CI does — regenerates nothing; review
+the resulting diff before committing it.
+
+Deliberate sharp edges, all of which abort the run before the experiment starts:
+
+- **A bare `--regenerate-expected` is rejected.** Regenerating every config is
+  expensive enough that it must be spelled `=all`.
+- **Partial names are rejected**, with the valid names listed. `-k` would have
+  been substring-based: `-k varda-single` also selects a future
+  `varda-single-2.0.yaml`, and `-k forecasters-ich1` also selects
+  `forecasters-ich1-oper.yaml`, so a short name could silently overwrite a
+  reference nobody meant to touch. Typos are caught the same way, instead of
+  landing as pytest's generic "no tests ran".
+- **Selecting no metric test is rejected.** These tests are marked `heavytest` and
+  are deselected by default, so forgetting `-m heavytest` would otherwise report a
+  green "N passed" having regenerated nothing.
 
 **Why it lives in the test rather than a standalone script:** both paths read the
 values through `_metric_value()`, so the references cannot be generated with a
