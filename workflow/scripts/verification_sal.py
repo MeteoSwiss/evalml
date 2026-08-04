@@ -104,13 +104,6 @@ def main(args: Namespace) -> None:
         args.output,
     )
 
-    # SAL is defined for precipitation only.
-    if not args.param.startswith("TOT_PREC"):
-        raise ValueError(
-            f"SAL is defined for precipitation only; got param '{args.param}'. "
-            "Use a TOT_PREC* parameter (e.g. TOT_PREC6, or TOT_PREC for "
-            "cumulative-from-start)."
-        )
     # The accumulation period is encoded in the param name (e.g. TOT_PREC6 → 6h).
     _, accum_h = parse_aggregated_param(args.param)
     if accum_h is not None:
@@ -196,19 +189,9 @@ def main(args: Namespace) -> None:
 
         # --- load forecast ---
         src_root = args.baseline_root if args.baseline_root else grib_dir
-        try:
-            fcst = load_forecast_data(
-                src_root, reftime, [args.step], [args.param], member=args.member
-            )
-        except Exception as exc:
-            raise RuntimeError(
-                f"Could not load forecast for initialisation "
-                f"{reftime.strftime(DATETIME_FMT)} (lead time {args.step}h) from "
-                f"{src_root}: {exc}. All configured initialisations must be "
-                "available so that run and baseline SAL scores are computed over "
-                "an identical sample; blacklist genuinely-absent dates in the "
-                "experiment config."
-            ) from exc
+        fcst = load_forecast_data(
+            src_root, reftime, [args.step], [args.param], member=args.member
+        )
 
         if "step" in fcst.dims:
             fcst = fcst.sel(step=np.timedelta64(args.step, "h"))
@@ -362,12 +345,6 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Accumulated precip param, period encoded in the name (e.g. TOT_PREC6).",
-    )
-    parser.add_argument(
-        "--steps",
-        type=str,
-        default=None,
-        help="Unused; kept for parity with existing Snakemake verification rules.",
     )
     parser.add_argument(
         "--reftimes",
