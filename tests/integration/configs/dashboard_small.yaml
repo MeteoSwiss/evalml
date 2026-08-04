@@ -1,39 +1,40 @@
-# yaml-language-server: $schema=../workflow/tools/config.schema.json
+# yaml-language-server: $schema=../../../workflow/tools/config.schema.json
 description: |
-  Evaluate skill of Varda-single-1.0 against ground observations.
+  Test the dashboard functionality on a minimal config. One reference date, short lead times,
+  animations disabled. Driven by tests/integration/test_dashboard_small.py.
 
-config_label: varda-single-1.0
+config_label: dashboard-test
+
+# Always replay inference from this frozen fixture (no GPU / MLflow / sandbox
+# build); truth still comes live from the DWH. To (re)capture the fixture you
+# must run real inference, so temporarily comment this line out, run
+# `evalml experiment <this config>`, then `evalml capture-fixture <this config>
+# <path>`, and restore it (see tests/integration/README.md).
+fixture_root: /store_new/mch/msopr/ml/evalml/test_fixtures/dashboard-small
 
 dates:
-  start: 2025-03-01T00:00
-  end: 2025-03-03T00:00
-  frequency: 24h
+  - 2024-08-01T00:00
 
 runs:
   - temporal_downscaler:
       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
       label: Varda-single-1.0
-      steps: 0/120/1
+      steps: 0/12/1
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
-        # - anemoi-inference==0.11.0
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
-        steps: 0/120/6
+        steps: 0/12/6
   - baseline:
       label: INCA
       root: /store_new/mch/msclim/INCA
       steps: 0/6/1
   - baseline:
-      label: ICON-CH2-CTRL
-      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
-      steps: 0/120/1
-  - baseline:
       label: ICON-CH1-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
-      steps: 0/33/1
+      steps: 0/12/1
 
 truth:
   label: SwissMetNet
@@ -54,7 +55,6 @@ experiment:
     - PMSL
   stratification:
     regions:
-      - icon
       - mittelland
       - berge
       - alpennordseite
@@ -90,16 +90,7 @@ experiment:
           - "TOT_PREC1:RMSE,R2,ETS"
       short_range:
         baseline: ICON-CH1-CTRL
-        lead_times: "6/33/6"
-        stratification: region
-        variables:
-          - "U_10M:RMSE,R2,ETS"
-          - "V_10M:RMSE,R2,ETS"
-          - "T_2M:RMSE,R2,ETS"
-          - "TOT_PREC6:RMSE,R2,ETS"
-      medium_range:
-        baseline: ICON-CH2-CTRL
-        lead_times: "24/120/24"
+        lead_times: "6/12/6"
         stratification: region
         variables:
           - "U_10M:RMSE,R2,ETS"
@@ -108,24 +99,6 @@ experiment:
           - "TOT_PREC6:RMSE,R2,ETS"
   scoremaps:
     enabled: false
-
-showcase:
-  params:
-    - T_2M
-    - SP_10M
-    - TOT_PREC1
-  meteograms:
-    enabled: false
-    stations: [JUN] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
-  animations:
-    enabled: true
-    frames_per_second: 5
-    domains:
-      # - globe
-      - europe
-      # - alps
-      - icon-ch
-      - switzerland
 
 locations:
   output_root: output/
@@ -140,5 +113,4 @@ profile:
     mem_mb_per_cpu: 1800
     runtime: "1h"
     gpus: 0
-    slurm_account: s83
   jobs: 50

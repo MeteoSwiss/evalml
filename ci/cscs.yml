@@ -11,33 +11,40 @@ include:
     SLURM_JOB_NUM_NODES: 1
     SLURM_NTASKS: 1
 
-unit_test_job:
-  extends: [.baremetal-runner-balfrin]
-  before_script:
-    - |
-      echo "Setting up environment for unit tests on $(hostname)"
-      VENV_DIR="$(pwd)/.venv"
-      echo "uv installed at: $(which uv)"
-      uv --version
-      echo "will install evalml at: $VENV_DIR"
-      UV_HOME="$VENV_DIR" uv sync
-      source "$VENV_DIR/bin/activate"
-  script:
-    - pytest tests/unit
-  variables:
-    # Explicitly request more time from Slurm, tests aren't running fast enough.
-    SLURM_TIMELIMIT: "01:00:00"
 
-integration_test_job:
-  extends: [.baremetal-runner-balfrin]
-  before_script:
+# Strict mode + a banner() helper for section headers. Referenced first so both
+# are in scope for every fragment that follows.
+.sh_preamble:
+  script:
     - |
+      set -euo pipefail
+      banner() { printf '\n\033[1;36m==== %s ====\033[0m\n' "$*"; }
+
+      # Print CI context up front so the log is self-explanatory. The build-dir/slot
+
+# Install uv (doesn't exist on the bare-metal runner)
+.install_uv:
+  script:
+    - |
+      banner "Install uv"
+      export UV_CACHE_DIR="$SCRATCH/.cache/uv"  # wheel cache, persistent across pipelines
+      # Set eckit ECKIT_GEO_CACHE_PATH for grid downloads
+      # We could use $SCRATCH/.cache/eckit if we wanted a persistent location.
+      export ECKIT_GEO_CACHE_PATH="$PWD/.cache/eckit"
+      export HOME="$PWD/home"
+      export PATH="$PWD/.local/bin:$PATH"
+      # uv: bare metal assumes a user-managed env so evalml ships no installer
+      export UV_INSTALL_DIR="$PWD/.local/bin"
+      curl -LsSf https://astral.sh/uv/install.sh | env INSTALLER_NO_MODIFY_PATH=1 sh
+      uv --version
+
+.install_evalml:
+  script:
+    - |
+      banner "Install evalml"
+      echo $PWD
       echo "Setting up environment for integration tests on $(hostname)"
       VENV_DIR="$(pwd)/.venv"
-      echo "uv installed at: $(which uv)"
-      uv --version
       echo "will install evalml at: $VENV_DIR"
       UV_HOME="$VENV_DIR" uv sync
       source "$VENV_DIR/bin/activate"
-  script:
-    - pytest tests/integration
