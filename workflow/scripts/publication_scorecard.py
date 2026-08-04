@@ -49,6 +49,7 @@ def _():
         mo,
         parse_var_metrics,
         pathlib,
+        plt,
         project_root,
         scaled_dot_area,
         sys,
@@ -294,11 +295,11 @@ def _(
     panels,
     pathlib,
     plot_cfg,
+    plt,
     resolved_output,
     scaled_dot_area,
 ):
     import numpy as np
-    import matplotlib.pyplot as plt
     from matplotlib.transforms import ScaledTranslation
 
     figure_cfg = plot_cfg["figure"]
