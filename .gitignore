@@ -14,7 +14,7 @@ _dev
 .vscode
 .idea
 .snakemake
-output
+output*/
 _sandbox/
 experiment_report.html
 

@@ -305,6 +305,14 @@ class AnimationsConfig(BaseModel):
             "[lon_min, lon_max, lat_min, lat_max], and optional 'projection'."
         ),
     )
+    fps: float | None = Field(
+        default=None,
+        description=(
+            "Frames per second for the output GIF. Overrides the default speed "
+            "(which is derived from the model time step). Use values < 1 for slow animations, "
+            "e.g. 0.5 = one frame every 2 seconds."
+        ),
+    )
 
 
 class ScorecardConfig(BaseModel):

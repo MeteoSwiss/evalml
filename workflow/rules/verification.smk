@@ -121,6 +121,18 @@ rule verification_metrics_aggregation:
             init_time=_restrict_reftimes_to_hours(REFTIMES),
             allow_missing=True,
         ),
+        inference_okfiles=lambda wc: expand(
+            rules.inference_execute.output.okfile,
+            run_id=(
+                [wc.run_id]
+                + (
+                    [RUN_CONFIGS[wc.run_id]["forecaster"]["run_id"]]
+                    if RUN_CONFIGS[wc.run_id].get("forecaster") is not None
+                    else []
+                )
+            ),
+            init_time=_restrict_reftimes_to_hours(REFTIMES),
+        ),
     output:
         OUT_ROOT / f"data/runs/{{run_id}}/verif_aggregated_{TRUTH_HASH}.nc",
     log:

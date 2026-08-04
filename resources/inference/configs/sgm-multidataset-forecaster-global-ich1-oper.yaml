@@ -9,7 +9,27 @@ env:
 input:
   test:
     use_original_paths: true
-       
+
+# --- Nudging (disabled by default) ---
+# Uncomment to nudge the initial condition toward station observations.
+# backend: 'peakweather' reads from a local dataset; 'jretrieve' fetches live from DWH.
+# nudge_variables: list of GRIB shortNames to nudge; omit to nudge all (T_2M, U_10M, V_10M, TOT_PREC).
+# use_limitation: int (optional, jretrieve only) — passed as --use-limitation; limits obs to
+#                 within ±N minutes of the target time (e.g. 50).
+#
+# pre_processors:
+#   - forward_transform_filter:
+#       nudge_toward_observation:
+#         backend: jretrieve
+#         nudge_variables: [T_2M]
+#         icon_grid_dir: /scratch/mch/llanzila/sruc/aux_files
+#         jretrieve_bbox: [45.7, 48.0, 5.8, 10.8]
+#         jretrieve_src_path: /scratch/mch/llanzila/sruc/evalml/src
+#         k: 3
+#         power: 4.0
+#         max_dist: 0.5
+#         use_limitation: 50
+
 post_processors:
   - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
       accumulations:

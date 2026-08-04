@@ -12,19 +12,21 @@ input:
                   scale: 0.001 # convert from kg m-2 to m
                   offset: 0
                   param: tp
+            # --- Nudging (disabled by default) ---
+            # Uncomment to nudge the initial condition toward station observations.
+            # backend: 'peakweather' reads from a local dataset; 'jretrieve' fetches live from DWH.
+            # nudge_variables: list of GRIB shortNames to nudge; omit to nudge all (T_2M, U_10M, V_10M, TOT_PREC).
             - forward_transform_filter:
                 nudge_toward_observation:
-                  backend: jretrieve
+                  nudge_variables: [T_2M, TD_2M, U_10M, V_10M]
+                  icon_grid_dir: /scratch/mch/llanzila/sruc/aux_files
                   jretrieve_bbox: [45.7, 48.0, 5.8, 10.8]
-                  jretrieve_src_path: /scratch/mch/llanzila/sruc/evalml/src
+                  jretrieve_src_path: /scratch/mch/llanzila/sruc/evalml/src/data_input/
                   k: 3
                   power: 4.0
                   max_dist: 0.5
-            #     nudge_toward_observation:
-            #       path_to_observation: /scratch/mch/llanzila/sruc/evalml/output/data/observation/PeakWeather
-            #       k: 3
-            #       power: 4.0
-            #       max_dist: 0.5
+                  use_limitation: 40
+                  run_mode: "devt"
           namer: &namer
             rules:
               - - shortName: T

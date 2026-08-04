@@ -155,7 +155,11 @@ rule make_forecast_animation:
         region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
     localrule: True
     params:
-        delay=lambda wc: 10 * int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
+        delay=lambda wc: (
+            int(100 / config.get("showcase", {}).get("animations", {}).get("fps"))
+            if config.get("showcase", {}).get("animations", {}).get("fps")
+            else 10 * int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2])
+        ),
     shell:
         """
         FRAMES=$(for f in {input}; do [ -s "$f" ] && echo "$f"; done | tr '\\n' ' ')
