@@ -90,7 +90,6 @@ def test_sal_config_defaults_and_extra_forbid():
     s = SalConfig()
     assert s.enabled is False
     assert s.params == ["TOT_PREC6"]
-    assert s.grid_extent == [-1.0, 18.0, 42.0, 50.5]
     with pytest.raises(ValueError):
         SalConfig(unknown_key=1)
 
@@ -100,17 +99,6 @@ def test_sal_config_rejects_non_precip_params():
         SalConfig(params=["T_2M"])
     with pytest.raises(ValueError, match="TOT_PREC"):
         SalConfig(params=["TOT_PREC6", "SP_10M"])  # one bad among valid
-
-
-def test_sal_config_grid_extent_validation():
-    with pytest.raises(ValueError, match="lon_min, lon_max, lat_min, lat_max"):
-        SalConfig(grid_extent=[1.0, 2.0, 3.0])  # wrong length
-    with pytest.raises(ValueError, match="lon_min < lon_max"):
-        SalConfig(grid_extent=[18.0, -1.0, 42.0, 50.5])  # lon_min >= lon_max
-    with pytest.raises(ValueError, match="finite"):
-        SalConfig(grid_extent=[float("nan"), 18.0, 42.0, 50.5])  # non-finite
-    with pytest.raises(ValueError, match="latitudes"):
-        SalConfig(grid_extent=[-1.0, 18.0, 42.0, 100.0])  # lat_max out of range
 
 
 def test_sal_leadtime_validator_rejects_unproducible(example_config):

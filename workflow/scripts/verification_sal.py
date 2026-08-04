@@ -28,6 +28,9 @@ from data_input import (
     parse_aggregated_param,
 )
 from verification.sal import (
+    DEFAULT_GRID_EXTENT,
+    DEFAULT_GRID_STEP_LAT,
+    DEFAULT_GRID_STEP_LON,
     MIN_TRUTH_POINTS,
     build_regular_grid,
     compute_sal,
@@ -41,12 +44,6 @@ logging.basicConfig(
 )
 
 DATETIME_FMT = "%Y%m%d%H%M"
-
-# Default near-isotropic raster: ~1.1 km cells, metrically near-square at
-# ~46.5°N, covering the greater-Alpine domain. Overridable via CLI / config.
-DEFAULT_GRID_EXTENT = (-1.0, 18.0, 42.0, 50.5)  # lon_min, lon_max, lat_min, lat_max
-DEFAULT_GRID_STEP_LAT = 0.01
-DEFAULT_GRID_STEP_LON = 0.0145
 
 
 def iter_init_dirs(run_root: Path) -> list[tuple[datetime, Path]]:
@@ -115,18 +112,17 @@ def main(args: Namespace) -> None:
             )
         LOG.info("Accumulation period: %dh", accum_h)
 
-    grid_extent = tuple(args.grid_extent)
     lats, lons, lat2d, lon2d = build_regular_grid(
-        grid_extent, args.grid_step_lat, args.grid_step_lon
+        DEFAULT_GRID_EXTENT, DEFAULT_GRID_STEP_LAT, DEFAULT_GRID_STEP_LON
     )
     shape = lat2d.shape
     LOG.info(
         "SAL raster: %d x %d cells, extent=%s, step=(%.4f lat, %.4f lon) deg",
         shape[0],
         shape[1],
-        grid_extent,
-        args.grid_step_lat,
-        args.grid_step_lon,
+        DEFAULT_GRID_EXTENT,
+        DEFAULT_GRID_STEP_LAT,
+        DEFAULT_GRID_STEP_LON,
     )
 
     if args.baseline_root:
@@ -275,7 +271,7 @@ def main(args: Namespace) -> None:
     header = [
         "SAL (Wernli et al. 2008) per-init precipitation scores",
         f"param: {args.param}  accum_h: {accum_h if accum_h is not None else 'n/a'}  step_h: {args.step}",
-        f"grid_extent: {list(grid_extent)}  grid_step: ({args.grid_step_lat}, {args.grid_step_lon})",
+        f"grid_extent: {list(DEFAULT_GRID_EXTENT)}  grid_step: ({DEFAULT_GRID_STEP_LAT}, {DEFAULT_GRID_STEP_LON})",
         f"member: {args.member}  source: {source}  n_processed: {len(df)}",
         "reftime UTC YYYYMMDDHHMM; S/A/L are NaN for dry windows.",
     ]
@@ -346,29 +342,6 @@ if __name__ == "__main__":
             "Init times (YYYYMMDDHHMM). For runs: optional restriction of the "
             "discovered init-time directories. For baselines: required."
         ),
-    )
-    parser.add_argument(
-        "--grid-extent",
-        dest="grid_extent",
-        type=float,
-        nargs=4,
-        metavar=("LON_MIN", "LON_MAX", "LAT_MIN", "LAT_MAX"),
-        default=list(DEFAULT_GRID_EXTENT),
-        help="SAL raster extent in degrees (PlateCarree).",
-    )
-    parser.add_argument(
-        "--grid-step-lat",
-        dest="grid_step_lat",
-        type=float,
-        default=DEFAULT_GRID_STEP_LAT,
-        help=f"SAL raster latitude spacing in degrees (default {DEFAULT_GRID_STEP_LAT}).",
-    )
-    parser.add_argument(
-        "--grid-step-lon",
-        dest="grid_step_lon",
-        type=float,
-        default=DEFAULT_GRID_STEP_LON,
-        help=f"SAL raster longitude spacing in degrees (default {DEFAULT_GRID_STEP_LON}).",
     )
     parser.add_argument(
         "--output",

@@ -278,25 +278,6 @@ class SalConfig(BaseModel):
         default=[6, 12, 18, 24, 30],
         description="List of lead times (hours) to score.",
     )
-    grid_extent: List[float] = Field(
-        default=[-1.0, 18.0, 42.0, 50.5],
-        description=(
-            "SAL raster extent [lon_min, lon_max, lat_min, lat_max] in degrees "
-            "(PlateCarree). Both forecast and truth are remapped onto this raster."
-        ),
-    )
-    grid_step_lat: float = Field(
-        default=0.01,
-        description="SAL raster latitude spacing in degrees.",
-    )
-    grid_step_lon: float = Field(
-        default=0.0145,
-        description=(
-            "SAL raster longitude spacing in degrees. Choose grid_step_lat and "
-            "grid_step_lon so pixels are metrically near-square at the domain's "
-            "central latitude (pysteps' Location term assumes square pixels)."
-        ),
-    )
 
     @field_validator("params")
     @classmethod
@@ -308,28 +289,6 @@ class SalConfig(BaseModel):
                 "'TOT_PREC' (e.g. TOT_PREC1, TOT_PREC6, or bare TOT_PREC for "
                 "cumulative-from-start); SAL is defined for precipitation only. "
                 f"Invalid: {bad}."
-            )
-        return v
-
-    @field_validator("grid_extent")
-    @classmethod
-    def validate_grid_extent(cls, v: List[float]) -> List[float]:
-        if len(v) != 4:
-            raise ValueError(
-                "sal.grid_extent must be [lon_min, lon_max, lat_min, lat_max]."
-            )
-        if any(x != x or x in (float("inf"), float("-inf")) for x in v):
-            raise ValueError(f"sal.grid_extent values must be finite; got {v}.")
-        lon_min, lon_max, lat_min, lat_max = v
-        if not -90.0 <= lat_min < lat_max <= 90.0:
-            raise ValueError(
-                f"sal.grid_extent latitudes must satisfy -90 <= lat_min < "
-                f"lat_max <= 90; got lat_min={lat_min}, lat_max={lat_max}."
-            )
-        if not -180.0 <= lon_min < lon_max <= 180.0:
-            raise ValueError(
-                f"sal.grid_extent longitudes must satisfy -180 <= lon_min < "
-                f"lon_max <= 180; got lon_min={lon_min}, lon_max={lon_max}."
             )
         return v
 

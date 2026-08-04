@@ -28,6 +28,12 @@ DEFAULT_THR_QUANTILE = 0.95
 # points, a station network ~150, so the exact cut is not critical.
 MIN_TRUTH_POINTS = 10_000
 
+# Fixed SAL scoring raster: greater-Alpine domain, ~1.1 km near-square cells at
+# ~46.5°N (step_lon/step_lat ≈ 1/cos(46.5°) keeps pixels metrically square).
+DEFAULT_GRID_EXTENT = (-1.0, 18.0, 42.0, 50.5)  # lon_min, lon_max, lat_min, lat_max
+DEFAULT_GRID_STEP_LAT = 0.01
+DEFAULT_GRID_STEP_LON = 0.0145
+
 
 def build_regular_grid(
     extent: tuple[float, float, float, float],
