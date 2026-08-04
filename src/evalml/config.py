@@ -732,35 +732,24 @@ class ConfigModel(BaseModel):
         description="Configuration for the FFV2 scoring pipeline. Required when running with --ffv2.",
     )
 
-    def _reject_unproducible_leadtimes(self, requested: List[int], label: str) -> None:
-        """Fail if any requested lead time is not produced by every participant.
-
-        `label` names the originating config block (e.g. "scoremaps", "sal")
-        and is used only to build the error message.
-        """
-        for item in self.runs:
-            steps = getattr(item, next(iter(type(item).model_fields))).steps
-            start, end, step = map(int, steps.split("/"))
-            producible = set(range(start, end + 1, step))
-            unsupported = set(requested) - producible
-            if unsupported:
-                raise ValueError(
-                    f"{label}.leadtimes contains {sorted(unsupported)} h which are not "
-                    f"produced by participant with steps '{steps}'."
-                )
-
     @model_validator(mode="after")
-    def validate_scoremap_leadtimes(self) -> "ConfigModel":
-        sm = self.experiment.scoremaps
-        if sm is not None and sm.enabled:
-            self._reject_unproducible_leadtimes(sm.leadtimes, "scoremaps")
-        return self
-
-    @model_validator(mode="after")
-    def validate_sal_leadtimes(self) -> "ConfigModel":
-        sal = self.experiment.sal
-        if sal is not None and sal.enabled:
-            self._reject_unproducible_leadtimes(sal.leadtimes, "sal")
+    def validate_leadtimes_producible(self) -> "ConfigModel":
+        """Reject scoremaps/sal lead times not produced by every participant."""
+        for label, cfg in (
+            ("scoremaps", self.experiment.scoremaps),
+            ("sal", self.experiment.sal),
+        ):
+            if cfg is None or not cfg.enabled:
+                continue
+            for item in self.runs:
+                steps = getattr(item, next(iter(type(item).model_fields))).steps
+                start, end, step = map(int, steps.split("/"))
+                unsupported = set(cfg.leadtimes) - set(range(start, end + 1, step))
+                if unsupported:
+                    raise ValueError(
+                        f"{label}.leadtimes contains {sorted(unsupported)} h which are not "
+                        f"produced by participant with steps '{steps}'."
+                    )
         return self
 
     model_config = {
