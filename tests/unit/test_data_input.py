@@ -122,6 +122,15 @@ def test_disaggregate_returns_nan_for_short_steps():
     assert result.sel(step=np.timedelta64(6, "h")).item() == pytest.approx(10.0)
 
 
+def test_disaggregate_accum_coarser_source_returns_all_nan():
+    """When the preceding boundary step (s-n) is absent from cumul (e.g. 6-hourly
+    source, n=1), the result for every affected step must be NaN, not a KeyError."""
+    cumul = _make_cumul([0, 6, 12], [0.0, 6.0, 12.0])
+    result = _disaggregate_accum(cumul, steps=[6, 12], n=1)
+    assert np.isnan(result.sel(step=np.timedelta64(6, "h")).item())
+    assert np.isnan(result.sel(step=np.timedelta64(12, "h")).item())
+
+
 # ---------------------------------------------------------------------------
 # _ensure_accum_ic
 # ---------------------------------------------------------------------------
@@ -226,6 +235,24 @@ def test_disaggregated_and_derived_params_tot_prec6_from_cumulative():
     np.testing.assert_allclose(
         result["TOT_PREC6"].sel(step=np.timedelta64(12, "h")).item(), 210.0
     )
+
+
+def test_disaggregated_and_derived_params_coarser_source_returns_nan():
+    """TOT_PREC1 requested from a 6-hourly cumulative source must yield all-NaN
+    with correct step coords — not a KeyError."""
+    ds = _make_cumul_ds([0, 6, 12, 18, 24], [0.0, 6.0, 12.0, 18.0, 24.0])
+
+    result = _disaggregated_and_derived_params(
+        ds, steps=[6, 12, 18, 24], params=["TOT_PREC1"]
+    )
+
+    assert "TOT_PREC1" in result.data_vars
+    assert "TOT_PREC" not in result.data_vars
+    assert set(
+        int(s.astype("timedelta64[h]").astype(int))
+        for s in result["TOT_PREC1"]["step"].values
+    ) == {6, 12, 18, 24}
+    assert result["TOT_PREC1"].isnull().all()
 
 
 def test_full_roundtrip_hourly_zarr_to_disaggregated():
