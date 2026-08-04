@@ -12,7 +12,7 @@ dates:
   - 2025-01-02T06:00
   - 2025-01-02T12:00
   - 2025-01-02T18:00
-  
+
 runs:
   - temporal_downscaler:
       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3

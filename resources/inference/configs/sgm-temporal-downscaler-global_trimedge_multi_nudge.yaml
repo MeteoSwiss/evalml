@@ -40,13 +40,13 @@ input:
                   max_dist: 0.5
                   run_mode: "devt"
                   holdout_fraction: 0.05
-                  holdout_seed: 42    
+                  holdout_seed: 42
                    # Station holdout — use one of the two options below, not both.
                   # Option A: randomly withhold a fraction of stations (e.g. 5% for cross-validation).
                   #   holdout_fraction: 0.05
                   #   holdout_seed: 42      # optional, defaults to 42 for reproducibility
                   # Option B: exclude specific stations by their nat_abbr identifier.
-                  #   exclude_stations: ['SCU', 'PAY', 'INNSWZ', 'WSLBTF', 'CDF', 'NABDUE', 'MMSAS', 'NABZUE', 'MAS', 'MMERZ', 'THU', 'OBR', 'FLTRL', 'WSLHOB', 'MMSAA'] 
+                  #   exclude_stations: ['SCU', 'PAY', 'INNSWZ', 'WSLBTF', 'CDF', 'NABDUE', 'MMSAS', 'NABZUE', 'MAS', 'MMERZ', 'THU', 'OBR', 'FLTRL', 'WSLHOB', 'MMSAA']
           namer: &namer
             rules:
               - - shortName: T

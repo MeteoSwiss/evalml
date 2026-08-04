@@ -28,6 +28,19 @@
           },
           "title": "Domains",
           "type": "array"
+        },
+        "fps": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Frames per second for the output GIF. Overrides the default speed (which is derived from the model time step). Use values < 1 for slow animations, e.g. 0.5 = one frame every 2 seconds.",
+          "title": "Fps"
         }
       },
       "title": "AnimationsConfig",
