@@ -251,6 +251,15 @@ def _(
 
     import copy
 
+    excluded_data_vars = [
+        "TOT_PREC1.ETS_gt_0p0", 
+        "TOT_PREC1.ETS_gt_10p0",
+        "TOT_PREC6.ETS_gt_0p0",
+        "TOT_PREC6.ETS_gt_1p0",
+        "TOT_PREC6.ETS_gt_10p0",
+        "TOT_PREC6.ETS_gt_50p0",
+    ]
+
     plot_cfg = copy.deepcopy(DEFAULT_PLOT_CFG)
     plot_cfg["colors"]["model_better"] = COLOR_SKILL_MODEL_BETTER
     plot_cfg["colors"]["baseline_better"] = COLOR_SKILL_BASELINE_BETTER
@@ -267,6 +276,7 @@ def _(
         _cfg = _build_panel_cfg(_sec, plot_cfg)
         _diff = load_relative_diff(_cfg)
         _diff = filter_diff(_diff, _cfg)
+        _diff = _diff.drop_vars([v for v in excluded_data_vars if v in _diff.data_vars])
         _lay = _panel_layout(_diff, _cfg)
         panels.append((_diff, _cfg, _sec["name"], _lay))
         LOG.info(
