@@ -14,19 +14,39 @@ input:
                   param: tp
             # --- Nudging (disabled by default) ---
             # Uncomment to nudge the initial condition toward station observations.
-            # backend: 'peakweather' reads from a local dataset; 'jretrieve' fetches live from DWH.
+            # 1. retrieve_observation: fetches live data from DWH via jretrieve → raw Parquet
+            # 2. clean_observation:    reads raw Parquet, applies QC cleaning → cleaned Parquet
+            # 3. nudge_toward_observation: reads cleaned Parquet, applies IoR correction
             # nudge_variables: list of GRIB shortNames to nudge; omit to nudge all (T_2M, U_10M, V_10M, TOT_PREC).
             - forward_transform_filter:
+                retrieve_observation:
+                  obs_path: observation/nudging_station_obs_raw.parquet
+                  jretrieve_src_path: /scratch/mch/llanzila/sruc/evalml/src/data_input/
+                  bbox: [45.7, 48.0, 5.8, 10.8]
+                  variables: [T_2M, TD_2M, U_10M, V_10M]
+                  use_limitation: 20
+                  run_mode: "devt"
+            - forward_transform_filter:
+                clean_observation:
+                  obs_path_in: observation/nudging_station_obs_raw.parquet
+                  obs_path_out: observation/nudging_station_obs.parquet
+            - forward_transform_filter:
                 nudge_toward_observation:
+                  obs_path: observation/nudging_station_obs.parquet
                   nudge_variables: [T_2M, TD_2M, U_10M, V_10M]
                   icon_grid_dir: /scratch/mch/llanzila/sruc/aux_files
-                  jretrieve_bbox: [45.7, 48.0, 5.8, 10.8]
-                  jretrieve_src_path: /scratch/mch/llanzila/sruc/evalml/src/data_input/
                   k: 3
                   power: 4.0
                   max_dist: 0.5
-                  use_limitation: 40
                   run_mode: "devt"
+                  holdout_fraction: 0.05
+                  holdout_seed: 42    
+                   # Station holdout — use one of the two options below, not both.
+                  # Option A: randomly withhold a fraction of stations (e.g. 5% for cross-validation).
+                  #   holdout_fraction: 0.05
+                  #   holdout_seed: 42      # optional, defaults to 42 for reproducibility
+                  # Option B: exclude specific stations by their nat_abbr identifier.
+                  #   exclude_stations: ['SCU', 'PAY', 'INNSWZ', 'WSLBTF', 'CDF', 'NABDUE', 'MMSAS', 'NABZUE', 'MAS', 'MMERZ', 'THU', 'OBR', 'FLTRL', 'WSLHOB', 'MMSAA'] 
           namer: &namer
             rules:
               - - shortName: T

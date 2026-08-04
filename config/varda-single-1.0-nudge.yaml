@@ -22,7 +22,7 @@ runs:
       extra_requirements:
         - anemoi-datasets==0.5.35
         # - -e /scratch/mch/llanzila/sruc/anemoi-plugins-meteoswiss
-        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@4a53741c3d5ba50271b570288253f65187b316bd
+        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@d3786cf393a41b176af94ba3b3fb0d3da8c41b71
         - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
