@@ -17,7 +17,9 @@ runs:
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
-        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@cea6c026264fa91dbfefc129a14ba79fc83115c6 # TODO once merged in main, use main
+        # NOTE this pins the merge commit that introduced 'copy-prognostic-from-forecaster'
+        # TODO pin a release tag once the plugins are versioned. Do not pin the main branch to avoid stale code (changes do to main to not change the evalml hash)
+        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@b4835d76346e1e5ec0181884520da00e317fbfbc 
         # - anemoi-inference==0.11.0
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
