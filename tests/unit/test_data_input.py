@@ -24,6 +24,21 @@ def _make_cumul(steps_h, values):
     )
 
 
+def _make_cumul_with_time(steps_h, values, reftime="2025-03-01"):
+    """Build a cumulative DataArray that also carries a datetime64 'time' aux coord.
+
+    Mirrors the real loader output where time = reftime + step.
+    """
+    step = np.array([np.timedelta64(h, "h") for h in steps_h]).astype("timedelta64[ns]")
+    ref = np.datetime64(reftime, "ns")
+    time = ref + step
+    return xr.DataArray(
+        np.array(values, dtype=np.float64),
+        dims=("step",),
+        coords={"step": step, "time": ("step", time)},
+    )
+
+
 # ---------------------------------------------------------------------------
 # parse_aggregated_param
 # ---------------------------------------------------------------------------
@@ -126,6 +141,16 @@ def test_disaggregate_accum_coarser_source_returns_all_nan():
     """When the preceding boundary step (s-n) is absent from cumul (e.g. 6-hourly
     source, n=1), the result for every affected step must be NaN, not a KeyError."""
     cumul = _make_cumul([0, 6, 12], [0.0, 6.0, 12.0])
+    result = _disaggregate_accum(cumul, steps=[6, 12], n=1)
+    assert np.isnan(result.sel(step=np.timedelta64(6, "h")).item())
+    assert np.isnan(result.sel(step=np.timedelta64(12, "h")).item())
+
+
+def test_disaggregate_accum_with_time_coord_does_not_raise():
+    """Regression: when cumul carries a datetime64 'time' aux coordinate, reindexing
+    to add missing steps must not raise DTypePromotionError (float NaN vs datetime64)."""
+    cumul = _make_cumul_with_time([0, 6, 12], [0.0, 6.0, 12.0])
+    # n=1 forces reindex to add steps 5h and 11h which are absent → NaN via NaT fill
     result = _disaggregate_accum(cumul, steps=[6, 12], n=1)
     assert np.isnan(result.sel(step=np.timedelta64(6, "h")).item())
     assert np.isnan(result.sel(step=np.timedelta64(12, "h")).item())

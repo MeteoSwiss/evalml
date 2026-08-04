@@ -580,7 +580,9 @@ def _disaggregate_accum(cumul: xr.DataArray, steps: list[int], n: int) -> xr.Dat
         {np.timedelta64(s, "h") for s in steps}
         | {np.timedelta64(s - n, "h") for s in valid_steps}
     )
-    cumul_r = cumul.reindex(step=needed, fill_value=np.nan)
+    cumul_r = cumul.reindex(
+        step=needed
+    )  # default fill: NaN for float, NaT for datetime
 
     result = xr.full_like(cumul_r.sel(step=step_coords), fill_value=np.nan)
 
