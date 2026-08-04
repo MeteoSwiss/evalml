@@ -1,31 +1,15 @@
 """SAL (Structure–Amplitude–Location) spatial precipitation verification.
 
-Wernli et al. (2008) SAL is an object-based score that compares a forecast
-precipitation field against a reference over a fixed domain, returning three
-signed, dimensionless components:
-
-  S  structure  — bias in object size/shape (negative: too peaked/small,
-                  positive: too widespread/flat), range roughly (-2, 2)
-  A  amplitude  — bias in domain-mean precipitation (normalised ratio),
-                  range (-2, 2)
-  L  location   — displacement of the precipitation field, 0 (perfect) → 2
-
-All three are normalised ratios, so they are invariant to a constant rescaling
-of the precipitation unit (mm vs kg m-2, etc.); only the object-detection
-threshold and any reported domain means depend on the unit.
-
-SAL requires both fields on a common 2-D raster with near-square pixels: the
-Location term measures centroid displacement in grid cells normalised by the
-domain diagonal, and pysteps assumes square pixels. Native model/analysis fields
-(ICON unstructured, KENDA ``(y, x)``, ...) are therefore remapped onto a regular
-lat–lon raster that is chosen to be metrically near-isotropic over the domain of
-interest before scoring — see :func:`build_regular_grid`.
-
-The heavy lifting (object detection + the three components) is delegated to
-``pysteps.verification.salscores.sal``; this module only adds the raster
-construction, the nearest-neighbour remap (reusing
-``verification.spatial.spherical_nearest_neighbor_indices``), and a thin wrapper
-that gates dry windows.
+Wernli et al. (2008) SAL is an object-based score comparing a forecast precip
+field to a reference over a fixed domain, returning three signed, dimensionless
+components: S (structure, object size/shape bias), A (amplitude, domain-mean
+bias) and L (location, field displacement). All are normalised ratios, hence
+invariant to a constant unit rescaling. Both fields must share a common raster
+with near-square pixels (pysteps' Location term assumes square pixels), so native
+fields are remapped onto a regular lat–lon raster (see build_regular_grid). The
+object detection + components are delegated to
+pysteps.verification.salscores.sal; this module adds the raster, the
+nearest-neighbour remap, and a dry-window gate.
 """
 
 from __future__ import annotations
@@ -35,18 +19,13 @@ from pysteps.verification.salscores import sal as _pysteps_sal
 
 from verification.spatial import spherical_nearest_neighbor_indices
 
-# pysteps' own defaults (Wernli et al. 2008, eq. 1): the detection threshold is
-# ``thr_factor * thr_quantile-percentile`` of the wet precipitation. Kept
-# identical to the pysteps defaults so results match a bare ``sal(pred, obs)``
-# call.
+# pysteps defaults (Wernli et al. 2008, eq. 1): detection threshold is
+# thr_factor * the thr_quantile-percentile of the wet precipitation.
 DEFAULT_THR_FACTOR = 0.067
 DEFAULT_THR_QUANTILE = 0.95
 
-# Minimum truth point count for SAL to treat the truth as a resolved field. A
-# gridded analysis over the domain has millions of points; a station network
-# (jretrieve/SwissMetNet) has ~150. The two regimes are orders of magnitude
-# apart, so the exact cut is not critical — 10k warns on the latter, never the
-# former.
+# Below this truth point count SAL warns: a gridded analysis has millions of
+# points, a station network ~150, so the exact cut is not critical.
 MIN_TRUTH_POINTS = 10_000
 
 
@@ -55,24 +34,11 @@ def build_regular_grid(
     step_lat: float,
     step_lon: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Build a regular lat–lon raster covering *extent*.
-
-    Parameters
-    ----------
-    extent
-        ``(lon_min, lon_max, lat_min, lat_max)`` in degrees (PlateCarree),
-        matching the ordering of ``DomainConfig.extent``.
-    step_lat, step_lon
-        Grid spacing in degrees. Choose them so the pixels are metrically
-        near-square at the domain's central latitude (e.g. 0.01° lat ×
-        0.0145° lon at ~46.5°N), honouring pysteps' square-pixel assumption.
-
-    Returns
-    -------
-    lats, lons, lat2d, lon2d
-        The 1-D axes and the two 2-D meshgrids, each of shape
-        ``(len(lats), len(lons))``. The upper bounds are included.
-    """
+    """Build a regular lat–lon raster covering *extent* (lon_min, lon_max,
+    lat_min, lat_max, degrees) at the given degree spacings. Returns the 1-D
+    axes and 2-D meshgrids (lats, lons, lat2d, lon2d), upper bounds included.
+    Choose the steps so pixels are near-square at the domain centre (pysteps
+    assumes square pixels)."""
     lon_min, lon_max, lat_min, lat_max = extent
     lons = np.arange(lon_min, lon_max + step_lon / 2, step_lon)
     lats = np.arange(lat_min, lat_max + step_lat / 2, step_lat)
@@ -86,12 +52,8 @@ def remap_indices(
     tgt_lat2d: np.ndarray,
     tgt_lon2d: np.ndarray,
 ) -> np.ndarray:
-    """Nearest-neighbour indices mapping a source grid onto the target raster.
-
-    Returns a flat index array (length ``tgt_lat2d.size``) into the flattened
-    source points, so it can be reused across many time steps that share the
-    same source grid — build it once per (source grid, target raster).
-    """
+    """Nearest-neighbour flat indices (length ``tgt_lat2d.size``) into the
+    flattened source points; reusable across time steps sharing the source grid."""
     return spherical_nearest_neighbor_indices(
         np.asarray(src_lat).ravel(),
         np.asarray(src_lon).ravel(),
@@ -106,11 +68,8 @@ def remap_field(
     shape: tuple[int, int],
     fill: float = 0.0,
 ) -> np.ndarray:
-    """Remap a native field onto the target raster using precomputed *indices*.
-
-    NaNs (e.g. off-domain cells) are replaced by *fill* (0 by default), matching
-    the convention that missing precipitation reads as no precipitation.
-    """
+    """Remap a native field onto the target raster via precomputed *indices*;
+    NaNs (e.g. off-domain cells) become *fill* (0 = no precipitation)."""
     flat = np.asarray(field, dtype=float).ravel()
     out = flat[indices].reshape(shape)
     return np.nan_to_num(out, nan=fill)
@@ -122,13 +81,9 @@ def compute_sal(
     thr_factor: float = DEFAULT_THR_FACTOR,
     thr_quantile: float = DEFAULT_THR_QUANTILE,
 ) -> tuple[float, float, float]:
-    """Compute the SAL triple for two co-located 2-D fields.
-
-    Returns ``(S, A, L)`` as floats. A window in which either field is
-    everywhere dry (max ≤ 0) has no detectable objects, so ``(nan, nan, nan)``
-    is returned rather than raising — the caller decides how to treat dry
-    windows (typically drop them via a wet-case filter downstream).
-    """
+    """Compute the SAL triple ``(S, A, L)`` for two co-located 2-D fields.
+    A window where either field is everywhere dry (max ≤ 0) has no detectable
+    objects, so ``(nan, nan, nan)`` is returned rather than raising."""
     pred = np.asarray(prediction, dtype=float)
     obs = np.asarray(observation, dtype=float)
     # Use the finite values only, so an all-NaN or empty field is a dry window

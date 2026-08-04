@@ -262,15 +262,9 @@ class ScoreMapsConfig(BaseModel):
 
 
 class SalConfig(BaseModel):
-    """Parameters controlling the SAL precipitation verification computation.
-
-    SAL (Structure–Amplitude–Location; Wernli et al. 2008) is a per-init,
-    object-based precipitation score. When enabled it is computed for every run
-    and baseline over the requested params and lead times, and written to
-    per-participant CSV files (one per param/lead time, one row per
-    initialisation). This is a compute-only capability; plotting the results
-    lives in the publication-figures workflow.
-    """
+    """SAL (Structure–Amplitude–Location; Wernli et al. 2008) per-init precip
+    scores, computed for every run and baseline when enabled and written to
+    per-participant CSVs. Compute-only; plotting lives in the figures workflow."""
 
     enabled: bool = Field(
         default=False,
@@ -278,10 +272,7 @@ class SalConfig(BaseModel):
     )
     params: List[str] = Field(
         default=["TOT_PREC6"],
-        description=(
-            "Accumulated precipitation params to score, the accumulation period "
-            "encoded in the name (e.g. TOT_PREC1, TOT_PREC6, TOT_PREC24)."
-        ),
+        description="Accumulated precip params to score, period encoded in the name (e.g. TOT_PREC6).",
     )
     leadtimes: List[int] = Field(
         default=[6, 12, 18, 24, 30],

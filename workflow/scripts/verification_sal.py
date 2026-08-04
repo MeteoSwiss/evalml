@@ -1,35 +1,15 @@
 """Compute per-init SAL (Structure–Amplitude–Location) precipitation scores.
 
-For a fixed lead time and (accumulated) precipitation parameter, iterates over
-all initialisation times (discovered under a run directory, or taken from
---reftimes for baselines), loads the forecast field and the matching truth
-slice, remaps *both* onto a common near-isotropic regular lat–lon raster, and
-computes the Wernli et al. (2008) SAL triple for that window. One row per
-initialisation — including dry windows (S/A/L = NaN, means retained so a
-downstream wet-case filter can drop them) — is written to a CSV file (SAL is a
-per-case scalar score with no spatial dimension, so a table is the natural
-container; fixed metadata is carried in a commented header).
-
-Unlike the score-map path (verification_scoremaps.py), SAL is a domain-integrated
-per-case score, not a per-cell field, so results are kept per initialisation
-rather than reduced to running per-cell means. And because the Location term
-needs square pixels, both fields are put on a purpose-built regular raster (see
-verification.sal.build_regular_grid) instead of the native truth grid.
-
-Forecasts and truth load through data_input.load_forecast_data /
-load_truth_data, which route by source and handle de-accumulation transparently:
-the accumulation period is encoded in the param name (TOT_PREC6 = 6h). Every
-configured initialisation must be available across forecast and truth — a missing
-one is a hard error, never a silent skip — so that run and baseline scores are
-computed over an identical sample.
-
-Usage
------
-    uv run workflow/scripts/verification_sal.py \\
-        output/data/runs/<run_id> \\
-        --truth /path/to/truth.zarr \\
-        --step 12 \\
-        --param TOT_PREC6
+For a fixed lead time and precip param, iterates over all init times (discovered
+under a run directory, or from --reftimes for baselines), loads the forecast and
+matching truth slice, remaps both onto a common near-square lat–lon raster (see
+verification.sal.build_regular_grid), and computes the Wernli et al. (2008) SAL
+triple. One row per init — dry windows included (S/A/L = NaN) — is written to a
+CSV with a commented metadata header. Forecasts and truth load via
+data_input.load_forecast_data / load_truth_data, which route by source and
+de-accumulate transparently (period encoded in the param name, TOT_PREC6 = 6h).
+Every configured init must be available across forecast and truth, else a hard
+error (never a silent skip).
 """
 
 import logging
@@ -72,12 +52,8 @@ DEFAULT_GRID_STEP_LON = 0.0145
 
 
 def iter_init_dirs(run_root: Path) -> list[tuple[datetime, Path]]:
-    """Return ``(reftime, grib_dir)`` pairs for every complete init time.
-
-    Expects subdirectories named ``YYYYMMDDHHMI`` directly under *run_root*.
-    GRIB files may live either directly in the init-time directory or inside a
-    ``grib/`` subdirectory.
-    """
+    """Return ``(reftime, grib_dir)`` for every init-time subdir (YYYYMMDDHHMM)
+    under *run_root*; GRIB may sit directly in it or in a ``grib/`` subdir."""
     result = []
     for d in sorted(run_root.iterdir()):
         if not d.is_dir():
@@ -95,13 +71,8 @@ def iter_init_dirs(run_root: Path) -> list[tuple[datetime, Path]]:
 
 
 def _native_1d(da: xr.DataArray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Flatten a field to 1-D, with matching latitude/longitude arrays.
-
-    Squeezes size-1 non-spatial dims (ensemble, vertical, reference time, the
-    already-selected step/time) so only the spatial dimension(s) remain, then
-    ravels the field and its ``latitude``/``longitude`` coordinates in a
-    consistent (C) order so they index the same points.
-    """
+    """Flatten a field to 1-D with matching lat/lon arrays, squeezing size-1
+    non-spatial dims (ensemble, vertical, reftime, step/time) first."""
     for dim in (
         "z",
         "number",
@@ -125,12 +96,13 @@ def _native_1d(da: xr.DataArray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 
 def main(args: Namespace) -> None:
-    LOG.info("=" * 60)
-    LOG.info("SAL verification  param=%s  step=%dh", args.param, args.step)
-    LOG.info("Run root : %s", args.run_root)
-    LOG.info("Truth    : %s", args.truth)
-    LOG.info("Output   : %s", args.output)
-    LOG.info("=" * 60)
+    LOG.info(
+        "SAL verification  param=%s step=%dh  truth=%s  output=%s",
+        args.param,
+        args.step,
+        args.truth,
+        args.output,
+    )
 
     # SAL is defined for precipitation only.
     if not args.param.startswith("TOT_PREC"):
@@ -144,14 +116,11 @@ def main(args: Namespace) -> None:
     if accum_h is not None:
         if args.step < accum_h:
             raise ValueError(
-                f"Lead time {args.step}h is smaller than the {accum_h}h "
-                f"accumulation period encoded in '{args.param}'."
+                f"Lead time {args.step}h < {accum_h}h accumulation of '{args.param}'."
             )
         if args.baseline_root and "INCA" in args.baseline_root.parts and accum_h != 1:
             raise ValueError(
-                f"INCA provides native 1h accumulations only; '{args.param}' "
-                f"requires a {accum_h}h accumulation period. Use TOT_PREC1 for "
-                "INCA SAL scores."
+                f"INCA is 1h-accumulation only; '{args.param}' needs {accum_h}h. Use TOT_PREC1."
             )
         LOG.info("Accumulation period: %dh", accum_h)
 
@@ -184,12 +153,9 @@ def main(args: Namespace) -> None:
             missing = sorted(wanted - discovered)
             if missing:
                 raise ValueError(
-                    f"{len(missing)} configured initialisation(s) have no GRIB "
-                    f"output under {args.run_root}: "
-                    f"{[m.strftime(DATETIME_FMT) for m in missing]}. All configured "
-                    "initialisations must be available so that run and baseline "
-                    "SAL scores are computed over an identical sample; blacklist "
-                    "genuinely-absent dates in the experiment config."
+                    f"{len(missing)} configured init(s) have no GRIB under "
+                    f"{args.run_root}: {[m.strftime(DATETIME_FMT) for m in missing]}. "
+                    "Blacklist genuinely-absent dates in the experiment config."
                 )
             init_items = [(rt, d) for rt, d in init_items if rt in wanted]
             LOG.info("Matched all %d configured init times", len(init_items))
@@ -202,8 +168,7 @@ def main(args: Namespace) -> None:
         else None
     )
 
-    # Fail fast if any required valid time is absent from the truth dataset, so
-    # the full set of missing times is reported at once rather than mid-loop.
+    # Fail fast if any required valid time is absent from the truth dataset.
     if truth_lazy is not None:
         truth_times = set(truth_lazy.time.values.astype("datetime64[ns]"))
         required_valid_times = {
@@ -214,16 +179,10 @@ def main(args: Namespace) -> None:
             raise ValueError(
                 f"Truth is missing {len(missing_truth)} required valid time(s) for "
                 f"param={args.param}, step={args.step}h (e.g. "
-                f"{[str(t) for t in missing_truth[:5]]}). All configured "
-                "initialisations must be available so that run and baseline SAL "
-                "scores are computed over an identical sample; blacklist "
-                "genuinely-absent dates in the experiment config."
+                f"{[str(t) for t in missing_truth[:5]]}). Blacklist absent dates."
             )
 
-    # Remap indices depend only on the (static) source grids, so build them once
-    # on the first init and reuse. fcst and truth may share a native grid (e.g.
-    # Varda and KENDA-CH1 are both on the ICON-CH1 mesh), in which case the truth
-    # indices are reused directly.
+    # Remap indices depend only on the static source grids: build once, reuse.
     fcst_idx: np.ndarray | None = None
     truth_idx: np.ndarray | None = None
 
@@ -232,9 +191,7 @@ def main(args: Namespace) -> None:
     for reftime, grib_dir in init_items:
         valid_time = np.datetime64(reftime + step_td).astype("datetime64[ns]")
         LOG.info(
-            "Processing reftime=%s  valid=%s",
-            reftime.strftime(DATETIME_FMT),
-            valid_time,
+            "Processing reftime=%s valid=%s", reftime.strftime(DATETIME_FMT), valid_time
         )
 
         # --- load forecast ---
@@ -267,15 +224,11 @@ def main(args: Namespace) -> None:
 
         # --- build remap indices once (static source grids) ---
         if fcst_idx is None:
-            # SAL needs a resolved truth field: remapping sparse station data
-            # (~150 points) onto the ~1 km raster yields meaningless scores.
-            # Warn once, on the first init, if the truth looks too sparse.
+            # SAL needs a resolved (gridded) truth field; warn if it looks sparse.
             if truth_lat.size < MIN_TRUTH_POINTS:
                 LOG.warning(
-                    "Truth has only %d points (< %d); SAL expects a gridded "
-                    "analysis field (e.g. the KENDA-CH1 zarr), not sparse station "
-                    "observations such as jretrieve/SwissMetNet — scores may be "
-                    "meaningless.",
+                    "Truth has only %d points (< %d); SAL expects a gridded analysis "
+                    "field, not sparse stations — scores may be meaningless.",
                     truth_lat.size,
                     MIN_TRUTH_POINTS,
                 )
@@ -326,10 +279,7 @@ def main(args: Namespace) -> None:
 
     LOG.info("Finished: %d init times processed", len(rows))
     if not rows:
-        raise ValueError(
-            "No initialisations were processed — nothing to write. Check that "
-            "--reftimes is non-empty."
-        )
+        raise ValueError("No initialisations processed — nothing to write.")
 
     df = pd.DataFrame(
         rows,
@@ -343,29 +293,16 @@ def main(args: Namespace) -> None:
         ],
     )
 
-    # SAL is a per-case scalar score (no spatial dimension), so the natural
-    # container is a table: one row per initialisation. Fixed metadata (param,
-    # lead time, thresholds, raster) goes in a commented header that pandas skips
-    # with read_csv(comment="#"). S/A/L are NaN for dry windows; fcst_mean /
-    # truth_mean are domain-mean precip over the SAL raster in the loader unit
-    # (mm for TOT_PREC*) and let a downstream wet-case filter drop dry windows.
+    # One row per init; fixed metadata in a commented header (pandas skips it via
+    # read_csv(comment="#")). S/A/L are NaN for dry windows.
     source = str(args.baseline_root if args.baseline_root else args.run_root)
     header = [
-        "SAL (Structure-Amplitude-Location, Wernli et al. 2008) per-init "
-        "precipitation scores",
-        f"param: {args.param}",
-        f"accum_h: {accum_h if accum_h is not None else 'n/a'}",
-        f"step_h: {args.step}",
-        f"thr_factor: {args.thr_factor}",
-        f"thr_quantile: {args.thr_quantile}",
-        f"grid_extent: {list(grid_extent)}",
-        f"grid_step_lat: {args.grid_step_lat}",
-        f"grid_step_lon: {args.grid_step_lon}",
-        f"member: {args.member}",
-        f"source: {source}",
-        f"n_processed: {len(df)}",
-        "reftime is the initialisation time (UTC, YYYYMMDDHHMM); "
-        "S/A/L are NaN for dry windows.",
+        "SAL (Wernli et al. 2008) per-init precipitation scores",
+        f"param: {args.param}  accum_h: {accum_h if accum_h is not None else 'n/a'}  step_h: {args.step}",
+        f"thr_factor: {args.thr_factor}  thr_quantile: {args.thr_quantile}",
+        f"grid_extent: {list(grid_extent)}  grid_step: ({args.grid_step_lat}, {args.grid_step_lon})",
+        f"member: {args.member}  source: {source}  n_processed: {len(df)}",
+        "reftime UTC YYYYMMDDHHMM; S/A/L are NaN for dry windows.",
     ]
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
