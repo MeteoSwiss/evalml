@@ -1,4 +1,6 @@
-input: test
+input:
+  test:
+    use_original_paths: true
 
 allow_nans: true
 
@@ -6,12 +8,17 @@ patch_metadata:
   config:
     dataloader:
       test:
-        dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2025-6h-v1-combined-land.zarr
+        dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2026-6h-v1-combined-land.zarr
 
 post_processors:
   - accumulate_from_start_of_forecast:
       accumulations:
         - tp
+  - backward_transform_filter:
+      filter: rescale
+      scale: 0.001 # convert units from m to kg m-2 (backward: x/scale = x*1000)
+      offset: 0
+      param: tp
 
 output:
   grib:

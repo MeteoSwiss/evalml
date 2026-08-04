@@ -44,6 +44,7 @@ experiment:
     - TOT_PREC6
   stratification:
     regions:
+      - icon
       - jura
       - mittelland
       - voralpen

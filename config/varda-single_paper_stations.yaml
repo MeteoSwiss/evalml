@@ -19,11 +19,6 @@ runs:
         checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/120/6
-  - forecaster:
-      label: stage-E-with-rollout
-      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/98d4e297f0164f18a0ad50fb01fbff42
-      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
-      steps: 0/120/6
   - baseline:
       label: ICON-CH1-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
@@ -34,16 +29,6 @@ runs:
       root: /store_new/mch/msopr/osm/ICON-CH2-EPS
       steps: 0/120/1
       member: control
-  - baseline:
-      label: ICON-CH1-EPS mean
-      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
-      steps: 0/33/1
-      member: mean
-  - baseline:
-      label: ICON-CH2-EPS mean
-      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
-      steps: 0/120/1
-      member: mean
 
 truth:
   label: SwissMetNet
@@ -59,6 +44,7 @@ experiment:
     - PMSL
   stratification:
     regions:
+      - icon
       - jura
       - mittelland
       - alpennordhang
@@ -88,16 +74,16 @@ experiment:
         lead_times: "6/33/6"
         stratification: region
         variables:
-          - "U_10M:RMSE,R2,ETS"
-          - "T_2M:RMSE,R2"
+          - "SP_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2,ETS"
           - "TOT_PREC1:RMSE,R2,ETS"
       medium_range:
         baseline: ICON-CH2-CTRL
         lead_times: "24/120/24"
         stratification: region
         variables:
-          - "U_10M:RMSE,R2,ETS"
-          - "T_2M:RMSE,R2"
+          - "SP_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2,ETS"
           - "TOT_PREC6:RMSE,R2,ETS"
 
 locations:

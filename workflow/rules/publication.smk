@@ -25,6 +25,8 @@ changes — without re-running on a no-op file touch.
 """
     output:
         OUT_ROOT / f"publication/{TRUTH_SLUG}/manifest.json",
+    input:
+        script = "src/evalml/publication/manifest.py",
     localrule: True
     params:
         master_hash=master_hash(),
@@ -36,6 +38,7 @@ changes — without re-running on a no-op file touch.
             baseline_configs=BASELINE_CONFIGS,
             truth_cfg=config.get("truth"),
             truth_hash=TRUTH_HASH,
+            verif_hash=VERIF_HASH,
             reftimes=REFTIMES,
             output_root=str(OUT_ROOT),
             publication_cfg=config.get("publication", {}),
@@ -87,7 +90,7 @@ def _meteogram_data_dep(wc):
     CLI resolves from the manifest is present, with correct ordering.
     """
     run_id = _pub_candidate_run_id()
-    return str(OUT_ROOT / f"data/runs/{run_id}/verif_aggregated_{TRUTH_HASH}.nc")
+    return str(OUT_ROOT / f"data/runs/{run_id}/verif_aggregated_{VERIF_HASH}.nc")
 
 
 rule publication_meteogram:
