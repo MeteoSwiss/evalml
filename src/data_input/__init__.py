@@ -1330,9 +1330,12 @@ def _disaggregated_and_derived_params(
                 cumuls[base] = _ensure_accum_ic(ds[base], load_steps)
             ds[agg_param] = _disaggregate_accum(cumuls[base], steps, n)
 
-    # Select only the originally requested steps (drop preceding helper steps)
+    # Select only the originally requested steps (drop preceding helper steps).
+    # Use reindex rather than sel so that steps absent from the loaded dataset
+    # (e.g. step 0 when the forecaster writes no step-0 file) are NaN-filled
+    # instead of raising a KeyError.
     if load_steps != list(steps) and "step" in ds.dims:
-        ds = ds.sel(step=[np.timedelta64(s, "h") for s in steps])
+        ds = ds.reindex(step=[np.timedelta64(s, "h") for s in steps])
 
     # Spatial derived params (skip if the loader already provided the variable natively)
     for p in params:
