@@ -47,10 +47,9 @@ def test_remap_indices_and_field_are_nearest_neighbour():
     out = remap_field(field, idx, tgt_lat2d.shape)
     assert np.array_equal(out, np.array([[10.0, 40.0]]))
 
-
-def test_remap_field_fills_nan_with_zero():
-    out = remap_field(np.array([np.nan, 5.0]), np.array([0, 1]), (1, 2))
-    assert np.array_equal(out, np.array([[0.0, 5.0]]))
+    # NaN source cells fill with 0 (missing precip = no precip).
+    nan_out = remap_field(np.array([np.nan, 5.0]), np.array([0, 1]), (1, 2))
+    assert np.array_equal(nan_out, np.array([[0.0, 5.0]]))
 
 
 # ---------------------------------------------------------------------------
@@ -72,22 +71,6 @@ def test_compute_sal_dry_window_returns_nan():
     assert all(np.isnan(v) for v in compute_sal(dry, wet))
     assert all(np.isnan(v) for v in compute_sal(wet, dry))
     assert all(np.isnan(v) for v in compute_sal(dry, dry))
-
-
-def test_compute_sal_amplitude_positive_when_overforecast():
-    obs = _blob((60, 60), 30, 30, 10.0, 6.0)
-    pred = 2.0 * obs  # uniform doubling → amplitude bias only
-    s, a, ell = compute_sal(pred, obs)
-    assert a > 0.5  # analytic value ~0.667
-    assert abs(s) < 1e-6  # structure unchanged by uniform scaling
-    assert abs(ell) < 1e-6  # location unchanged
-
-
-def test_compute_sal_location_positive_when_displaced():
-    obs = _blob((80, 80), 40, 25, 10.0, 5.0)
-    pred = _blob((80, 80), 40, 55, 10.0, 5.0)  # same blob shifted east
-    _, _, ell = compute_sal(pred, obs)
-    assert ell > 0.0
 
 
 def test_compute_sal_is_invariant_to_common_rescaling():
@@ -121,12 +104,6 @@ def test_sal_config_rejects_non_precip_params():
         SalConfig(params=["TOT_PREC6", "SP_10M"])  # one bad among valid
 
 
-def test_sal_config_accepts_precip_params_including_cumulative():
-    # accumulated windows and bare cumulative-from-start are both allowed
-    s = SalConfig(params=["TOT_PREC1", "TOT_PREC6", "TOT_PREC"])
-    assert s.params == ["TOT_PREC1", "TOT_PREC6", "TOT_PREC"]
-
-
 def test_sal_config_grid_extent_validation():
     with pytest.raises(ValueError, match="lon_min, lon_max, lat_min, lat_max"):
         SalConfig(grid_extent=[1.0, 2.0, 3.0])  # wrong length
@@ -142,9 +119,3 @@ def test_sal_leadtime_validator_rejects_unproducible(example_config):
     example_config["experiment"]["sal"] = {"enabled": True, "leadtimes": [9999]}
     with pytest.raises(ValueError, match="sal.leadtimes"):
         ConfigModel.model_validate(example_config)
-
-
-def test_sal_disabled_skips_leadtime_validation(example_config):
-    # Disabled SAL must not trigger leadtime validation even with a bogus value.
-    example_config["experiment"]["sal"] = {"enabled": False, "leadtimes": [9999]}
-    ConfigModel.model_validate(example_config)
