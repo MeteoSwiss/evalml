@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=../../../workflow/tools/config.schema.json
+description: |
+  Integration-test fixture: minimal --mec run exercising the MEC feedback-file
+  path (prepare_mec_input -> link_mec_input -> generate_mec_namelist -> run_mec).
+  Inference is replayed from a frozen fixture (no GPU / MLflow / venv build); the
+  verSYNOP obs are frozen alongside it under the same fixture dir.
+  Driven by tests/integration/test_mec_small.py.
+config_label: mec-test
+
+# Always replay inference from this frozen fixture (no GPU / MLflow / sandbox
+# build). To (re)capture the fixture you must run real inference, so temporarily
+# comment this line out, run `evalml experiment <this config> --mec`, then
+# `evalml capture-fixture <this config> <path>`, and restore it (see
+# tests/integration/README.md).
+fixture_root: /store_new/mch/msopr/ml/evalml/test_fixtures/mec-small/v_20250801_9f46
+
+dates:
+  start: 2025-08-01T12:00
+  end: 2025-08-02T00:00
+  frequency: 12h
+
+runs:
+  - forecaster:
+      # Reusing a known-good checkpoint from config/forecasters-ich1_mec_ffv2.yaml.
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/9f4626a7562a4eb49700aaaaa8607230
+      label: icon_1km_hierarchical_2_level_proc_from_scratch
+      steps: 0/12/12
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+      extra_requirements:
+        - anemoi-inference==0.11.1
+
+# Required by the config schema; not exercised by the mec_all target itself.
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
+experiment:
+  params:
+    - T_2M
+  stratification:
+    regions:
+      - icon
+  dashboard:
+    stratification:
+      - season
+
+locations:
+  output_root: output/
+
+# Required for --mec: prepare_mec_input reads observations from these three roots.
+# Only ver_synop_root is used by this test; it points at the frozen verSYNOP obs
+# co-located with the inference fixture (see fixture_root above).
+mec:
+  ekf_root: /store_new/mch/msopr/osm/KENDA-CH1/EKF
+  mon_synop_root: /scratch/mch/paa/mec/MEC_ML_input/monFiles2025
+  ver_synop_root: /store_new/mch/msopr/ml/evalml/test_fixtures/mec-small/v_20250801_9f46/obs
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+    slurm_account: s83
+  jobs: 50
