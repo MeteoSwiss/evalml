@@ -28,8 +28,6 @@ from data_input import (
     parse_aggregated_param,
 )
 from verification.sal import (
-    DEFAULT_THR_FACTOR,
-    DEFAULT_THR_QUANTILE,
     MIN_TRUTH_POINTS,
     build_regular_grid,
     compute_sal,
@@ -231,12 +229,7 @@ def main(args: Namespace) -> None:
         fcst_2d = remap_field(fcst_field, fcst_idx, shape)
         truth_2d = remap_field(truth_field, truth_idx, shape)
 
-        s, a, ell = compute_sal(
-            fcst_2d,
-            truth_2d,
-            thr_factor=args.thr_factor,
-            thr_quantile=args.thr_quantile,
-        )
+        s, a, ell = compute_sal(fcst_2d, truth_2d)
         fcst_mean = float(fcst_2d.mean())
         truth_mean = float(truth_2d.mean())
         LOG.info(
@@ -282,7 +275,6 @@ def main(args: Namespace) -> None:
     header = [
         "SAL (Wernli et al. 2008) per-init precipitation scores",
         f"param: {args.param}  accum_h: {accum_h if accum_h is not None else 'n/a'}  step_h: {args.step}",
-        f"thr_factor: {args.thr_factor}  thr_quantile: {args.thr_quantile}",
         f"grid_extent: {list(grid_extent)}  grid_step: ({args.grid_step_lat}, {args.grid_step_lon})",
         f"member: {args.member}  source: {source}  n_processed: {len(df)}",
         "reftime UTC YYYYMMDDHHMM; S/A/L are NaN for dry windows.",
@@ -354,20 +346,6 @@ if __name__ == "__main__":
             "Init times (YYYYMMDDHHMM). For runs: optional restriction of the "
             "discovered init-time directories. For baselines: required."
         ),
-    )
-    parser.add_argument(
-        "--thr-factor",
-        dest="thr_factor",
-        type=float,
-        default=DEFAULT_THR_FACTOR,
-        help=f"SAL object-detection threshold factor (default {DEFAULT_THR_FACTOR}).",
-    )
-    parser.add_argument(
-        "--thr-quantile",
-        dest="thr_quantile",
-        type=float,
-        default=DEFAULT_THR_QUANTILE,
-        help=f"SAL detection wet quantile (default {DEFAULT_THR_QUANTILE}).",
     )
     parser.add_argument(
         "--grid-extent",

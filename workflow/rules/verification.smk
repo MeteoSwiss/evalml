@@ -285,8 +285,6 @@ rule verification_scoremaps_baseline:
 _SAL_CONFIG = config.get("experiment", {}).get("sal") or {}
 _SAL_GRID_EXTENT = _SAL_CONFIG.get("grid_extent", [-1.0, 18.0, 42.0, 50.5])
 _SAL_ARGS = (
-    f"--thr-factor {_SAL_CONFIG.get('thr_factor', 0.067)} "
-    f"--thr-quantile {_SAL_CONFIG.get('thr_quantile', 0.95)} "
     f"--grid-extent {' '.join(str(x) for x in _SAL_GRID_EXTENT)} "
     f"--grid-step-lat {_SAL_CONFIG.get('grid_step_lat', 0.01)} "
     f"--grid-step-lon {_SAL_CONFIG.get('grid_step_lon', 0.0145)}"

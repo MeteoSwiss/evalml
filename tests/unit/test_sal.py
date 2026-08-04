@@ -3,7 +3,6 @@ import pytest
 
 from evalml.config import ConfigModel, SalConfig
 from verification.sal import (
-    DEFAULT_THR_FACTOR,
     build_regular_grid,
     compute_sal,
     remap_field,
@@ -91,7 +90,6 @@ def test_sal_config_defaults_and_extra_forbid():
     s = SalConfig()
     assert s.enabled is False
     assert s.params == ["TOT_PREC6"]
-    assert s.thr_factor == pytest.approx(DEFAULT_THR_FACTOR)
     assert s.grid_extent == [-1.0, 18.0, 42.0, 50.5]
     with pytest.raises(ValueError):
         SalConfig(unknown_key=1)

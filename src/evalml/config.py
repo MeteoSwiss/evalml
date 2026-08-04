@@ -278,18 +278,6 @@ class SalConfig(BaseModel):
         default=[6, 12, 18, 24, 30],
         description="List of lead times (hours) to score.",
     )
-    thr_factor: float = Field(
-        default=0.067,
-        description=(
-            "SAL object-detection threshold factor (Wernli et al. 2008, eq. 1); "
-            "the detection contour is thr_factor * the thr_quantile-percentile of "
-            "the wet precipitation. 0.067 is the pysteps default."
-        ),
-    )
-    thr_quantile: float = Field(
-        default=0.95,
-        description="Wet quantile (0–1) defining the SAL detection threshold.",
-    )
     grid_extent: List[float] = Field(
         default=[-1.0, 18.0, 42.0, 50.5],
         description=(

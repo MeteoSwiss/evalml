@@ -723,7 +723,7 @@
     },
     "SalConfig": {
       "additionalProperties": false,
-      "description": "Parameters controlling the SAL precipitation verification computation.\n\nSAL (Structure\u2013Amplitude\u2013Location; Wernli et al. 2008) is a per-init,\nobject-based precipitation score. When enabled it is computed for every run\nand baseline over the requested params and lead times, and written to\nper-participant CSV files (one per param/lead time, one row per\ninitialisation). This is a compute-only capability; plotting the results\nlives in the publication-figures workflow.",
+      "description": "SAL (Structure\u2013Amplitude\u2013Location; Wernli et al. 2008) per-init precip\nscores, computed for every run and baseline when enabled and written to\nper-participant CSVs. Compute-only; plotting lives in the figures workflow.",
       "properties": {
         "enabled": {
           "default": false,
@@ -735,7 +735,7 @@
           "default": [
             "TOT_PREC6"
           ],
-          "description": "Accumulated precipitation params to score, the accumulation period encoded in the name (e.g. TOT_PREC1, TOT_PREC6, TOT_PREC24).",
+          "description": "Accumulated precip params to score, period encoded in the name (e.g. TOT_PREC6).",
           "items": {
             "type": "string"
           },
@@ -756,18 +756,6 @@
           },
           "title": "Leadtimes",
           "type": "array"
-        },
-        "thr_factor": {
-          "default": 0.067,
-          "description": "SAL object-detection threshold factor (Wernli et al. 2008, eq. 1); the detection contour is thr_factor * the thr_quantile-percentile of the wet precipitation. 0.067 is the pysteps default.",
-          "title": "Thr Factor",
-          "type": "number"
-        },
-        "thr_quantile": {
-          "default": 0.95,
-          "description": "Wet quantile (0\u20131) defining the SAL detection threshold.",
-          "title": "Thr Quantile",
-          "type": "number"
         },
         "grid_extent": {
           "default": [
