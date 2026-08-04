@@ -761,6 +761,18 @@
           ],
           "default": null,
           "description": "Publication scoremap figure settings (omit to skip). Requires a gridded (zarr) truth source."
+        },
+        "scorecards": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicationScorecardsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Publication scorecard figures (omit to skip)."
         }
       },
       "title": "PublicationConfig",
@@ -823,6 +835,20 @@
         "station"
       ],
       "title": "PublicationMeteogramConfig",
+      "type": "object"
+    },
+    "PublicationScorecardsConfig": {
+      "additionalProperties": false,
+      "description": "Publication scorecard figures \u2014 sections are taken from experiment.scorecards.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate publication scorecard figures.",
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "PublicationScorecardsConfig",
       "type": "object"
     },
     "PublicationScoremapsConfig": {
