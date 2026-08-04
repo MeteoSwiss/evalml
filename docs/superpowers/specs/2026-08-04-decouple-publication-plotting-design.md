@@ -51,15 +51,16 @@ Snakemake never invokes a notebook; a notebook never invokes Snakemake.
 *everything a figure needs*, then stops before plotting:
 
 ```
-publication_all  →  manifest.json
+publication_all  →  manifest.json                       (publication_manifest)
                  +  all verif_aggregated_*.nc            (EXPERIMENT_PARTICIPANTS)
-                 +  scoremap *.nc  (only when scoremaps.enabled)
+                 +  scoremap *.nc  (only when publication.scoremaps.enabled)
 ```
 
 These are the exact result-dependencies the deleted figure rules used to
 declare (the candidate-verif dependency that the meteogram rule needed is
-subsumed by `EXPERIMENT_PARTICIPANTS`). It keeps the reproducible chain intact
-minus the plotting step.
+subsumed by `EXPERIMENT_PARTICIPANTS`; the scoremap NC list is still computed
+from in-memory globals via the surviving helpers). It keeps the reproducible
+chain intact minus the plotting step.
 
 ### Components
 
@@ -78,12 +79,29 @@ minus the plotting step.
 
 **Deleted (the coupling + the redundant render path):**
 
-- `workflow/rules/publication.smk`: the three figure rules and their input
-  helpers — `_pub_scoremap_inputs`, `_pub_candidate_run_id`,
-  `_meteogram_data_dep`, `_pub_scoremap_cfg`, `_pub_scoremap_leadtimes`. (This
-  is where scoremap path logic was duplicated from the manifest.)
+- `workflow/rules/publication.smk`: the three figure rules
+  (`publication_figures`, `publication_meteogram`, `publication_scoremaps`) and
+  the meteogram data-dep helper `_meteogram_data_dep` (subsumed — see below).
 - `src/evalml/publication/cli.py` and `src/evalml/publication/__main__.py` —
   the standalone renderer. The notebooks replace it.
+
+**Kept but rewired (result-dependency listing, not plotting):**
+
+In the paper configs `experiment.scoremaps.enabled` is `false` while
+`publication.scoremaps.enabled` is `true`, so the publication target is the
+*only* thing that pulls scoremap NC production into the DAG. The scoremap
+input-listing helpers therefore **survive** and are re-wired to feed
+`publication_all` (they compute file paths from in-memory globals — required,
+because the manifest file a sibling rule produces cannot be read at
+DAG-build time):
+
+- `_pub_scoremap_inputs`, `_pub_scoremap_cfg`, `_pub_scoremap_leadtimes`,
+  `_pub_candidate_run_id` — kept; now feed `publication_all` instead of the
+  deleted plot rule. Scoremap NC files are `…/scoremaps/{param}_{leadtime}_
+  {TRUTH_HASH}.nc`.
+- `_meteogram_data_dep` is deleted: the candidate's `verif_aggregated` (already
+  in `EXPERIMENT_PARTICIPANTS`) guarantees inference ran for every reftime, so
+  the meteogram's GRIB is present without a separate dep.
 - `workflow/scripts/publication_figures.py`, `publication_meteogram.py`,
   `publication_scoremaps.py` — the marimo apps. Their plotting logic is *ported*
   into the notebooks, then the files are removed.
@@ -94,6 +112,14 @@ minus the plotting step.
 - `workflow/scripts/publication.mplstyle` →
   `src/evalml/publication/publication.mplstyle`, loaded via `importlib.resources`
   through a new `style.mplstyle_path()` helper.
+
+The promotion is done additively first (the package module is the canonical
+copy; the originals stay until the marimo scripts that import them are deleted),
+so every intermediate commit stays green. One *other* consumer must migrate:
+`workflow/scripts/plot_meteogram_region.py` (a main-workflow paper script, kept)
+imports `publication_style` **and** applies `publication.mplstyle`. It is
+repointed to `evalml.publication.style` + `style.mplstyle_path()` as part of the
+final cleanup, after which the two `workflow/scripts/` originals are deleted.
 
 **New:**
 
@@ -111,6 +137,31 @@ minus the plotting step.
 Everything else — the matplotlib layout, panels, annotations — lives **in the
 notebook cells**, visible and directly editable. This is the "plotting in the
 notebook, styling shared" arrangement.
+
+### Imports the notebooks need (beyond style)
+
+The ported plotting logic reuses existing helpers. Most are importable as-is
+(the editable install exposes `src/`): `data_input`, `verification.spatial`,
+`plotting` (`DOMAINS`, `StatePlotter`), and `evalml.publication.*`. Two helper
+modules live in `workflow/scripts/` and are **shared with the main workflow**,
+so they stay put and the notebooks reach them via a one-line bootstrap that
+prepends `workflow/scripts` (and, defensively, `src`) to `sys.path`:
+
+- `verification_plot_metrics` → `_ensure_unique_lead_time`,
+  `_select_best_sources`, `decode_metric` (leadtime notebook)
+- `meteogram_derivations` → `add_derived`, `expand_to_base_params`,
+  `station_timeseries_to_long` (meteogram notebook)
+
+This bootstrap is distinct from the removed style `sys.path` hack: style is now
+a proper package import; this only reaches genuinely-shared workflow helpers we
+deliberately do not move.
+
+### Tooling dependency
+
+The env currently declares only `marimo`. Authoring and executing Jupyter
+notebooks needs `ipykernel` + `nbconvert` (execution / port-fidelity check) and
+optionally `jupyterlab` (interactive editing). These go in a new
+`[dependency-groups]` group (e.g. `notebooks`), not the core `dependencies`.
 
 ### Notebook anatomy
 
