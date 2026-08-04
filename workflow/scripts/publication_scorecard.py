@@ -308,10 +308,6 @@ def _(
     hline_cfg = plot_cfg["hline"]
     layout_cfg = plot_cfg["layout"]
 
-    plt.rcParams["font.family"] = plot_cfg["rcparams"]["font_family"]
-    plt.rcParams["font.sans-serif"] = [plot_cfg["rcparams"]["font_sans"]]
-    plt.rcParams["figure.dpi"] = plot_cfg["rcparams"]["dpi"]
-
     has_missing = any(
         any(np.isnan(diff[v].values).any() for v in diff.data_vars)
         for diff, _, _, _ in panels
