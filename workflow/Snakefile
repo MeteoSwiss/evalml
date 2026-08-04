@@ -294,6 +294,13 @@ rule publication_all:
                 "enabled", False
             )
             else []
+        )
+        + (
+            [rules.publication_teaser.output]
+            if ((config.get("publication", {}) or {}).get("teaser") or {}).get(
+                "enabled", False
+            )
+            else []
         ),
 
 
