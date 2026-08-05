@@ -278,6 +278,7 @@ rule verification_scoremaps_baseline:
 # truth hash. Plotting lives in the publication-figures workflow.           #
 # ----------------------------------------------------- #
 
+
 rule verification_sal:
     input:
         "src/verification/__init__.py",
