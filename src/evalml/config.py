@@ -399,7 +399,7 @@ class Dashboard(BaseModel):
 
     stratification: List[str] = Field(
         ...,
-        description="Stratifications to include in the dashboard (any of season, region, init_hour)",
+        description="Stratifications to include in the dashboard (any of season, region, init_hour, station_group)",
     )
 
 
@@ -424,6 +424,13 @@ class ExperimentConfig(BaseModel):
     dashboard: Dashboard = Field(
         ...,
         description="Settings for the experiment dashboard.",
+    )
+    cross_validation: bool = Field(
+        default=False,
+        description=(
+            "When True, adds a 'station_group' stratification dimension (all/holdout/holdin) "
+            "to separate metrics for stations used in nudging from those withheld."
+        ),
     )
     scorecards: Optional[ExperimentScorecardConfig] = Field(
         default=None,

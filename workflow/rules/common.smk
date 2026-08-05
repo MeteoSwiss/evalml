@@ -375,6 +375,7 @@ if "jretrieve" in str(config["truth"]["root"]):
 
 
 TRUTH_HASH = truth_hash(config["truth"])
+CROSS_VALIDATION = config.get("experiment", {}).get("cross_validation", False)
 REGIONS = parse_regions()
 SHOWCASE_REGIONS = parse_showcase_regions()
 SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])

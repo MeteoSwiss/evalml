@@ -218,6 +218,13 @@ def _load_relative_diff(cfg: dict) -> xr.Dataset:
     model_ds = xr.open_dataset(cfg["model"]["path"])
     baseline_ds = xr.open_dataset(cfg["baseline"]["path"])
 
+    # When cross_validation is enabled, model runs carry a station_group dim.
+    # Scorecards always compare the "all" group — select it and drop the dim.
+    if "station_group" in model_ds.dims:
+        model_ds = model_ds.sel(station_group="all", drop=True)
+    if "station_group" in baseline_ds.dims:
+        baseline_ds = baseline_ds.sel(station_group="all", drop=True)
+
     for label, ds in [("model", model_ds), ("baseline", baseline_ds)]:
         if "n_samples" not in ds.data_vars:
             raise ValueError(

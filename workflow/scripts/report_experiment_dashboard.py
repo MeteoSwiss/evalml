@@ -86,6 +86,13 @@ def main(args):
         df = df[df["season"] == "all"]
     if "init_hour" not in stratification:
         df = df[df["init_hour"] == "all"]
+    # station_group: baselines have no station_group dim → fill with "all"
+    if "station_group" not in df.columns:
+        df["station_group"] = "all"
+    else:
+        df["station_group"] = df["station_group"].fillna("all")
+    if "station_group" not in stratification:
+        df = df[df["station_group"] == "all"]
 
     # create a new column for line styles and shapes in dashboard
     df.dropna(inplace=True)
@@ -98,6 +105,7 @@ def main(args):
     regions = df["region"].unique() if "region" in stratification else []
     seasons = df["season"].unique() if "season" in stratification else []
     init_hours = df["init_hour"].unique() if "init_hour" in stratification else []
+    station_groups = df["station_group"].unique() if "station_group" in stratification else []
 
     # Columnar JSON: store columns + data array (no repeated keys per row).
     # region_season_init is a derived column — computed in JS at parse time.
@@ -119,6 +127,7 @@ def main(args):
         "region",
         "season",
         "init_hour",
+        "station_group",
     ]
     df_export = df[export_cols].copy()
     df_export["value"] = df_export["value"].apply(
@@ -160,6 +169,7 @@ def main(args):
         regions=regions,
         seasons=seasons,
         init_hours=init_hours,
+        station_groups=station_groups,
         stratification=stratification,
         header_text=args.header_text,
         configfile_content=open(args.configfile, "r").read()

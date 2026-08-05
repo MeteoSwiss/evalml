@@ -21,8 +21,8 @@ runs:
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi_nudge.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
-        # - -e /scratch/mch/llanzila/sruc/anemoi-plugins-meteoswiss
-        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@d3786cf393a41b176af94ba3b3fb0d3da8c41b71
+        - -e /scratch/mch/llanzila/sruc/anemoi-plugins-meteoswiss
+        # - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@f91315e
         - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
@@ -99,6 +99,8 @@ experiment:
       # - region
       # - init_hour
       - season
+      - station_group
+  cross_validation: true
   scorecards:
     enabled: true
     sections:

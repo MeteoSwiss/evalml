@@ -4,6 +4,9 @@ from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+import yaml
 
 from verification import verify  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
@@ -28,6 +31,39 @@ class ScriptConfig(Namespace):
     reftime: datetime = None
     params: list[str] = ["T_2M", "TD_2M", "U_10M", "V_10M"]
     steps: list[int] = parse_steps("0/120/6")
+
+
+def _find_nudge_cfg(inf_cfg: dict) -> dict:
+    """Extract nudge_toward_observation params from the inference config YAML."""
+    try:
+        pre_processors = inf_cfg["input"]["cutout"][0]["lam_0"]["grib"]["pre_processors"]
+        for pp in pre_processors:
+            inner = pp.get("forward_transform_filter", {})
+            if "nudge_toward_observation" in inner:
+                return inner["nudge_toward_observation"]
+    except (KeyError, IndexError, TypeError):
+        pass
+    return {}
+
+
+def compute_holdout_stations(obs_parquet: Path, inference_config: Path) -> list[str]:
+    """Return nat_abbr list of stations withheld from nudging, mirroring the plugin logic."""
+    df = pd.read_parquet(obs_parquet)
+    with open(inference_config) as f:
+        inf_cfg = yaml.safe_load(f)
+    nudge_cfg = _find_nudge_cfg(inf_cfg)
+
+    exclude_stations = nudge_cfg.get("exclude_stations")
+    holdout_fraction = nudge_cfg.get("holdout_fraction")
+    holdout_seed = nudge_cfg.get("holdout_seed", 42)
+
+    if exclude_stations is not None:
+        return [s for s in exclude_stations if s in df.index]
+    if holdout_fraction is not None and 0.0 < float(holdout_fraction) < 1.0:
+        n_holdout = round(len(df) * float(holdout_fraction))
+        rng = np.random.default_rng(holdout_seed)
+        return list(rng.choice(df.index, size=n_holdout, replace=False))
+    return []
 
 
 def program_summary_log(args):
@@ -84,6 +120,17 @@ def main(args: ScriptConfig):
         (datetime.now() - now).total_seconds(),
     )
 
+    # determine holdout stations for cross-validation station stratification
+    holdout_stations = None
+    if args.cross_validation and args.run_workdir is not None:
+        obs_parquet = args.run_workdir / "observation/nudging_station_obs.parquet"
+        inference_config = args.run_workdir / "config.yaml"
+        if obs_parquet.exists() and inference_config.exists():
+            holdout_stations = compute_holdout_stations(obs_parquet, inference_config)
+            LOG.info("Cross-validation holdout: %d stations withheld: %s", len(holdout_stations), holdout_stations)
+        else:
+            LOG.warning("cross_validation=True but obs parquet or inference config not found; skipping station stratification.")
+
     # compute metrics and statistics
     now = datetime.now()
     results = verify(
@@ -93,6 +140,7 @@ def main(args: ScriptConfig):
         args.truth_label,
         args.regions,
         threshold_dict=args.threshold_dict,
+        holdout_stations=holdout_stations,
     )
     LOG.info(
         "Computed verification metrics in %s seconds",
@@ -168,6 +216,18 @@ if __name__ == "__main__":
         type=lambda x: eval(x),
         help="Dictionary of thresholds for each parameter in the format '{param: [threshold1, threshold2, ...]}' (default: None).",
         default=None,
+    )
+    parser.add_argument(
+        "--cross_validation",
+        type=lambda x: x.lower() == "true",
+        default=False,
+        help="When True, compute metrics separately for holdout/holdin station groups.",
+    )
+    parser.add_argument(
+        "--run_workdir",
+        type=Path,
+        default=None,
+        help="Per-run working directory containing observation parquet and config.yaml.",
     )
     parser.add_argument(
         "--member",

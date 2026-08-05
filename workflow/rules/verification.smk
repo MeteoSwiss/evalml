@@ -34,6 +34,7 @@ rule verification_metrics_baseline:
         regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
+        cross_validation=False,
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
@@ -47,6 +48,7 @@ rule verification_metrics_baseline:
             --regions "{params.regions}" \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
+            --cross_validation {params.cross_validation} \
             --member "{params.member}" \
             --output {output} >{log} 2>&1
         """
@@ -89,6 +91,10 @@ rule verification_metrics:
         ).resolve(),
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
+        cross_validation=CROSS_VALIDATION,
+        run_workdir=lambda wc: (
+            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}"
+        ).resolve(),
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
@@ -102,6 +108,8 @@ rule verification_metrics:
             --regions "{params.regions}" \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
+            --cross_validation {params.cross_validation} \
+            --run_workdir {params.run_workdir} \
             --output {output} >{log} 2>&1
         """
 

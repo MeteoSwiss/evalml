@@ -226,6 +226,19 @@ def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
     return out
 
 
+def _create_station_group_masks(
+    values_coord: xr.DataArray, holdout_stations: list[str]
+) -> xr.DataArray:
+    """Boolean masks for all/holdout/holdin station groups over the values dimension."""
+    all_nat_abbr = values_coord.values
+    is_holdout = np.isin(all_nat_abbr, holdout_stations)
+    return xr.DataArray(
+        np.stack([np.ones_like(is_holdout), is_holdout, ~is_holdout]),
+        coords={"station_group": ["all", "holdout", "holdin"], "values": values_coord.values},
+        dims=["station_group", "values"],
+    )
+
+
 def verify(
     fcst: xr.Dataset,
     obs: xr.Dataset,
@@ -235,6 +248,7 @@ def verify(
     dim: list[str] | None = None,
     threshold_dict: dict[str, dict[str, list[float]]] | None = None,
     num_workers: int | None = None,
+    holdout_stations: list[str] | None = None,
 ) -> xr.Dataset:
     """
     Compute verification metrics and statistics comparing forecast and observation datasets.
@@ -292,6 +306,13 @@ def verify(
         lon=obs_aligned["longitude"], lat=obs_aligned["latitude"]
     )
 
+    station_masks = None
+    if holdout_stations is not None:
+        station_masks = _create_station_group_masks(obs_aligned["values"], holdout_stations)
+        LOG.info("Station group masks created: %d holdout, %d holdin stations",
+                 int(station_masks.sel(station_group="holdout").sum()),
+                 int(station_masks.sel(station_group="holdin").sum()))
+
     scores = []
     statistics = []
     for param in fcst_aligned.data_vars:
@@ -313,6 +334,11 @@ def verify(
         # Apply all region masks at once via broadcast — adds "region" as leading dim
         fcst_param = fcst_aligned[param].where(masks)
         obs_param = obs_aligned[param].where(masks)
+
+        # Apply station group masks — adds "station_group" dim (all/holdout/holdin)
+        if station_masks is not None:
+            fcst_param = fcst_param.where(station_masks)
+            obs_param = obs_param.where(station_masks)
 
         score = _compute_scores(
             fcst_param,

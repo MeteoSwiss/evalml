@@ -77,6 +77,8 @@ def main(args: Namespace) -> None:
 
     # remove duplicated but not identical values from analyses (rounding errors)
     dfs = [xr.open_dataset(f) for f in args.verif_files]
+    # When cross_validation is enabled, runs carry a station_group dim; select "all" for standard plots.
+    dfs = [d.sel(station_group="all", drop=True) if "station_group" in d.dims else d for d in dfs]
     # 1) Ensure each dataset has unique lead_time values
     dfs = [_ensure_unique_lead_time(d) for d in dfs]
     # 2) For sources present in multiple datasets, keep the one with most lead_times
