@@ -272,13 +272,6 @@ rule verification_scoremaps_baseline:
         """
 
 
-# ----------------------------------------------------- #
-# SAL precipitation verification (Structure–Amplitude–Location)            #
-# Compute-only: one CSV per (participant, param, lead time), keyed by    #
-# truth hash. Plotting lives in the publication-figures workflow.           #
-# ----------------------------------------------------- #
-
-
 rule verification_sal:
     input:
         "src/verification/__init__.py",

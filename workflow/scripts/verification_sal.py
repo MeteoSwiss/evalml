@@ -1,18 +1,16 @@
 """Compute per-init SAL (Wernli et al. 2008) precipitation scores.
 
 For a fixed lead time and precip param, loads the forecast and matching truth
-slice for each init time in --reftimes, remaps both onto a common near-square
-lat–lon raster (see verification.sal.build_regular_grid) and computes the SAL
-triple. Writes one CSV row per init — dry windows included (S/A/L = NaN) —
-with a commented metadata header. Forecasts and truth load via
-data_input.load_forecast_data / load_truth_data, which route by source and
-de-accumulate transparently (period encoded in the param name, TOT_PREC6 = 6h).
-Any init missing from forecast or truth is a hard error, never a silent skip.
+slice for each init time in --reftimes, remaps both onto the common near-square
+raster (verification.sal.sal_raster) and computes the SAL triple. Writes one CSV
+row per init — dry windows included (S/A/L = NaN) — with a commented metadata
+header. Any init missing from forecast or truth is a hard error, never a silent
+skip.
 """
 
 import logging
 from argparse import ArgumentParser, Namespace
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -26,14 +24,12 @@ from data_input import (
     parse_aggregated_param,
 )
 from verification.sal import (
-    DEFAULT_GRID_EXTENT,
-    DEFAULT_GRID_STEP_LAT,
-    DEFAULT_GRID_STEP_LON,
+    GRID_EXTENT,
     MIN_TRUTH_POINTS,
-    build_regular_grid,
     compute_sal,
     remap_field,
     remap_indices,
+    sal_raster,
 )
 
 LOG = logging.getLogger(__name__)
@@ -67,23 +63,11 @@ def main(args: Namespace) -> None:
         raise ValueError(
             f"Lead time {args.step}h < {accum_h}h accumulation of '{args.param}'."
         )
-    LOG.info(
-        "SAL verification  param=%s accum=%sh step=%dh  truth=%s  output=%s",
-        args.param,
-        accum_h,
-        args.step,
-        args.truth,
-        args.output,
-    )
 
-    _, _, lat2d, lon2d = build_regular_grid(
-        DEFAULT_GRID_EXTENT, DEFAULT_GRID_STEP_LAT, DEFAULT_GRID_STEP_LON
-    )
+    lat2d, lon2d = sal_raster()
     shape = lat2d.shape
-    LOG.info("SAL raster: %d x %d cells, extent=%s", *shape, DEFAULT_GRID_EXTENT)
 
     reftimes = sorted(datetime.strptime(s, DATETIME_FMT) for s in args.reftimes)
-    step_td = timedelta(hours=args.step)
     truth_lazy = (
         open_truth_zarr(args.truth, [args.param])
         if args.truth.suffix == ".zarr"
@@ -95,11 +79,6 @@ def main(args: Namespace) -> None:
     rows = []
 
     for reftime in reftimes:
-        LOG.info(
-            "Processing reftime=%s valid=%s",
-            reftime.strftime(DATETIME_FMT),
-            reftime + step_td,
-        )
         if args.baseline_root:
             # Baselines read from the operational archive.
             src_root = args.baseline_root
@@ -141,43 +120,31 @@ def main(args: Namespace) -> None:
                 if shared
                 else remap_indices(truth_lat, truth_lon, lat2d, lon2d)
             )
-            LOG.info(
-                "Remap indices built: %d forecast / %d truth points (shared grid: %s)",
-                fcst_lat.size,
-                truth_lat.size,
-                shared,
-            )
 
         fcst_2d = remap_field(fcst_field, fcst_idx, shape)
         truth_2d = remap_field(truth_field, truth_idx, shape)
         s, a, ell = compute_sal(fcst_2d, truth_2d)
         fcst_mean, truth_mean = float(fcst_2d.mean()), float(truth_2d.mean())
         LOG.info(
-            "  S=%+.3f A=%+.3f L=%.3f (fcst_mean=%.3f truth_mean=%.3f)",
+            "%s  S=%+.3f A=%+.3f L=%.3f  fcst_mean=%.3f truth_mean=%.3f",
+            reftime.strftime(DATETIME_FMT),
             s,
             a,
             ell,
             fcst_mean,
             truth_mean,
         )
-        rows.append(
-            {
-                "reftime": reftime.strftime(DATETIME_FMT),
-                "S": s,
-                "A": a,
-                "L": ell,
-                "fcst_mean": fcst_mean,
-                "truth_mean": truth_mean,
-            }
-        )
+        rows.append((reftime.strftime(DATETIME_FMT), s, a, ell, fcst_mean, truth_mean))
 
     # One row per init; fixed metadata in a commented header (pandas skips it via
     # read_csv(comment="#")). S/A/L are NaN for dry windows.
-    df = pd.DataFrame(rows)
+    df = pd.DataFrame(
+        rows, columns=["reftime", "S", "A", "L", "fcst_mean", "truth_mean"]
+    )
     header = [
         "SAL (Wernli et al. 2008) per-init precipitation scores",
         f"param: {args.param}  accum_h: {accum_h}  step_h: {args.step}  member: {args.member}",
-        f"grid_extent: {list(DEFAULT_GRID_EXTENT)}  grid_step: ({DEFAULT_GRID_STEP_LAT}, {DEFAULT_GRID_STEP_LON})",
+        f"grid_extent: {list(GRID_EXTENT)}  grid_cells: {shape[0]}x{shape[1]}",
         f"source: {args.baseline_root or args.run_root}  n_init: {len(df)}",
         "reftime UTC YYYYMMDDHHMM; S/A/L are NaN for dry windows.",
     ]
@@ -197,37 +164,18 @@ if __name__ == "__main__":
             "--run_root or --baseline_root must be provided."
         )
     )
+    parser.add_argument("--run_root", type=Path, help="output/data/runs/<run_id>.")
+    parser.add_argument("--baseline_root", type=Path, help="Baseline archive root.")
     parser.add_argument(
-        "--run_root", type=Path, help="Root of a model run (output/data/runs/<run_id>)."
+        "--member", default="000", help="ICON baseline: '000', 'median', 'mean', NNN."
     )
+    parser.add_argument("--truth", type=Path, required=True, help="Reference zarr.")
+    parser.add_argument("--step", type=int, required=True, help="Lead time in hours.")
+    parser.add_argument("--param", required=True, help="Precip param, e.g. TOT_PREC6.")
     parser.add_argument(
-        "--baseline_root", type=Path, help="Root of a baseline archive."
+        "--reftimes", nargs="+", required=True, help="Init times (YYYYMMDDHHMM)."
     )
-    parser.add_argument(
-        "--member",
-        default="000",
-        help="Member for ICON baselines: '000', 'median', 'mean' or a 3-digit ID.",
-    )
-    parser.add_argument(
-        "--truth", type=Path, required=True, help="Reference zarr (or jretrieve spec)."
-    )
-    parser.add_argument(
-        "--step", type=int, required=True, help="Forecast lead time in hours."
-    )
-    parser.add_argument(
-        "--param",
-        required=True,
-        help="Accumulated precip param, period encoded in the name (e.g. TOT_PREC6).",
-    )
-    parser.add_argument(
-        "--reftimes",
-        nargs="+",
-        required=True,
-        help="Init times to score (YYYYMMDDHHMM).",
-    )
-    parser.add_argument(
-        "--output", type=Path, required=True, help="Output CSV (one row per init)."
-    )
+    parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
     if bool(args.run_root) == bool(args.baseline_root):

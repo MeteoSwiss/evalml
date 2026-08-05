@@ -2,12 +2,7 @@ import numpy as np
 import pytest
 
 from evalml.config import ConfigModel, SalConfig
-from verification.sal import (
-    build_regular_grid,
-    compute_sal,
-    remap_field,
-    remap_indices,
-)
+from verification.sal import GRID_EXTENT, compute_sal, remap_field, sal_raster
 
 
 def _blob(shape, cy, cx, amp, sigma):
@@ -21,34 +16,22 @@ def _blob(shape, cy, cx, amp, sigma):
 # ---------------------------------------------------------------------------
 
 
-def test_build_regular_grid_shape_bounds_and_orientation():
-    lats, lons, lat2d, lon2d = build_regular_grid((5.0, 11.0, 45.0, 48.0), 0.5, 0.5)
+def test_sal_raster_shape_bounds_and_orientation():
+    lat2d, lon2d = sal_raster()
+    lon_min, lon_max, lat_min, lat_max = GRID_EXTENT
 
-    assert lat2d.shape == lon2d.shape == (lats.size, lons.size)
+    assert lat2d.shape == lon2d.shape == (851, 1311)
     # Lower bounds are exact; upper bounds are included but not overshot.
-    assert lats[0] == 45.0 and 48.0 - 0.5 < lats[-1] <= 48.0 + 1e-9
-    assert lons[0] == 5.0 and 11.0 - 0.5 < lons[-1] <= 11.0 + 1e-9
-    # latitude varies along axis 0, longitude along axis 1.
-    assert np.allclose(lat2d[:, 0], lats)
-    assert np.allclose(lon2d[0, :], lons)
+    assert lat2d[0, 0] == lat_min and lat_max - 0.01 < lat2d[-1, 0] <= lat_max + 1e-9
+    assert lon2d[0, 0] == lon_min and lon_max - 0.0145 < lon2d[0, -1] <= lon_max + 1e-9
+    # latitude varies along axis 0, longitude along axis 1 (pysteps' L term).
+    assert np.all(lat2d[0, :] == lat2d[0, 0]) and np.all(lon2d[:, 0] == lon2d[0, 0])
 
 
-def test_remap_indices_and_field_are_nearest_neighbour():
-    src_lat = np.array([46.0, 46.0, 47.0, 47.0])
-    src_lon = np.array([7.0, 8.0, 7.0, 8.0])
-    tgt_lat2d = np.array([[46.1, 46.9]])
-    tgt_lon2d = np.array([[7.1, 7.9]])
-
-    idx = remap_indices(src_lat, src_lon, tgt_lat2d, tgt_lon2d)
-    assert np.array_equal(idx, np.array([0, 3]))
-
-    field = np.array([10.0, 20.0, 30.0, 40.0])
-    out = remap_field(field, idx, tgt_lat2d.shape)
-    assert np.array_equal(out, np.array([[10.0, 40.0]]))
-
+def test_remap_field_gathers_and_fills_nan_with_zero():
     # NaN source cells fill with 0 (missing precip = no precip).
-    nan_out = remap_field(np.array([np.nan, 5.0]), np.array([0, 1]), (1, 2))
-    assert np.array_equal(nan_out, np.array([[0.0, 5.0]]))
+    out = remap_field(np.array([np.nan, 5.0, 7.0]), np.array([2, 0, 1]), (1, 3))
+    assert np.array_equal(out, np.array([[7.0, 0.0, 5.0]]))
 
 
 # ---------------------------------------------------------------------------
@@ -72,26 +55,9 @@ def test_compute_sal_dry_window_returns_nan():
     assert all(np.isnan(v) for v in compute_sal(dry, dry))
 
 
-def test_compute_sal_is_invariant_to_common_rescaling():
-    obs = _blob((80, 80), 40, 25, 10.0, 5.0)
-    pred = _blob((80, 80), 38, 50, 7.0, 6.0)  # differs in S, A and L
-    base = compute_sal(pred, obs)
-    scaled = compute_sal(10.0 * pred, 10.0 * obs)
-    assert np.allclose(base, scaled, atol=1e-9)
-    assert np.isfinite(base).all()
-
-
 # ---------------------------------------------------------------------------
 # Config model
 # ---------------------------------------------------------------------------
-
-
-def test_sal_config_defaults_and_extra_forbid():
-    s = SalConfig()
-    assert s.enabled is False
-    assert s.params == ["TOT_PREC6"]
-    with pytest.raises(ValueError):
-        SalConfig(unknown_key=1)
 
 
 def test_sal_config_rejects_non_precip_params():

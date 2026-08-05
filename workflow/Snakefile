@@ -196,7 +196,7 @@ rule experiment_all:
             if SCOREMAPS_CONFIGS.get("enabled", False)
             else []
         ),
-        # SAL precipitation scores (compute-only: the NetCDFs themselves are the
+        # SAL precipitation scores (compute-only: the CSVs themselves are the
         # targets; plotting lives in the publication-figures workflow).
         (
             expand(
