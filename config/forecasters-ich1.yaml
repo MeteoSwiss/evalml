@@ -57,6 +57,7 @@ experiment:
     - PMSL
   stratification:
     regions:
+      - icon
       - jura
       - mittelland
       - voralpen

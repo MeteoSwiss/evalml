@@ -26,7 +26,16 @@ _IFS_TO_ICON = {
     "2d": "TD_2M",
     "sp": "PS",
     "lsm": "FR_LAND",
-    "z": "FSI",
+    "tcc": "CLCT",
+    "lcc": "CLCL",
+    # TODO: ssrd is treated as a plain per-step field (no de-accumulation),
+    # which only holds because it's not currently listed in any
+    # accumulate_from_start_of_forecast.accumulations in the inference
+    # configs (unlike tp, see _tot_prec_handling). If ssrd/strd are ever
+    # added there, this needs the same cumulative-since-start handling tp
+    # gets, or verification/plots will silently be wrong.
+    "ssrd": "SSRD",
+    "z": "FIS",
 }
 _ICON_TO_IFS = {v: k for k, v in _IFS_TO_ICON.items()}
 
@@ -324,6 +333,20 @@ def _open_analysis_zarr(root: Path, params: list[str]) -> xr.Dataset:
         )
         ds = ds.assign_coords(elevation=elevation).drop_vars(["FIS"])
 
+    # Drop grid points with undefined (NaN) coordinates. This can occur when
+    # xarray opens a zarr dataset whose lat/lon arrays have fill_value=0.0: any
+    # grid point sitting exactly on 0° longitude is masked to NaN by xarray even
+    # though it is a valid point in the raw zarr (e.g. aifs-ea-an-oper o96 ERA5
+    # dataset has 192 such points).
+    if "values" in ds.dims and "latitude" in ds.coords and "longitude" in ds.coords:
+        valid = np.isfinite(ds["latitude"].values) & np.isfinite(ds["longitude"].values)
+        if not valid.all():
+            LOG.warning(
+                "Dropping %d grid point(s) with undefined lat/lon from truth dataset.",
+                int((~valid).sum()),
+            )
+            ds = ds.isel(values=valid)
+
     return ds
 
 
@@ -464,10 +487,21 @@ def load_from_grib_file(file: str | list[str], sel_kwargs):
 
 
 def variable_name_profile(
-    level_type: Literal["height_above_ground_level", "mean_sea", "surface", "pressure"],
+    level_type: Literal[
+        "height_above_ground_level",
+        "mean_sea",
+        "surface",
+        "pressure",
+        "entire_atmosphere",
+    ],
 ) -> dict[str, Any]:
     """Resolve variable name profile based on the level type."""
-    if level_type in ["height_above_ground_level", "mean_sea", "surface"]:
+    if level_type in [
+        "height_above_ground_level",
+        "mean_sea",
+        "surface",
+        "entire_atmosphere",
+    ]:
         return {}
     elif level_type == "pressure":
         return {
@@ -1319,7 +1353,18 @@ def load_forecast_data(
             files=_collect_ml_grib_files(root, load_steps),
             params=load_params,
         )
-        ds = _try_assign_elevation(ds)
+        # Try to derive elevation from surface geopotential (FIS/z at step 0)
+        # before falling back to ICON grid constants lookup.
+        fis_files = _collect_ml_grib_files(root, [0])
+        if fis_files:
+            fis_ds = _load_forecast_data_from_grib(fis_files, ["FIS"])
+            if "FIS" in fis_ds:
+                elevation = ekdv.geopotential_height_from_geopotential(
+                    fis_ds["FIS"].isel(step=0, drop=True).squeeze(drop=True)
+                )
+                ds = ds.assign_coords(elevation=elevation)
+        if "elevation" not in ds.coords:
+            ds = _try_assign_elevation(ds)
     elif "INCA" in root.parts:
         LOG.info("Loading INCA baseline from NetCDF files...")
         # INCA provides wind speed natively (FF), so don't expand SP_10M → U_10M/V_10M.
