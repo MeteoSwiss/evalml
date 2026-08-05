@@ -1,8 +1,8 @@
 """Compute per-init SAL (Structure–Amplitude–Location) precipitation scores.
 
-For a fixed lead time and precip param, iterates over all init times (discovered
-under a run directory, or from --reftimes for baselines), loads the forecast and
-matching truth slice, remaps both onto a common near-square lat–lon raster (see
+For a fixed lead time and precip param, iterates over the init times given by
+--reftimes, loads the forecast and matching truth slice for each, and remaps
+both onto a common near-square lat–lon raster (see
 verification.sal.build_regular_grid), and computes the Wernli et al. (2008) SAL
 triple. One row per init — dry windows included (S/A/L = NaN) — is written to a
 CSV with a commented metadata header. Forecasts and truth load via
@@ -44,25 +44,6 @@ logging.basicConfig(
 )
 
 DATETIME_FMT = "%Y%m%d%H%M"
-
-
-def iter_init_dirs(run_root: Path) -> list[tuple[datetime, Path]]:
-    """Return ``(reftime, grib_dir)`` for every init-time subdir (YYYYMMDDHHMM)
-    under *run_root*; GRIB may sit directly in it or in a ``grib/`` subdir."""
-    result = []
-    for d in sorted(run_root.iterdir()):
-        if not d.is_dir():
-            continue
-        try:
-            reftime = datetime.strptime(d.name, DATETIME_FMT)
-        except ValueError:
-            continue
-        grib_dir = d / "grib" if (d / "grib").is_dir() else d
-        if not any(grib_dir.glob("*.grib")):
-            LOG.debug("No GRIB files in %s, skipping", grib_dir)
-            continue
-        result.append((reftime, grib_dir))
-    return result
 
 
 def _native_1d(da: xr.DataArray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -125,27 +106,19 @@ def main(args: Namespace) -> None:
         DEFAULT_GRID_STEP_LON,
     )
 
+    reftimes = sorted(datetime.strptime(s, DATETIME_FMT) for s in args.reftimes)
     if args.baseline_root:
-        init_items = [
-            (rt, None)
-            for rt in sorted(datetime.strptime(s, DATETIME_FMT) for s in args.reftimes)
-        ]
-        LOG.info("Using %d baseline init times from --reftimes", len(init_items))
+        # Baselines read from the operational archive; grib_dir is unused.
+        init_items = [(rt, None) for rt in reftimes]
     else:
-        init_items = iter_init_dirs(args.run_root)
-        LOG.info("Found %d init time directories", len(init_items))
-        if args.reftimes:
-            wanted = {datetime.strptime(s, DATETIME_FMT) for s in args.reftimes}
-            discovered = {rt for rt, _ in init_items}
-            missing = sorted(wanted - discovered)
-            if missing:
-                raise ValueError(
-                    f"{len(missing)} configured init(s) have no GRIB under "
-                    f"{args.run_root}: {[m.strftime(DATETIME_FMT) for m in missing]}. "
-                    "Blacklist genuinely-absent dates in the experiment config."
-                )
-            init_items = [(rt, d) for rt, d in init_items if rt in wanted]
-            LOG.info("Matched all %d configured init times", len(init_items))
+        # A run stores GRIB under run_root/<reftime>/[grib/]; build the path per
+        # reftime (a missing init then fails in load_forecast_data).
+        init_items = [
+            (rt, d / "grib" if (d / "grib").is_dir() else d)
+            for rt in reftimes
+            for d in [args.run_root / rt.strftime(DATETIME_FMT)]
+        ]
+    LOG.info("Using %d init times from --reftimes", len(init_items))
 
     step_td = timedelta(hours=args.step)
 
@@ -338,10 +311,7 @@ if __name__ == "__main__":
         "--reftimes",
         nargs="+",
         default=None,
-        help=(
-            "Init times (YYYYMMDDHHMM). For runs: optional restriction of the "
-            "discovered init-time directories. For baselines: required."
-        ),
+        help="Init times to score (YYYYMMDDHHMM); required.",
     )
     parser.add_argument(
         "--output",
@@ -353,10 +323,7 @@ if __name__ == "__main__":
 
     if bool(args.run_root) == bool(args.baseline_root):
         parser.error("Exactly one of --run_root or --baseline_root must be provided.")
-    if args.baseline_root and not args.reftimes:
-        parser.error(
-            "--reftimes is required with --baseline_root: init times cannot be "
-            "discovered from the operational archive."
-        )
+    if not args.reftimes:
+        parser.error("--reftimes is required.")
 
     main(args)
