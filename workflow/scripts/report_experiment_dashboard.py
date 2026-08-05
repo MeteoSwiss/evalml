@@ -64,6 +64,13 @@ def main(args):
     _check_n_samples_consistency(dfs, args.verif_files)
     dfs = [_ensure_unique_lead_time(d) for d in dfs]
     dfs = _select_best_sources(dfs)
+    # Normalize station_group dimension before concat: datasets without it (baselines) are
+    # expanded to station_group=["all"] so xr.concat receives uniform-rank tensors.
+    if any("station_group" in d.dims for d in dfs):
+        dfs = [
+            d if "station_group" in d.dims else d.expand_dims(station_group=["all"])
+            for d in dfs
+        ]
     ds = xr.concat(dfs, dim="source", join="outer")
     LOG.info("Loaded verification netcdf: \n%s", ds)
 
@@ -86,16 +93,37 @@ def main(args):
         df = df[df["season"] == "all"]
     if "init_hour" not in stratification:
         df = df[df["init_hour"] == "all"]
-    # station_group: baselines have no station_group dim → fill with "all"
     if "station_group" not in df.columns:
         df["station_group"] = "all"
-    else:
-        df["station_group"] = df["station_group"].fillna("all")
     if "station_group" not in stratification:
         df = df[df["station_group"] == "all"]
 
-    # create a new column for line styles and shapes in dashboard
+    # Drop NaN rows before station_group fold so that baselines (NaN at holdin/holdout)
+    # are not mistakenly counted as multi-group sources.
     df.dropna(inplace=True)
+
+    # When station_group is in stratification, fold it into the source name for forecast
+    # sources so each group appears as a separate labelled line in the dashboard.
+    # Truth/obs sources (e.g. SwissMetNet) only carry stat metrics (mean/std/min/max)
+    # and are excluded from the fold to avoid spurious "SwissMetNet (holdin)" entries.
+    if "station_group" in stratification:
+        _stat_metrics = {"mean", "std", "min", "max"}
+        _forecast_sources = set(
+            df.groupby("source")["metric"]
+            .apply(lambda m: not m.isin(_stat_metrics).all())
+            .pipe(lambda s: s[s].index)
+        )
+        _multi_sources = set(
+            df[df["source"].isin(_forecast_sources)]
+            .groupby("source")["station_group"]
+            .nunique()
+            .pipe(lambda s: s[s > 1].index)
+        )
+        if _multi_sources:
+            mask = df["source"].isin(_multi_sources)
+            df.loc[mask, "source"] = (
+                df.loc[mask, "source"] + " (" + df.loc[mask, "station_group"] + ")"
+            )
     LOG.info("Loaded verification data frame: \n%s", df)
 
     # get unique sources and params
