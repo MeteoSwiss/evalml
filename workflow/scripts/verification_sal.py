@@ -1,15 +1,13 @@
-"""Compute per-init SAL (Structure–Amplitude–Location) precipitation scores.
+"""Compute per-init SAL (Wernli et al. 2008) precipitation scores.
 
-For a fixed lead time and precip param, iterates over the init times given by
---reftimes, loads the forecast and matching truth slice for each, and remaps
-both onto a common near-square lat–lon raster (see
-verification.sal.build_regular_grid), and computes the Wernli et al. (2008) SAL
-triple. One row per init — dry windows included (S/A/L = NaN) — is written to a
-CSV with a commented metadata header. Forecasts and truth load via
+For a fixed lead time and precip param, loads the forecast and matching truth
+slice for each init time in --reftimes, remaps both onto a common near-square
+lat–lon raster (see verification.sal.build_regular_grid) and computes the SAL
+triple. Writes one CSV row per init — dry windows included (S/A/L = NaN) —
+with a commented metadata header. Forecasts and truth load via
 data_input.load_forecast_data / load_truth_data, which route by source and
 de-accumulate transparently (period encoded in the param name, TOT_PREC6 = 6h).
-Every configured init must be available across forecast and truth, else a hard
-error (never a silent skip).
+Any init missing from forecast or truth is a hard error, never a silent skip.
 """
 
 import logging
@@ -47,170 +45,121 @@ DATETIME_FMT = "%Y%m%d%H%M"
 
 
 def _native_1d(da: xr.DataArray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Flatten a field to 1-D with matching lat/lon arrays, squeezing size-1
-    non-spatial dims (ensemble, vertical, reftime, step/time) first."""
-    for dim in (
-        "z",
-        "number",
-        "ensemble",
-        "eps",
-        "forecast_reference_time",
-        "step",
-        "time",
-    ):
-        if dim in da.dims and da.sizes[dim] == 1:
-            da = da.squeeze(dim, drop=True)
-    field = np.asarray(da.values, dtype=float).ravel()
-    lat = np.asarray(da["latitude"].values).ravel()
-    lon = np.asarray(da["longitude"].values).ravel()
+    """Flatten a field and its 2-D lat/lon coords to matching 1-D arrays,
+    dropping size-1 dims (ensemble, vertical, reftime, step/time) first."""
+    da = da.squeeze(drop=True)
+    field, lat, lon = (
+        np.asarray(a, dtype=float).ravel()
+        for a in (da.values, da["latitude"].values, da["longitude"].values)
+    )
     if not (field.size == lat.size == lon.size):
         raise ValueError(
-            f"Field/lat/lon size mismatch after squeeze: field={field.size}, "
-            f"lat={lat.size}, lon={lon.size} (dims={da.dims})."
+            f"Field/lat/lon size mismatch after squeeze: {field.size}/{lat.size}/"
+            f"{lon.size} (dims={da.dims})."
         )
     return field, lat, lon
 
 
 def main(args: Namespace) -> None:
+    # The accumulation period is encoded in the param name (e.g. TOT_PREC6 -> 6h).
+    _, accum_h = parse_aggregated_param(args.param)
+    if accum_h is not None and args.step < accum_h:
+        raise ValueError(
+            f"Lead time {args.step}h < {accum_h}h accumulation of '{args.param}'."
+        )
     LOG.info(
-        "SAL verification  param=%s step=%dh  truth=%s  output=%s",
+        "SAL verification  param=%s accum=%sh step=%dh  truth=%s  output=%s",
         args.param,
+        accum_h,
         args.step,
         args.truth,
         args.output,
     )
 
-    # The accumulation period is encoded in the param name (e.g. TOT_PREC6 → 6h).
-    _, accum_h = parse_aggregated_param(args.param)
-    if accum_h is not None:
-        if args.step < accum_h:
-            raise ValueError(
-                f"Lead time {args.step}h < {accum_h}h accumulation of '{args.param}'."
-            )
-        if args.baseline_root and "INCA" in args.baseline_root.parts and accum_h != 1:
-            raise ValueError(
-                f"INCA is 1h-accumulation only; '{args.param}' needs {accum_h}h. Use TOT_PREC1."
-            )
-        LOG.info("Accumulation period: %dh", accum_h)
-
-    lats, lons, lat2d, lon2d = build_regular_grid(
+    _, _, lat2d, lon2d = build_regular_grid(
         DEFAULT_GRID_EXTENT, DEFAULT_GRID_STEP_LAT, DEFAULT_GRID_STEP_LON
     )
     shape = lat2d.shape
-    LOG.info(
-        "SAL raster: %d x %d cells, extent=%s, step=(%.4f lat, %.4f lon) deg",
-        shape[0],
-        shape[1],
-        DEFAULT_GRID_EXTENT,
-        DEFAULT_GRID_STEP_LAT,
-        DEFAULT_GRID_STEP_LON,
-    )
+    LOG.info("SAL raster: %d x %d cells, extent=%s", *shape, DEFAULT_GRID_EXTENT)
 
     reftimes = sorted(datetime.strptime(s, DATETIME_FMT) for s in args.reftimes)
-    if args.baseline_root:
-        # Baselines read from the operational archive; grib_dir is unused.
-        init_items = [(rt, None) for rt in reftimes]
-    else:
-        # A run stores GRIB under run_root/<reftime>/[grib/]; build the path per
-        # reftime (a missing init then fails in load_forecast_data).
-        init_items = [
-            (rt, d / "grib" if (d / "grib").is_dir() else d)
-            for rt in reftimes
-            for d in [args.run_root / rt.strftime(DATETIME_FMT)]
-        ]
-    LOG.info("Using %d init times from --reftimes", len(init_items))
-
     step_td = timedelta(hours=args.step)
-
     truth_lazy = (
         open_truth_zarr(args.truth, [args.param])
         if args.truth.suffix == ".zarr"
         else None
     )
 
-    # Fail fast if any required valid time is absent from the truth dataset.
-    if truth_lazy is not None:
-        truth_times = set(truth_lazy.time.values.astype("datetime64[ns]"))
-        required_valid_times = {
-            np.datetime64(rt + step_td).astype("datetime64[ns]") for rt, _ in init_items
-        }
-        missing_truth = sorted(required_valid_times - truth_times)
-        if missing_truth:
-            raise ValueError(
-                f"Truth is missing {len(missing_truth)} required valid time(s) for "
-                f"param={args.param}, step={args.step}h (e.g. "
-                f"{[str(t) for t in missing_truth[:5]]}). Blacklist absent dates."
-            )
-
     # Remap indices depend only on the static source grids: build once, reuse.
-    fcst_idx: np.ndarray | None = None
-    truth_idx: np.ndarray | None = None
+    fcst_idx = truth_idx = None
+    rows = []
 
-    rows: list[dict] = []
-
-    for reftime, grib_dir in init_items:
-        valid_time = np.datetime64(reftime + step_td).astype("datetime64[ns]")
+    for reftime in reftimes:
         LOG.info(
-            "Processing reftime=%s valid=%s", reftime.strftime(DATETIME_FMT), valid_time
+            "Processing reftime=%s valid=%s",
+            reftime.strftime(DATETIME_FMT),
+            reftime + step_td,
         )
+        if args.baseline_root:
+            # Baselines read from the operational archive.
+            src_root = args.baseline_root
+        else:
+            # A run stores GRIB under run_root/<reftime>/[grib/] (a missing init
+            # then fails in load_forecast_data).
+            src_root = args.run_root / reftime.strftime(DATETIME_FMT)
+            src_root = src_root / "grib" if (src_root / "grib").is_dir() else src_root
 
-        # --- load forecast ---
-        src_root = args.baseline_root if args.baseline_root else grib_dir
         fcst = load_forecast_data(
             src_root, reftime, [args.step], [args.param], member=args.member
         )
-
         if "step" in fcst.dims:
             fcst = fcst.sel(step=np.timedelta64(args.step, "h"))
-
-        # --- load truth slice ---
         truth_ds = load_truth_data(
             args.truth, reftime, [args.step], [args.param], lazy_ds=truth_lazy
-        )
-        truth_ds = truth_ds.isel(time=0)
+        ).isel(time=0)
 
         fcst_field, fcst_lat, fcst_lon = _native_1d(fcst[args.param])
         truth_field, truth_lat, truth_lon = _native_1d(truth_ds[args.param])
 
-        # --- build remap indices once (static source grids) ---
         if fcst_idx is None:
             # SAL needs a resolved (gridded) truth field; warn if it looks sparse.
             if truth_lat.size < MIN_TRUTH_POINTS:
                 LOG.warning(
-                    "Truth has only %d points (< %d); SAL expects a gridded analysis "
+                    "Truth has only %d points (< %d): SAL expects a gridded analysis "
                     "field, not sparse stations — scores may be meaningless.",
                     truth_lat.size,
                     MIN_TRUTH_POINTS,
                 )
-            LOG.info("Building remap indices for %d forecast points", fcst_lat.size)
             fcst_idx = remap_indices(fcst_lat, fcst_lon, lat2d, lon2d)
-            if (
-                truth_lat.shape == fcst_lat.shape
-                and np.max(np.abs(truth_lat - fcst_lat)) < 1e-6
-                and np.max(np.abs(truth_lon - fcst_lon)) < 1e-6
-            ):
-                LOG.info("Truth shares the forecast grid; reusing indices")
-                truth_idx = fcst_idx
-            else:
-                LOG.info("Building remap indices for %d truth points", truth_lat.size)
-                truth_idx = remap_indices(truth_lat, truth_lon, lat2d, lon2d)
+            shared = (
+                fcst_lat.shape == truth_lat.shape
+                and np.allclose(fcst_lat, truth_lat, atol=1e-6)
+                and np.allclose(fcst_lon, truth_lon, atol=1e-6)
+            )
+            truth_idx = (
+                fcst_idx
+                if shared
+                else remap_indices(truth_lat, truth_lon, lat2d, lon2d)
+            )
+            LOG.info(
+                "Remap indices built: %d forecast / %d truth points (shared grid: %s)",
+                fcst_lat.size,
+                truth_lat.size,
+                shared,
+            )
 
         fcst_2d = remap_field(fcst_field, fcst_idx, shape)
         truth_2d = remap_field(truth_field, truth_idx, shape)
-
         s, a, ell = compute_sal(fcst_2d, truth_2d)
-        fcst_mean = float(fcst_2d.mean())
-        truth_mean = float(truth_2d.mean())
+        fcst_mean, truth_mean = float(fcst_2d.mean()), float(truth_2d.mean())
         LOG.info(
-            "reftime=%s: S=%s A=%s L=%s (fcst_mean=%.3f truth_mean=%.3f)",
-            reftime.strftime(DATETIME_FMT),
-            f"{s:+.3f}" if np.isfinite(s) else "nan (dry)",
-            f"{a:+.3f}" if np.isfinite(a) else "nan",
-            f"{ell:.3f}" if np.isfinite(ell) else "nan",
+            "  S=%+.3f A=%+.3f L=%.3f (fcst_mean=%.3f truth_mean=%.3f)",
+            s,
+            a,
+            ell,
             fcst_mean,
             truth_mean,
         )
-
         rows.append(
             {
                 "reftime": reftime.strftime(DATETIME_FMT),
@@ -222,37 +171,20 @@ def main(args: Namespace) -> None:
             }
         )
 
-    LOG.info("Finished: %d init times processed", len(rows))
-    if not rows:
-        raise ValueError("No initialisations processed — nothing to write.")
-
-    df = pd.DataFrame(
-        rows,
-        columns=[
-            "reftime",
-            "S",
-            "A",
-            "L",
-            "fcst_mean",
-            "truth_mean",
-        ],
-    )
-
     # One row per init; fixed metadata in a commented header (pandas skips it via
     # read_csv(comment="#")). S/A/L are NaN for dry windows.
-    source = str(args.baseline_root if args.baseline_root else args.run_root)
+    df = pd.DataFrame(rows)
     header = [
         "SAL (Wernli et al. 2008) per-init precipitation scores",
-        f"param: {args.param}  accum_h: {accum_h if accum_h is not None else 'n/a'}  step_h: {args.step}",
+        f"param: {args.param}  accum_h: {accum_h}  step_h: {args.step}  member: {args.member}",
         f"grid_extent: {list(DEFAULT_GRID_EXTENT)}  grid_step: ({DEFAULT_GRID_STEP_LAT}, {DEFAULT_GRID_STEP_LON})",
-        f"member: {args.member}  source: {source}  n_processed: {len(df)}",
+        f"source: {args.baseline_root or args.run_root}  n_init: {len(df)}",
         "reftime UTC YYYYMMDDHHMM; S/A/L are NaN for dry windows.",
     ]
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, "w") as fh:
-        for line in header:
-            fh.write(f"# {line}\n")
+        fh.writelines(f"# {line}\n" for line in header)
         df.to_csv(fh, index=False)
     LOG.info("Saved %d rows to %s", len(df), args.output)
 
@@ -260,70 +192,45 @@ def main(args: Namespace) -> None:
 if __name__ == "__main__":
     parser = ArgumentParser(
         description=(
-            "Compute per-init SAL precipitation scores. Supports model runs "
-            "(GRIB) and baselines (ICON GRIB archive or INCA NetCDF archive). "
-            "Exactly one of --run_root or --baseline_root must be provided."
+            "Compute per-init SAL precipitation scores for a model run (GRIB) or "
+            "a baseline (ICON GRIB / INCA NetCDF archive). Exactly one of "
+            "--run_root or --baseline_root must be provided."
         )
     )
     parser.add_argument(
-        "--run_root",
-        type=Path,
-        default=None,
-        help="Root directory of a model run (e.g. output/data/runs/<run_id>).",
+        "--run_root", type=Path, help="Root of a model run (output/data/runs/<run_id>)."
     )
     parser.add_argument(
-        "--baseline_root",
-        type=Path,
-        default=None,
-        help=(
-            "Root directory of a baseline archive (ICON-CH1/CH2-EPS operational "
-            "GRIB archive, or an INCA NetCDF archive). Requires --reftimes."
-        ),
+        "--baseline_root", type=Path, help="Root of a baseline archive."
     )
     parser.add_argument(
         "--member",
-        type=str,
         default="000",
-        help=(
-            "Ensemble member for ICON baselines: '000' for control, 'median', "
-            "'mean', or a 3-digit ID. Ignored for runs and INCA."
-        ),
+        help="Member for ICON baselines: '000', 'median', 'mean' or a 3-digit ID.",
     )
     parser.add_argument(
-        "--truth",
-        type=Path,
-        required=True,
-        help="Path to the reference zarr dataset (or a jretrieve spec).",
+        "--truth", type=Path, required=True, help="Reference zarr (or jretrieve spec)."
     )
     parser.add_argument(
-        "--step",
-        type=int,
-        required=True,
-        help="Forecast lead time in hours (e.g. 12).",
+        "--step", type=int, required=True, help="Forecast lead time in hours."
     )
     parser.add_argument(
         "--param",
-        type=str,
         required=True,
         help="Accumulated precip param, period encoded in the name (e.g. TOT_PREC6).",
     )
     parser.add_argument(
         "--reftimes",
         nargs="+",
-        default=None,
-        help="Init times to score (YYYYMMDDHHMM); required.",
+        required=True,
+        help="Init times to score (YYYYMMDDHHMM).",
     )
     parser.add_argument(
-        "--output",
-        type=Path,
-        required=True,
-        help="Output CSV file (one row per init, with a commented metadata header).",
+        "--output", type=Path, required=True, help="Output CSV (one row per init)."
     )
     args = parser.parse_args()
 
     if bool(args.run_root) == bool(args.baseline_root):
         parser.error("Exactly one of --run_root or --baseline_root must be provided.")
-    if not args.reftimes:
-        parser.error("--reftimes is required.")
 
     main(args)
