@@ -197,7 +197,7 @@ rule experiment_all:
             else []
         ),
         # SAL precipitation scores (compute-only: the CSVs themselves are the
-        # targets; plotting lives in the publication-figures workflow).
+        # targets.
         (
             expand(
                 rules.verification_sal.output,
