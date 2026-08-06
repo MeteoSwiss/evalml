@@ -736,7 +736,7 @@
     },
     "SalConfig": {
       "additionalProperties": false,
-      "description": "SAL (Structure\u2013Amplitude\u2013Location; Wernli et al. 2008) per-init precip\nscores, computed for every run and baseline when enabled and written to\nper-participant CSVs. Compute-only; plotting lives in the figures workflow.",
+      "description": "SAL (Structure\u2013Amplitude\u2013Location; Wernli et al. 2008) per-init precip\nscores, computed for every run and baseline when enabled and written to\nper-participant CSVs.",
       "properties": {
         "enabled": {
           "default": false,
