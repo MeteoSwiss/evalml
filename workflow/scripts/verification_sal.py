@@ -91,8 +91,7 @@ def main(args: Namespace) -> None:
         fcst = load_forecast_data(
             src_root, reftime, [args.step], [args.param], member=args.member
         )
-        if "step" in fcst.dims:
-            fcst = fcst.sel(step=np.timedelta64(args.step, "h"))
+        fcst = fcst.sel(step=np.timedelta64(args.step, "h"))
         truth_ds = load_truth_data(
             args.truth, reftime, [args.step], [args.param], lazy_ds=truth_lazy
         ).isel(time=0)
