@@ -268,7 +268,7 @@ class ScoreMapsConfig(BaseModel):
 class SalConfig(BaseModel):
     """SAL (Structure–Amplitude–Location; Wernli et al. 2008) per-init precip
     scores, computed for every run and baseline when enabled and written to
-    per-participant CSVs. Compute-only; plotting lives in the figures workflow."""
+    per-participant CSVs."""
 
     enabled: bool = Field(
         default=False,
