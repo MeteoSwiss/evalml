@@ -136,8 +136,8 @@ def main(args: Namespace) -> None:
         )
         rows.append((reftime.strftime(DATETIME_FMT), s, a, ell, fcst_mean, truth_mean))
 
-    # One row per init; fixed metadata in a commented header (pandas skips it via
-    # read_csv(comment="#")). S/A/L are NaN for dry windows.
+    # One row per init; fixed metadata in a commented header.
+    # S/A/L are NaN for dry windows.
     df = pd.DataFrame(
         rows, columns=["reftime", "S", "A", "L", "fcst_mean", "truth_mean"]
     )
