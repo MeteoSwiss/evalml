@@ -740,7 +740,7 @@
       "properties": {
         "enabled": {
           "default": false,
-          "description": "Whether to compute SAL scores (requires pysteps + scikit-image).",
+          "description": "Whether to compute SAL scores.",
           "title": "Enabled",
           "type": "boolean"
         },
