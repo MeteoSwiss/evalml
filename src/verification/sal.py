@@ -19,10 +19,6 @@ from verification.spatial import spherical_nearest_neighbor_indices
 DEFAULT_THR_FACTOR = 0.067
 DEFAULT_THR_QUANTILE = 0.95
 
-# Below this truth point count SAL warns: a gridded analysis has millions of
-# points, a station network ~150, so the exact cut is not critical.
-MIN_TRUTH_POINTS = 10_000
-
 GRID_EXTENT = (-1.0, 18.0, 42.0, 50.5)  # lon_min, lon_max, lat_min, lat_max
 
 

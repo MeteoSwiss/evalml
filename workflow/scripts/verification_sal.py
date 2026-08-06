@@ -25,7 +25,6 @@ from data_input import (
 )
 from verification.sal import (
     GRID_EXTENT,
-    MIN_TRUTH_POINTS,
     compute_sal,
     remap_field,
     remap_indices,
@@ -63,16 +62,19 @@ def main(args: Namespace) -> None:
         raise ValueError(
             f"Lead time {args.step}h < {accum_h}h accumulation of '{args.param}'."
         )
+    # SAL needs a resolved (gridded) truth field: reject station observations
+    # (jretrievedwh:...) and any other unsupported root before reading data.
+    if args.truth.suffix != ".zarr":
+        raise ValueError(
+            f"SAL needs a gridded analysis zarr as truth, got '{args.truth}'; "
+            "station observations (jretrievedwh:...) are not supported."
+        )
 
     lat2d, lon2d = sal_raster()
     shape = lat2d.shape
 
     reftimes = sorted(datetime.strptime(s, DATETIME_FMT) for s in args.reftimes)
-    truth_lazy = (
-        open_truth_zarr(args.truth, [args.param])
-        if args.truth.suffix == ".zarr"
-        else None
-    )
+    truth_lazy = open_truth_zarr(args.truth, [args.param])
 
     # Remap indices depend only on the static source grids: build once, reuse.
     fcst_idx = truth_idx = None
@@ -100,14 +102,6 @@ def main(args: Namespace) -> None:
         truth_field, truth_lat, truth_lon = _native_1d(truth_ds[args.param])
 
         if fcst_idx is None:
-            # SAL needs a resolved (gridded) truth field; warn if it looks sparse.
-            if truth_lat.size < MIN_TRUTH_POINTS:
-                LOG.warning(
-                    "Truth has only %d points (< %d): SAL expects a gridded analysis "
-                    "field, not sparse stations — scores may be meaningless.",
-                    truth_lat.size,
-                    MIN_TRUTH_POINTS,
-                )
             fcst_idx = remap_indices(fcst_lat, fcst_lon, lat2d, lon2d)
             shared = (
                 fcst_lat.shape == truth_lat.shape
