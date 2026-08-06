@@ -92,51 +92,42 @@ Notes as this grows:
 
 ## Regenerating expected metrics for `test_experiment_metrics`
 
-`test_configs.py` runs each config in `CONFIGS` and compares every metric
-against `expected/<config>.yaml`. To refresh those references after an
-intentional pipeline change, run the same test with `--regenerate-expected`: it
-runs the experiment as usual, then overwrites the reference file instead of
-asserting.
-
-The flag **takes the exact config file name** and deselects every other config,
-which is normally what you want — each config costs hours of GPU time and a change
-rarely invalidates all of them:
+`test_configs.py` runs each config in `CONFIGS` and compares every metric against
+`expected/<config>.yaml`; the test only ever asserts. To refresh those references
+after an intentional pipeline change, run the generator script — it runs the same
+experiment, then writes the reference file instead of comparing:
 
 ```
-pytest tests/integration/test_configs.py -m heavytest --regenerate-expected=varda-single-1.0.yaml
+python tests/integration/regenerate_expected.py varda-single-1.0.yaml
 ```
 
-Repeat the option to regenerate several, or pass `--regenerate-expected=all` for
-every config in `CONFIGS`. Omitting it — as CI does — regenerates nothing; review
-the resulting diff before committing it.
+Name several configs to regenerate several, or pass `all` for every config in
+`CONFIGS`. Review the resulting diff before committing it. CI runs pytest, which
+has no way to regenerate anything.
 
-Deliberate sharp edges, all of which abort the run before the experiment starts:
+The script **takes exact config file names**, which is normally what you want —
+each config costs hours of GPU time and a change rarely invalidates all of them. A
+partial name such as `varda-single` is rejected with the valid names listed,
+before any experiment starts: it would otherwise also match a future
+`varda-single-2.0.yaml`, silently overwriting a reference nobody meant to touch.
 
-- **A bare `--regenerate-expected` is rejected.** Regenerating every config is
-  expensive enough that it must be spelled `=all`.
-- **Partial names are rejected**, with the valid names listed. `-k` would have
-  been substring-based: `-k varda-single` also selects a future
-  `varda-single-2.0.yaml`, and `-k forecasters-ich1` also selects
-  `forecasters-ich1-oper.yaml`, so a short name could silently overwrite a
-  reference nobody meant to touch. Typos are caught the same way, instead of
-  landing as pytest's generic "no tests ran".
-- **Selecting no metric test is rejected.** These tests are marked `heavytest` and
-  are deselected by default, so forgetting `-m heavytest` would otherwise report a
-  green "N passed" having regenerated nothing.
-
-**Why it lives in the test rather than a standalone script:** both paths read the
-values through `_metric_value()`, so the references cannot be generated with a
-different selection than the one compared against. A separate generator would
-duplicate the source filter, the `.mean("step")`, and the source-key derivation,
-and drift from the test unnoticed.
+**Shared with the test, not copied.** `expected_metrics.py` holds everything both
+paths need — `find_nc_files()`, `run_experiment()`, `run_sources()`,
+`source_key()` and `metric_value()`. The references therefore cannot be generated
+with a different selection, or from a different experiment invocation, than the
+one compared against; an earlier generator that duplicated this logic drifted out
+of sync unnoticed.
 
 **Only the files the run rewrote are used.** `output/data/runs/` is shared across
 configs, so a plain glob would write one config's runs into another's reference
-file. Regeneration snapshots the `verif_aggregated_*.nc` mtimes before the
+file. The script snapshots the `verif_aggregated_*.nc` mtimes before the
 experiment and keeps only the files that changed. A consequence: if snakemake
 considers the outputs up to date it rewrites nothing, and regeneration fails with
 that explanation rather than writing references from a stale tree — remove the
 run's directory under `output/data/runs/` (or the whole `output/`) and re-run.
+This is also why the script runs the experiment itself rather than reading an
+existing tree: `run_id` is a hash computed inside snakemake, so outside a run
+there is nothing to tell one config's outputs from another's.
 
 **Format.** The generated file maps each run's source key (the part before the
 `/`, e.g. `forecaster-b30a-4d02`) to its list of `{sel, metrics}` entries, so a
