@@ -272,7 +272,7 @@ class SalConfig(BaseModel):
 
     enabled: bool = Field(
         default=False,
-        description="Whether to compute SAL scores (requires pysteps + scikit-image).",
+        description="Whether to compute SAL scores.",
     )
     params: List[str] = Field(
         default=["TOT_PREC6"],
