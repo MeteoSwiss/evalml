@@ -399,7 +399,7 @@ class Dashboard(BaseModel):
 
     stratification: List[str] = Field(
         ...,
-        description="Stratifications to include in the dashboard (any of season, region, init_hour, station_group)",
+        description="Stratifications to include in the dashboard (any of season, region, init_hour)",
     )
 
 

@@ -95,35 +95,32 @@ def main(args):
         df = df[df["init_hour"] == "all"]
     if "station_group" not in df.columns:
         df["station_group"] = "all"
-    if "station_group" not in stratification:
-        df = df[df["station_group"] == "all"]
 
     # Drop NaN rows before station_group fold so that baselines (NaN at holdin/holdout)
     # are not mistakenly counted as multi-group sources.
     df.dropna(inplace=True)
 
-    # When station_group is in stratification, fold it into the source name for forecast
-    # sources so each group appears as a separate labelled line in the dashboard.
+    # Automatically fold station_group into the source name for forecast sources that
+    # have multiple station groups (only happens when cross_validation=true).
     # Truth/obs sources (e.g. SwissMetNet) only carry stat metrics (mean/std/min/max)
-    # and are excluded from the fold to avoid spurious "SwissMetNet (holdin)" entries.
-    if "station_group" in stratification:
-        _stat_metrics = {"mean", "std", "min", "max"}
-        _forecast_sources = set(
-            df.groupby("source")["metric"]
-            .apply(lambda m: not m.isin(_stat_metrics).all())
-            .pipe(lambda s: s[s].index)
+    # and are excluded to avoid spurious "SwissMetNet (holdin)" entries.
+    _stat_metrics = {"mean", "std", "min", "max"}
+    _forecast_sources = set(
+        df.groupby("source")["metric"]
+        .apply(lambda m: not m.isin(_stat_metrics).all())
+        .pipe(lambda s: s[s].index)
+    )
+    _multi_sources = set(
+        df[df["source"].isin(_forecast_sources)]
+        .groupby("source")["station_group"]
+        .nunique()
+        .pipe(lambda s: s[s > 1].index)
+    )
+    if _multi_sources:
+        mask = df["source"].isin(_multi_sources)
+        df.loc[mask, "source"] = (
+            df.loc[mask, "source"] + " (" + df.loc[mask, "station_group"] + ")"
         )
-        _multi_sources = set(
-            df[df["source"].isin(_forecast_sources)]
-            .groupby("source")["station_group"]
-            .nunique()
-            .pipe(lambda s: s[s > 1].index)
-        )
-        if _multi_sources:
-            mask = df["source"].isin(_multi_sources)
-            df.loc[mask, "source"] = (
-                df.loc[mask, "source"] + " (" + df.loc[mask, "station_group"] + ")"
-            )
     LOG.info("Loaded verification data frame: \n%s", df)
 
     # get unique sources and params
@@ -133,7 +130,6 @@ def main(args):
     regions = df["region"].unique() if "region" in stratification else []
     seasons = df["season"].unique() if "season" in stratification else []
     init_hours = df["init_hour"].unique() if "init_hour" in stratification else []
-    station_groups = df["station_group"].unique() if "station_group" in stratification else []
 
     # Columnar JSON: store columns + data array (no repeated keys per row).
     # region_season_init is a derived column — computed in JS at parse time.
@@ -155,7 +151,6 @@ def main(args):
         "region",
         "season",
         "init_hour",
-        "station_group",
     ]
     df_export = df[export_cols].copy()
     df_export["value"] = df_export["value"].apply(
@@ -197,7 +192,6 @@ def main(args):
         regions=regions,
         seasons=seasons,
         init_hours=init_hours,
-        station_groups=station_groups,
         stratification=stratification,
         header_text=args.header_text,
         configfile_content=open(args.configfile, "r").read()

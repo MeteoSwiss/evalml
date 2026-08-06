@@ -1,0 +1,167 @@
+runner: temporal_downscaler
+
+input:
+  cutout:
+    - lam_0:
+        grib:
+          path: forecaster/20*
+          pre_processors:
+            - forward_transform_filter:
+                # does not have an effect if the temporal downscaler does not use tp as prognostic variable
+                rescale:
+                  scale: 0.001 # convert from kg m-2 to m
+                  offset: 0
+                  param: tp
+            # --- Nudging (disabled by default) ---
+            # Uncomment to nudge the initial condition toward station observations.
+            # 1. retrieve_observation: fetches live data from DWH via jretrieve → raw Parquet
+            # 2. clean_observation:    reads raw Parquet, applies QC cleaning → cleaned Parquet
+            # 3. nudge_toward_observation: reads cleaned Parquet, applies IoR correction
+            # nudge_variables: list of GRIB shortNames to nudge; omit to nudge all (T_2M, U_10M, V_10M, TOT_PREC).
+            - forward_transform_filter:
+                retrieve_observation:
+                  obs_path: observation/nudging_station_obs_raw.parquet
+                  jretrieve_src_path: /scratch/mch/llanzila/sruc/evalml/src/data_input/
+                  bbox: [45.7, 48.0, 5.8, 10.8]
+                  variables: [T_2M, TD_2M, U_10M, V_10M]
+                  use_limitation: 20
+                  run_mode: "devt"
+            - forward_transform_filter:
+                clean_observation:
+                  obs_path_in: observation/nudging_station_obs_raw.parquet
+                  obs_path_out: observation/nudging_station_obs.parquet
+            - forward_transform_filter:
+                nudge_toward_observation:
+                  obs_path: observation/nudging_station_obs.parquet
+                  nudge_variables: [T_2M, TD_2M, U_10M, V_10M]
+                  icon_grid_dir: /scratch/mch/llanzila/sruc/aux_files
+                  k: 3
+                  power: 4.0
+                  max_dist: 0.5
+                  run_mode: "devt"
+                  holdout_fraction: 0.0
+                  holdout_seed: 42
+                  # exclude_stations: ['SCU', 'PAY', 'INNSWZ', 'WSLBTF', 'CDF', 'NABDUE', 'MMSAS', 'NABZUE', 'MAS', 'MMERZ', 'THU', 'OBR', 'FLTRL', 'WSLHOB', 'MMSAA']
+                   # Station holdout — use one of the two options below, not both.
+                  # Option A: randomly withhold a fraction of stations (e.g. 5% for cross-validation).
+                  #   holdout_fraction: 0.05
+                  #   holdout_seed: 42      # optional, defaults to 42 for reproducibility
+                  # Option B: exclude specific stations by their nat_abbr identifier.
+                  #   exclude_stations: ['SCU', 'PAY', 'INNSWZ', 'WSLBTF', 'CDF', 'NABDUE', 'MMSAS', 'NABZUE', 'MAS', 'MMERZ', 'THU', 'OBR', 'FLTRL', 'WSLHOB', 'MMSAA']
+          namer: &namer
+            rules:
+              - - shortName: T
+                - t_{level}
+              - - shortName: U
+                - u_{level}
+              - - shortName: V
+                - v_{level}
+              - - shortName: W
+                - w_{level}
+              - - shortName: QV
+                - q_{level}
+              - - shortName: FI
+                - z_{level}
+              - - shortName: PMSL
+                - msl
+              - - shortName: FIS
+                - z
+              - - shortName: PS
+                - sp
+              - - shortName: T_2M
+                - 2t
+              - - shortName: TD_2M
+                - 2d
+              - - shortName: T_G
+                - skt
+              - - shortName: U_10M
+                - 10u
+              - - shortName: V_10M
+                - 10v
+              - - shortName: FR_LAND
+                - lsm
+              - - shortName: TOT_PREC
+                - tp
+    - global:
+        grib:
+          path: forecaster/ifs*
+          namer: *namer
+
+constant_forcings:
+  test:
+    use_original_paths: true
+
+patch_metadata: resources/sgm-temporal-downscaler-ich1-oper-patch.yaml
+
+post_processors:
+  - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
+      accumulations:
+        - tp
+  - forward_transform_filter:
+      rescale:
+        scale: 1000 # convert units from m to kg m-2
+        offset: 0
+        param: tp
+
+output:
+  tee:
+    - grib:
+        path: grib/{dateTime}_{step:03}.grib
+        encoding:
+          typeOfGeneratingProcess: 2
+        templates:
+            samples: resources/templates_index_icon.yaml
+        post_processors:
+          - extract_mask: # removes global points
+              mask: "lam_0/cutout_mask"
+              as_slice: true
+          # here, the trimedge mask can be specified when available
+
+    - grib:
+        path: grib/ifs-{dateTime}_{step:03}.grib
+        encoding:
+          typeOfGeneratingProcess: 2
+        templates:
+          samples: resources/templates_index_ifs.yaml
+        post_processors:
+          - extract_mask: # removes lam points
+              mask: "lam_0/cutout_mask"
+              as_slice: true
+              inverse: true
+          - assign_mask: # fill local/global overlapping points with nan
+              mask: "global/cutout_mask"
+        modifiers:
+          - patches:
+            - variable:
+                U_10M: {"param": 165, "shortName": "10u"}
+                10u: {"param": 165, "shortName": "10u"}
+                V_10M: {"param": 166, "shortName": "10v"}
+                10v: {"param": 166, "shortName": "10v"}
+                TD_2M: {"param": 168, "shortName": "2d"}
+                2d: {"param": 168, "shortName": "2d"}
+                T_2M: {"param": 167, "shortName": "2t"}
+                2t: {"param": 167, "shortName": "2t"}
+                FR_LAND: {"param": 172, "shortName": "lsm"}
+                lsm: {"param": 172, "shortName": "lsm"}
+                PMSL: {"param": 151, "shortName": "msl"}
+                msl: {"param": 151, "shortName": "msl"}
+                PS: {"param": 134, "shortName": "sp"}
+                sp: {"param": 134, "shortName": "sp"}
+                SSO_SIGMA: {"param": 163, "shortName": "slor"}
+                slor: {"param": 163, "shortName": "slor"}
+                SSO_STDH: {"param": 160, "shortName": "sdor"}
+                sdor: {"param": 160, "shortName": "sdor"}
+                TOT_PREC: {"param": 228, "shortName": "tp"}
+                tp: {"param": 228, "shortName": "tp"}
+                z: {"param": 129, "shortName": "z"}
+                "^q_(\\d+)$": {"param": 133, "shortName": "q"}
+                "^t_(\\d+)$": {"param": 130, "shortName": "t"}
+                "^u_(\\d+)$": {"param": 131, "shortName": "u"}
+                "^v_(\\d+)$": {"param": 132, "shortName": "v"}
+                "^w_(\\d+)$": {"param": 135, "shortName": "w"}
+                "^z_(\\d+)$": {"param": 129, "shortName": "z"}
+
+# silenced due to bug in anemoi-inference for multi-step temporal downscalers, can be removed when fixed
+verbosity: 0
+allow_nans: true
+output_frequency: "1h"

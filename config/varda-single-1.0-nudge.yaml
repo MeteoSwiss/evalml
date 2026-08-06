@@ -7,7 +7,7 @@ config_label: varda-single-1.0-nudge
 dates:
   # start: 2025-01-01T06:00
   # end: 2025-12-31T06:00
-  # frequency: 24h
+  # frequency: 54h
   - 2025-01-02T00:00
   - 2025-01-02T06:00
   - 2025-01-02T12:00
@@ -16,9 +16,9 @@ dates:
 runs:
   - temporal_downscaler:
       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
-      label: Varda-rapid-0.1
+      label: Varda-rapid-0.1-all
       steps: 0/12/1
-      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi_nudge.yaml
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi_nudge_all.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
         - -e /scratch/mch/llanzila/sruc/anemoi-plugins-meteoswiss
@@ -31,29 +31,46 @@ runs:
         extra_requirements:
           - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
 
-  # - temporal_downscaler:
-  #     checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
-  #     label: Varda-single-1.0
-  #     steps: 0/12/1
-  #     config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
-  #     extra_requirements:
-  #       - anemoi-datasets==0.5.35
-  #       - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
-  #     forecaster:
-  #       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
-  #       config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
-  #       steps: 0/12/6
-  #       extra_requirements:
-  #         - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
+  - temporal_downscaler:
+      checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
+      label: Varda-rapid-0.1
+      steps: 0/12/1
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi_nudge_holdout.yaml
+      extra_requirements:
+        - anemoi-datasets==0.5.35
+        - -e /scratch/mch/llanzila/sruc/anemoi-plugins-meteoswiss
+        # - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@f91315e
+        - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
+      forecaster:
+        checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
+        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+        steps: 0/12/6
+        extra_requirements:
+          - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
+
+  - temporal_downscaler:
+      checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
+      label: Varda-single-1.0
+      steps: 0/12/1
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
+      extra_requirements:
+        - anemoi-datasets==0.5.35
+        - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
+      forecaster:
+        checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
+        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+        steps: 0/12/6
+        extra_requirements:
+          - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
 
   - baseline:
       label: INCA
       root: /store_new/mch/msclim/INCA
       steps: 0/6/1
-  - baseline:
-      label: ICON-CH2-CTRL
-      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
-      steps: 0/12/1
+  # - baseline:
+  #     label: ICON-CH2-CTRL
+  #     root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+  #     steps: 0/12/1
   - baseline:
       label: ICON-CH1-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
@@ -99,7 +116,6 @@ experiment:
       # - region
       # - init_hour
       - season
-      - station_group
   cross_validation: true
   scorecards:
     enabled: true
