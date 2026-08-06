@@ -86,7 +86,11 @@ def build_expected(nc_files):
                                 row_metrics[metric] = round(val, 6)
                         if row_metrics:
                             entries.append({"sel": sel, "metrics": row_metrics})
-    return by_source
+    # Drop sources that contributed no finite metric at all: setdefault() above
+    # creates the key before any row is built, so without this a reference whose
+    # every value was NaN would still be written as a dict of empty lists — and
+    # the "refusing to write an empty reference" guard below would not fire.
+    return {key: entries for key, entries in by_source.items() if entries}
 
 
 def regenerate(config_name):
