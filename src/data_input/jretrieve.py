@@ -361,6 +361,10 @@ class StationCatalog:
         #   2. a fixed parameter priority,
         #   3. the most recent operational period (largest op_since).
         # Stations with no current row fall back to their latest period.
+        #
+        # Currently, we select one metadata entry per station, even though they
+        # might vary across parameters. This could be improved in the future, i.e.
+        # the code adapted to handle metadata per station and parameter.  
         m = meta.copy()
         op_till = m["op_till"]
         m["_current"] = op_till.isna() | (op_till.astype(str).str.strip() == "")
