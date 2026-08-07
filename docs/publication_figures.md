@@ -10,7 +10,7 @@ standalone Jupyter notebooks (interactive), without ever typing a hash.
 
 ```bash
 # 1. Produce results + manifest (reproducible), via Snakemake
-evalml publication config/varda-single_paper_forecaster_scoremaps.yaml
+evalml publication config/varda-single_paper_stations.yaml
 
 # 2. Render the paper figures (standalone, no Snakemake)
 jupyter lab notebooks/publication/       # open leadtime / meteogram / scoremaps
@@ -174,6 +174,16 @@ evalml publication config/varda-single_paper_forecaster_scoremaps.yaml
 This builds the manifest, runs inference + verification as needed, and stops.
 Figures are rendered from the manifest by the notebooks (Section B below).
 
+> **Scoremaps need their NC files produced first.** `evalml publication` only
+> adds scoremap NC files to the DAG when the config has a
+> `publication.scoremaps` block with `enabled: true` (see *Configuring the
+> figures*). The shipped `config/varda-single_paper*.yaml` files don't set one,
+> so their scoremap NC files come from the **experiment** target instead
+> (`experiment.scoremaps.enabled: true`). If you render `scoremaps.ipynb` and it
+> can't find `…/scoremaps/<param>_<step>_<hash>.nc`, either add a
+> `publication.scoremaps` block to the config and re-run `evalml publication`,
+> or run the experiment target that produces those files.
+
 ```mermaid
 flowchart LR
     A["inference_execute<br/>(per init_time)"] --> B["verification_metrics<br/>+ aggregation"]
@@ -184,7 +194,9 @@ flowchart LR
     classDef opt stroke-dasharray: 4 4
     class SC opt
 ```
-`*` scoremap NC files only included when `scoremaps.enabled` **and** truth is gridded.
+`*` scoremap NC files are pulled into `publication_all` only when the config sets
+`publication.scoremaps.enabled: true` (and the truth is gridded). Otherwise they are
+produced by the experiment target — see the note above.
 
 ### B. Rendering the figures (notebooks)
 

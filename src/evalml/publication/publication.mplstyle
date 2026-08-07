@@ -12,7 +12,7 @@ ytick.labelsize     : 13
 legend.fontsize     : 13    # fig.legend() / ax.legend()
 figure.titlesize    : 16    # fig.suptitle()
 
-# Lines — overridden per-source by line_style() in publication_style.py
+# Lines — overridden per-source by line_style() in style.py
 lines.linewidth     : 1.5
 
 # Legend

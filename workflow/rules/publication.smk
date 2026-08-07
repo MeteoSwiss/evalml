@@ -47,11 +47,18 @@ changes — without re-running on a no-op file touch.
 
 
 # --- Result dependencies for `publication_all` -------------------------------
-# The scoremap NC files must be listed from in-memory globals (the manifest file
-# a sibling rule produces cannot be read at DAG-build time). In the paper configs
-# `experiment.scoremaps.enabled` is false while `publication.scoremaps.enabled`
-# is true, so the publication target is the only thing pulling scoremap
-# production — these helpers keep that dependency alive.
+# When `publication.scoremaps.enabled` is set, `publication_all` pulls the
+# candidate + baseline scoremap NC files so the scoremaps notebook has data to
+# plot. These paths must be listed from in-memory globals (the manifest file a
+# sibling rule produces cannot be read at DAG-build time), using the same
+# template `Manifest.scoremap_path` resolves — so the declared inputs always
+# match what the notebook reads.
+#
+# Note: the current `config/varda-single_paper*.yaml` configs have no
+# `publication:` block, so this gate is off for them and scoremap NC files are
+# produced instead by the experiment target (`experiment.scoremaps.enabled`).
+# To have `evalml publication` build them, add a `publication.scoremaps` block
+# (see docs/publication_figures.md).
 
 
 def _pub_candidate_run_id():
