@@ -39,6 +39,7 @@ rule report_experiment_dashboard:
         sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
         header_text=make_header_text(),
         stratification=" ".join(config["experiment"]["dashboard"]["stratification"]),
+        cross_validation_flag="--cross_validation" if CROSS_VALIDATION_CFG else "",
     shell:
         """
         python {input.script} \
@@ -48,6 +49,7 @@ rule report_experiment_dashboard:
             --header_text "{params.header_text}" \
             --configfile "{input.configfile}" \
             --stratification {params.stratification} \
+            {params.cross_validation_flag} \
             --output {output} >{log} 2>&1
         """
 

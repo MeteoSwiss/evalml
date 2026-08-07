@@ -148,6 +148,16 @@
             </select>
         </div>
         {% endif %}
+        {% if cross_validation %}
+        <div class="control-group">
+            <label>Station group</label>
+            <select id="station-group-select" style="width:100%;padding:6px;font-size:14px;border:1px solid #b0b0b0;border-radius:4px;background:#fff;">
+                {% for sg in station_groups %}
+                <option value="{{ sg | e }}"{% if sg == 'all' %} selected{% endif %}>{{ sg | e }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
         <div class="control-group">
             <label>Source(s)</label>
             <select id="source-select" multiple>

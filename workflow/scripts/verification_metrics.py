@@ -1,3 +1,4 @@
+import json
 import logging
 from argparse import ArgumentParser
 from argparse import Namespace
@@ -5,8 +6,6 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
-import yaml
 
 from verification import verify  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
@@ -33,36 +32,22 @@ class ScriptConfig(Namespace):
     steps: list[int] = parse_steps("0/120/6")
 
 
-def _find_nudge_cfg(inf_cfg: dict) -> dict:
-    """Extract nudge_toward_observation params from the inference config YAML."""
-    try:
-        pre_processors = inf_cfg["input"]["cutout"][0]["lam_0"]["grib"]["pre_processors"]
-        for pp in pre_processors:
-            inner = pp.get("forward_transform_filter", {})
-            if "nudge_toward_observation" in inner:
-                return inner["nudge_toward_observation"]
-    except (KeyError, IndexError, TypeError):
-        pass
-    return {}
+def compute_holdout_stations(all_stations: list, cv_cfg: dict) -> list[str]:
+    """Return nat_abbr list of holdout stations derived from the truth dataset's station list.
 
-
-def compute_holdout_stations(obs_parquet: Path, inference_config: Path) -> list[str]:
-    """Return nat_abbr list of stations withheld from nudging, mirroring the plugin logic."""
-    df = pd.read_parquet(obs_parquet)
-    with open(inference_config) as f:
-        inf_cfg = yaml.safe_load(f)
-    nudge_cfg = _find_nudge_cfg(inf_cfg)
-
-    exclude_stations = nudge_cfg.get("exclude_stations")
-    holdout_fraction = nudge_cfg.get("holdout_fraction")
-    holdout_seed = nudge_cfg.get("holdout_seed", 42)
+    Mirrors the selection logic in nudging.py so the evaluation partition matches
+    what was actually withheld from nudging, using the experiment-level seed/fraction.
+    """
+    exclude_stations = cv_cfg.get("exclude_stations")
+    holdout_fraction = cv_cfg.get("holdout_fraction")
+    holdout_seed = cv_cfg.get("holdout_seed", 42)
 
     if exclude_stations is not None:
-        return [s for s in exclude_stations if s in df.index]
+        return [s for s in exclude_stations if s in all_stations]
     if holdout_fraction is not None and 0.0 < float(holdout_fraction) < 1.0:
-        n_holdout = round(len(df) * float(holdout_fraction))
+        n_holdout = round(len(all_stations) * float(holdout_fraction))
         rng = np.random.default_rng(holdout_seed)
-        return list(rng.choice(df.index, size=n_holdout, replace=False))
+        return list(rng.choice(all_stations, size=n_holdout, replace=False))
     return []
 
 
@@ -121,15 +106,23 @@ def main(args: ScriptConfig):
     )
 
     # determine holdout stations for cross-validation station stratification
+    # holdout stations are derived from the truth dataset's station list so the
+    # same partition is used consistently across all models and baselines.
     holdout_stations = None
-    if args.cross_validation and args.run_workdir is not None:
-        obs_parquet = args.run_workdir / "observation/nudging_station_obs.parquet"
-        inference_config = args.run_workdir / "config.yaml"
-        if obs_parquet.exists() and inference_config.exists():
-            holdout_stations = compute_holdout_stations(obs_parquet, inference_config)
-            LOG.info("Cross-validation holdout: %d stations withheld: %s", len(holdout_stations), holdout_stations)
+    cv_cfg = args.cross_validation_cfg
+    if cv_cfg and "values" in truth.dims:
+        all_stations = list(truth["values"].values)
+        holdout_stations = compute_holdout_stations(all_stations, cv_cfg)
+        if holdout_stations:
+            LOG.info(
+                "Cross-validation holdout: %d / %d stations withheld",
+                len(holdout_stations),
+                len(all_stations),
+            )
         else:
-            LOG.warning("cross_validation=True but obs parquet or inference config not found; skipping station stratification.")
+            LOG.warning("cross_validation_cfg set but no holdout stations selected (check holdout_fraction / exclude_stations).")
+    elif cv_cfg:
+        LOG.warning("cross_validation_cfg set but truth dataset has no 'values' dimension; station stratification skipped.")
 
     # compute metrics and statistics
     now = datetime.now()
@@ -218,16 +211,14 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
-        "--cross_validation",
-        type=lambda x: x.lower() == "true",
-        default=False,
-        help="When True, compute metrics separately for holdout/holdin station groups.",
-    )
-    parser.add_argument(
-        "--run_workdir",
-        type=Path,
+        "--cross_validation_cfg",
+        type=lambda s: json.loads(s) if s else None,
         default=None,
-        help="Per-run working directory containing observation parquet and config.yaml.",
+        help=(
+            "Cross-validation config as a JSON dict with keys: holdout_fraction, holdout_seed, "
+            "exclude_stations. When set, adds station_group stratification (all/holdout/holdin) "
+            "to all models and baselines using the truth dataset's station list."
+        ),
     )
     parser.add_argument(
         "--member",

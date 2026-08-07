@@ -64,8 +64,8 @@ def main(args):
     _check_n_samples_consistency(dfs, args.verif_files)
     dfs = [_ensure_unique_lead_time(d) for d in dfs]
     dfs = _select_best_sources(dfs)
-    # Normalize station_group dimension before concat: datasets without it (baselines) are
-    # expanded to station_group=["all"] so xr.concat receives uniform-rank tensors.
+    # Normalize station_group dimension: datasets without it (cross_validation disabled for that run)
+    # are expanded to station_group=["all"] so xr.concat receives uniform-rank tensors.
     if any("station_group" in d.dims for d in dfs):
         dfs = [
             d if "station_group" in d.dims else d.expand_dims(station_group=["all"])
@@ -96,31 +96,7 @@ def main(args):
     if "station_group" not in df.columns:
         df["station_group"] = "all"
 
-    # Drop NaN rows before station_group fold so that baselines (NaN at holdin/holdout)
-    # are not mistakenly counted as multi-group sources.
     df.dropna(inplace=True)
-
-    # Automatically fold station_group into the source name for forecast sources that
-    # have multiple station groups (only happens when cross_validation=true).
-    # Truth/obs sources (e.g. SwissMetNet) only carry stat metrics (mean/std/min/max)
-    # and are excluded to avoid spurious "SwissMetNet (holdin)" entries.
-    _stat_metrics = {"mean", "std", "min", "max"}
-    _forecast_sources = set(
-        df.groupby("source")["metric"]
-        .apply(lambda m: not m.isin(_stat_metrics).all())
-        .pipe(lambda s: s[s].index)
-    )
-    _multi_sources = set(
-        df[df["source"].isin(_forecast_sources)]
-        .groupby("source")["station_group"]
-        .nunique()
-        .pipe(lambda s: s[s > 1].index)
-    )
-    if _multi_sources:
-        mask = df["source"].isin(_multi_sources)
-        df.loc[mask, "source"] = (
-            df.loc[mask, "source"] + " (" + df.loc[mask, "station_group"] + ")"
-        )
     LOG.info("Loaded verification data frame: \n%s", df)
 
     # get unique sources and params
@@ -130,6 +106,10 @@ def main(args):
     regions = df["region"].unique() if "region" in stratification else []
     seasons = df["season"].unique() if "season" in stratification else []
     init_hours = df["init_hour"].unique() if "init_hour" in stratification else []
+
+    # station_group selector: auto-detect from data (shown when cross_validation is enabled)
+    station_groups = sorted(df["station_group"].unique())
+    cross_validation = args.cross_validation and station_groups != ["all"]
 
     # Columnar JSON: store columns + data array (no repeated keys per row).
     # region_season_init is a derived column — computed in JS at parse time.
@@ -151,6 +131,7 @@ def main(args):
         "region",
         "season",
         "init_hour",
+        "station_group",
     ]
     df_export = df[export_cols].copy()
     df_export["value"] = df_export["value"].apply(
@@ -193,6 +174,8 @@ def main(args):
         seasons=seasons,
         init_hours=init_hours,
         stratification=stratification,
+        cross_validation=cross_validation,
+        station_groups=station_groups,
         header_text=args.header_text,
         configfile_content=open(args.configfile, "r").read()
         if args.configfile.is_file()
@@ -239,6 +222,12 @@ if __name__ == "__main__":
         nargs="*",
         default=["region", "season", "init_hour"],
         help="Stratification dimensions to include in the dashboard (any of region, season, init_hour).",
+    )
+    parser.add_argument(
+        "--cross_validation",
+        action="store_true",
+        default=False,
+        help="When set, shows a station-group selector (All / Holdout / Hold-in) in the dashboard.",
     )
     parser.add_argument(
         "--configfile",

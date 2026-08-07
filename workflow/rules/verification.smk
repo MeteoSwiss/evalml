@@ -1,6 +1,7 @@
 # ----------------------------------------------------- #
 # VERIFICATION WORKFLOW                                 #
 # ----------------------------------------------------- #
+import json
 from datetime import datetime
 
 import pandas as pd
@@ -34,7 +35,7 @@ rule verification_metrics_baseline:
         regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
-        cross_validation=False,
+        cross_validation_cfg=json.dumps(CROSS_VALIDATION_CFG),
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
@@ -48,7 +49,7 @@ rule verification_metrics_baseline:
             --regions "{params.regions}" \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
-            --cross_validation {params.cross_validation} \
+            --cross_validation_cfg '{params.cross_validation_cfg}' \
             --member "{params.member}" \
             --output {output} >{log} 2>&1
         """
@@ -91,10 +92,7 @@ rule verification_metrics:
         ).resolve(),
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
-        cross_validation=CROSS_VALIDATION,
-        run_workdir=lambda wc: (
-            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}"
-        ).resolve(),
+        cross_validation_cfg=json.dumps(CROSS_VALIDATION_CFG),
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
@@ -108,8 +106,7 @@ rule verification_metrics:
             --regions "{params.regions}" \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
-            --cross_validation {params.cross_validation} \
-            --run_workdir {params.run_workdir} \
+            --cross_validation_cfg '{params.cross_validation_cfg}' \
             --output {output} >{log} 2>&1
         """
 

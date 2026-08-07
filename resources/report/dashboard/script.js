@@ -38,8 +38,16 @@ initChoices("source-select");
 initChoices("metric-select");
 initChoices("param-select");
 
+// Station-group selector: single-select native <select> (may be absent when cross_validation is off)
+const stationGroupSelect = document.getElementById("station-group-select");
+if (stationGroupSelect) stationGroupSelect.addEventListener("change", scheduleUpdate);
+
 function getSelected(id) {
   return choicesInstances[id] ? choicesInstances[id].getValue(true) : [];
+}
+
+function getStationGroup() {
+  return stationGroupSelect ? stationGroupSelect.value : "all";
 }
 
 // ---------------------------------------------------------------------------
@@ -203,13 +211,18 @@ async function updateChart() {
   const selMetrics = getSelected("metric-select");
   const selParams  = getSelected("param-select");
 
-  // Filter data by region / season / init / source
+  const selStationGroup = getStationGroup();
+
+  // Filter data by region / season / init / source / station_group
   // (metric and param are handled per cell)
   let filtered = DATA;
   if (selRegions.length) filtered = filtered.filter(d => selRegions.includes(d.region));
   if (selSeasons.length) filtered = filtered.filter(d => selSeasons.includes(d.season));
   if (selInits.length)   filtered = filtered.filter(d => selInits.includes(d.init_hour));
   if (selSources.length) filtered = filtered.filter(d => selSources.includes(d.source));
+  // Always filter to the selected station_group so each source appears as one line.
+  // When cross_validation is off every row has station_group="all" and this is a no-op.
+  filtered = filtered.filter(d => d.station_group === selStationGroup);
 
   // Show / hide table columns (params)
   document.querySelectorAll("#chart-table thead th[data-param]").forEach(th => {
@@ -314,6 +327,7 @@ function resizeChartScroll() {
       getSelected("source-select"),
       getSelected("metric-select"),
       getSelected("param-select"),
+      stationGroupSelect ? [stationGroupSelect.value] : [],
     ].flatMap(v => v);
     summary.textContent = parts.join(", ");
   }
@@ -329,7 +343,7 @@ function resizeChartScroll() {
 
   // Keep summary current when selections change (guard: some selects may be absent)
   ["region-select", "season-select", "init-select",
-   "source-select", "metric-select", "param-select"].forEach(id => {
+   "source-select", "metric-select", "param-select", "station-group-select"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("change", () => {
       if (panel.classList.contains("collapsed")) updateSummary();

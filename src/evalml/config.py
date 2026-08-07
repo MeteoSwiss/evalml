@@ -403,6 +403,29 @@ class Dashboard(BaseModel):
     )
 
 
+class CrossValidationConfig(BaseModel):
+    """Cross-validation settings for station-group stratified verification."""
+
+    holdout_fraction: Optional[float] = Field(
+        default=None,
+        description=(
+            "Fraction of truth stations to hold out for evaluation (exclusive 0–1). "
+            "Mutually exclusive with exclude_stations."
+        ),
+    )
+    holdout_seed: int = Field(
+        default=42,
+        description="Random seed for reproducible holdout station selection.",
+    )
+    exclude_stations: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Explicit list of station nat_abbr to hold out. "
+            "Mutually exclusive with holdout_fraction."
+        ),
+    )
+
+
 class ExperimentConfig(BaseModel):
     """Configuration for the experiment workflow outputs."""
 
@@ -425,11 +448,11 @@ class ExperimentConfig(BaseModel):
         ...,
         description="Settings for the experiment dashboard.",
     )
-    cross_validation: bool = Field(
-        default=False,
+    cross_validation: Optional[CrossValidationConfig] = Field(
+        default=None,
         description=(
-            "When True, adds a 'station_group' stratification dimension (all/holdout/holdin) "
-            "to separate metrics for stations used in nudging from those withheld."
+            "When set, adds a 'station_group' dimension (all/holdout/holdin) to verification "
+            "metrics for all models and baselines. Specify either holdout_fraction or exclude_stations."
         ),
     )
     scorecards: Optional[ExperimentScorecardConfig] = Field(

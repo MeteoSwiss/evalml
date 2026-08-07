@@ -33,6 +33,7 @@ def prepare_config(default_config_path: str, output_config_path: str, params: di
         yaml.safe_dump(config, f, sort_keys=False)
 
 
+
 def prepare_workdir(workdir: Path, resources_root: Path):
     """Prepare the working directory for the inference run.
 
@@ -94,6 +95,7 @@ def prepare_temporal_downscaler(smk):
     # prepare config
     overrides = _overrides_from_params(smk)
     prepare_config(smk.input.config, smk.output.config, overrides)
+
     LOG.info("Wrote config file at %s", smk.output.config)
     with open(smk.output.config, "r") as f:
         config_content = f.read()
