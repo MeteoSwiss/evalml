@@ -1,5 +1,5 @@
 ## Publication figure style for evalml paper figures.
-## Apply with: plt.style.use(Path(__file__).parent / "publication.mplstyle")
+## Apply with: plt.style.use(mplstyle_path())  # from evalml.publication.style
 
 # Two-level font-size hierarchy:
 #   16 pt  — titles, axis labels, legend, suptitle  (identifies what is shown)
