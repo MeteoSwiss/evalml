@@ -272,21 +272,15 @@ rule verification_metrics_plot_all:
 
 
 rule publication_all:
-    """Target: produce all results + the manifest the notebooks plot from.
+    """Target: produce the publication manifest and stop.
 
-    Stops before plotting. Figures are rendered by the standalone notebooks in
-    notebooks/publication/, driven only by the manifest.
+    The result files the manifest points at (verification NC files, scoremaps,
+    GRIB) are produced by the experiment/verification workflow (`evalml
+    experiment`), not here. Figures are rendered from the manifest by the
+    standalone notebooks in notebooks/publication/.
     """
     input:
-        [rules.publication_manifest.output[0]]
-        + list(EXPERIMENT_PARTICIPANTS.values())
-        + (
-            _pub_scoremap_files()
-            if ((config.get("publication") or {}).get("scoremaps") or {}).get(
-                "enabled", False
-            )
-            else []
-        ),
+        rules.publication_manifest.output,
 
 
 rule mec_all:

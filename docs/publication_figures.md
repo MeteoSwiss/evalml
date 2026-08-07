@@ -9,15 +9,22 @@ standalone Jupyter notebooks (interactive), without ever typing a hash.
 ## TL;DR
 
 ```bash
-# 1. Produce results + manifest (reproducible), via Snakemake
+# 1. Produce the results (verification NC files, scoremaps, …) via the experiment workflow
+evalml experiment config/varda-single_paper_stations.yaml
+
+# 2. Write the manifest (run/baseline -> hash -> paths) — cheap, no data recomputed
 evalml publication config/varda-single_paper_stations.yaml
 
-# 2. Render the paper figures (standalone, no Snakemake)
+# 3. Render the paper figures (standalone, no Snakemake)
 jupyter lab notebooks/publication/       # open leadtime / meteogram / scoremaps
 # or headless:
 EVALML_MANIFEST=output/publication/<truth>/manifest.json \
   jupyter nbconvert --to notebook --execute --inplace notebooks/publication/leadtime.ipynb
 ```
+
+`evalml publication` **only writes the manifest** — the result files come from
+`evalml experiment` (step 1). The manifest just records where they live, so you
+can (re)generate it independently and re-run step 1 whenever the data changes.
 
 ---
 
@@ -115,10 +122,16 @@ labels are expected to be distinct.
 
 ## Configuring the figures
 
-The `publication:` block drives everything and is validated at config load:
+The `publication:` block is **optional**. It no longer drives any Snakemake
+production (the manifest is built regardless, and results come from the
+experiment workflow); instead it does two things:
 
-Each figure has its own `enabled` switch — omit a block (or set `enabled: false`)
-to skip that figure:
+1. **Sets the notebooks' default case** — the block is copied into the manifest,
+   and each notebook reads its defaults (meteogram station/init time/params,
+   scoremaps params/steps/baseline) from it. Omit the block and the notebooks
+   fall back to their built-in defaults, which you can still override in-cell.
+2. **Is validated at config load** (and again in the resolver) so an incoherent
+   request fails early with a clear message rather than mid-plot.
 
 ```yaml
 publication:
@@ -136,7 +149,7 @@ publication:
     baseline_label: ICON-CH1-CTRL     # must match a baseline `label` in `runs`
     steps: [6, 24]                    # one figure per lead time; each must be
                                       # produced by candidate AND baseline.
-                                      # Omit to default to experiment.scoremaps.leadtimes.
+                                      # Omit and the scoremaps notebook defaults to [24].
     params: [T_2M, SP_10M]
     scores: [MSE_SKILL, BIAS_CONTRIB]
     region: switzerland
@@ -159,46 +172,41 @@ use that loads only the manifest.
 
 ## How to run
 
-### A. Reproducible, end-to-end (Snakemake)
+### A. Produce the results (Snakemake)
+
+The result NC files (verification aggregates, scoremaps, GRIB) are produced by
+the **experiment** workflow, driven by the `experiment:` config blocks — not by
+the publication target:
 
 ```bash
-# Station/leadtime/meteogram run:
-evalml publication config/varda-single_paper_stations.yaml
-evalml publication config/varda-single_paper_stations.yaml --dry-run   # preview the DAG
-evalml publication config/varda-single_paper_stations.yaml --report report.html
-
-# Scoremaps run (requires gridded/zarr truth):
-evalml publication config/varda-single_paper_forecaster_scoremaps.yaml
+evalml experiment config/varda-single_paper_stations.yaml
+evalml experiment config/varda-single_paper_forecaster_scoremaps.yaml   # scoremaps (gridded truth)
 ```
 
-This builds the manifest, runs inference + verification as needed, and stops.
-Figures are rendered from the manifest by the notebooks (Section B below).
+Scoremaps are produced when `experiment.scoremaps.enabled: true` in the config.
 
-> **Scoremaps need their NC files produced first.** `evalml publication` only
-> adds scoremap NC files to the DAG when the config has a
-> `publication.scoremaps` block with `enabled: true` (see *Configuring the
-> figures*). The shipped `config/varda-single_paper*.yaml` files don't set one,
-> so their scoremap NC files come from the **experiment** target instead
-> (`experiment.scoremaps.enabled: true`). If you render `scoremaps.ipynb` and it
-> can't find `…/scoremaps/<param>_<step>_<hash>.nc`, either add a
-> `publication.scoremaps` block to the config and re-run `evalml publication`,
-> or run the experiment target that produces those files.
+### B. Write the manifest (Snakemake)
+
+```bash
+evalml publication config/varda-single_paper_stations.yaml
+evalml publication config/varda-single_paper_stations.yaml --dry-run    # preview (one cheap rule)
+```
+
+`publication_all` runs a single cheap localrule (`publication_manifest`) and
+stops — it records where the results live; it does **not** produce or depend on
+them. Regenerate it any time the config changes.
 
 ```mermaid
 flowchart LR
-    A["inference_execute<br/>(per init_time)"] --> B["verification_metrics<br/>+ aggregation"]
-    B --> C["verif_aggregated_*.nc"]
-    C --> ALL
-    SC["scoremaps/*.nc*"] --> ALL
-    M["publication_manifest"] --> ALL["publication_all"]
-    classDef opt stroke-dasharray: 4 4
-    class SC opt
+    subgraph exp["evalml experiment"]
+        A["inference + verification"] --> C["verif_aggregated_*.nc<br/>scoremaps/*.nc"]
+    end
+    M["evalml publication<br/>= publication_manifest"] --> MAN["manifest.json"]
+    C -. recorded in .-> MAN
+    MAN --> NB["notebooks/publication/*"] --> F["figures"]
 ```
-`*` scoremap NC files are pulled into `publication_all` only when the config sets
-`publication.scoremaps.enabled: true` (and the truth is gridded). Otherwise they are
-produced by the experiment target — see the note above.
 
-### B. Rendering the figures (notebooks)
+### C. Rendering the figures (notebooks)
 
 The three notebooks in `notebooks/publication/` are standalone — they load the
 manifest, resolve all paths through the `Manifest` API, apply the shared
@@ -308,9 +316,10 @@ tests/unit/
 Design rules of thumb:
 - The manifest is the single source of truth for paths; never split a `run_id`
   (it contains `/`), only `str.format`-join templates.
-- The Snakemake scoremap input function resolves files from in-memory globals via
-  the *same* template the notebooks use, so the declared inputs always match what the
-  notebooks plot.
+- `evalml publication` only writes the manifest; result NC files are produced by
+  the experiment workflow. The notebooks open whatever result files exist at the
+  paths the manifest records — a missing file surfaces as a clear `FileNotFoundError`,
+  the cue to (re)run `evalml experiment`.
 - Coherence checks live in `ConfigModel` (fail the launch early) **and** in the
   resolver (protect manifest-only callers).
 - Notebooks reach `workflow/scripts/` helpers via a small kernel-safe bootstrap that
