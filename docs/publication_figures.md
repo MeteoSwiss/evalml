@@ -1,9 +1,8 @@
 # Publication figures
 
-This document explains the **publication figures** subsystem of `evalml`: why it
-was refactored, how it works, and how to produce the figures — both through
-Snakemake (reproducible) and via standalone Jupyter notebooks (interactive), without
-ever typing a hash.
+This document describes the **publication figures** subsystem of `evalml`: how it
+works and how to produce the figures — both through Snakemake (reproducible) and via
+standalone Jupyter notebooks (interactive), without ever typing a hash.
 
 ---
 
@@ -19,71 +18,6 @@ jupyter lab notebooks/publication/       # open leadtime / meteogram / scoremaps
 EVALML_MANIFEST=output/publication/<truth>/manifest.json \
   jupyter nbconvert --to notebook --execute --inplace notebooks/publication/leadtime.ipynb
 ```
-
----
-
-## Why the refactor
-
-The publication workflow grew organically and had two pain points:
-
-1. **Config could express broken states, caught late.** `publication.scoremaps`
-   wasn't even in the schema, scoremaps could be requested against
-   station-observation truth (which has no spatial maps), and lead-time / baseline
-   mismatches only surfaced as cryptic Snakemake graph-expansion errors.
-
-2. **Plotting couldn't realistically run outside Snakemake.** The figure scripts
-   are CLI-capable, but to run them by hand you had to hand-assemble cryptic
-   identifiers like
-   `temporal_downscaler-f927-1ee3-on-forecaster-c304-23e7/495c` and
-   `TRUTH_HASH=caa0`, plus the on-disk path conventions — and these were
-   hardcoded as *stale* defaults inside the scripts.
-
-The fix keeps the Snakemake/hashing/pydantic foundations and adds a thin,
-publication-owned layer on top:
-
-- a **manifest** that persists the run/baseline → hash → data-path mapping,
-- a **resolver/validator** that reads it and turns broken requests into clear errors,
-- **standalone Jupyter notebooks** that render any figure from the manifest,
-- **validated config** so incoherent setups fail at load time.
-
-Core inference/verification code is untouched.
-
----
-
-## Implications for the `main` branch
-
-The refactor was deliberately scoped to the **publication subsystem**. This is what
-it means for shared / core code if/when this work is merged toward `main`:
-
-**Not touched (by design).** The inference pipeline, the verification metric/score
-computation, and the run/baseline/truth **hashing identity model** in
-`common.smk` are unchanged. `env_id`/`run_id`/`TRUTH_HASH` and all existing on-disk
-paths are identical, so existing artifacts remain valid and `experiment_all` /
-`showcase_all` behave exactly as before.
-
-**Shared files this refactor edits, and why they're safe:**
-
-| File | Change | Backward-compat note |
-|------|--------|----------------------|
-| `src/evalml/config.py` | Adds `PublicationScoremapsConfig`, `PublicationConfig.scoremaps`, and a `ConfigModel.validate_publication` cross-field validator. | The validator only checks a figure whose per-task `enabled` is true — configs that don't use the publication block are unaffected. `extra: forbid` was added to `PublicationConfig`, so a misspelled key *under* `publication:` now errors (previously it could slip through). |
-| `workflow/rules/common.smk` | `resolve_leadtimes` / `resolve_baseline_id` / `ACCUMULATED_PARAMS` were moved into the importable `evalml.resolution` module and re-imported here. | Pure move — identical behaviour. Existing callers (`plot.smk`, `report.smk`) are unchanged. The only new requirement is that the `evalml` package is importable in the Snakemake process (it already is). |
-| `workflow/rules/publication.smk`, `workflow/Snakefile` | New `publication_manifest` rule; `publication_all` depends on `publication_manifest` + all `verif_aggregated` results (+ scoremap NC files when `publication.scoremaps.enabled`); figures are rendered from the manifest by the notebooks. | Only the publication target is affected; no other target's DAG changes. |
-
-**One cross-cutting invariant to preserve.** `common.smk` now *depends on*
-`evalml.resolution`. Keep that module import-light and free of Snakemake globals so
-both the workflow process and the standalone notebooks/tests can import it.
-
-**Dependency / environment (separate from the code).** Decoding the global ICON
-forecast grid for the meteogram requires a matched `eckit` / `eckitlib` /
-`eccodeslib` native stack (e.g. the Test PyPI `*.dev103` set). This is **not** a
-code change and is **not** pinned in `pyproject.toml`/`uv.lock` yet — it applies to
-`main` too (the limitation is pre-existing). Decide separately whether to pin it; a
-plain `uv sync` will otherwise revert any manual install.
-
-**Suggested follow-up before merging to `main`:** consolidate the path/layout +
-hashing conventions (currently string-built across `verification.smk`, `plot.smk`,
-`publication.smk`) into one importable module that the manifest serializes — the
-manifest is a deliberate first step in that direction. See the design notes.
 
 ---
 
@@ -194,7 +128,9 @@ publication:
     enabled: false
     init_time: "202504010000"        # must be one of the configured `dates`
     station: "KLO"
-    params: [T_2M, TOT_PREC, SP_10M, DD_10M]
+    params: [T_2M, TOT_PREC1, SP_10M, DD_10M]
+    # Note: station obs provide accumulation-windowed precip (TOT_PREC1, TOT_PREC6),
+    # not bare TOT_PREC.
   scoremaps:                          # REQUIRES gridded (zarr) truth
     enabled: true
     baseline_label: ICON-CH1-CTRL     # must match a baseline `label` in `runs`
@@ -226,9 +162,13 @@ use that loads only the manifest.
 ### A. Reproducible, end-to-end (Snakemake)
 
 ```bash
-evalml publication config/varda-single_paper.yaml          # full chain
-evalml publication config/varda-single_paper.yaml --dry-run   # preview the DAG
-evalml publication config/varda-single_paper.yaml --report report.html
+# Station/leadtime/meteogram run:
+evalml publication config/varda-single_paper_stations.yaml
+evalml publication config/varda-single_paper_stations.yaml --dry-run   # preview the DAG
+evalml publication config/varda-single_paper_stations.yaml --report report.html
+
+# Scoremaps run (requires gridded/zarr truth):
+evalml publication config/varda-single_paper_forecaster_scoremaps.yaml
 ```
 
 This builds the manifest, runs inference + verification as needed, and stops.
@@ -295,9 +235,9 @@ resolved via `figures_dir(m.output_root, m.truth["label"])`:
 
 | Figure | Location | Files |
 |---|---|---|
-| leadtime | `output/figures/<truth>/leadtime/` | `publication_figures_rmse_bias.pdf/.png`, `..._ets.pdf/.png` |
+| leadtime | `output/figures/<truth>/leadtime/` | `publication_figures_rmse_bias.pdf/.png`, `publication_figures_ets.pdf/.png`, `publication_figures_rmse_bias_skill.pdf/.png`, `publication_figures_ets_skill.pdf/.png`, `publication_figures.html` |
 | meteogram | `output/figures/<truth>/meteogram/` | `publication_meteogram.pdf/.png` |
-| scoremaps | `output/figures/<truth>/scoremaps/` | `publication_scoremaps_<param>_<step>.pdf/.png` |
+| scoremaps | `output/figures/<truth>/scoremaps/` | `publication_scoremaps_<step>h.pdf/.png` (one per lead time), `publication_scoremaps.html` |
 
 ---
 
@@ -310,7 +250,7 @@ to re-render figures, just run the notebook — it never triggers the
 inference/verification cascade. To also avoid a Snakemake rerun for the manifest,
 restrict triggers:
 ```bash
-evalml publication config/varda-single_paper.yaml -- --rerun-triggers mtime
+evalml publication config/varda-single_paper_stations.yaml -- --rerun-triggers mtime
 ```
 
 **Meteogram: `jretrieve credentials not found`.** The meteogram fetches station
@@ -363,3 +303,6 @@ Design rules of thumb:
   resolver (protect manifest-only callers).
 - Notebooks reach `workflow/scripts/` helpers via a small kernel-safe bootstrap that
   prepends `workflow/scripts` and `src` to `sys.path` at the top of each notebook.
+- `evalml.resolution` must stay import-light and free of Snakemake globals so that
+  `workflow/rules/common.smk`, standalone notebooks, and the test suite can all
+  import it without a Snakemake process.
