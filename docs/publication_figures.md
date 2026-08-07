@@ -313,10 +313,6 @@ restrict triggers:
 evalml publication config/varda-single_paper.yaml -- --rerun-triggers mtime
 ```
 
-**To re-render without any Snakemake rerun, just run the notebook** — it reads only
-the manifest and the already-computed result files, so it never triggers the
-inference/verification cascade.
-
 **Meteogram: `jretrieve credentials not found`.** The meteogram fetches station
 obs live from `jretrievedwh`. Put `JRETRIEVE_CLIENT_ID` / `JRETRIEVE_CLIENT_SECRET`
 in a `.env` next to `.jretrievedwh-conf.prod.py` (repo root) so they reach SLURM
@@ -337,7 +333,7 @@ figures code.
 ```
 src/evalml/
   resolution.py          # pure, importable: resolve_leadtimes, resolve_baseline_id
-  config.py              # PublicationConfig + PublicationScoreMapsConfig + ConfigModel validators
+  config.py              # PublicationConfig + PublicationScoremapsConfig + ConfigModel validators
   publication/
     manifest.py          # build_manifest (pure), write/load
     resolver.py          # Manifest, Participant, validate_request, ResolutionError
