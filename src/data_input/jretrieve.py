@@ -324,10 +324,8 @@ def fetch_data(
 
 
 # Priority for choosing which parameter's metadata row defines a station's
-# single coordinate when several parameters are current at once (temperature
-# first, then the other near-surface sensors). Parameters not listed sort last.
-# A fixed priority keeps the choice deterministic and stable against DWH row
-# churn (unlike relying on alphabetical parameter order).
+# single coordinate when several parameters are current at once.
+# Parameters not listed sort last.
 _META_PARAM_PRIORITY: tuple[str, ...] = (
     "tre200s0",  # T_2M
     "tde200s0",  # TD_2M
@@ -357,16 +355,12 @@ class StationCatalog:
 
     @classmethod
     def from_meta(cls, meta: pd.DataFrame) -> "StationCatalog":
-        # A station has several metadata rows (one per parameter x operational
-        # period), each with its own coordinates, because sensors get relocated
-        # or re-surveyed over time and the DWH keeps the full history. Collapse
-        # to one row per station by preferring, in order:
+        # A station has one metadata rows per parameter and operational period).
+        # Collapse to one row per station by preferring, in order:
         #   1. the *current* location (empty/absent op_till),
-        #   2. a fixed parameter priority (temperature-anchored, deterministic),
+        #   2. a fixed parameter priority,
         #   3. the most recent operational period (largest op_since).
-        # Stations with no current row fall back to their latest period. This
-        # avoids picking a long-retired location and is stable against the DWH
-        # adding/removing rows for a station between queries.
+        # Stations with no current row fall back to their latest period.
         m = meta.copy()
         op_till = m["op_till"]
         m["_current"] = op_till.isna() | (op_till.astype(str).str.strip() == "")
