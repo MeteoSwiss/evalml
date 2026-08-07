@@ -6,13 +6,10 @@ description: |
 
 config_label: varda-single-1.0
 
-fixture_root: /store_new/mch/msopr/ml/evalml/test_fixtures/hirad
+fixture_root: /scratch/mch/mmcgloho/evaml_test_fixtures/dashboard-small/
 
 dates:
-  - 2023-01-15T00:00
-  - 2023-01-15T06:00
-  - 2023-01-15T12:00
-  - 2023-01-15T18:00
+  - 2024-08-01T00:00
 
 runs:
   - baseline:
