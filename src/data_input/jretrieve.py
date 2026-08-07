@@ -364,7 +364,7 @@ class StationCatalog:
         #
         # Currently, we select one metadata entry per station, even though they
         # might vary across parameters. This could be improved in the future, i.e.
-        # the code adapted to handle metadata per station and parameter.  
+        # the code adapted to handle metadata per station and parameter.
         m = meta.copy()
         op_till = m["op_till"]
         m["_current"] = op_till.isna() | (op_till.astype(str).str.strip() == "")
