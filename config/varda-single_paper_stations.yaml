@@ -50,6 +50,9 @@ experiment:
       - alpennordhang
       - innerealpentaeler
       - alpensuedseite
+      - alpen
+      - tiefelagen
+      - berge
     root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
   thresholds:
     TOT_PREC1:
