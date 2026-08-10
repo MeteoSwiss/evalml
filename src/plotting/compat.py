@@ -51,10 +51,12 @@ def load_state_from_grib(
             "The GRIB file may not contain these fields at this lead time "
             "(e.g. accumulated fields like TOT_PREC are undefined at step 0)."
         )
-    state["forecast_reference_time"] = datetime.fromtimestamp(
-        ds["forecast_reference_time"].values.item() / 1e9
+    # Cast datetime64 directly: datetime.fromtimestamp() would read the epoch
+    # value in the host's local zone and relabel these UTC times (+2h on CEST).
+    state["forecast_reference_time"] = (
+        ds["forecast_reference_time"].values.astype("datetime64[s]").item()
     )
-    state["valid_time"] = datetime.fromtimestamp(ds["valid_time"].values.item() / 1e9)
+    state["valid_time"] = ds["valid_time"].values.astype("datetime64[s]").item()
     state["longitudes"] = ds["longitude"].values.flatten()
     state["latitudes"] = ds["latitude"].values.flatten()
     # Add the limited-area model envelope polygon (convex hull) before global coords are added.

@@ -14,6 +14,8 @@ post_processors:
   - accumulate_from_start_of_forecast:
       accumulations:
         - tp
+ # We use `backward_transform_filter` instead of `forward_transform_filter`
+ # as this is not supported in the pinned anemoi-inference version used for aifs-single's evalml config (anemoi-inference=0.11.1)
   - backward_transform_filter:
       filter: rescale
       scale: 0.001 # convert units from m to kg m-2 (backward: x/scale = x*1000)
