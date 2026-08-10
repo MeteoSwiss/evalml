@@ -80,20 +80,51 @@ def parse_reference_times():
 
 
 def parse_regions():
-    """Parse regions from the configuration."""
+    """Return a JSON list of region specs in config order.
+
+    Each entry is either ``{"type": "bbox", "name": ..., "bbox": [...]}``
+    or ``{"type": "shp", "name": ..., "path": ...}``, preserving the original
+    order so the NetCDF region coordinate matches the config.
+    """
+    from evalml.config import PREDEFINED_REGIONS
+
     cfg = config["experiment"]["stratification"]
-    regions = [f"{cfg['root']}/{region}.shp" for region in cfg["regions"]]
-    regions_txt = ",".join(regions)
-    return regions_txt
+    root = cfg.get("root", "")
+    result = []
+    for entry in cfg.get("regions", []):
+        if isinstance(entry, str):
+            if entry in PREDEFINED_REGIONS:
+                logging.getLogger("snakemake").info(
+                    "Region %s found among the predefined regions (rectangles in lon/lat).  The evaluation will happen on the bounding box %s",
+                    entry,
+                    PREDEFINED_REGIONS[entry],
+                )
+                result.append(
+                    {"type": "bbox", "name": entry, "bbox": PREDEFINED_REGIONS[entry]}
+                )
+            else:
+                path = f"{root}/{entry}.shp"
+                logging.getLogger("snakemake").info(
+                    "Region %s not found in the predefined regions. Will try to locate file %s.",
+                    entry,
+                    path,
+                )
+                result.append({"type": "shp", "name": entry, "path": path})
+        elif isinstance(entry, dict):
+            name, bbox = next(iter(entry.items()))
+            result.append({"type": "bbox", "name": name, "bbox": bbox})
+    return json.dumps(result)
 
 
 def parse_showcase_regions():
     """Parse showcase domains from config.
 
-    Returns a dict mapping domain name -> {extent, projection}.
+    Returns a dict mapping domain name -> {extent, projection, rotate, hours_per_revolution}.
     Named domains (strings) have extent=None and projection=None,
     meaning the plot script will fall back to the DOMAINS lookup.
     Custom domains carry their explicit extent and projection.
+    rotate/hours_per_revolution only take effect when extent is None
+    (full-globe domains).
     """
     result = {}
     for r in (
@@ -102,11 +133,18 @@ def parse_showcase_regions():
         .get("domains", ["globe", "europe", "switzerland"])
     ):
         if isinstance(r, str):
-            result[r] = {"extent": None, "projection": None}
+            result[r] = {
+                "extent": None,
+                "projection": None,
+                "rotate": False,
+                "hours_per_revolution": 96.0,
+            }
         else:
             result[r["name"]] = {
                 "extent": r.get("extent"),
                 "projection": r.get("projection", "orthographic"),
+                "rotate": r.get("rotate", False),
+                "hours_per_revolution": r.get("hours_per_revolution", 96.0),
             }
     return result
 
@@ -143,6 +181,12 @@ def model_id(checkpoint_uri: str) -> str:
     """Generate a model ID based on the checkpoint URI."""
     ckpt_type = _checkpoint_uri_type(checkpoint_uri)
     if ckpt_type == "mlflow":
+        fragment = checkpoint_uri.split("#")[-1]
+        if "/models/" in fragment:
+            parts = fragment.strip("/").split("/")
+            if len(parts) >= 4 and parts[2] == "versions":
+                return f"{parts[1]}-v{parts[3]}"[:HASH_LENGTH]
+            return f"{parts[1]}-latest"[:HASH_LENGTH]
         return checkpoint_uri.split("/")[-1][:HASH_LENGTH]
     elif ckpt_type == "huggingface":
         return checkpoint_uri.split("/")[-1].split(".")[0]
@@ -213,6 +257,7 @@ def collect_all_runs() -> dict:
                 # (as_candidate=False) demote a run that was already registered as
                 # an explicit candidate. Order in config["runs"] must not matter.
                 run_cfg["_is_candidate"] = True
+                run_cfg["label"] = runs[run_id].get("label")
             runs[run_id] = run_cfg
     return runs
 
@@ -275,12 +320,12 @@ def collect_experiment_participants():
     participants = {}
     for base in BASELINE_CONFIGS.keys():
         participants[base] = (
-            OUT_ROOT / f"data/baselines/{base}/verif_aggregated_{TRUTH_HASH}.nc"
+            OUT_ROOT / f"data/baselines/{base}/verif_aggregated_{VERIF_HASH}.nc"
         )
     for exp in RUN_CONFIGS.keys():
         if RUN_CONFIGS[exp].get("_is_candidate", False):
             participants[exp] = (
-                OUT_ROOT / f"data/runs/{exp}/verif_aggregated_{TRUTH_HASH}.nc"
+                OUT_ROOT / f"data/runs/{exp}/verif_aggregated_{VERIF_HASH}.nc"
             )
     return participants
 
@@ -349,12 +394,50 @@ def truth_hash(truth_config: dict) -> str:
     return generate_json_hash(cfg)
 
 
+def verif_hash(full_config: dict) -> str:
+    """Hash of all settings that affect verification outputs.
+
+    Combines the truth source with verification-method settings so that
+    changing either (e.g. switching lapse_rate_correction on/off) produces
+    new output paths and unconditionally triggers a rerun.
+    """
+    truth_cfg = {
+        k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE
+    }
+    experiment_verif_cfg = {
+        "lapse_rate_correction": full_config.get("lapse_rate_correction", True),
+    }
+    return generate_json_hash({"truth": truth_cfg, "verif": experiment_verif_cfg})
+
+
+def truth_file_dep(_):
+    """Truth file dependency: a real path for zarr, but a live-query
+    marker (no input file) for jretrieve."""
+    root = config["truth"]["root"]
+    return [] if "jretrieve" in str(root) else [root]
+
+
+# Fail fast: when the truth source is the live DWH (jretrievedwh), verify its
+# prerequisites at workflow-build time so a misconfigured environment is caught
+# at launch, before any (expensive) inference job runs.
+if "jretrieve" in str(config["truth"]["root"]):
+    from data_input.jretrieve import check_prerequisites, parse_selection
+
+    _, _jretrieve_stage, _ = parse_selection(config["truth"]["root"])
+    check_prerequisites(_jretrieve_stage)
+
+
 TRUTH_HASH = truth_hash(config["truth"])
 REGIONS = parse_regions()
-SHOWCASE_REGIONS = parse_showcase_regions()
-SHOWCASE_PARAMS = config.get("showcase", {}).get("params", ["T_2M", "SP_10M"])
+VERIF_HASH = verif_hash(config)
+_showcase = config.get("showcase", {})
+SHOWCASE_CONFIG = {
+    "regions": parse_showcase_regions(),
+    "params": _showcase.get("params", ["T_2M", "SP_10M"]),
+    "fps": _showcase.get("animations", {}).get("frames_per_second", 2.0),
+}
 EXPERIMENT_PARAMS = config.get("experiment", {}).get(
-    "params", ["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"]
+    "params", ["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"]
 )
 REFTIMES = parse_reference_times()
 RUN_CONFIGS = collect_all_runs()
@@ -365,3 +448,52 @@ _scorecard = config.get("experiment", {}).get("scorecards") or {}
 SCORECARD_CONFIGS = (
     _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
 )
+
+
+# Params with no value at lead time 0. Two distinct reasons land here:
+# - period-accumulated params (TOT_PREC/tp) verify a [lead - period, lead]
+#   window, so they have no value at lead times shorter than one step spacing
+#   (e.g. no 0h precip map).
+# - diagnostic params (e.g. CLCT/tcc) aren't part of the model's input state,
+#   so they're simply absent from the initial-state GRIB file written at step 0.
+# Short and canonical names both appear across the workflow (showcases vs maps).
+PARAMS_WITHOUT_STEP_ZERO_VALUE = {
+    "TOT_PREC",
+    "tp",
+    "CLCT",
+    "tcc",
+    "CLCL",
+    "lcc",
+    "SSRD",
+    "ssrd",
+}
+
+
+def resolve_leadtimes(steps_spec, requested="all", param=None):
+    """Lead times to compute for a single participant.
+
+    A run or baseline produces only the lead times in its own ``steps`` spec
+    (``start/stop/step``, hours). This returns those of the ``requested``
+    selection that the participant actually produces — the literal ``"all"``
+    (every produced lead time) or an explicit list of ints — so a 36h lead is
+    never requested of an ICON-CH1 baseline (steps ``0/33/6``), nor a >120h
+    lead of ICON-CH2. Explicitly requested lead times the participant cannot
+    produce are skipped with a warning. For accumulated ``param``s, lead times
+    shorter than one step spacing are dropped (no accumulation window).
+    """
+    start, end, step = map(int, steps_spec.split("/"))
+    supported = set(range(start, end + 1, step))
+    wanted = supported if requested == "all" else set(requested)
+
+    unsupported = sorted(wanted - supported)
+    if unsupported:
+        logging.getLogger("snakemake").warning(
+            "Skipping lead time(s) %sh: not produced by forecast steps '%s'.",
+            unsupported,
+            steps_spec,
+        )
+
+    valid = wanted & supported
+    if param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
+        valid = {lt for lt in valid if lt >= step}
+    return sorted(valid)

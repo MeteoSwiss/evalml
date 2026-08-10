@@ -141,6 +141,15 @@ def main(args: Namespace) -> None:
     # TODO: implement grouping
 
     LOG.info("Reading %d verification files", len(args.verif_files))
+    source_sets = [
+        frozenset(xr.open_dataset(f, engine="netcdf4")["source"].values)
+        for f in args.verif_files
+    ]
+    if len(set(source_sets)) > 1:
+        raise ValueError(
+            f"Inconsistent source values across verif files — a label may have "
+            f"changed between runs without triggering a rerun: {set(source_sets)}"
+        )
     ds = xr.open_mfdataset(
         sorted(args.verif_files),
         combine="nested",

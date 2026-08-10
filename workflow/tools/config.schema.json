@@ -28,6 +28,13 @@
           },
           "title": "Domains",
           "type": "array"
+        },
+        "frames_per_second": {
+          "default": 2.0,
+          "description": "Frames per second for the output GIF animation.",
+          "exclusiveMinimum": 0,
+          "title": "Frames Per Second",
+          "type": "number"
         }
       },
       "title": "AnimationsConfig",
@@ -136,7 +143,6 @@
       "type": "object"
     },
     "DefaultResources": {
-      "additionalProperties": false,
       "description": "Default resource settings for job execution.",
       "properties": {
         "slurm_partition": {
@@ -228,6 +234,19 @@
           "description": "Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
           "title": "Projection",
           "type": "string"
+        },
+        "rotate": {
+          "default": false,
+          "description": "Rotate the viewpoint across animation frames as lead time advances. Only valid for full-globe domains (extent: null).",
+          "title": "Rotate",
+          "type": "boolean"
+        },
+        "hours_per_revolution": {
+          "default": 96.0,
+          "description": "Simulated lead-time hours for one full 360\u00b0 rotation, when rotate is enabled.",
+          "exclusiveMinimum": 0,
+          "title": "Hours Per Revolution",
+          "type": "number"
         }
       },
       "required": [
@@ -247,11 +266,10 @@
           "default": [
             "T_2M",
             "TD_2M",
-            "U_10M",
-            "V_10M",
+            "SP_10M",
             "PS",
             "PMSL",
-            "TOT_PREC"
+            "TOT_PREC6"
           ],
           "description": "List of parameters to compute verification metrics for.",
           "items": {
@@ -289,6 +307,18 @@
           ],
           "default": null,
           "description": "Scorecard generation configuration. Omit or set enabled: false to disable."
+        },
+        "scoremaps": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScoreMapsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Score map plot configuration. Omit or set enabled: false to disable."
         }
       },
       "required": [
@@ -327,6 +357,76 @@
       },
       "title": "ExplicitDates",
       "type": "array"
+    },
+    "Ffv2Config": {
+      "additionalProperties": false,
+      "description": "Configuration for the FFV2 scoring pipeline.",
+      "properties": {
+        "experiment_ids": {
+          "description": "Comma-separated experiment IDs passed to FFV2.",
+          "title": "Experiment Ids",
+          "type": "string"
+        },
+        "veri_ens_member": {
+          "description": "Comma-separated ensemble member indices passed to FFV2, one per experiment ID (typically -1 for deterministic runs).",
+          "title": "Veri Ens Member",
+          "type": "string"
+        },
+        "catthresholds": {
+          "additionalProperties": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "description": "Per-variable categorical thresholds for FFV2, mapping FFV2 variable names to lists of threshold values.",
+          "title": "Catthresholds",
+          "type": "object"
+        },
+        "pecthresholds": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object"
+          },
+          "description": "Per-variable PEC thresholds for FFV2, mapping FFV2 variable names to a dict with exactly one 'lower' and one 'upper' value.",
+          "title": "Pecthresholds",
+          "type": "object"
+        },
+        "experiment_description": {
+          "description": "Short description of the experiment for FFV2 output files.",
+          "title": "Experiment Description",
+          "type": "string"
+        },
+        "file_description": {
+          "description": "File description string used in FFV2 output file naming.",
+          "title": "File Description",
+          "type": "string"
+        },
+        "domain_table": {
+          "description": "Path to the domain table file (polygon) used by FFV2.",
+          "title": "Domain Table",
+          "type": "string"
+        },
+        "blacklists": {
+          "description": "Path to the blacklist directory used by FFV2.",
+          "title": "Blacklists",
+          "type": "string"
+        }
+      },
+      "required": [
+        "experiment_ids",
+        "veri_ens_member",
+        "catthresholds",
+        "pecthresholds",
+        "experiment_description",
+        "file_description",
+        "domain_table",
+        "blacklists"
+      ],
+      "title": "Ffv2Config",
+      "type": "object"
     },
     "ForecasterConfig": {
       "additionalProperties": false,
@@ -530,6 +630,34 @@
       "title": "Locations",
       "type": "object"
     },
+    "MecConfig": {
+      "additionalProperties": false,
+      "description": "Paths to input observation files for the MEC verification step.",
+      "properties": {
+        "ekf_root": {
+          "description": "Root directory for EKF SYNOP files. Files are expected at {ekf_root}/{YYYYMM}/ekfSYNOP_{init}00.nc.",
+          "title": "Ekf Root",
+          "type": "string"
+        },
+        "mon_synop_root": {
+          "description": "Root directory for monSYNOP files. Files are expected at {mon_synop_root}/{YYYYMMDDH}/monSYNOP.nc.",
+          "title": "Mon Synop Root",
+          "type": "string"
+        },
+        "ver_synop_root": {
+          "description": "Root directory for reference verSYNOP files. Files are expected at {ver_synop_root}/verSYNOP_{init}00.nc.",
+          "title": "Ver Synop Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ekf_root",
+        "mon_synop_root",
+        "ver_synop_root"
+      ],
+      "title": "MecConfig",
+      "type": "object"
+    },
     "MeteogramConfig": {
       "description": "Configuration for meteogram generation.",
       "properties": {
@@ -592,6 +720,87 @@
         "jobs"
       ],
       "title": "Profile",
+      "type": "object"
+    },
+    "ScoreMapsConfig": {
+      "additionalProperties": false,
+      "description": "Parameters controlling which score map plots are produced.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to produce score maps (computationally intensive).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "params": {
+          "default": [
+            "T_2M"
+          ],
+          "description": "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 (period-accumulated precipitation, period encoded in the name).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "leadtimes": {
+          "default": [
+            6,
+            24
+          ],
+          "description": "List of lead times (hours) to plot.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Leadtimes",
+          "type": "array"
+        },
+        "scores": {
+          "default": [
+            "BIAS"
+          ],
+          "description": "List of verification scores to plot. Supported: BIAS, RMSE, MAE.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Scores",
+          "type": "array"
+        },
+        "regions": {
+          "default": [
+            "switzerland"
+          ],
+          "description": "List of regions to plot (e.g. switzerland, centraleurope).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Regions",
+          "type": "array"
+        },
+        "seasons": {
+          "default": [
+            "all"
+          ],
+          "description": "List of seasons to plot ('all', 'DJF', 'MAM', 'JJA', 'SON').",
+          "items": {
+            "type": "string"
+          },
+          "title": "Seasons",
+          "type": "array"
+        },
+        "init_hours": {
+          "default": [
+            "all"
+          ],
+          "description": "List of initialization hours to plot. Use 'all' for the unstratified view, or zero-padded hour strings like '00', '06', '12', '18'.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Init Hours",
+          "type": "array"
+        }
+      },
+      "title": "ScoreMapsConfig",
       "type": "object"
     },
     "ScorecardConfig": {
@@ -660,23 +869,40 @@
       "description": "Stratification settings for the analysis.",
       "properties": {
         "regions": {
-          "description": "List of region names for stratification.",
+          "description": "List of region specs for spatial stratification. At least one region is required. String entries are either predefined region names (['global', 'icon']) or shapefile names resolved against 'root'. Predefined names take precedence over shapefiles. Dict entries map a custom region name to a bounding box [lon_min, lon_max, lat_min, lat_max]. The first entry is the domain region used by the dashboard when region stratification is not active.",
           "items": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              }
+            ]
           },
           "title": "Regions",
           "type": "array"
         },
         "root": {
-          "description": "Root directory where the region shapefiles are stored.",
-          "title": "Root",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Root directory where the region shapefiles are stored. Required when regions contains string entries.",
+          "title": "Root"
         }
       },
-      "required": [
-        "regions",
-        "root"
-      ],
       "title": "Stratification",
       "type": "object"
     },
@@ -862,6 +1088,12 @@
         }
       ]
     },
+    "lapse_rate_correction": {
+      "default": true,
+      "description": "Apply standard-atmosphere lapse-rate correction to T_2M.",
+      "title": "Lapse Rate Correction",
+      "type": "boolean"
+    },
     "experiment": {
       "$ref": "#/$defs/ExperimentConfig",
       "description": "Settings for the experiment workflow outputs."
@@ -875,6 +1107,30 @@
     "showcase": {
       "$ref": "#/$defs/ShowcaseConfig",
       "description": "Settings for the showcase workflow."
+    },
+    "mec": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MecConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Input observation paths for the MEC verification step. Required when running with --mec."
+    },
+    "ffv2": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Ffv2Config"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Configuration for the FFV2 scoring pipeline. Required when running with --ffv2."
     }
   },
   "required": [

@@ -1,9 +1,14 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
+from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
 
-from pydantic import BaseModel, Field, RootModel, field_validator
+from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
+
+PREDEFINED_REGIONS: Dict[str, List[float]] = {
+    "global": [-180, 180, -90, 90],
+    "icon": [1.5, 16, 43, 49.5],
+}
 
 
 class Dates(BaseModel):
@@ -101,7 +106,6 @@ class RunConfig(BaseModel):
         False,
         description="If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
     )
-
     config: Dict[str, Any] | str
 
     model_config = {"extra": "forbid"}
@@ -219,6 +223,48 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
+class ScoreMapsConfig(BaseModel):
+    """Parameters controlling which score map plots are produced."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to produce score maps (computationally intensive).",
+    )
+    params: List[str] = Field(
+        default=["T_2M"],
+        description=(
+            "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
+            "PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 "
+            "(period-accumulated precipitation, period encoded in the name)."
+        ),
+    )
+    leadtimes: List[int] = Field(
+        default=[6, 24],
+        description="List of lead times (hours) to plot.",
+    )
+    scores: List[str] = Field(
+        default=["BIAS"],
+        description="List of verification scores to plot. Supported: BIAS, RMSE, MAE.",
+    )
+    regions: List[str] = Field(
+        default=["switzerland"],
+        description="List of regions to plot (e.g. switzerland, centraleurope).",
+    )
+    seasons: List[str] = Field(
+        default=["all"],
+        description="List of seasons to plot ('all', 'DJF', 'MAM', 'JJA', 'SON').",
+    )
+    init_hours: List[str] = Field(
+        default=["all"],
+        description=(
+            "List of initialization hours to plot. Use 'all' for the unstratified "
+            "view, or zero-padded hour strings like '00', '06', '12', '18'."
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class DomainConfig(BaseModel):
     """A custom map domain defined by name, extent, and projection."""
 
@@ -231,8 +277,28 @@ class DomainConfig(BaseModel):
         "orthographic",
         description="Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
     )
+    rotate: bool = Field(
+        False,
+        description=(
+            "Rotate the viewpoint across animation frames as lead time advances. "
+            "Only valid for full-globe domains (extent: null)."
+        ),
+    )
+    hours_per_revolution: float = Field(
+        96.0,
+        gt=0,
+        description="Simulated lead-time hours for one full 360° rotation, when rotate is enabled.",
+    )
 
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _rotate_requires_globe(self):
+        if self.rotate and self.extent is not None:
+            raise ValueError(
+                "rotate: true is only valid for full-globe domains (extent: null)."
+            )
+        return self
 
 
 class MeteogramConfig(BaseModel):
@@ -263,6 +329,11 @@ class AnimationsConfig(BaseModel):
             "or a custom domain dict with 'name', optional 'extent' "
             "[lon_min, lon_max, lat_min, lat_max], and optional 'projection'."
         ),
+    )
+    frames_per_second: float = Field(
+        default=2.0,
+        gt=0,
+        description="Frames per second for the output GIF animation.",
     )
 
 
@@ -335,14 +406,44 @@ class Locations(BaseModel):
 class Stratification(BaseModel):
     """Stratification settings for the analysis."""
 
-    regions: List[str] = Field(
-        ...,
-        description="List of region names for stratification.",
+    regions: List[Union[str, Dict[str, List[float]]]] = Field(
+        default_factory=list,
+        description=(
+            "List of region specs for spatial stratification. At least one region is required. "
+            f"String entries are either predefined region names ({list(PREDEFINED_REGIONS)}) or "
+            "shapefile names resolved against 'root'. Predefined names take precedence over shapefiles. "
+            "Dict entries map a custom region name to a bounding box [lon_min, lon_max, lat_min, lat_max]. "
+            "The first entry is the domain region used by the dashboard when region stratification is not active."
+        ),
     )
-    root: str = Field(
-        ...,
-        description="Root directory where the region shapefiles are stored.",
+    root: Optional[str] = Field(
+        None,
+        description="Root directory where the region shapefiles are stored. Required when regions contains string entries.",
     )
+
+    @field_validator("regions")
+    @classmethod
+    def validate_regions(
+        cls, v: List[Union[str, Dict[str, List[float]]]]
+    ) -> List[Union[str, Dict[str, List[float]]]]:
+        if not v:
+            raise ValueError(
+                "At least one region must be specified. "
+                f"Add a domain region as the first entry, e.g. a predefined name "
+                f"({list(PREDEFINED_REGIONS)}), a custom bbox dict, or a shapefile name."
+            )
+        for entry in v:
+            if isinstance(entry, dict):
+                if len(entry) != 1:
+                    raise ValueError(
+                        f"Each bbox region dict must have exactly one key, got: {list(entry.keys())}"
+                    )
+                name, bbox = next(iter(entry.items()))
+                if len(bbox) != 4:
+                    raise ValueError(
+                        f"Bbox for region '{name}' must have exactly 4 values [lon_min, lon_max, lat_min, lat_max], got {len(bbox)}."
+                    )
+        return v
 
 
 class Dashboard(BaseModel):
@@ -362,7 +463,7 @@ class ExperimentConfig(BaseModel):
         description="Spatial stratification settings for the analysis.",
     )
     params: List[str] = Field(
-        default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"],
+        default=["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"],
         description="List of parameters to compute verification metrics for.",
     )
     thresholds: Dict[str, Dict[str, List[float]]] = Field(
@@ -379,6 +480,10 @@ class ExperimentConfig(BaseModel):
     scorecards: Optional[ExperimentScorecardConfig] = Field(
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
+    )
+    scoremaps: Optional[ScoreMapsConfig] = Field(
+        default=None,
+        description="Score map plot configuration. Omit or set enabled: false to disable.",
     )
 
     @field_validator("thresholds")
@@ -408,8 +513,6 @@ class DefaultResources(BaseModel):
     gpus: int | None = Field(
         None, ge=0, description="Default GPU count per job (0 for non-GPU jobs)."
     )
-
-    model_config = {"extra": "forbid"}
 
     def parsable(self) -> list[str]:
         """Convert the default resources to a string of key=value pairs."""
@@ -474,6 +577,84 @@ class Profile(BaseModel):
         return out
 
 
+class MecConfig(BaseModel):
+    """Paths to input observation files for the MEC verification step."""
+
+    ekf_root: str = Field(
+        ...,
+        description="Root directory for EKF SYNOP files. Files are expected at {ekf_root}/{YYYYMM}/ekfSYNOP_{init}00.nc.",
+    )
+    mon_synop_root: str = Field(
+        ...,
+        description="Root directory for monSYNOP files. Files are expected at {mon_synop_root}/{YYYYMMDDH}/monSYNOP.nc.",
+    )
+    ver_synop_root: str = Field(
+        ...,
+        description="Root directory for reference verSYNOP files. Files are expected at {ver_synop_root}/verSYNOP_{init}00.nc.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class Ffv2Config(BaseModel):
+    """Configuration for the FFV2 scoring pipeline."""
+
+    experiment_ids: str = Field(
+        ...,
+        description="Comma-separated experiment IDs passed to FFV2.",
+    )
+    veri_ens_member: str = Field(
+        ...,
+        description="Comma-separated ensemble member indices passed to FFV2, one per experiment ID (typically -1 for deterministic runs).",
+    )
+    catthresholds: dict[str, list[float]] = Field(
+        ...,
+        description="Per-variable categorical thresholds for FFV2, mapping FFV2 variable names to lists of threshold values.",
+    )
+    pecthresholds: dict[str, dict[str, float]] = Field(
+        ...,
+        description="Per-variable PEC thresholds for FFV2, mapping FFV2 variable names to a dict with exactly one 'lower' and one 'upper' value.",
+    )
+    experiment_description: str = Field(
+        ...,
+        description="Short description of the experiment for FFV2 output files.",
+    )
+    file_description: str = Field(
+        ...,
+        description="File description string used in FFV2 output file naming.",
+    )
+    domain_table: str = Field(
+        ...,
+        description="Path to the domain table file (polygon) used by FFV2.",
+    )
+    blacklists: str = Field(
+        ...,
+        description="Path to the blacklist directory used by FFV2.",
+    )
+
+    @field_validator("veri_ens_member", mode="before")
+    @classmethod
+    def coerce_veri_ens_member_to_str(cls, v):
+        return str(v)
+
+    @field_validator("pecthresholds")
+    @classmethod
+    def validate_pecthresholds(cls, v):
+        for var, bounds in v.items():
+            invalid = set(bounds) - {"lower", "upper"}
+            if invalid:
+                raise ValueError(
+                    f"pecthresholds[{var!r}] contains invalid keys {invalid}; only 'lower' and 'upper' are allowed."
+                )
+            if not bounds:
+                raise ValueError(
+                    f"pecthresholds[{var!r}] must have at least one of 'lower' or 'upper'."
+                )
+        return v
+
+    model_config = {"extra": "forbid"}
+
+
 class ConfigModel(BaseModel):
     """Top-level configuration."""
 
@@ -491,6 +672,10 @@ class ConfigModel(BaseModel):
         description="List of experiment participants, including forecaster/temporal downscaler ML runs and baselines.",
     )
     truth: TruthConfig | None
+    lapse_rate_correction: bool = Field(
+        default=True,
+        description="Apply standard-atmosphere lapse-rate correction to T_2M.",
+    )
     experiment: ExperimentConfig = Field(
         ...,
         description="Settings for the experiment workflow outputs.",
@@ -501,6 +686,32 @@ class ConfigModel(BaseModel):
         default_factory=ShowcaseConfig,
         description="Settings for the showcase workflow.",
     )
+    mec: MecConfig | None = Field(
+        None,
+        description="Input observation paths for the MEC verification step. Required when running with --mec.",
+    )
+    ffv2: Ffv2Config | None = Field(
+        None,
+        description="Configuration for the FFV2 scoring pipeline. Required when running with --ffv2.",
+    )
+
+    @model_validator(mode="after")
+    def validate_scoremap_leadtimes(self) -> "ConfigModel":
+        sm = self.experiment.scoremaps
+        if sm is None or not sm.enabled:
+            return self
+        requested = set(sm.leadtimes)
+        for item in self.runs:
+            steps = getattr(item, next(iter(item.model_fields))).steps
+            start, end, step = map(int, steps.split("/"))
+            producible = set(range(start, end + 1, step))
+            unsupported = requested - producible
+            if unsupported:
+                raise ValueError(
+                    f"scoremaps.leadtimes contains {sorted(unsupported)} h which are not "
+                    f"produced by participant with steps '{steps}'."
+                )
+        return self
 
     model_config = {
         "extra": "forbid",  # fail on misspelled keys
