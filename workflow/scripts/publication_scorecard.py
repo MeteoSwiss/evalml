@@ -259,6 +259,10 @@ def _(
         )
 
     import copy
+    import textwrap as _tw
+
+    _PARAM_WRAP = 20   # wrap parameter names after ~20 chars
+    _REGION_WRAP = 12  # wrap region names after ~12 chars
 
     excluded_data_vars = [
         "TOT_PREC1.ETS_gt_0p0", 
@@ -290,13 +294,16 @@ def _(
         _diff = _diff.drop_vars([v for v in excluded_data_vars if v in _diff.data_vars])
         _diff = _diff.drop_sel(region = "jura")
         _diff = _diff.rename({
-            v: f"{param_label(v.rsplit('.', 1)[0])}.{v.rsplit('.', 1)[1]}"
+            v: f"{_tw.fill(param_label(v.rsplit('.', 1)[0]), width=_PARAM_WRAP)}.{v.rsplit('.', 1)[1]}"
             for v in _diff.data_vars
         })
         _strat_dim = _cfg.get("stratification", "region")
         if _strat_dim in _diff.coords:
             _diff = _diff.assign_coords({
-                _strat_dim: [region_label(str(r)) for r in _diff[_strat_dim].values]
+                _strat_dim: [
+                    _tw.fill(region_label(str(r)), width=_REGION_WRAP)
+                    for r in _diff[_strat_dim].values
+                ]
             })
         _lay = _panel_layout(_diff, _cfg)
         panels.append((_diff, _cfg, _sec["name"], _lay))
