@@ -6,6 +6,8 @@ import hashlib
 import json
 from urllib.parse import urlparse
 
+from evalml.config import THIRD_PARTY_MODEL_TYPES
+
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
 
@@ -209,6 +211,17 @@ def register_run(model_type, run_config, as_candidate=True):
              Ensures each unique run configuration has its own output directory.
     """
     run_cfg = copy.deepcopy(run_config)
+
+    if model_type in THIRD_PARTY_MODEL_TYPES:
+        # No checkpoint/venv/anemoi-inference: identity is just the pre-generated
+        # GRIB's source directory and the requested steps.
+        env_id = f"{model_type}-{env_entry_hash(run_cfg, model_type)}"
+        run_id = f"{env_id}/{run_specific_hash(run_cfg, model_type)}"
+        run_cfg["env_id"] = env_id
+        run_cfg["_is_candidate"] = as_candidate
+        run_cfg["model_type"] = model_type
+        return {run_id: run_cfg}
+
     mid = model_id(run_cfg["checkpoint"])
 
     out = {}
@@ -348,7 +361,11 @@ def env_entry_hash(run_config: dict, model_type: str) -> str:
     - extra_requirements (different dependencies)
     - disable_local_eccodes_definitions (different ECCODES setup)
     - For temporal downscalers: the forecaster's env_id (different upstream model)
+    - Third-party runs (e.g. spatial_downscaler): no environment to build, so this
+      is just the source GRIB directory identity.
     """
+    if model_type in THIRD_PARTY_MODEL_TYPES:
+        return generate_json_hash({"root": run_config["root"]})
     cfg = {k: v for k, v in run_config.items() if k in ENV_HASH_FIELDS}
     configs_to_hash = [cfg]
     if model_type == "temporal_downscaler" and run_config.get("forecaster"):
@@ -364,7 +381,13 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
     - steps (lead times)
     - config YAML file contents (inference parameters)
     - For temporal downscalers: the forecaster's run_id (which run's outputs to read)
+    - Third-party runs (e.g. spatial_downscaler): no inference config to hash, so
+      this is just the source GRIB directory identity plus steps.
     """
+    if model_type in THIRD_PARTY_MODEL_TYPES:
+        return generate_json_hash(
+            {"root": run_config["root"], "steps": run_config["steps"]}
+        )
     configs_to_hash = [{"steps": run_config["steps"]}]
     with open(run_config["config"], "r") as f:
         configs_to_hash.append(yaml.safe_load(f))

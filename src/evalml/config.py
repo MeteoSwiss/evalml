@@ -3,12 +3,28 @@ from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
-PROJECT_ROOT = Path(__file__).parents[2]
-
 PREDEFINED_REGIONS: Dict[str, List[float]] = {
     "global": [-180, 180, -90, 90],
     "icon": [1.5, 16, 43, 49.5],
 }
+
+
+def _validate_steps_range(v: str) -> str:
+    """Validate a 'start/end/step' lead-time spec, shared across run/participant configs."""
+    if "/" not in v:
+        raise ValueError(f"Steps must follow the format 'start/stop/step', got '{v}'")
+    parts = v.split("/")
+    if len(parts) != 3:
+        raise ValueError("Steps must be formatted as 'start/end/step'.")
+    try:
+        start, end, step = map(int, parts)
+    except ValueError:
+        raise ValueError("Start, end, and step must be integers.")
+    if start > end:
+        raise ValueError(f"Start ({start}) must be less than or equal to end ({end}).")
+    if step <= 0:
+        raise ValueError(f"Step ({step}) must be a positive integer.")
+    return v
 
 
 class Dates(BaseModel):
@@ -112,35 +128,15 @@ class RunConfig(BaseModel):
 
     @field_validator("steps")
     def validate_steps(cls, v: str) -> str:
-        if "/" not in v:
-            raise ValueError(
-                f"Steps must follow the format 'start/stop/step', got '{v}'"
-            )
-        parts = v.split("/")
-        if len(parts) != 3:
-            raise ValueError("Steps must be formatted as 'start/end/step'.")
-        try:
-            start, end, step = map(int, parts)
-        except ValueError:
-            raise ValueError("Start, end, and step must be integers.")
-        if start > end:
-            raise ValueError(
-                f"Start ({start}) must be less than or equal to end ({end})."
-            )
-        if step <= 0:
-            raise ValueError(f"Step ({step}) must be a positive integer.")
-        return v
+        return _validate_steps_range(v)
 
 
 class ForecasterConfig(RunConfig):
     """Single training run stored in MLflow."""
 
     config: Dict[str, Any] | str = Field(
-        default_factory=lambda _: str(
-            PROJECT_ROOT / "resources" / "inference" / "configs" / "forecaster.yaml"
-        ),
-        description="Configuration for the forecaster run. Can be a dictionary of parameters or a path to a configuration file."
-        "By default, it will point to resources/inference/configs/forecaster.yaml in the evalml repository.",
+        ...,
+        description="Configuration for the forecaster run. Can be a dictionary of parameters or a path to a configuration file.",
     )
 
 
@@ -148,21 +144,54 @@ class TemporalDownscalerConfig(RunConfig):
     """Single training run stored in MLflow."""
 
     config: Dict[str, Any] | str = Field(
-        default_factory=lambda _: str(
-            PROJECT_ROOT
-            / "resources"
-            / "inference"
-            / "configs"
-            / "temporal_downscaler.yaml"
-        ),
-        description="Configuration for the temporal downscaler run. Can be a dictionary of parameters or a path to a configuration file. "
-        "By default, it will point to resources/inference/configs/temporal_downscaler.yaml in the evalml repository.",
+        ...,
+        description="Configuration for the temporal downscaler run. Can be a dictionary of parameters or a path to a configuration file.",
     )
 
     forecaster: ForecasterConfig | None = Field(
         None,
         description="Configuration for the forecaster run that this temporal downscaler is based on.",
     )
+
+
+class ThirdPartyRunConfig(BaseModel):
+    """A run whose inference was produced entirely outside evalml.
+
+    No checkpoint, venv, or anemoi-inference config: evalml never runs inference for
+    these participants, it only stages their pre-existing GRIB into the same
+    per-run output layout other run types produce. Shared base for spatial_downscaler
+    and future third-party experiment sources.
+    """
+
+    label: str | None = Field(
+        None,
+        description="The label for the run that will be used in experiment results such as reports and figures.",
+    )
+    root: str = Field(
+        ...,
+        min_length=1,
+        description=(
+            "Root directory of pre-generated GRIB from the external workflow, laid "
+            "out as root/{init_time}/*.grib (init_time formatted YYYYMMDDHHMM)."
+        ),
+    )
+    steps: str = Field(
+        ...,
+        description=(
+            "Forecast lead times in hours this run produces, formatted as "
+            "'start/end/step'."
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("steps")
+    def validate_steps(cls, v: str) -> str:
+        return _validate_steps_range(v)
+
+
+class SpatialDownscalerConfig(ThirdPartyRunConfig):
+    """Pre-generated spatial-downscaler GRIB, produced by a workflow outside evalml."""
 
 
 class BaselineConfig(BaseModel):
@@ -219,8 +248,25 @@ class TemporalDownscalerItem(BaseModel):
     temporal_downscaler: TemporalDownscalerConfig
 
 
+class SpatialDownscalerItem(BaseModel):
+    spatial_downscaler: SpatialDownscalerConfig
+
+
 class BaselineItem(BaseModel):
     baseline: BaselineConfig
+
+
+# Model types backed by a ThirdPartyRunConfig subclass: evalml never runs inference
+# for these, only stages their pre-existing GRIB. Computed by introspection (rather
+# than hand-maintained) so a new third-party run type is picked up automatically as
+# soon as its *Item class is added below.
+THIRD_PARTY_MODEL_TYPES: FrozenSet[str] = frozenset(
+    field_name
+    for item_cls in (ForecasterItem, TemporalDownscalerItem, SpatialDownscalerItem, BaselineItem)
+    for field_name, field_info in item_cls.model_fields.items()
+    if isinstance(field_info.annotation, type)
+    and issubclass(field_info.annotation, ThirdPartyRunConfig)
+)
 
 
 class ScoreMapsConfig(BaseModel):
@@ -667,9 +713,11 @@ class ConfigModel(BaseModel):
         description="Optional label for the experiment that will be used in the experiment directory name. Defaults to the config file name if not provided.",
     )
     dates: Dates | ExplicitDates
-    runs: List[ForecasterItem | TemporalDownscalerItem | BaselineItem] = Field(
+    runs: List[
+        ForecasterItem | TemporalDownscalerItem | SpatialDownscalerItem | BaselineItem
+    ] = Field(
         ...,
-        description="List of experiment participants, including forecaster/temporal downscaler ML runs and baselines.",
+        description="List of experiment participants, including forecaster/temporal downscaler/spatial downscaler ML runs and baselines.",
     )
     truth: TruthConfig | None
     lapse_rate_correction: bool = Field(
