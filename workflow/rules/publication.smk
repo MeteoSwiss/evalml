@@ -15,6 +15,8 @@ TRUTH_SLUG = truth_slug((config.get("truth") or {}).get("label", ""))
 
 
 rule publication_manifest:
+    input:
+        script="src/evalml/publication/manifest.py",
     """Persist the run/baseline -> hash -> data-path mapping for the CLI/notebooks.
 
 Cheap localrule: dumps the in-memory workflow globals to JSON, so paths can be
@@ -25,8 +27,6 @@ changes — without re-running on a no-op file touch.
 """
     output:
         OUT_ROOT / f"publication/{TRUTH_SLUG}/manifest.json",
-    input:
-        script = "src/evalml/publication/manifest.py",
     localrule: True
     params:
         master_hash=master_hash(),
