@@ -50,6 +50,7 @@ dev = [
 # Skip longtests (GPU/credential/data-dependent integration tests) by default,
 # in CI and locally. Run them explicitly with `pytest -m longtest`.
 addopts = "-m 'not longtest'"
+pythonpath = ["workflow/scripts"]
 markers = [
     "longtest: mark tests that take a long time to run, e.g. integration tests",
 ]
