@@ -3,7 +3,7 @@
 Wernli et al. (2008) SAL compares a forecast precipitation field to a reference
 over a fixed domain, returning three signed, dimensionless components: S
 (structure), A (amplitude) and L (location). Object detection and the components
-are delegated to pysteps.verification.salscores.sal; this module adds the fixed
+are delegated to pysteps.verification.salscores.sal; this module adds the
 scoring raster, the nearest-neighbour remap onto it, and a dry-window gate.
 """
 
@@ -19,18 +19,36 @@ from verification.spatial import spherical_nearest_neighbor_indices
 DEFAULT_THR_FACTOR = 0.067
 DEFAULT_THR_QUANTILE = 0.95
 
-GRID_EXTENT = (-1.0, 18.0, 42.0, 50.5)  # lon_min, lon_max, lat_min, lat_max
+# Defaults for the scoring raster, overridable per experiment via the config
+# (SalConfig.grid_extent / grid_step_lat / grid_step_lon, which carry the same
+# values). The extent is the bounding box of the ICON-CH1 analysis domain, the
+# SAL truth: KENDA-CH1 spans lon -0.8171..17.7106, lat 42.0279..50.5005, so this
+# rounds outwards by <=0.29 deg. Scoring much beyond the truth's support is not
+# free -- the remap has no distance cutoff, so cells outside it repeat the
+# nearest border value, and a larger raster also deflates pysteps' L term via
+# its longer diagonal.
+DEFAULT_GRID_EXTENT = (-1.0, 18.0, 42.0, 50.5)  # lon_min, lon_max, lat_min, lat_max
+DEFAULT_GRID_STEP_LAT = 0.01
+DEFAULT_GRID_STEP_LON = 0.0145
 
 
-def sal_raster() -> tuple[np.ndarray, np.ndarray]:
-    """The fixed SAL scoring raster over GRID_EXTENT as ``(lat2d, lon2d)``
-    meshgrids, upper bounds included, latitude varying along axis 0. Spacing is
-    0.01° lat × 0.0145° lon, i.e. ~1.1 km near-square cells at ~46.5°N
-    (ratio ≈ 1/cos(46.5°)), since pysteps' L term assumes square pixels."""
-    lon_min, lon_max, lat_min, lat_max = GRID_EXTENT
-    step_lat, step_lon = 0.01, 0.0145
-    lons = np.arange(lon_min, lon_max + step_lon / 2, step_lon)
-    lats = np.arange(lat_min, lat_max + step_lat / 2, step_lat)
+def sal_raster(
+    extent: tuple[float, float, float, float] = DEFAULT_GRID_EXTENT,
+    step_lat: float = DEFAULT_GRID_STEP_LAT,
+    step_lon: float = DEFAULT_GRID_STEP_LON,
+) -> tuple[np.ndarray, np.ndarray]:
+    """The SAL scoring raster over *extent* as ``(lat2d, lon2d)`` meshgrids,
+    latitude varying along axis 0. Cells stay inside *extent*: an upper bound is
+    included when the span is a whole multiple of the spacing, else the last cell
+    falls short of it by up to one step. Pick *step_lat* and *step_lon* so cells
+    are metrically near-square at the extent's central latitude (pysteps' L term
+    assumes square pixels); the defaults give ~1.1 km cells, exactly square at
+    46.4°N (0.0145/0.01 = 1/cos(46.4°))."""
+    lon_min, lon_max, lat_min, lat_max = extent
+    # The epsilon admits an exact upper bound despite float drift (~1e-11 over
+    # ~1e3 steps) while staying ~6 orders below one step, so it cannot overshoot.
+    lons = np.arange(lon_min, lon_max + step_lon * 1e-6, step_lon)
+    lats = np.arange(lat_min, lat_max + step_lat * 1e-6, step_lat)
     lon2d, lat2d = np.meshgrid(lons, lats)
     return lat2d, lon2d
 

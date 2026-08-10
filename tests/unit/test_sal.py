@@ -6,7 +6,14 @@ import numpy as np
 import pytest
 
 from evalml.config import ConfigModel, SalConfig
-from verification.sal import GRID_EXTENT, compute_sal, remap_field, sal_raster
+from verification.sal import (
+    DEFAULT_GRID_EXTENT,
+    DEFAULT_GRID_STEP_LAT,
+    DEFAULT_GRID_STEP_LON,
+    compute_sal,
+    remap_field,
+    sal_raster,
+)
 
 SCRIPT = Path(__file__).resolve().parents[2] / "workflow/scripts/verification_sal.py"
 
@@ -24,14 +31,23 @@ def _blob(shape, cy, cx, amp, sigma):
 
 def test_sal_raster_shape_bounds_and_orientation():
     lat2d, lon2d = sal_raster()
-    lon_min, lon_max, lat_min, lat_max = GRID_EXTENT
+    lon_min, lon_max, lat_min, lat_max = DEFAULT_GRID_EXTENT
 
     assert lat2d.shape == lon2d.shape == (851, 1311)
-    # Lower bounds are exact; upper bounds are included but not overshot.
-    assert lat2d[0, 0] == lat_min and lat_max - 0.01 < lat2d[-1, 0] <= lat_max + 1e-9
-    assert lon2d[0, 0] == lon_min and lon_max - 0.0145 < lon2d[0, -1] <= lon_max + 1e-9
+    # Lower bounds are exact; the raster never leaves the extent and comes within
+    # one step of its upper bounds -- exactly 50.5 in latitude (8.5 deg is a whole
+    # multiple of 0.01), 0.005 deg short of 18.0 in longitude.
+    assert lat2d[0, 0] == lat_min and lat_max - 0.01 < lat2d[-1, 0] <= lat_max
+    assert lon2d[0, 0] == lon_min and lon_max - 0.0145 < lon2d[0, -1] <= lon_max
     # latitude varies along axis 0, longitude along axis 1 (pysteps' L term).
     assert np.all(lat2d[0, :] == lat2d[0, 0]) and np.all(lon2d[:, 0] == lon2d[0, 0])
+
+
+def test_sal_raster_honours_custom_extent_and_steps():
+    lat2d, lon2d = sal_raster((5.0, 6.0, 45.0, 46.0), step_lat=0.5, step_lon=0.25)
+    assert lat2d.shape == lon2d.shape == (3, 5)
+    assert lat2d[:, 0].tolist() == [45.0, 45.5, 46.0]
+    assert lon2d[0].tolist() == [5.0, 5.25, 5.5, 5.75, 6.0]
 
 
 def test_remap_field_gathers_and_fills_nan_with_zero():
@@ -64,6 +80,30 @@ def test_compute_sal_dry_window_returns_nan():
 # ---------------------------------------------------------------------------
 # Config model
 # ---------------------------------------------------------------------------
+
+
+def test_sal_config_grid_defaults_match_the_module_constants():
+    # The config carries its own literals (importing verification.sal would pull
+    # pysteps into every config validation), so pin the two together.
+    s = SalConfig()
+    assert tuple(s.grid_extent) == DEFAULT_GRID_EXTENT
+    assert (s.grid_step_lat, s.grid_step_lon) == (
+        DEFAULT_GRID_STEP_LAT,
+        DEFAULT_GRID_STEP_LON,
+    )
+
+
+def test_sal_config_grid_validation():
+    with pytest.raises(ValueError, match="lon_min, lon_max, lat_min, lat_max"):
+        SalConfig(grid_extent=[1.0, 2.0, 3.0])  # wrong length
+    with pytest.raises(ValueError, match="increasing"):
+        SalConfig(grid_extent=[18.0, -1.0, 42.0, 50.5])  # lon_min >= lon_max
+    with pytest.raises(ValueError, match="finite"):
+        SalConfig(grid_extent=[float("nan"), 18.0, 42.0, 50.5])  # non-finite
+    with pytest.raises(ValueError, match="lat in"):
+        SalConfig(grid_extent=[-1.0, 18.0, 42.0, 100.0])  # lat_max out of range
+    with pytest.raises(ValueError, match="grid_step_lat"):
+        SalConfig(grid_step_lat=0.0)  # a non-positive spacing yields no raster
 
 
 def test_sal_config_rejects_non_precip_params():

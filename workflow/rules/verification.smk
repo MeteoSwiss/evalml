@@ -272,6 +272,20 @@ rule verification_scoremaps_baseline:
         """
 
 
+# The SAL scoring raster is experiment-level (not per-participant); pass it from
+# the validated config, which fills in the SalConfig defaults. Absent when there
+# is no sal block at all, in which case these rules never fire and the script's
+# own defaults would apply anyway.
+_SAL_CONFIG = config.get("experiment", {}).get("sal") or {}
+_SAL_ARGS = (
+    f"--grid-extent {' '.join(str(x) for x in _SAL_CONFIG['grid_extent'])} "
+    f"--grid-step-lat {_SAL_CONFIG['grid_step_lat']} "
+    f"--grid-step-lon {_SAL_CONFIG['grid_step_lon']}"
+    if _SAL_CONFIG
+    else ""
+)
+
+
 rule verification_sal:
     input:
         "src/verification/__init__.py",
@@ -297,6 +311,7 @@ rule verification_sal:
     params:
         reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
         run_root=lambda wc: (Path(OUT_ROOT) / f"data/runs/{wc.run_id}").resolve(),
+        sal_args=_SAL_ARGS,
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
@@ -306,6 +321,7 @@ rule verification_sal:
             --truth {input.truth} \
             --step {wildcards.leadtime} \
             --param {wildcards.param} \
+            {params.sal_args} \
             --output {output} >{log} 2>&1
         """
 
@@ -332,6 +348,7 @@ rule verification_sal_baseline:
     params:
         member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
         reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
+        sal_args=_SAL_ARGS,
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
@@ -342,5 +359,6 @@ rule verification_sal_baseline:
             --step {wildcards.leadtime} \
             --param {wildcards.param} \
             --member "{params.member}" \
+            {params.sal_args} \
             --output {output} >{log} 2>&1
         """

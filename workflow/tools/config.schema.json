@@ -769,6 +769,34 @@
           },
           "title": "Leadtimes",
           "type": "array"
+        },
+        "grid_extent": {
+          "default": [
+            -1.0,
+            18.0,
+            42.0,
+            50.5
+          ],
+          "description": "SAL raster extent [lon_min, lon_max, lat_min, lat_max] in degrees (PlateCarree). Both forecast and truth are remapped onto this raster. The default is the ICON-CH1 analysis bounding box; keep it close to the truth's footprint, since cells outside it only repeat the nearest border value.",
+          "items": {
+            "type": "number"
+          },
+          "title": "Grid Extent",
+          "type": "array"
+        },
+        "grid_step_lat": {
+          "default": 0.01,
+          "description": "SAL raster latitude spacing in degrees.",
+          "exclusiveMinimum": 0,
+          "title": "Grid Step Lat",
+          "type": "number"
+        },
+        "grid_step_lon": {
+          "default": 0.0145,
+          "description": "SAL raster longitude spacing in degrees. Choose grid_step_lat and grid_step_lon so cells are metrically near-square at the extent's central latitude (pysteps' Location term assumes square pixels).",
+          "exclusiveMinimum": 0,
+          "title": "Grid Step Lon",
+          "type": "number"
         }
       },
       "title": "SalConfig",

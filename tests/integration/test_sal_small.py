@@ -40,8 +40,9 @@ EXPECTED_REFTIMES = [
 ]
 EXPECTED_COLUMNS = ["reftime", "S", "A", "L", "fcst_mean", "truth_mean"]
 
-# verification.sal.sal_raster() over GRID_EXTENT at 0.01 lat x 0.0145 lon.
-# Pinned here so a silent change to the scoring raster fails this test too.
+# verification.sal.sal_raster() over the SalConfig grid defaults (the sal_small
+# config does not override them): the ICON-CH1 analysis bounding box at 0.01 lat
+# x 0.0145 lon. Pinned here so a silent change to the raster fails this test too.
 EXPECTED_GRID_CELLS = "851x1311"
 
 # --- Tolerances -------------------------------------------------------------

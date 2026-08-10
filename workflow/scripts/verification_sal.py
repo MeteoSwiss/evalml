@@ -24,7 +24,9 @@ from data_input import (
     parse_aggregated_param,
 )
 from verification.sal import (
-    GRID_EXTENT,
+    DEFAULT_GRID_EXTENT,
+    DEFAULT_GRID_STEP_LAT,
+    DEFAULT_GRID_STEP_LON,
     compute_sal,
     remap_field,
     remap_indices,
@@ -70,8 +72,17 @@ def main(args: Namespace) -> None:
             "station observations (jretrievedwh:...) are not supported."
         )
 
-    lat2d, lon2d = sal_raster()
+    lat2d, lon2d = sal_raster(
+        tuple(args.grid_extent), args.grid_step_lat, args.grid_step_lon
+    )
     shape = lat2d.shape
+    LOG.info(
+        "SAL raster: %dx%d cells, extent=%s, step=(%g lat, %g lon) deg",
+        *shape,
+        args.grid_extent,
+        args.grid_step_lat,
+        args.grid_step_lon,
+    )
 
     reftimes = sorted(datetime.strptime(s, DATETIME_FMT) for s in args.reftimes)
     truth_lazy = open_truth_zarr(args.truth, [args.param])
@@ -137,7 +148,8 @@ def main(args: Namespace) -> None:
     header = [
         "SAL (Wernli et al. 2008) per-init precipitation scores",
         f"param: {args.param}  accum_h: {accum_h}  step_h: {args.step}  member: {args.member}",
-        f"grid_extent: {list(GRID_EXTENT)}  grid_cells: {shape[0]}x{shape[1]}",
+        f"grid_extent: {list(args.grid_extent)}  grid_step: "
+        f"({args.grid_step_lat}, {args.grid_step_lon})  grid_cells: {shape[0]}x{shape[1]}",
         f"source: {args.baseline_root or args.run_root}  n_init: {len(df)}",
         "reftime UTC YYYYMMDDHHMM; S/A/L are NaN for dry windows.",
     ]
@@ -167,6 +179,29 @@ if __name__ == "__main__":
     parser.add_argument("--param", required=True, help="Precip param, e.g. TOT_PREC6.")
     parser.add_argument(
         "--reftimes", nargs="+", required=True, help="Init times (YYYYMMDDHHMM)."
+    )
+    parser.add_argument(
+        "--grid-extent",
+        dest="grid_extent",
+        type=float,
+        nargs=4,
+        metavar=("LON_MIN", "LON_MAX", "LAT_MIN", "LAT_MAX"),
+        default=list(DEFAULT_GRID_EXTENT),
+        help="SAL raster extent in degrees (PlateCarree).",
+    )
+    parser.add_argument(
+        "--grid-step-lat",
+        dest="grid_step_lat",
+        type=float,
+        default=DEFAULT_GRID_STEP_LAT,
+        help=f"SAL raster latitude spacing in degrees (default {DEFAULT_GRID_STEP_LAT}).",
+    )
+    parser.add_argument(
+        "--grid-step-lon",
+        dest="grid_step_lon",
+        type=float,
+        default=DEFAULT_GRID_STEP_LON,
+        help=f"SAL raster longitude spacing in degrees (default {DEFAULT_GRID_STEP_LON}).",
     )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
