@@ -41,11 +41,14 @@ def _():
     # region coordinate values are already human-readable after assign_coords below,
     # so skip the .capitalize() that _format_slice_label would otherwise apply.
     import report_scorecard as _rsc
+
     _orig_fmt = _rsc._format_slice_label
+
     def _fmt(s, strat_dim):
         if strat_dim == "region" and isinstance(s, str):
             return s
         return _orig_fmt(s, strat_dim)
+
     _rsc._format_slice_label = _fmt
     return (
         COLOR_SKILL_BASELINE_BETTER,
@@ -153,13 +156,12 @@ def _(LOG, candidate, manifest_path, output_dir, project_root):
             "baseline": "ICON-CH1-CTRL",
             "lead_times": "6/33/6",
             "variables": ["T_2M", "SP_10M", "TOT_PREC1", "PMSL"],
-        }, 
+        },
         {
             "name": "medium_range",
             "baseline": "ICON-CH2-CTRL",
             "lead_times": "24/120/24",
             "variables": ["T_2M", "SP_10M", "TOT_PREC6", "PMSL"],
-
         },
     ]
     for d in section_cfgs:
@@ -175,7 +177,9 @@ def _(LOG, candidate, manifest_path, output_dir, project_root):
         )
         LOG.info("scorecard: section %r — baseline %r", d["name"], d["base_label"])
 
-    resolved_output = output_dir or str(project_root / f"output/figures/{slug}/scorecards")
+    resolved_output = output_dir or str(
+        project_root / f"output/figures/{slug}/scorecards"
+    )
     return cand_info, resolved_output, section_cfgs
 
 
@@ -236,13 +240,17 @@ def _(
         )
         col_width = max(
             figure["col_width"],
-            slice_label_w_in * layout["slice_label_pad"] / (n_leads + layout["slice_gap"]),
+            slice_label_w_in
+            * layout["slice_label_pad"]
+            / (n_leads + layout["slice_gap"]),
         )
         plot_width = len(slices) * (n_leads + layout["slice_gap"]) - layout["slice_gap"]
         y_bottom = -(len(rows) - 0.5)
         y_top = layout["slice_y"] + slice_label_h_rows + layout["slice_y_pad"]
         xlim_left = layout["metric_x"] - figure["left_margin_in"] / col_width
-        data_w_in = max(figure["width_min"], plot_width * col_width + figure["width_pad"])
+        data_w_in = max(
+            figure["width_min"], plot_width * col_width + figure["width_pad"]
+        )
         return dict(
             rows=rows,
             slices=slices,
@@ -261,11 +269,11 @@ def _(
     import copy
     import textwrap as _tw
 
-    _PARAM_WRAP = 20   # wrap parameter names after ~20 chars
+    _PARAM_WRAP = 20  # wrap parameter names after ~20 chars
     _REGION_WRAP = 12  # wrap region names after ~12 chars
 
     excluded_data_vars = [
-        "TOT_PREC1.ETS_gt_0p0", 
+        "TOT_PREC1.ETS_gt_0p0",
         "TOT_PREC1.ETS_gt_10p0",
         "TOT_PREC6.ETS_gt_0p0",
         "TOT_PREC6.ETS_gt_1p0",
@@ -276,7 +284,7 @@ def _(
     plot_cfg = copy.deepcopy(DEFAULT_PLOT_CFG)
     plot_cfg["colors"]["model_better"] = COLOR_SKILL_MODEL_BETTER
     plot_cfg["colors"]["baseline_better"] = COLOR_SKILL_BASELINE_BETTER
-    plot_cfg["figure"]["title_margin_in"] = 0.5   # space between title and axes
+    plot_cfg["figure"]["title_margin_in"] = 0.5  # space between title and axes
     plot_cfg["figure"]["inter_panel_gap_in"] = 1.2  # extra gap above non-first panels
 
     LOG.info("scorecard: loading data for %d section(s)", len(section_cfgs))
@@ -292,19 +300,23 @@ def _(
         _diff = load_relative_diff(_cfg)
         _diff = filter_diff(_diff, _cfg)
         _diff = _diff.drop_vars([v for v in excluded_data_vars if v in _diff.data_vars])
-        _diff = _diff.drop_sel(region = "jura")
-        _diff = _diff.rename({
-            v: f"{_tw.fill(param_label(v.rsplit('.', 1)[0]), width=_PARAM_WRAP)}.{v.rsplit('.', 1)[1]}"
-            for v in _diff.data_vars
-        })
+        _diff = _diff.drop_sel(region="jura")
+        _diff = _diff.rename(
+            {
+                v: f"{_tw.fill(param_label(v.rsplit('.', 1)[0]), width=_PARAM_WRAP)}.{v.rsplit('.', 1)[1]}"
+                for v in _diff.data_vars
+            }
+        )
         _strat_dim = _cfg.get("stratification", "region")
         if _strat_dim in _diff.coords:
-            _diff = _diff.assign_coords({
-                _strat_dim: [
-                    _tw.fill(region_label(str(r)), width=_REGION_WRAP)
-                    for r in _diff[_strat_dim].values
-                ]
-            })
+            _diff = _diff.assign_coords(
+                {
+                    _strat_dim: [
+                        _tw.fill(region_label(str(r)), width=_REGION_WRAP)
+                        for r in _diff[_strat_dim].values
+                    ]
+                }
+            )
         _lay = _panel_layout(_diff, _cfg)
         panels.append((_diff, _cfg, _sec["name"], _lay))
         LOG.info(
@@ -317,9 +329,7 @@ def _(
 
     mo.md(
         f"**Loaded {len(panels)} panel(s):** "
-        + ", ".join(
-            f"{name} ({len(lay['rows'])} rows)" for _, _, name, lay in panels
-        )
+        + ", ".join(f"{name} ({len(lay['rows'])} rows)" for _, _, name, lay in panels)
     )
     return panels, plot_cfg
 
@@ -404,9 +414,8 @@ def _(
         # _ax.get_position() gives the axes bbox in subfig fraction after subplots_adjust.
         _title_x = 0.01
         _ax_pos = _ax.get_position()
-        _metric_x_frac = (
-            (layout_cfg["metric_x"] - _lay["xlim_left"])
-            / (_lay["plot_width"] - _lay["xlim_left"])
+        _metric_x_frac = (layout_cfg["metric_x"] - _lay["xlim_left"]) / (
+            _lay["plot_width"] - _lay["xlim_left"]
         )
         _group_dx_in = (
             _title_x - _ax_pos.x0 - _ax_pos.width * _metric_x_frac
@@ -430,10 +439,12 @@ def _(
         # _draw_data_rows uses ha="right" for group labels; override it on the axes
         # instance so it uses ha="left" (matching the title anchor above).
         _orig_ax_text = _ax.text
+
         def _left_text(*args, **kwargs):
             if kwargs.get("transform") is _group_transform:
                 kwargs = {**kwargs, "ha": "left"}
             return _orig_ax_text(*args, **kwargs)
+
         _ax.text = _left_text
         _sep_ys = draw_data_rows(
             _ax,
@@ -465,9 +476,10 @@ def _(
         _metric_frac = (layout_cfg["metric_x"] - _lay["xlim_left"]) / (
             _lay["plot_width"] - _lay["xlim_left"]
         )
-        _hline_x0 = _metric_frac - (
-            (_lay["metric_label_w_pt"] - hline_cfg["start_pad_pt"]) / 72
-        ) / _ax_w_in
+        _hline_x0 = (
+            _metric_frac
+            - ((_lay["metric_label_w_pt"] - hline_cfg["start_pad_pt"]) / 72) / _ax_w_in
+        )
         for _sy in _sep_ys:
             _ax.axhline(
                 y=_sy,
@@ -483,7 +495,10 @@ def _(
             [(_sample_pcts[0], _colors["baseline_better"], f"≤-{_sample_pcts[0]}%")]
             + [(p, _colors["baseline_better"], f"-{p}%") for p in _sample_pcts[1:]]
             + [(_neutral_pct, _colors["neutral"], f"|Δ|<{_neutral_pct}%")]
-            + [(p, _colors["model_better"], f"+{p}%") for p in reversed(_sample_pcts[1:])]
+            + [
+                (p, _colors["model_better"], f"+{p}%")
+                for p in reversed(_sample_pcts[1:])
+            ]
             + [(_sample_pcts[0], _colors["model_better"], f"≥+{_sample_pcts[0]}%")]
         )
         _x_span = min(legend_cfg["width_in"] / _ax_w_in, 0.8)

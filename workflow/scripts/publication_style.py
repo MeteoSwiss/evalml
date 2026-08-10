@@ -95,6 +95,7 @@ def param_label(param: str) -> str:
     """Full variable name for a parameter code (falls back to the code)."""
     return PARAM_LABELS.get(param, param)
 
+
 def region_label(region: str) -> str:
     """Region label for region"""
     return REGION_LABELS.get(region, region)
