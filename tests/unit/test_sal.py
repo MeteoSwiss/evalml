@@ -1,8 +1,14 @@
+import importlib.util
+from argparse import Namespace
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 from evalml.config import ConfigModel, SalConfig
 from verification.sal import GRID_EXTENT, compute_sal, remap_field, sal_raster
+
+SCRIPT = Path(__file__).resolve().parents[2] / "workflow/scripts/verification_sal.py"
 
 
 def _blob(shape, cy, cx, amp, sigma):
@@ -71,3 +77,36 @@ def test_sal_leadtime_validator_rejects_unproducible(example_config):
     example_config["experiment"]["sal"] = {"enabled": True, "leadtimes": [9999]}
     with pytest.raises(ValueError, match="sal.leadtimes"):
         ConfigModel.model_validate(example_config)
+
+
+# ---------------------------------------------------------------------------
+# Script pre-flight guards
+#
+# Both fire before any data is read, so they are unit-testable: no archive, no
+# truth zarr, no snakemake. The end-to-end path is covered by the longtest
+# (tests/integration/test_sal_small.py), which needs /store_new.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def sal_script():
+    """verification_sal.py loaded by path (workflow/scripts is not a package)."""
+    spec = importlib.util.spec_from_file_location("verification_sal", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_script_rejects_step_below_accumulation(sal_script):
+    # A 6 h accumulation cannot be evaluated at a 3 h lead time.
+    with pytest.raises(ValueError, match="accumulation"):
+        sal_script.main(Namespace(param="TOT_PREC6", step=3, truth=Path("truth.zarr")))
+
+
+def test_script_rejects_non_zarr_truth(sal_script):
+    # SAL needs a resolved gridded field; station observations and other
+    # non-zarr roots are rejected up front rather than failing on read.
+    with pytest.raises(ValueError, match="zarr"):
+        sal_script.main(
+            Namespace(param="TOT_PREC6", step=6, truth=Path("jretrievedwh:surface"))
+        )
