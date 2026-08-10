@@ -209,4 +209,8 @@ class Manifest:
                     )
             return
 
+        if figure == "scorecards":
+            self.get_candidate(opts.get("candidate"))
+            return
+
         raise ResolutionError(f"Unknown figure type {figure!r}.")

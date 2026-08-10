@@ -68,12 +68,23 @@ SCORE_LABELS = {
     "BIAS_CONTRIB": "Contribution of bias to MSE skill",
 }
 
+REGION_LABELS = {
+    "icon": "Switzerland",
+    "jura": "Jura",
+    "mittelland": "Swiss Plateau",
+    "innerealpentaeler": "Inneralpine Valleys",
+    "alpennordhang": "Northern Slopes",
+    "alpensuedseite": "Southern Slopes",
+}
+
 # Human-readable variable names (used for panel titles / labels).
 PARAM_LABELS = {
     "T_2M": "2m Temperature",
     "TD_2M": "2m Dew Point Temperature",
-    "TOT_PREC": "Total Precipitation",
+    "TOT_PREC1": "Total Precipitation (hourly)",
+    "TOT_PREC6": "Total Precipitation (6-hourly)",
     "SP_10M": "Wind Speed",
+    "PMSL": "Sea Level Pressure",
     "DD_10M": "Wind Direction",
     "U_10M": "Eastward Wind",
     "V_10M": "Northward Wind",
@@ -83,6 +94,10 @@ PARAM_LABELS = {
 def param_label(param: str) -> str:
     """Full variable name for a parameter code (falls back to the code)."""
     return PARAM_LABELS.get(param, param)
+
+def region_label(region: str) -> str:
+    """Region label for region"""
+    return REGION_LABELS.get(region, region)
 
 
 def line_style(src: str) -> dict:

@@ -1,6 +1,13 @@
 ## Publication figure style for evalml paper figures.
 ## Apply with: plt.style.use(Path(__file__).parent / "publication.mplstyle")
 
+# Font family
+font.family         : sans-serif
+font.sans-serif     : Liberation Sans
+
+# Figure DPI (screen / PDF rendering; PNG exports pass an explicit dpi= argument)
+figure.dpi          : 250
+
 # Two-level font-size hierarchy:
 #   16 pt  — titles, axis labels, legend, suptitle  (identifies what is shown)
 #   13 pt  — tick values, in-panel annotations      (reads specific numbers)
