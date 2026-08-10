@@ -34,8 +34,19 @@ def _():
     from publication_style import (
         COLOR_SKILL_BASELINE_BETTER,
         COLOR_SKILL_MODEL_BETTER,
+        param_label,
+        region_label,
     )
 
+    # region coordinate values are already human-readable after assign_coords below,
+    # so skip the .capitalize() that _format_slice_label would otherwise apply.
+    import report_scorecard as _rsc
+    _orig_fmt = _rsc._format_slice_label
+    def _fmt(s, strat_dim):
+        if strat_dim == "region" and isinstance(s, str):
+            return s
+        return _orig_fmt(s, strat_dim)
+    _rsc._format_slice_label = _fmt
     return (
         COLOR_SKILL_BASELINE_BETTER,
         COLOR_SKILL_MODEL_BETTER,
@@ -47,10 +58,12 @@ def _():
         load_relative_diff,
         measure_label_sizes,
         mo,
+        param_label,
         parse_var_metrics,
         pathlib,
         plt,
         project_root,
+        region_label,
         scaled_dot_area,
         sys,
         timedelta_to_hours,
@@ -121,12 +134,6 @@ def _(mo, project_root, sys):
 
 
 @app.cell
-def _(manifest_path):
-    manifest_path
-    return
-
-
-@app.cell
 def _(LOG, candidate, manifest_path, output_dir, project_root):
     from evalml.publication.manifest import load_manifest
 
@@ -183,7 +190,9 @@ def _(
     load_relative_diff,
     measure_label_sizes,
     mo,
+    param_label,
     parse_var_metrics,
+    region_label,
     section_cfgs,
     timedelta_to_hours,
 ):
@@ -263,6 +272,8 @@ def _(
     plot_cfg = copy.deepcopy(DEFAULT_PLOT_CFG)
     plot_cfg["colors"]["model_better"] = COLOR_SKILL_MODEL_BETTER
     plot_cfg["colors"]["baseline_better"] = COLOR_SKILL_BASELINE_BETTER
+    plot_cfg["figure"]["title_margin_in"] = 0.5   # space between title and axes
+    plot_cfg["figure"]["inter_panel_gap_in"] = 1.2  # extra gap above non-first panels
 
     LOG.info("scorecard: loading data for %d section(s)", len(section_cfgs))
     panels = []
@@ -277,6 +288,16 @@ def _(
         _diff = load_relative_diff(_cfg)
         _diff = filter_diff(_diff, _cfg)
         _diff = _diff.drop_vars([v for v in excluded_data_vars if v in _diff.data_vars])
+        _diff = _diff.drop_sel(region = "jura")
+        _diff = _diff.rename({
+            v: f"{param_label(v.rsplit('.', 1)[0])}.{v.rsplit('.', 1)[1]}"
+            for v in _diff.data_vars
+        })
+        _strat_dim = _cfg.get("stratification", "region")
+        if _strat_dim in _diff.coords:
+            _diff = _diff.assign_coords({
+                _strat_dim: [region_label(str(r)) for r in _diff[_strat_dim].values]
+            })
         _lay = _panel_layout(_diff, _cfg)
         panels.append((_diff, _cfg, _sec["name"], _lay))
         LOG.info(
@@ -332,12 +353,14 @@ def _(
     ) / 72
 
     # Vertical layout: one panel per section, stacked top-to-bottom.
+    _inter_panel_gap_in = figure_cfg.get("inter_panel_gap_in", 0)
     panel_widths = [lay["data_w_in"] for _, _, _, lay in panels]
     panel_heights = [
         figure_cfg["title_margin_in"]
+        + (_inter_panel_gap_in if i > 0 else 0)
         + legend_h_in
         + figure_cfg["row_height"] * (lay["y_top"] - lay["y_bottom"])
-        for _, _, _, lay in panels
+        for i, (_, _, _, lay) in enumerate(panels)
     ]
     fig_width = max(panel_widths)
     fig_height = sum(panel_heights)
@@ -364,27 +387,47 @@ def _(
         _ax.set_ylim(_lay["y_bottom"], _lay["y_top"])
         _ax.axis("off")
 
+        _inter_gap = _inter_panel_gap_in if _i > 0 else 0
         _subfig.subplots_adjust(
-            top=1 - figure_cfg["title_margin_in"] / _panel_h,
+            top=1 - (figure_cfg["title_margin_in"] + _inter_gap) / _panel_h,
             bottom=legend_h_in / _panel_h,
         )
 
+        # Align the group-label left edge with the title's left anchor (subfig x=0.01).
+        # _ax.get_position() gives the axes bbox in subfig fraction after subplots_adjust.
+        _title_x = 0.01
+        _ax_pos = _ax.get_position()
+        _metric_x_frac = (
+            (layout_cfg["metric_x"] - _lay["xlim_left"])
+            / (_lay["plot_width"] - _lay["xlim_left"])
+        )
+        _group_dx_in = (
+            _title_x - _ax_pos.x0 - _ax_pos.width * _metric_x_frac
+        ) * fig_width
         _group_transform = _ax.transData + ScaledTranslation(
-            -(_lay["metric_label_w_pt"] + layout_cfg["group_metric_gap_pt"]) / 72,
+            _group_dx_in,
             0,
             _fig.dpi_scale_trans,
         )
         _letter = chr(ord("a") + _i)
+        _title_y = (1 - _inter_gap / _panel_h) if _inter_gap > 0 else 0.99
         _subfig.text(
-            0.01,
-            0.99,
+            _title_x,
+            _title_y,
             f"{_letter}) {_section_name} with {_baseline_source} as baseline",
             fontsize=fonts["title"],
-            fontweight="bold",
             ha="left",
             va="top",
         )
 
+        # _draw_data_rows uses ha="right" for group labels; override it on the axes
+        # instance so it uses ha="left" (matching the title anchor above).
+        _orig_ax_text = _ax.text
+        def _left_text(*args, **kwargs):
+            if kwargs.get("transform") is _group_transform:
+                kwargs = {**kwargs, "ha": "left"}
+            return _orig_ax_text(*args, **kwargs)
+        _ax.text = _left_text
         _sep_ys = draw_data_rows(
             _ax,
             _diff,
@@ -396,6 +439,7 @@ def _(
             _group_transform,
             _cfg,
         )
+        _ax.text = _orig_ax_text
         draw_slice_headers(
             _ax,
             _lay["slices"],
