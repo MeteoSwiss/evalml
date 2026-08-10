@@ -4,7 +4,7 @@ description: |
 
 dates:
   start: 2025-04-01T00:00
-  end: 2025-12-26T18:00 # to ensure that the full forecasts is in 2025
+  end: 2026-03-31T18:00
   frequency: 30h
 
 runs:
@@ -32,7 +32,7 @@ runs:
 
 truth:
   label: KENDA-CH1
-  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2026-1h-pl13-v2.0.zarr
 
 experiment:
   params:
@@ -50,6 +50,9 @@ experiment:
       - alpennordhang
       - innerealpentaeler
       - alpensuedseite
+      - alpen
+      - tiefelagen
+      - berge
     root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
   thresholds:
     TOT_PREC1:
