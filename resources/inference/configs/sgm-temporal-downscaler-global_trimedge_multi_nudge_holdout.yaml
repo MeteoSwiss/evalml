@@ -38,20 +38,30 @@ input:
                   icon_grid_dir: /scratch/mch/llanzila/sruc/aux_files
                   k: 3
                   power: 4.0
-                  max_dist: 0.065    # in degrees, ~6.5 km
+                  max_dist: 0.12    # in degrees, ~12 km
                   run_mode: "devt"
                   # Stations to withhold from nudging (held-out for cross-validation).
                   exclude_stations:
-                    - FAH
-                    - DEM
-                    - WAE
-                    - GUT
+                    - COY
+                    - FRE
+                    - RUE
+                    - BAS
+                    - PLF
+                    - CGI
+                    - HOE
+                    - PUY
+                    - RAG
                     - SAE
-                    - CDM
-                    - PMA
-                    - SIA
+                    - ALT
+                    - GOS
+                    - COV
+                    - ULR
+                    - BIN
+                    - GUE
+                    - ROE
                     - BIA
-                    - SMM
+                    - CEV
+                    - OTL
           namer: &namer
             rules:
               - - shortName: T

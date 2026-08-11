@@ -38,7 +38,7 @@ input:
                   icon_grid_dir: /scratch/mch/llanzila/sruc/aux_files
                   k: 3
                   power: 4.0
-                  max_dist: 0.065    # in degrees, ~6.5 km
+                  max_dist: 0.12    # in degrees, ~12 km
                   run_mode: "devt"
                   holdout_fraction: 0.0
                   holdout_seed: 42

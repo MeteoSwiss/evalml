@@ -113,16 +113,26 @@ experiment:
   cross_validation:
     # Stations withheld from nudging in the nudge-partial inference run.
     exclude_stations:
-      - FAH
-      - DEM
-      - WAE
-      - GUT
+      - COY
+      - FRE
+      - RUE
+      - BAS
+      - PLF
+      - CGI
+      - HOE
+      - PUY
+      - RAG
       - SAE
-      - CDM
-      - PMA
-      - SIA
+      - ALT
+      - GOS
+      - COV
+      - ULR
+      - BIN
+      - GUE
+      - ROE
       - BIA
-      - SMM
+      - CEV
+      - OTL
   scorecards:
     enabled: true
     sections:
