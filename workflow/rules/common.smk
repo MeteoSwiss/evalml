@@ -469,6 +469,22 @@ PARAMS_WITHOUT_STEP_ZERO_VALUE = {
 }
 
 
+def balfrin_cpus(mem_mb, actual_cpus=1, node_mem_mb=512_000, node_cpus=256):
+    """Minimum cores to request on Balfrin based on memory usage.
+
+    Balfrin CPU nodes have no per-job memory control: any job can consume the
+    full node memory (512 GB / 256 cores).  To avoid starving other jobs,
+    reserve cores proportional to expected memory so the scheduler implicitly
+    limits total memory usage:
+
+        cores = max(actual_cpus, ceil(mem_mb / node_mem_mb * node_cpus))
+    """
+    import math
+
+    mem_cpus = math.ceil(mem_mb / node_mem_mb * node_cpus)
+    return max(actual_cpus, mem_cpus)
+
+
 def resolve_leadtimes(steps_spec, requested="all", param=None):
     """Lead times to compute for a single participant.
 
