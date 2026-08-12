@@ -15,11 +15,15 @@ _dev
 .idea
 .snakemake
 output
+output_*/
 _sandbox/
 experiment_report.html
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
+
+# Marimo session cache
+__marimo__/
 
 # Logs
 *.log
