@@ -42,11 +42,11 @@ def truth_slug(label: str) -> str:
 # Path templates, relative to ``output_root``. run_id / baseline_id are opaque
 # (run_id contains '/'), so these are only ever str.format-joined, never split.
 PATH_TEMPLATES = {
-    "run_verif": "data/runs/{run_id}/verif_aggregated_{truth_hash}.nc",
+    "run_verif": "data/runs/{run_id}/verif_aggregated_{verif_hash}.nc",
     "run_grib": "data/runs/{run_id}/{init_time}/grib",
     "run_scoremap": "data/runs/{run_id}/scoremaps/{param}_{leadtime}_{truth_hash}.nc",
     "run_sal": "data/runs/{run_id}/sal/{param}_{leadtime}_{truth_hash}.csv",
-    "baseline_verif": "data/baselines/{baseline_id}/verif_aggregated_{truth_hash}.nc",
+    "baseline_verif": "data/baselines/{baseline_id}/verif_aggregated_{verif_hash}.nc",
     "baseline_scoremap": "data/baselines/{baseline_id}/scoremaps/{param}_{leadtime}_{truth_hash}.nc",
     "baseline_sal": "data/baselines/{baseline_id}/sal/{param}_{leadtime}_{truth_hash}.csv",
 }
@@ -68,6 +68,7 @@ def build_manifest(
     baseline_configs: dict,
     truth_cfg: dict | None,
     truth_hash: str,
+    verif_hash: str,
     reftimes,
     output_root: str,
     publication_cfg: dict | None,
@@ -106,7 +107,7 @@ def build_manifest(
                     "verif_aggregated": _join(
                         output_root,
                         PATH_TEMPLATES["baseline_verif"].format(
-                            baseline_id=baseline_id, truth_hash=truth_hash
+                            baseline_id=baseline_id, verif_hash=verif_hash
                         ),
                     ),
                     "scoremap_template": _join(
@@ -148,7 +149,7 @@ def build_manifest(
                     "verif_aggregated": _join(
                         output_root,
                         PATH_TEMPLATES["run_verif"].format(
-                            run_id=run_id, truth_hash=truth_hash
+                            run_id=run_id, verif_hash=verif_hash
                         ),
                     ),
                     "grib_dir_template": _join(

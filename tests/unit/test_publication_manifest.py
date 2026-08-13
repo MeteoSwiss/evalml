@@ -56,6 +56,7 @@ def _build(truth_root="jretrieve:1,2"):
         baseline_configs=baseline_configs,
         truth_cfg=truth_cfg,
         truth_hash="2b83",
+        verif_hash="6ae6",
         reftimes=[datetime(2025, 4, 1, 0, 0), datetime(2025, 4, 3, 6, 0)],
         output_root="output/",
         publication_cfg={"enabled": True, "meteogram": {"init_time": "202504010000"}},
@@ -79,7 +80,7 @@ def test_build_manifest_paths():
     assert cand["paths"]["verif_aggregated"] == (
         "output/data/runs/"
         "temporal_downscaler-f927-1ee3-on-forecaster-c304-23e7/495c/"
-        "verif_aggregated_2b83.nc"
+        "verif_aggregated_6ae6.nc"
     )
     assert "{init_time}" in cand["paths"]["grib_dir_template"]
     assert "{param}" in cand["paths"]["scoremap_template"]
@@ -154,6 +155,7 @@ def _write_truth_manifest(root, label, truth_root="/store/x.zarr"):
         baseline_configs=baseline_configs,
         truth_cfg={"label": label, "root": truth_root},
         truth_hash="aaaa",
+        verif_hash="bbbb",
         reftimes=[datetime(2025, 4, 1, 0, 0)],
         output_root=str(root),
         publication_cfg={},

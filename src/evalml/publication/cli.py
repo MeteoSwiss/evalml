@@ -295,6 +295,37 @@ def scoremaps(
     )
 
 
+@publication.command("scorecards")
+@manifest_option
+@truth_option
+@click.option("--candidate", default=None, help="Candidate label (required if >1).")
+@click.option(
+    "--output",
+    default=None,
+    help="Output directory (default figures/<truth>/scorecards).",
+)
+@_friendly_errors
+def scorecards(manifest, truth, candidate, output):
+    """Publication-ready combined scorecard: all sections side-by-side in one figure."""
+    from evalml.publication.manifest import default_manifest_path as _default_path
+
+    resolved_manifest = manifest or str(_default_path(truth=truth))
+    m = _load(resolved_manifest)
+    output = output or _fig_dir(m, "scorecards")
+    m.validate_request("scorecards", candidate=candidate)
+    cmd = [
+        sys.executable,
+        SCRIPTS / "publication_scorecard.py",
+        "--manifest",
+        resolved_manifest,
+        "--output",
+        output,
+    ]
+    if candidate:
+        cmd += ["--candidate", candidate]
+    _run(cmd)
+
+
 @publication.command("sal-scatter")
 @manifest_option
 @truth_option

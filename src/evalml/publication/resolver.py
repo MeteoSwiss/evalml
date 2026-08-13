@@ -222,6 +222,10 @@ class Manifest:
                     )
             return
 
+        if figure == "scorecards":
+            self.get_candidate(opts.get("candidate"))
+            return
+
         if figure == "sal_scatter":
             if self.truth.get("type") != "zarr":
                 raise ResolutionError(

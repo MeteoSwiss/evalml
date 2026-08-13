@@ -15,14 +15,15 @@ TRUTH_SLUG = truth_slug((config.get("truth") or {}).get("label", ""))
 
 
 rule publication_manifest:
-    """Persist the run/baseline -> hash -> data-path mapping for the CLI/notebooks.
-
-Cheap localrule: dumps the in-memory workflow globals to JSON, so paths can be
-resolved (interactively or by the figure rules) without recomputing any hash.
-The master hash (a digest of the whole config) is a rule param, so Snakemake's
-`params` rerun-trigger regenerates the manifest whenever the config content
-changes — without re-running on a no-op file touch.
-"""
+    # Persist the run/baseline -> hash -> data-path mapping for the CLI/notebooks.
+    #
+    # Cheap localrule: dumps the in-memory workflow globals to JSON, so paths can be
+    # resolved (interactively or by the figure rules) without recomputing any hash.
+    # The master hash (a digest of the whole config) is a rule param, so Snakemake's
+    # `params` rerun-trigger regenerates the manifest whenever the config content
+    # changes — without re-running on a no-op file touch.
+    input:
+        script="src/evalml/publication/manifest.py",
     output:
         OUT_ROOT / f"publication/{TRUTH_SLUG}/manifest.json",
     localrule: True
@@ -36,6 +37,7 @@ changes — without re-running on a no-op file touch.
             baseline_configs=BASELINE_CONFIGS,
             truth_cfg=config.get("truth"),
             truth_hash=TRUTH_HASH,
+            verif_hash=VERIF_HASH,
             reftimes=REFTIMES,
             output_root=str(OUT_ROOT),
             publication_cfg=config.get("publication", {}),
@@ -88,7 +90,7 @@ def _meteogram_data_dep(wc):
     CLI resolves from the manifest is present, with correct ordering.
     """
     run_id = _pub_candidate_run_id()
-    return str(OUT_ROOT / f"data/runs/{run_id}/verif_aggregated_{TRUTH_HASH}.nc")
+    return str(OUT_ROOT / f"data/runs/{run_id}/verif_aggregated_{VERIF_HASH}.nc")
 
 
 rule publication_meteogram:
