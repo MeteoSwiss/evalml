@@ -10,7 +10,7 @@ dates:
 runs:
   - forecaster:
       label: Varda-Single
-      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/98d4e297f0164f18a0ad50fb01fbff42
       config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
       steps: 0/120/6
   - baseline:

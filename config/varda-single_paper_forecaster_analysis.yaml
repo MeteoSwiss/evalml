@@ -9,7 +9,7 @@ dates:
 
 runs:
   - forecaster:
-      label: Varda-Single
+      label: stage-E-no-rollout
       checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
       config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
       steps: 0/120/6
