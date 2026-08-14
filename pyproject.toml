@@ -31,6 +31,8 @@ dependencies = [
     "earthkit-plots>=1.0,<1.1",
     "earthkit-meteo>=1.0,<1.1",
     "earthkit-geo>=1.0,<1.1",
+    "pysteps>=1.12",       # SAL spatial precipitation verification (salscores)
+    "scikit-image>=0.22",  # required by pysteps.verification.salscores
 ]
 
 [project.scripts]

@@ -43,6 +43,11 @@ experiment:
   stratification:
     regions:
       - global
+  sal:
+    enabled: false
+    params:
+      - TOT_PREC6
+    leadtimes: [6, 12, 18, 24, 30]
 
 locations:
   output_root: output/

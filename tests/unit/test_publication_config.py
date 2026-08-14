@@ -11,7 +11,31 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def paper_config():
-    cfg = yaml.safe_load((PROJECT_ROOT / "config/varda-single_paper.yaml").read_text())
+    # `varda-single_paper.yaml` was split into `_analysis` / `_stations`, and the
+    # publication block (opt-in) was dropped from the shipped configs in that move.
+    # Load the analysis config and attach a representative publication block so
+    # these tests exercise the publication-config validation rules.
+    cfg = yaml.safe_load(
+        (PROJECT_ROOT / "config/varda-single_paper_analysis.yaml").read_text()
+    )
+    cfg["publication"] = {
+        "leadtimes": {"enabled": True},
+        "scoremaps": {
+            "enabled": True,
+            "steps": [6, 24],
+            "params": ["T_2M", "SP_10M"],
+            "scores": ["MSE_SKILL", "BIAS_CONTRIB"],
+            "baseline_label": "ICON-CH1-CTRL",
+            "season": "all",
+            "region": "switzerland",
+        },
+        "meteogram": {
+            "enabled": False,
+            "init_time": "202504010000",
+            "station": "KLO",
+            "params": ["T_2M", "TOT_PREC", "SP_10M", "DD_10M"],
+        },
+    }
     return cfg
 
 
