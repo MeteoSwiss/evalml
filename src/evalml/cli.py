@@ -268,6 +268,28 @@ def sandbox(
     )
 
 
+@cli.command(help="Generate publication figures as defined by a config YAML file.")
+@click.argument(
+    "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
+@workflow_options
+def publication(
+    configfile, cores, verbose, dry_run, unlock, report, dag, rulegraph, extra_smk_args
+):
+    execute_workflow(
+        configfile,
+        "publication_all",
+        cores,
+        verbose,
+        dry_run,
+        unlock,
+        report,
+        dag,
+        rulegraph,
+        extra_smk_args,
+    )
+
+
 @cli.command(help="Make a specific file from a workflow defined in the YAML file.")
 @click.argument(
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)

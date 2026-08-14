@@ -6,10 +6,12 @@ config:
           dataset_config:
             dataset:
               cutout:
-                - dataset: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-ifsnames-v1.0.zarr
+                - dataset: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2026-1h-pl13-ifsnames-v2.0.zarr
+                  start: "2024-05-01T00:00:00" # exclude start of 2024 due to missing dates in KENDA-CH1
+                  end: "2026-05-01T00:00:00"
                 - dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2026-6h-v1-combined-land.zarr
-          start: null
-          end: null
+                  start: "2024-05-01T00:00:00" # exclude start of 2024 due to missing dates in KENDA-CH1
+                  end: "2026-05-01T00:00:00"
 
 dataset:
   data:

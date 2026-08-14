@@ -7,6 +7,17 @@ from pathlib import Path
 from datetime import datetime
 
 
+def _get_patch_metadata(wc):
+    """Return the source patch_metadata file for a given run's inference config."""
+    with open(RUN_CONFIGS[wc.run_id]["config"]) as f:
+        cfg = yaml.safe_load(f)
+    patch = cfg.get("patch_metadata")
+    if patch is None:
+        return []
+    source = Path("resources/inference/metadata").resolve() / Path(patch).name
+    return [source] if source.exists() else []
+
+
 rule inference_get_checkpoint:
     output:
         checkpoint=OUT_ROOT / "data/runs/{env_id}/inference-last.ckpt",
@@ -176,6 +187,7 @@ rule inference_prepare_forecaster:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
+        metadata=_get_patch_metadata,
     output:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
@@ -206,6 +218,7 @@ rule inference_prepare_temporal_downscaler:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
+        metadata=_get_patch_metadata,
         forecasts=lambda wc: (
             [
                 OUT_ROOT
