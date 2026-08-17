@@ -1,21 +1,27 @@
 # yaml-language-server: $schema=../../../workflow/tools/config.schema.json
 description: |
-  Integration-test fixture: minimal experiment run exercising the dashboard
-  path (plot_meteogram.py). One reference date, short lead times,
-  animations disabled. Driven by tests/integration/test_showcase.py.
+  HiRAD downscaling experiments.
 
-config_label: varda-single-1.0
-
-fixture_root: /scratch/mch/mmcgloho/evaml_test_fixtures/dashboard-small/
+config_label: hirad-forecast-n320-test-1.0
 
 dates:
-  - 2024-08-01T00:00
+  - 2026-07-30T00:00 # Disaggregation errors: I believe tp is sometimes negative in HiRAD. TODO to fix.
+  - 2026-07-31T00:00 # Forecast data that works
+
 
 runs:
+  - spatial_downscaler:
+      root: '/store_new/mch/msopr/ml/evalml/hirad_grib_data'
+      label: HiRAD-downscaling-N320
+      steps: 0/12/1
   - baseline:
       label: ICON-CH1-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
       steps: 0/12/1
+
+# HiRAD GRIB data has no elevation coordinate yet.
+# TODO: set to true when we fix the GRIB generation.
+lapse_rate_correction: false
 
 truth:
   label: SwissMetNet
@@ -26,9 +32,17 @@ truth:
   #                  root: jretrievedwh:bbox=45.8,47.8,5.9,10.5
   #                  append ;stage=devt to target a non-prod DWH stage
 
+#truth:
+#   label: KENDA-CH1
+#   root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
 experiment:
   params:
     - T_2M
+    # TODO Use a derivation of SP_10M instead of 10U and 10V
+    - SP_10M
+    - U_10M
+    - V_10M
     - TOT_PREC1
   stratification:
     regions:
@@ -44,6 +58,12 @@ experiment:
     T_2M:
       lt: [273.15]
       gt: [288.15, 298.15]
+    SP_10M:
+      gt: [2.5, 5, 10, 15]
+    U_10M:
+      gt: [2.5, 5, 10, 15]
+    V_10M:
+      gt: [2.5, 5, 10, 15]
   dashboard:
     stratification:
       # - region
@@ -58,13 +78,19 @@ experiment:
         stratification: region
         variables:
           - "T_2M:RMSE,R2,ETS"
+          #- "SP_10M:RMSE,R2,ETS"
+          - "U_10M:RMSE,R2,ETS"
+          - "V_10M:RMSE,R2,ETS"
           - "TOT_PREC1:RMSE,R2,ETS"
   scoremaps:
-    enabled: false
+    enabled: false # requires 24h lead times
 
 showcase:
   params:
     - T_2M
+    - SP_10M
+    - U_10M
+    - V_10M
     - TOT_PREC1
   meteograms:
     enabled: false
@@ -74,8 +100,8 @@ showcase:
     frames_per_second: 5
     domains:
       # - globe
-      - europe
-      # - alps
+      # - europe
+      - alps
       - icon-ch
       - switzerland
 

@@ -172,7 +172,8 @@ class ThirdPartyRunConfig(BaseModel):
         min_length=1,
         description=(
             "Root directory of pre-generated GRIB from the external workflow, laid "
-            "out as root/{init_time}/*.grib (init_time formatted YYYYMMDDHHMM)."
+            "out as root/{init_time}/grib/*.grib (init_time formatted YYYYMMDDHHMM), "
+            "matching evalml's own internal per-run GRIB layout."
         ),
     )
     steps: str = Field(
