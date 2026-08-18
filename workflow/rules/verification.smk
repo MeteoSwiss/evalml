@@ -21,7 +21,7 @@ rule verification_metrics_baseline:
     log:
         OUT_ROOT / "logs/verification_metrics_baseline/{baseline_id}-{init_time}.log",
     resources:
-        cpus_per_task=24,
+        cpus_per_task=balfrin_cpus(80_000, actual_cpus=24),
         mem_mb=80_000,
         runtime="120m",
     params:
@@ -75,7 +75,7 @@ rule verification_metrics:
     log:
         OUT_ROOT / "logs/verification_metrics/{run_id}-{init_time}.log",
     resources:
-        cpus_per_task=24,
+        cpus_per_task=balfrin_cpus(80_000, actual_cpus=24),
         mem_mb=80_000,
         runtime="60m",
     # wildcard_constraints:
@@ -134,7 +134,7 @@ rule verification_metrics_aggregation:
     log:
         OUT_ROOT / "logs/verification_metrics_aggregation/{run_id}.log",
     resources:
-        cpus_per_task=24,
+        cpus_per_task=balfrin_cpus(250_000, actual_cpus=24),
         mem_mb=250_000,
         runtime="2h",
     shell:
@@ -170,7 +170,7 @@ rule verification_metrics_plot:
     log:
         OUT_ROOT / "logs/verification_metrics_plot/{experiment}.log",
     resources:
-        cpus_per_task=16,
+        cpus_per_task=balfrin_cpus(50_000, actual_cpus=16),
         mem_mb=50_000,
         runtime="20m",
     params:
@@ -210,7 +210,7 @@ rule verification_scoremaps:
         OUT_ROOT
         / f"logs/verification_scoremaps/{{run_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
     resources:
-        cpus_per_task=2,
+        cpus_per_task=balfrin_cpus(50_000, actual_cpus=2),
         mem_mb=50_000,
         runtime="60m",
     # wildcard_constraints:
@@ -250,7 +250,7 @@ rule verification_scoremaps_baseline:
         OUT_ROOT
         / f"logs/verification_scoremaps_baseline/{{baseline_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
     resources:
-        cpus_per_task=24,
+        cpus_per_task=balfrin_cpus(50_000, actual_cpus=24),
         mem_mb=50_000,
         runtime="60m",
     params:
