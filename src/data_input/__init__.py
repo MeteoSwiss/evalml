@@ -458,10 +458,19 @@ def _collect_icon_archive_files(
             f"ICON-CH2-EPS): {root}"
         )
 
-    return [
+    all_paths = [
         reftime_dir / "grib" / f"{gribname}{lt // 24:02}{lt % 24:02}0000_{member_id}"
         for lt in steps
     ]
+    existing = [p for p in all_paths if p.exists()]
+    missing = [p for p in all_paths if not p.exists()]
+    if missing:
+        LOG.debug(
+            "Skipping %d archive file(s) not found (coarser source resolution?): %s",
+            len(missing),
+            missing,
+        )
+    return existing
 
 
 def _discover_icon_member_ids(
@@ -556,17 +565,32 @@ def _disaggregate_accum(cumul: xr.DataArray, steps: list[int], n: int) -> xr.Dat
 
     For each step s in steps where s >= n: result[s] = cumul[s] - cumul[s-n],
     clipped to 0. For steps s < n (window extends before model start), result is NaN.
+    If cumul lacks any required step (e.g. 6-hourly source with n=1 requested), the
+    corresponding result is NaN — no KeyError is raised.
     Raises ValueError if any valid window gives significantly negative values (data is
     not actually cumulative from start).
     """
     step_coords = [np.timedelta64(s, "h") for s in steps]
-    result = xr.full_like(cumul.sel(step=step_coords), fill_value=np.nan)
-
     valid_steps = [s for s in steps if s >= n]
+
+    # Reindex cumul to cover every step we need (both s and s-n for valid windows).
+    # Missing steps in the source become NaN, so a coarser-resolution cumul (e.g.
+    # 6-hourly) naturally produces all-NaN results for a finer aggregation (e.g. n=1).
+    needed = sorted(
+        {np.timedelta64(s, "h") for s in steps}
+        | {np.timedelta64(s - n, "h") for s in valid_steps}
+    )
+    cumul_r = cumul.reindex(
+        step=needed
+    )  # default fill: NaN for float, NaT for datetime
+
+    result = xr.full_like(cumul_r.sel(step=step_coords), fill_value=np.nan)
+
     for s in valid_steps:
-        result.loc[{"step": np.timedelta64(s, "h")}] = cumul.sel(
-            step=np.timedelta64(s, "h")
-        ) - cumul.sel(step=np.timedelta64(s - n, "h"))
+        s_td = np.timedelta64(s, "h")
+        result.loc[{"step": s_td}] = cumul_r.sel(step=s_td) - cumul_r.sel(
+            step=np.timedelta64(s - n, "h")
+        )
 
     if valid_steps:
         valid_min = float(
@@ -1306,9 +1330,12 @@ def _disaggregated_and_derived_params(
                 cumuls[base] = _ensure_accum_ic(ds[base], load_steps)
             ds[agg_param] = _disaggregate_accum(cumuls[base], steps, n)
 
-    # Select only the originally requested steps (drop preceding helper steps)
+    # Select only the originally requested steps (drop preceding helper steps).
+    # Use reindex rather than sel so that steps absent from the loaded dataset
+    # (e.g. step 0 when the forecaster writes no step-0 file) are NaN-filled
+    # instead of raising a KeyError.
     if load_steps != list(steps) and "step" in ds.dims:
-        ds = ds.sel(step=[np.timedelta64(s, "h") for s in steps])
+        ds = ds.reindex(step=[np.timedelta64(s, "h") for s in steps])
 
     # Spatial derived params (skip if the loader already provided the variable natively)
     for p in params:
