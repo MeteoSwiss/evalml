@@ -12,7 +12,7 @@ def _get_patch_metadata(wc):
     with open(RUN_CONFIGS[wc.run_id]["config"]) as f:
         cfg = yaml.safe_load(f)
     patch = cfg.get("patch_metadata")
-    if patch is None:
+    if not isinstance(patch, str):
         return []
     source = Path("resources/inference/metadata").resolve() / Path(patch).name
     return [source] if source.exists() else []
