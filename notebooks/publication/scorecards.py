@@ -1,22 +1,31 @@
 import marimo
 
-__generated_with = "0.23.3"
+__generated_with = "0.23.7"
 app = marimo.App(width="full")
 
 
 @app.cell
 def _():
     import sys
-    import pathlib
+    from pathlib import Path
 
     import marimo as mo
     import matplotlib.pyplot as plt
 
-    _script_dir = pathlib.Path(__file__).resolve().parent  # workflow/scripts/
-    sys.path.append(str(_script_dir))
-    project_root = _script_dir.parent.parent
+    # Repo root: cwd when run from repo root, else walk up (marimo runs with
+    # cwd = the notebook's own directory). __file__ is undefined in a kernel.
+    PROJECT_ROOT = Path.cwd().resolve()
+    if not (PROJECT_ROOT / "workflow").is_dir():
+        for _p in [PROJECT_ROOT] + list(PROJECT_ROOT.parents):
+            if (_p / "workflow").is_dir() and (_p / "src").is_dir():
+                PROJECT_ROOT = _p
+                break
+    sys.path.insert(0, str(PROJECT_ROOT / "src"))
+    sys.path.insert(0, str(PROJECT_ROOT / "workflow" / "scripts"))
 
-    plt.style.use(_script_dir / "publication.mplstyle")
+    from evalml.publication import style as _style
+
+    plt.style.use(_style.mplstyle_path())
 
     from report_scorecard import (
         DEFAULT_PLOT_CFG,
@@ -31,7 +40,7 @@ def _():
         _timedelta_to_hours as timedelta_to_hours,
     )
 
-    from publication_style import (
+    from evalml.publication.style import (
         COLOR_SKILL_BASELINE_BETTER,
         COLOR_SKILL_MODEL_BETTER,
         param_label,
@@ -54,6 +63,8 @@ def _():
         COLOR_SKILL_BASELINE_BETTER,
         COLOR_SKILL_MODEL_BETTER,
         DEFAULT_PLOT_CFG,
+        Path,
+        PROJECT_ROOT,
         draw_data_rows,
         draw_legend,
         draw_slice_headers,
@@ -63,9 +74,7 @@ def _():
         mo,
         param_label,
         parse_var_metrics,
-        pathlib,
         plt,
-        project_root,
         region_label,
         scaled_dot_area,
         sys,
@@ -86,7 +95,7 @@ def _():
 
 
 @app.cell
-def _(mo, project_root, sys):
+def _(PROJECT_ROOT, mo, sys):
     import os as _os
 
     # Interactive defaults: try manifest auto-discovery so opening the notebook
@@ -105,12 +114,12 @@ def _(mo, project_root, sys):
             _manifest_default = str(_found)
             _truth = _json.loads(_found.read_text()).get("truth", {})
             _output_default = str(
-                project_root
+                PROJECT_ROOT
                 / f"output/figures/{_truth.get('slug') or _ts(_truth.get('label', ''))}/scorecards"
             )
         except Exception as _exc:
             _manifest_default = str(
-                project_root / "output/publication/SwissMetNet/manifest.json"
+                PROJECT_ROOT / "output/publication/SwissMetNet/manifest.json"
             )
             print(
                 f"[publication_scorecard] manifest auto-discovery failed ({_exc}); "
@@ -137,7 +146,7 @@ def _(mo, project_root, sys):
 
 
 @app.cell
-def _(LOG, candidate, manifest_path, output_dir, project_root):
+def _(LOG, PROJECT_ROOT, candidate, manifest_path, output_dir):
     from evalml.publication.manifest import load_manifest
 
     mani = load_manifest(manifest_path)
@@ -147,7 +156,7 @@ def _(LOG, candidate, manifest_path, output_dir, project_root):
     cand_info = {
         "id": cand.id,
         "label": cand.label,
-        "verif_aggregated": project_root / cand.paths["verif_aggregated"],
+        "verif_aggregated": PROJECT_ROOT / cand.paths["verif_aggregated"],
     }
 
     section_cfgs = [
@@ -172,13 +181,13 @@ def _(LOG, candidate, manifest_path, output_dir, project_root):
                 "scores": ["RMSE", "ETS"],
                 "base_id": _base.id,
                 "base_label": _base.label,
-                "base_verif": project_root / _base.paths["verif_aggregated"],
+                "base_verif": PROJECT_ROOT / _base.paths["verif_aggregated"],
             }
         )
         LOG.info("scorecard: section %r — baseline %r", d["name"], d["base_label"])
 
     resolved_output = output_dir or str(
-        project_root / f"output/figures/{slug}/scorecards"
+        PROJECT_ROOT / f"output/figures/{slug}/scorecards"
     )
     return cand_info, resolved_output, section_cfgs
 
@@ -337,11 +346,11 @@ def _(
 @app.cell
 def _(
     LOG,
+    Path,
     draw_data_rows,
     draw_legend,
     draw_slice_headers,
     panels,
-    pathlib,
     plot_cfg,
     plt,
     resolved_output,
@@ -519,7 +528,7 @@ def _(
             _cfg,
         )
 
-    _out = pathlib.Path(resolved_output)
+    _out = Path(resolved_output)
     _out.mkdir(parents=True, exist_ok=True)
     _pdf = _out / "publication_scorecard.pdf"
     _png = _out / "publication_scorecard.png"

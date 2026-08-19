@@ -45,11 +45,6 @@ dev = [
     "pre-commit>=4.2.0",
     "snakefmt>=2.0",
 ]
-notebooks = [
-    "jupyterlab>=4.0",
-    "nbconvert>=7.0",
-    "ipykernel>=6.0",
-]
 
 [tool.pytest.ini_options]
 # Skip longtests (GPU/credential/data-dependent integration tests) by default,

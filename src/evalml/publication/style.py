@@ -1,7 +1,7 @@
 """Shared visual style for the publication figures.
 
 Source of truth for colors, markers, line styles, and human-readable parameter
-labels used by the publication notebooks (``notebooks/publication/*.ipynb``) and
+labels used by the publication notebooks (``notebooks/publication/*.py``) and
 by ``plot_meteogram_region.py``.  Font sizes and layout defaults live in the
 packaged ``publication.mplstyle``; apply it with::
 

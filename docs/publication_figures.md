@@ -2,7 +2,7 @@
 
 This document describes the **publication figures** subsystem of `evalml`: how it
 works and how to produce the figures — both through Snakemake (reproducible) and via
-standalone Jupyter notebooks (interactive), without ever typing a hash.
+standalone Marimo notebooks (interactive), without ever typing a hash.
 
 ---
 
@@ -16,10 +16,10 @@ evalml experiment config/varda-single_paper_stations.yaml
 evalml publication config/varda-single_paper_stations.yaml
 
 # 3. Render the paper figures (standalone, no Snakemake)
-jupyter lab notebooks/publication/       # open leadtime / meteogram / scoremaps
+marimo edit notebooks/publication/leadtime.py   # or meteogram.py / scoremaps.py
 # or headless:
 EVALML_MANIFEST=output/publication/<truth>/manifest.json \
-  jupyter nbconvert --to notebook --execute --inplace notebooks/publication/leadtime.ipynb
+  marimo run notebooks/publication/leadtime.py
 ```
 
 `evalml publication` **only writes the manifest** — the result files come from
@@ -42,7 +42,7 @@ flowchart TD
         builder["manifest.py<br/>build / load"]
         resolver["resolver.py<br/>Manifest + validate_request"]
     end
-    notebooks["notebooks/publication/<br/>leadtime.ipynb / meteogram.ipynb / scoremaps.ipynb"]
+    notebooks["notebooks/publication/<br/>leadtime.py / meteogram.py / scoremaps.py"]
     figs["figures: .pdf / .png"]
 
     cfg --> common --> manrule --> manifest
@@ -203,7 +203,7 @@ flowchart LR
     end
     M["evalml publication<br/>= publication_manifest"] --> MAN["manifest.json"]
     C -. recorded in .-> MAN
-    MAN --> NB["notebooks/publication/*"] --> F["figures"]
+    MAN --> NB["notebooks/publication/*.py"] --> F["figures"]
 ```
 
 ### C. Rendering the figures (notebooks)
@@ -215,9 +215,10 @@ manifest, resolve all paths through the `Manifest` API, apply the shared
 
 | Notebook | Figures produced |
 |---|---|
-| `leadtime.ipynb` | Lead-time score curves (RMSE/bias/ETS) |
-| `meteogram.ipynb` | Single-station meteogram (requires jretrieve + eckit stack) |
-| `scoremaps.ipynb` | Spatial skill-score maps (requires gridded/zarr truth) |
+| `leadtime.py` | Lead-time score curves (RMSE/bias/ETS) |
+| `meteogram.py` | Single-station meteogram (requires jretrieve + eckit stack) |
+| `scoremaps.py` | Spatial skill-score maps (requires gridded/zarr truth) |
+| `scorecards.py` | Combined multi-section scorecard (short-range + medium-range) |
 
 **Manifest discovery** (precedence, highest first):
 
@@ -232,18 +233,17 @@ at build time. Every parameter (station, init time, steps, params, …) can be
 overridden in the notebook cell where `m.validate_request(...)` is called — change
 the value in that cell and re-run.
 
-**Interactive (Jupyter Lab):**
+**Interactive (Marimo):**
 
 ```bash
-jupyter lab notebooks/publication/
+marimo edit notebooks/publication/leadtime.py
 ```
 
-**Headless (nbconvert):**
+**Headless:**
 
 ```bash
 EVALML_MANIFEST=output/publication/SwissMetNet/manifest.json \
-  jupyter nbconvert --to notebook --execute --inplace \
-  notebooks/publication/leadtime.ipynb
+  marimo run notebooks/publication/leadtime.py
 ```
 
 ---
@@ -299,9 +299,10 @@ src/evalml/
     resolver.py          # Manifest, Participant, validate_request, ResolutionError
     style.py             # mplstyle_path() + packaged publication.mplstyle
 notebooks/publication/
-  leadtime.ipynb         # lead-time score figures
-  meteogram.ipynb        # single-station meteogram
-  scoremaps.ipynb        # spatial skill-score maps
+  leadtime.py            # lead-time score figures
+  meteogram.py           # single-station meteogram
+  scoremaps.py           # spatial skill-score maps
+  scorecards.py          # combined multi-section scorecard
 workflow/rules/publication.smk   # publication_manifest rule; publication_all target
 workflow/scripts/
   verification_plot_metrics.py   # shared metric-plotting helpers (used by leadtime notebook)
