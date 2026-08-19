@@ -17,15 +17,13 @@ TRUTH_SLUG = truth_slug((config.get("truth") or {}).get("label", ""))
 
 
 rule publication_manifest:
-    """Persist the run/baseline -> hash -> data-path mapping for the notebooks.
-
-    Cheap localrule: dumps the in-memory workflow globals to JSON, so paths can be
-    resolved (interactively or by the notebooks) without recomputing any hash. It
-    does not depend on the heavy data — the notebooks open whatever result files
-    exist at the recorded paths. The master hash (a digest of the whole config) is
-    a rule param, so Snakemake's `params` rerun-trigger regenerates the manifest
-    whenever the config content changes — without re-running on a no-op file touch.
-    """
+    # Persist the run/baseline -> hash -> data-path mapping for the CLI/notebooks.
+    #
+    # Cheap localrule: dumps the in-memory workflow globals to JSON, so paths can be
+    # resolved (interactively or by the figure rules) without recomputing any hash.
+    # The master hash (a digest of the whole config) is a rule param, so Snakemake's
+    # `params` rerun-trigger regenerates the manifest whenever the config content
+    # changes — without re-running on a no-op file touch.
     input:
         script="src/evalml/publication/manifest.py",
     output:

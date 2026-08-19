@@ -274,11 +274,11 @@ rule verification_metrics_plot_all:
 rule publication_all:
     """Target: produce the publication manifest and stop.
 
-    The result files the manifest points at (verification NC files, scoremaps,
-    GRIB) are produced by the experiment/verification workflow (`evalml
-    experiment`), not here. Figures are rendered from the manifest by the
-    standalone notebooks in notebooks/publication/.
-    """
+The result files the manifest points at (verification NC files, scoremaps,
+GRIB) are produced by the experiment/verification workflow (`evalml
+experiment`), not here. Figures are rendered from the manifest by the
+standalone notebooks in notebooks/publication/.
+"""
     input:
         rules.publication_manifest.output,
 

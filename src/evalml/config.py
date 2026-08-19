@@ -473,6 +473,17 @@ class PublicationScoremapsConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class PublicationScorecardsConfig(BaseModel):
+    """Publication scorecard figures — sections are taken from experiment.scorecards."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate publication scorecard figures.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class PublicationConfig(BaseModel):
     """Configuration for the publication workflow."""
 
@@ -488,6 +499,10 @@ class PublicationConfig(BaseModel):
         default=None,
         description="Publication scoremap figure settings (omit to skip). "
         "Requires a gridded (zarr) truth source.",
+    )
+    scorecards: Optional[PublicationScorecardsConfig] = Field(
+        default=None,
+        description="Publication scorecard figures (omit to skip).",
     )
 
     model_config = {"extra": "forbid"}

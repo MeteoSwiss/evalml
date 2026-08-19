@@ -4,12 +4,12 @@ description: |
 
 dates:
   start: 2025-04-01T00:00
-  end: 2025-12-26T18:00 # to ensure that the full forecasts is in 2025
+  end: 2026-03-31T18:00
   frequency: 30h
 
 runs:
   - forecaster:
-      label: Varda-Single
+      label: stage-E-no-rollout
       checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/c30490b6ba064e4db03b430f3a2595ad
       config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
       steps: 0/120/6
@@ -69,6 +69,9 @@ experiment:
       - alpennordhang
       - innerealpentaeler
       - alpensuedseite
+      - alpen
+      - tiefelagen
+      - berge
     root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
   thresholds:
     TOT_PREC6:
