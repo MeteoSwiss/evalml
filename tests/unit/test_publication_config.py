@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def paper_config():
-    cfg = yaml.safe_load((PROJECT_ROOT / "config/varda-single_paper.yaml").read_text())
+    cfg = yaml.safe_load((PROJECT_ROOT / "config/varda-single_paper_stations.yaml").read_text())
     return cfg
 
 
