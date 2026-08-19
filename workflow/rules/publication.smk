@@ -9,11 +9,14 @@
 # `notebooks/publication/`, driven only by the manifest — see
 # docs/publication_figures.md.
 
-from evalml.publication.manifest import truth_slug
+from pathlib import Path as _Path
+from evalml.publication.manifest import config_slug as _config_slug
 
-# The manifest is namespaced by the truth label so station-based and
-# analysis-based runs don't overwrite each other's manifest.
-TRUTH_SLUG = truth_slug((config.get("truth") or {}).get("label", ""))
+# The manifest is namespaced by a config slug (config file stem + short master
+# hash) so each config file produces a distinct manifest even when two configs
+# share the same truth label.
+_CONFIGFILE_STEM = _Path(workflow.configfiles[0]).stem if workflow.configfiles else "config"
+CONFIG_SLUG = _config_slug(_CONFIGFILE_STEM)
 
 
 rule publication_manifest:
@@ -27,7 +30,7 @@ rule publication_manifest:
     input:
         script="src/evalml/publication/manifest.py",
     output:
-        OUT_ROOT / f"publication/{TRUTH_SLUG}/manifest.json",
+        OUT_ROOT / f"manifests/manifest_{CONFIG_SLUG}.json",
     localrule: True
     params:
         master_hash=master_hash(),
@@ -44,5 +47,6 @@ rule publication_manifest:
             output_root=str(OUT_ROOT),
             publication_cfg=config.get("publication", {}),
             master_hash=params.master_hash,
+            config_slug=CONFIG_SLUG,
         )
         write_manifest(output[0], manifest)

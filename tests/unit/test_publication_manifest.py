@@ -6,6 +6,7 @@ import pytest
 
 from evalml.publication.manifest import (
     build_manifest,
+    config_slug,
     default_manifest_path,
     load_manifest,
     manifest_path,
@@ -60,7 +61,8 @@ def _build(truth_root="jretrieve:1,2"):
         reftimes=[datetime(2025, 4, 1, 0, 0), datetime(2025, 4, 3, 6, 0)],
         output_root="output/",
         publication_cfg={"enabled": True, "meteogram": {"init_time": "202504010000"}},
-        master_hash="abcd",
+        master_hash="abcd1234ef",
+        config_slug="test_config",
     )
 
 
@@ -143,12 +145,24 @@ def test_truth_slug():
     assert truth_slug("") == "truth"
 
 
+def test_config_slug():
+    assert config_slug("config/varda-single_paper_analysis.yaml") == "varda-single_paper_analysis"
+    assert config_slug("varda-single_paper_stations") == "varda-single_paper_stations"
+    assert config_slug("my config.yaml") == "my_config"
+    assert config_slug("") == "config"
+
+
+def test_build_manifest_records_config_slug():
+    m = _build()
+    assert m["config_slug"] == "test_config"
+
+
 def test_build_manifest_records_truth_slug():
     m = _build(truth_root="/store/x.zarr")
     assert m["truth"]["slug"] == "T"  # fixture truth label is "T"
 
 
-def _write_truth_manifest(root, label, truth_root="/store/x.zarr"):
+def _write_truth_manifest(root, label, truth_root="/store/x.zarr", cfg_name="cfg"):
     run_configs, baseline_configs, _ = _globals(truth_root)
     man = build_manifest(
         run_configs=run_configs,
@@ -159,29 +173,28 @@ def _write_truth_manifest(root, label, truth_root="/store/x.zarr"):
         reftimes=[datetime(2025, 4, 1, 0, 0)],
         output_root=str(root),
         publication_cfg={},
-        master_hash="m",
+        master_hash="mmmmmmmm",
+        config_slug=config_slug(cfg_name),
     )
-    write_manifest(manifest_path(str(root), label), man)
+    write_manifest(manifest_path(str(root), cfg_name), man)
 
 
 def test_discovery_single(tmp_path, monkeypatch):
     monkeypatch.delenv("EVALML_MANIFEST", raising=False)
     _write_truth_manifest(tmp_path, "KENDA-CH1")
-    assert default_manifest_path(output_root=str(tmp_path)) == manifest_path(
-        str(tmp_path), "KENDA-CH1"
-    )
+    assert default_manifest_path(output_root=str(tmp_path)) == manifest_path(str(tmp_path), "cfg")
 
 
 def test_discovery_multiple_requires_truth(tmp_path, monkeypatch):
     monkeypatch.delenv("EVALML_MANIFEST", raising=False)
-    _write_truth_manifest(tmp_path, "KENDA-CH1")
-    _write_truth_manifest(tmp_path, "SwissMetNet", truth_root="jretrieve:1,2")
+    _write_truth_manifest(tmp_path, "KENDA-CH1", cfg_name="cfg_a")
+    _write_truth_manifest(tmp_path, "SwissMetNet", truth_root="jretrieve:1,2", cfg_name="cfg_b")
     with pytest.raises(ValueError, match="Multiple publication manifests"):
         default_manifest_path(output_root=str(tmp_path))
-    # explicit truth disambiguates
+    # explicit truth disambiguates by scanning manifest content
     assert default_manifest_path(
         output_root=str(tmp_path), truth="SwissMetNet"
-    ) == manifest_path(str(tmp_path), "SwissMetNet")
+    ) == manifest_path(str(tmp_path), "cfg_b")
     assert (
         load_manifest(
             default_manifest_path(output_root=str(tmp_path), truth="KENDA-CH1")
@@ -202,4 +215,4 @@ def test_write_and_load_roundtrip(tmp_path):
     write_manifest(path, m)
     loaded = load_manifest(path)
     assert loaded.get_candidate().label == "Varda-Single"
-    assert loaded.master_hash == "abcd"
+    assert loaded.master_hash == "abcd1234ef"
