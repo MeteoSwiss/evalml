@@ -1,16 +1,43 @@
 
 # ICON-CH1 templates
-- - {levtype: pl, param: [T, QV, U, V, OMEGA, FI]}
-  - resources/icon-ch1-typeOfLevel=isobaricInhPa.grib
+# Each entry lists both the MCH param names (checkpoints trained on MCH-named
+# zarrs) and the native IFS param names (checkpoints trained on "ifsnames"
+# zarrs, e.g. realch1 ifsnames v2.0, whose params are not renamed — see the
+# corresponding patch metadata). The pressure-level entry is matched on param
+# only and placed last: those checkpoints carry levtype "unknown", and the
+# surface entries (matched first, with levtype sfc) disambiguate the surface
+# "z" from the pressure-level "z".
 
-- - {levtype: sfc, param: [T_2M, TD_2M, U_10M, V_10M]}
+- - {levtype: sfc, param: [T_2M, TD_2M, U_10M, V_10M, 2t, 2d, 10u, 10v]}
   - resources/icon-ch1-typeOfLevel=heightAboveGround.grib
 
-- - {levtype: sfc, param: [FR_LAND, PS, FIS, T_G, SKT, SSO_SIGMA,SSO_STDH]}
+- - {levtype: sfc, param: [FR_LAND, PS, FIS, T_G, SKT, SSO_SIGMA, SSO_STDH, CLCT,
+                           lsm, sp, z, skt, sdor, slor, tcc]}
   - resources/icon-ch1-typeOfLevel=surface.grib
 
-- - {levtype: sfc, param: [PMSL]}
+- - {levtype: sfc, param: [PMSL, msl]}
   - resources/icon-ch1-typeOfLevel=meanSea.grib
 
-- - {levtype: sfc, param: [TOT_PREC]}
+- - {levtype: sfc, param: [TOT_PREC, tp]}
   - resources/icon-ch1-shortName=TOT_PREC.grib
+
+# Layer cloud covers are typeOfLevel=isobaricLayer with per-variable level
+# bounds, so each needs its own template.
+- - {levtype: sfc, param: [CLCL, lcc]}
+  - resources/icon-ch1-shortName=CLCL.grib
+
+- - {levtype: sfc, param: [CLCM, mcc]}
+  - resources/icon-ch1-shortName=CLCM.grib
+
+- - {levtype: sfc, param: [CLCH, hcc]}
+  - resources/icon-ch1-shortName=CLCH.grib
+
+# ssrd/strd have no MCH shortName; they are encoded with centre=ecmf (see the
+# patches modifier in the inference config) as hourly accumulations, reusing
+# the accumulation (PDT 4.8) template of TOT_PREC for the grid definition.
+- - {levtype: sfc, param: [ssrd, strd]}
+  - resources/icon-ch1-shortName=TOT_PREC.grib
+
+# Pressure levels last (see header note).
+- - {param: [T, QV, U, V, OMEGA, FI, t, q, u, v, w, z]}
+  - resources/icon-ch1-typeOfLevel=isobaricInhPa.grib

@@ -17,7 +17,11 @@ PARAMS_MAP = {
     "TOT_PREC": "tp",
     "CLCT": "tcc",
     "CLCL": "lcc",
+    "CLCM": "mcc",
+    "CLCH": "hcc",
     "SSRD": "ssrd",
+    "STRD": "strd",
+    "T_G": "skt",
 }
 
 PARAMS_MAP_INV = {v: k for k, v in PARAMS_MAP.items()}

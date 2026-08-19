@@ -464,8 +464,14 @@ PARAMS_WITHOUT_STEP_ZERO_VALUE = {
     "tcc",
     "CLCL",
     "lcc",
+    "CLCM",
+    "mcc",
+    "CLCH",
+    "hcc",
     "SSRD",
     "ssrd",
+    "STRD",
+    "strd",
 }
 
 

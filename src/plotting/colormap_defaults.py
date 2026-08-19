@@ -92,6 +92,23 @@ _CMAP_DEFAULTS = {
         "units": "",
         "levels": list(np.linspace(0, 1, 21)),
     },
+    "CLCM": {
+        "cmap": plt.get_cmap("Blues_r"),
+        "vmin": 0,
+        "vmax": 1,
+        "extend": "neither",
+        "units": "",
+        "levels": list(np.linspace(0, 1, 21)),
+    },
+    "CLCH": {
+        "cmap": plt.get_cmap("Blues_r"),
+        "vmin": 0,
+        "vmax": 1,
+        "extend": "neither",
+        "units": "",
+        "levels": list(np.linspace(0, 1, 21)),
+    },
+    "T_G": load_ncl_colormap("t2m_29lev.ct") | {"units": "degC", "extend": "both"},
     "SSRD": {
         # tricontourf always bands regardless of "levels" being set (it falls
         # back to an auto locator with ~7 bands otherwise) — use a fine level
@@ -104,6 +121,17 @@ _CMAP_DEFAULTS = {
         "extend": "max",
         "units": "J m-2",
         "levels": list(np.linspace(0, 4e6, 21)),
+    },
+    "STRD": {
+        # Hourly-accumulated downward long-wave radiation: typical surface
+        # values are ~150-450 W m-2, i.e. ~0.5-1.6 MJ m-2 per hour. No zero
+        # plateau (unlike SSRD at night), so no boundary clipping needed.
+        "cmap": plt.get_cmap("inferno"),
+        "vmin": 0.4e6,
+        "vmax": 1.7e6,
+        "extend": "both",
+        "units": "J m-2",
+        "levels": list(np.linspace(0.4e6, 1.7e6, 21)),
     },
     "TOT_PREC_1H": {
         "extend": "max",

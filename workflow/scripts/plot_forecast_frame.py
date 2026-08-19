@@ -80,7 +80,7 @@ def preprocess_field(param: str, state: dict):
     Returns: (field_array, units_override or None)
     """
     fields = state["fields"]
-    if param in ("T_2M", "TD_2M", "T", "TD"):
+    if param in ("T_2M", "TD_2M", "T", "TD", "T_G"):
         return kelvin_to_celsius(fields[param]), "°C"
     if param == "SP_10M":
         return ekm_wind.speed(fields["U_10M"], fields["V_10M"]), "m/s"
@@ -88,7 +88,7 @@ def preprocess_field(param: str, state: dict):
         return ekm_wind.speed(fields["U"], fields["V"]), "m/s"
     if param == "TOT_PREC":
         return np.maximum(fields[param], 0), "mm"
-    if param in ("CLCT", "CLCL"):
+    if param in ("CLCT", "CLCL", "CLCM", "CLCH"):
         # Avoid exact 0/1 plateaus breaking tricontourf on orthographic
         # projections (tmp/reproduce_clct_bug.py). Pair with extend="neither".
         # Any new bounded field with silent-blank or GeometryCollection-crash
@@ -161,7 +161,24 @@ def main():
         return
     grib_file = Path(grib_file[0])
     LOG.info("Loading grib file %s", grib_file)
-    state = load_state_from_grib(grib_file, paramlist=paramlist)
+    try:
+        state = load_state_from_grib(grib_file, paramlist=paramlist)
+    except ValueError:
+        # Diagnostic params (not part of the model input state) are absent from
+        # the initial-state file even when it exists. Emit empty placeholders
+        # (filtered out at GIF assembly) rather than failing the whole run.
+        if lead_time != 0:
+            raise
+        LOG.warning(
+            "Param %s not present in the initial-state GRIB file %s."
+            " Creating empty placeholder frames.",
+            param,
+            grib_file,
+        )
+        for region_name in regions:
+            outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
+            outfn.touch()
+        return
 
     # tp is accumulated from start of forecast; de-accumulate to get period [lt-accu, lt]
     if param == "TOT_PREC":

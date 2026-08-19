@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Single-date trial of the new-variables showcase (CLCT/CLCL/CLCM/CLCH,
+  SSRD/STRD, T_G) for the multistep stage-C forecaster. Validates the GRIB
+  templates/patches and the animation pipeline before the full campaign
+  (multistep-vs-varda-stage-c.yaml).
+
+config_label: showcase-trial-newvars
+
+dates:
+  - 2024-06-19T00:00
+
+runs:
+  - forecaster:
+      checkpoint: /scratch/mch/miccatta/SwissAI_checkpoints/checkpoint_regREALCH1_fr1_st1_in3_out6/3cb7119cdc3c4b96ae18a4e62e487111/inference-anemoi-by_epoch-epoch_021-step_044000.ckpt
+      label: stage_C_in7_out6_50k
+      steps: 0/24/1
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-1h.yaml
+
+truth:
+  label: REA-L
+  root: /store_new/mch/msopr/ml/datasets/mch-realch1-fdb-1km-2005-2025-1h-pl13-v1.0.zarr
+
+experiment:
+  params:
+    - T_2M
+  stratification:
+    regions:
+      - icon
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
+  dashboard:
+    stratification:
+      - season
+
+showcase:
+  params:
+    - T_2M
+    - TOT_PREC
+    - CLCT
+    - CLCL
+    - CLCM
+    - CLCH
+    - SSRD
+    - STRD
+    - T_G
+  meteograms:
+    enabled: false
+    stations: [JUN]
+  animations:
+    enabled: true
+    domains:
+      - globe
+      - europe
+      - icon-ch
+
+locations:
+  output_root: /scratch/mch/rradev/evalml-showcase-trial/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 1
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+    slurm_account: s83
+  jobs: 50

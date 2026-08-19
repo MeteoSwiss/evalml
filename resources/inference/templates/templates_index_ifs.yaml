@@ -3,3 +3,9 @@
 
 - - {levtype: sfc}
   - resources/ifs-levtype=sfc.grib
+
+# Pressure-level variables from checkpoints that carry levtype "unknown"
+# (e.g. trained on the realch1 ifsnames v2.0 zarr), matched by param instead.
+# Placed after the sfc entry so the surface "z" (levtype sfc) is not caught.
+- - {param: [T, QV, U, V, OMEGA, FI, t, q, u, v, w, z]}
+  - resources/ifs-levtype=pl.grib

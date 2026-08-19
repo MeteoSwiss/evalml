@@ -28,13 +28,17 @@ _IFS_TO_ICON = {
     "lsm": "FR_LAND",
     "tcc": "CLCT",
     "lcc": "CLCL",
-    # TODO: ssrd is treated as a plain per-step field (no de-accumulation),
-    # which only holds because it's not currently listed in any
+    "mcc": "CLCM",
+    "hcc": "CLCH",
+    "skt": "T_G",
+    # TODO: ssrd/strd are treated as plain per-step fields (no de-accumulation),
+    # which only holds because they're not currently listed in any
     # accumulate_from_start_of_forecast.accumulations in the inference
     # configs (unlike tp, see _tot_prec_handling). If ssrd/strd are ever
     # added there, this needs the same cumulative-since-start handling tp
     # gets, or verification/plots will silently be wrong.
     "ssrd": "SSRD",
+    "strd": "STRD",
     "z": "FIS",
 }
 _ICON_TO_IFS = {v: k for k, v in _IFS_TO_ICON.items()}
@@ -492,6 +496,7 @@ def variable_name_profile(
         "mean_sea",
         "surface",
         "pressure",
+        "pressure_layer",
         "entire_atmosphere",
     ],
 ) -> dict[str, Any]:
@@ -500,6 +505,7 @@ def variable_name_profile(
         "height_above_ground_level",
         "mean_sea",
         "surface",
+        "pressure_layer",  # layer-cloud params (CLCL/CLCM/CLCH); one layer per param
         "entire_atmosphere",
     ]:
         return {}
