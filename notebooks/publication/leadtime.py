@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.7"
+__generated_with = "0.23.3"
 app = marimo.App()
 
 
@@ -44,7 +44,7 @@ def _(PROJECT_ROOT, Path):
 
     # Auto-discovers output/publication/<truth>/manifest.json (or $EVALML_MANIFEST,
     # or set truth=... below when several truths exist).
-    m = load_manifest()
+    m = load_manifest(PROJECT_ROOT / "output/manifests/manifest_varda-single_paper_stations.json")
     m.validate_request("figures")
 
     pairs = m.verif_paths()  # [(path, label), ...]
