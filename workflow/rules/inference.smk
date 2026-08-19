@@ -270,7 +270,7 @@ def _passthrough_grib_source(wc):
     rc = RUN_CONFIGS[wc.run_id]
     if rc["model_type"] not in THIRD_PARTY_MODEL_TYPES:
         return None
-    return str((Path(rc["root"]) / wc.init_time).resolve())
+    return str((Path(rc["root"]) / wc.init_time / "grib").resolve())
 
 
 def _execute_resource(wc, field, default, passthrough_default=None):

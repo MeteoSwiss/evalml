@@ -884,7 +884,7 @@
           "title": "Label"
         },
         "root": {
-          "description": "Root directory of pre-generated GRIB from the external workflow, laid out as root/{init_time}/*.grib (init_time formatted YYYYMMDDHHMM).",
+          "description": "Root directory of pre-generated GRIB from the external workflow, laid out as root/{init_time}/grib/*.grib (init_time formatted YYYYMMDDHHMM), matching evalml's own internal per-run GRIB layout.",
           "minLength": 1,
           "title": "Root",
           "type": "string"
