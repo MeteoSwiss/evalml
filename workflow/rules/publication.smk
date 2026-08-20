@@ -1,17 +1,22 @@
 # ----------------------------------------------------- #
 # Publication-grade figures workflow                    #
 # ----------------------------------------------------- #
-# The figures are rendered by the standalone `evalml.publication` CLI, which
-# reads a manifest (run/baseline -> hash -> data-path mapping) instead of
-# hand-assembled identifiers. The same CLI drives interactive use, so these
-# rules are thin wrappers: produce the manifest + the data, then call the CLI.
+# The publication target produces *only* the manifest (a run/baseline -> hash ->
+# data-path mapping). The result files it points at (verification NC files,
+# scoremaps, GRIB) are produced by the experiment/verification workflow
+# (`evalml experiment`, driven by the `experiment:` config blocks), not here.
+# All publication-ready plotting happens in the standalone notebooks under
+# `notebooks/publication/`, driven only by the manifest — see
+# docs/publication_figures.md.
 
+from pathlib import Path as _Path
+from evalml.publication.manifest import config_slug as _config_slug
 
-from evalml.publication.manifest import truth_slug
-
-# Publication outputs are namespaced by the truth label so station-based and
-# analysis-based runs don't overwrite each other's manifest or figures.
-TRUTH_SLUG = truth_slug((config.get("truth") or {}).get("label", ""))
+# The manifest is namespaced by a config slug (config file stem + short master
+# hash) so each config file produces a distinct manifest even when two configs
+# share the same truth label.
+_CONFIGFILE_STEM = _Path(workflow.configfiles[0]).stem if workflow.configfiles else "config"
+CONFIG_SLUG = _config_slug(_CONFIGFILE_STEM)
 
 
 rule publication_manifest:
@@ -25,7 +30,7 @@ rule publication_manifest:
     input:
         script="src/evalml/publication/manifest.py",
     output:
-        OUT_ROOT / f"publication/{TRUTH_SLUG}/manifest.json",
+        OUT_ROOT / f"manifests/manifest_{CONFIG_SLUG}.json",
     localrule: True
     params:
         master_hash=master_hash(),
@@ -42,150 +47,6 @@ rule publication_manifest:
             output_root=str(OUT_ROOT),
             publication_cfg=config.get("publication", {}),
             master_hash=params.master_hash,
+            config_slug=CONFIG_SLUG,
         )
         write_manifest(output[0], manifest)
-
-
-rule publication_figures:
-    input:
-        "workflow/scripts/publication_style.py",
-        "workflow/scripts/publication.mplstyle",
-        "workflow/scripts/publication_figures.py",
-        manifest=rules.publication_manifest.output,
-        verif=EXPERIMENT_PARTICIPANTS.values(),
-    output:
-        report(
-            directory(OUT_ROOT / f"figures/{TRUTH_SLUG}/leadtime"),
-            htmlindex="publication_figures.html",
-        ),
-    log:
-        OUT_ROOT / "logs/figures/publication_figures.log",
-    localrule: True
-    shell:
-        """
-        python -m evalml.publication figures \
-            --manifest {input.manifest} \
-            --output {output} >{log} 2>&1
-        """
-
-
-def _pub_candidate_run_id():
-    """The single publication candidate run_id (raises if not exactly one)."""
-    candidates = [rid for rid, cfg in RUN_CONFIGS.items() if cfg.get("_is_candidate")]
-    if len(candidates) != 1:
-        raise ValueError(
-            f"The publication workflow expects exactly one candidate run; "
-            f"found {len(candidates)}. Pick a single candidate in the config."
-        )
-    return candidates[0]
-
-
-def _meteogram_data_dep(wc):
-    """Aggregated verification file of the candidate run (DAG dependency).
-
-    Depending on this regular file (rather than the candidate's GRIB *directory*,
-    which two inference_prepare rules ambiguously declare) guarantees inference has
-    run for every reftime — including the meteogram's init_time — so the GRIB the
-    CLI resolves from the manifest is present, with correct ordering.
-    """
-    run_id = _pub_candidate_run_id()
-    return str(OUT_ROOT / f"data/runs/{run_id}/verif_aggregated_{VERIF_HASH}.nc")
-
-
-rule publication_meteogram:
-    input:
-        "workflow/scripts/publication_style.py",
-        "workflow/scripts/publication.mplstyle",
-        "workflow/scripts/publication_meteogram.py",
-        manifest=rules.publication_manifest.output,
-        verif=_meteogram_data_dep,
-    output:
-        report(
-            directory(OUT_ROOT / f"figures/{TRUTH_SLUG}/meteogram"),
-            htmlindex="publication_meteogram.html",
-        ),
-    log:
-        OUT_ROOT / "logs/figures/publication_meteogram.log",
-    resources:
-        slurm_partition="postproc",
-        cpus_per_task=8,
-        mem_mb=32000,
-        runtime="60m",
-    shell:
-        """
-        set -euo pipefail
-        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
-        python -m evalml.publication meteogram \
-            --manifest {input.manifest} \
-            --output {output} >{log} 2>&1
-        """
-
-
-def _pub_scoremap_cfg():
-    return (config.get("publication", {}) or {}).get("scoremaps") or {}
-
-
-def _pub_scoremap_leadtimes(cfg):
-    """Lead times (hours) to plot: publication.scoremaps.steps when set,
-    otherwise falls back to experiment.scoremaps.leadtimes.
-    """
-    steps = cfg.get("steps")
-    if steps is not None:
-        return [int(s) for s in steps]
-    return list(
-        config.get("experiment", {}).get("scoremaps", {}).get("leadtimes", [6, 24])
-    )
-
-
-def _pub_scoremap_inputs(wc):
-    """Scoremap NC files for the candidate and baseline (DAG dependency).
-
-    Computed from the in-memory globals (not the manifest file, which a sibling
-    rule produces) using the same path template the CLI resolves from the manifest,
-    so the declared inputs always match what the CLI plots. Files are ordered
-    leadtime-major (all params for leadtimes[0], then leadtimes[1], …) to match
-    how the scoremaps script slices them.
-    """
-    cfg = _pub_scoremap_cfg()
-    params = cfg.get("params", ["T_2M", "SP_10M"])
-    leadtimes = _pub_scoremap_leadtimes(cfg)
-    cand_id = _pub_candidate_run_id()
-    base_id = resolve_baseline_id(cfg.get("baseline_label", "ICON-CH1-CTRL"))
-    return {
-        "cand_files": [
-            str(OUT_ROOT / f"data/runs/{cand_id}/scoremaps/{p}_{lt}_{TRUTH_HASH}.nc")
-            for lt in leadtimes
-            for p in params
-        ],
-        "base_files": [
-            str(
-                OUT_ROOT
-                / f"data/baselines/{base_id}/scoremaps/{p}_{lt}_{TRUTH_HASH}.nc"
-            )
-            for lt in leadtimes
-            for p in params
-        ],
-    }
-
-
-rule publication_scoremaps:
-    input:
-        unpack(_pub_scoremap_inputs),
-        "workflow/scripts/publication_scoremaps.py",
-        "workflow/scripts/publication_style.py",
-        "workflow/scripts/publication.mplstyle",
-        manifest=rules.publication_manifest.output,
-    output:
-        report(
-            directory(OUT_ROOT / f"figures/{TRUTH_SLUG}/scoremaps"),
-            htmlindex="publication_scoremaps.html",
-        ),
-    log:
-        OUT_ROOT / "logs/figures/publication_scoremaps.log",
-    localrule: True
-    shell:
-        """
-        python -m evalml.publication scoremaps \
-            --manifest {input.manifest} \
-            --output {output} >{log} 2>&1
-        """

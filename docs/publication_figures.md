@@ -1,89 +1,30 @@
 # Publication figures
 
-This document explains the **publication figures** subsystem of `evalml`: why it
-was refactored, how it works, and how to produce the figures — both through
-Snakemake (reproducible) and standalone (interactive), without ever typing a hash.
+This document describes the **publication figures** subsystem of `evalml`: how it
+works and how to produce the figures — both through Snakemake (reproducible) and via
+standalone Marimo notebooks (interactive), without ever typing a hash.
 
 ---
 
 ## TL;DR
 
 ```bash
-# 1. Reproducible end-to-end (inference → verification → figures), via Snakemake
-evalml publication config/varda-single_paper.yaml
+# 1. Produce the results (verification NC files, scoremaps, …) via the experiment workflow
+evalml experiment config/varda-single_paper_stations.yaml
 
-# 2. Interactive / re-render from data that already exists (no Snakemake)
-python -m evalml.publication list        # see what's available (auto-finds the manifest)
-python -m evalml.publication figures     # --output defaults to figures/<truth>/leadtime
-python -m evalml.publication meteogram
-python -m evalml.publication scoremaps   # needs gridded (zarr) truth
+# 2. Write the manifest (run/baseline -> hash -> paths) — cheap, no data recomputed
+evalml publication config/varda-single_paper_stations.yaml
+
+# 3. Render the paper figures (standalone, no Snakemake)
+marimo edit notebooks/publication/leadtime.py   # or meteogram.py / scoremaps.py
+# or headless:
+EVALML_MANIFEST=output/publication/<truth>/manifest.json \
+  marimo run notebooks/publication/leadtime.py
 ```
 
----
-
-## Why the refactor
-
-The publication workflow grew organically and had two pain points:
-
-1. **Config could express broken states, caught late.** `publication.scoremaps`
-   wasn't even in the schema, scoremaps could be requested against
-   station-observation truth (which has no spatial maps), and lead-time / baseline
-   mismatches only surfaced as cryptic Snakemake graph-expansion errors.
-
-2. **Plotting couldn't realistically run outside Snakemake.** The figure scripts
-   are CLI-capable, but to run them by hand you had to hand-assemble cryptic
-   identifiers like
-   `temporal_downscaler-f927-1ee3-on-forecaster-c304-23e7/495c` and
-   `TRUTH_HASH=caa0`, plus the on-disk path conventions — and these were
-   hardcoded as *stale* defaults inside the scripts.
-
-The fix keeps the Snakemake/hashing/pydantic foundations and adds a thin,
-publication-owned layer on top:
-
-- a **manifest** that persists the run/baseline → hash → data-path mapping,
-- a **resolver/validator** that reads it and turns broken requests into clear errors,
-- a **CLI** that renders any figure from the manifest,
-- **validated config** so incoherent setups fail at load time.
-
-Core inference/verification code is untouched.
-
----
-
-## Implications for the `main` branch
-
-The refactor was deliberately scoped to the **publication subsystem**. This is what
-it means for shared / core code if/when this work is merged toward `main`:
-
-**Not touched (by design).** The inference pipeline, the verification metric/score
-computation, and the run/baseline/truth **hashing identity model** in
-`common.smk` are unchanged. `env_id`/`run_id`/`TRUTH_HASH` and all existing on-disk
-paths are identical, so existing artifacts remain valid and `experiment_all` /
-`showcase_all` behave exactly as before.
-
-**Shared files this refactor edits, and why they're safe:**
-
-| File | Change | Backward-compat note |
-|------|--------|----------------------|
-| `src/evalml/config.py` | Adds `PublicationScoremapsConfig`, `PublicationConfig.scoremaps`, and a `ConfigModel.validate_publication` cross-field validator. | The validator only checks a figure whose per-task `enabled` is true — configs that don't use the publication block are unaffected. `extra: forbid` was added to `PublicationConfig`, so a misspelled key *under* `publication:` now errors (previously it could slip through). |
-| `workflow/rules/common.smk` | `resolve_leadtimes` / `resolve_baseline_id` / `ACCUMULATED_PARAMS` were moved into the importable `evalml.resolution` module and re-imported here. | Pure move — identical behaviour. Existing callers (`plot.smk`, `report.smk`) are unchanged. The only new requirement is that the `evalml` package is importable in the Snakemake process (it already is). |
-| `workflow/rules/publication.smk`, `workflow/Snakefile` | New `publication_manifest` rule; the three figure rules became thin CLI wrappers; `publication_all` gained the manifest. | Only the publication target is affected; no other target's DAG changes. |
-| `workflow/scripts/publication_*.py` | Defaults now come from the manifest, with a hardcoded fallback. | Behaviour is unchanged when the scripts are driven by the CLI/rules (which always pass explicit args). |
-
-**One cross-cutting invariant to preserve.** `common.smk` now *depends on*
-`evalml.resolution`. Keep that module import-light and free of Snakemake globals so
-both the workflow process and the standalone CLI/tests can import it.
-
-**Dependency / environment (separate from the code).** Decoding the global ICON
-forecast grid for the meteogram requires a matched `eckit` / `eckitlib` /
-`eccodeslib` native stack (e.g. the Test PyPI `*.dev103` set). This is **not** a
-code change and is **not** pinned in `pyproject.toml`/`uv.lock` yet — it applies to
-`main` too (the limitation is pre-existing). Decide separately whether to pin it; a
-plain `uv sync` will otherwise revert any manual install.
-
-**Suggested follow-up before merging to `main`:** consolidate the path/layout +
-hashing conventions (currently string-built across `verification.smk`, `plot.smk`,
-`publication.smk`) into one importable module that the manifest serializes — the
-manifest is a deliberate first step in that direction. See the design notes.
+`evalml publication` **only writes the manifest** — the result files come from
+`evalml experiment` (step 1). The manifest just records where they live, so you
+can (re)generate it independently and re-run step 1 whenever the data changes.
 
 ---
 
@@ -95,29 +36,24 @@ flowchart TD
     subgraph smk["Snakemake (reproducible)"]
         common["common.smk<br/>RUN_CONFIGS, BASELINE_CONFIGS,<br/>TRUTH_HASH, REFTIMES"]
         manrule["rule publication_manifest<br/>(cheap localrule)"]
-        figrules["rules publication_figures /<br/>_meteogram / _scoremaps<br/>(thin wrappers)"]
     end
     manifest["output/publication/&lt;truth&gt;/manifest.json<br/>run/baseline → hash → paths"]
     subgraph pub["evalml.publication (importable)"]
         builder["manifest.py<br/>build / load"]
         resolver["resolver.py<br/>Manifest + validate_request"]
-        cli["cli.py<br/>python -m evalml.publication"]
     end
-    scripts["workflow/scripts/<br/>publication_{figures,meteogram,scoremaps}.py"]
-    figs["figures: .pdf / .png / .html"]
+    notebooks["notebooks/publication/<br/>leadtime.py / meteogram.py / scoremaps.py"]
+    figs["figures: .pdf / .png"]
 
     cfg --> common --> manrule --> manifest
     common --> builder --> manrule
-    manifest --> resolver --> cli --> scripts --> figs
-    figrules -->|shell: python -m evalml.publication| cli
-    manrule --> figrules
+    manifest --> resolver --> notebooks --> figs
     cfg -. validated by .-> resolver
-    scripts -. defaults from .-> manifest
 ```
 
-Key idea: **one resolution path, three entry points.** The Snakemake rules, the
-standalone CLI, and the marimo notebooks all resolve data the same way — through
-the manifest — so reproducible and interactive runs never drift.
+Key idea: **one resolution path, one rendering entry point.** The Snakemake manifest
+rule and the Jupyter notebooks all resolve data the same way — through the manifest
+— so reproducible and interactive runs never drift.
 
 ---
 
@@ -164,9 +100,9 @@ records everything a figure needs, so consumers never recompute a hash:
 - **Regenerated automatically** when the config content changes — `master_hash()`
   is a rule `param`, so Snakemake's `params` rerun-trigger rebuilds it (a no-op
   file touch does *not* trigger it).
-- **Found automatically** by the CLI/notebooks: with one truth present it's
-  auto-discovered; with several, pick one with `--truth <label>` (or `--manifest
-  PATH` / `$EVALML_MANIFEST`).
+- **Found automatically** by the notebooks: with one truth present it's
+  auto-discovered; with several, pass `truth=<label>` in the notebook cell (or set
+  `$EVALML_MANIFEST` to an explicit path).
 
 ### Output namespacing
 
@@ -179,18 +115,23 @@ output/figures/<truth_slug>/{leadtime,meteogram,scoremaps}/
 ```
 
 The underlying data is already separated by `TRUTH_HASH`; this extends the same
-separation to the manifest and figures. Standalone CLI renders default their
-`--output` to `figures/<truth_slug>/<figure>` too. Two truths sharing a label would
-collide — labels are expected to be distinct.
+separation to the manifest and figures. Two truths sharing a label would collide —
+labels are expected to be distinct.
 
 ---
 
 ## Configuring the figures
 
-The `publication:` block drives everything and is validated at config load:
+The `publication:` block is **optional**. It no longer drives any Snakemake
+production (the manifest is built regardless, and results come from the
+experiment workflow); instead it does two things:
 
-Each figure has its own `enabled` switch — omit a block (or set `enabled: false`)
-to skip that figure:
+1. **Sets the notebooks' default case** — the block is copied into the manifest,
+   and each notebook reads its defaults (meteogram station/init time/params,
+   scoremaps params/steps/baseline) from it. Omit the block and the notebooks
+   fall back to their built-in defaults, which you can still override in-cell.
+2. **Is validated at config load** (and again in the resolver) so an incoherent
+   request fails early with a clear message rather than mid-plot.
 
 ```yaml
 publication:
@@ -200,13 +141,15 @@ publication:
     enabled: false
     init_time: "202504010000"        # must be one of the configured `dates`
     station: "KLO"
-    params: [T_2M, TOT_PREC, SP_10M, DD_10M]
+    params: [T_2M, TOT_PREC1, SP_10M, DD_10M]
+    # Note: station obs provide accumulation-windowed precip (TOT_PREC1, TOT_PREC6),
+    # not bare TOT_PREC.
   scoremaps:                          # REQUIRES gridded (zarr) truth
     enabled: true
     baseline_label: ICON-CH1-CTRL     # must match a baseline `label` in `runs`
     steps: [6, 24]                    # one figure per lead time; each must be
                                       # produced by candidate AND baseline.
-                                      # Omit to default to experiment.scoremaps.leadtimes.
+                                      # Omit and the scoremaps notebook defaults to [24].
     params: [T_2M, SP_10M]
     scores: [MSE_SKILL, BIAS_CONTRIB]
     region: switzerland
@@ -222,94 +165,99 @@ publication:
 | baseline exists | `scoremaps.baseline_label` not among baselines | "not found. Available baseline labels: […]" |
 | meteogram init time | `meteogram.init_time` outside `dates` | "not in the configured initialisation times" |
 
-The same checks run in the resolver, so they also protect standalone/interactive
-use that only loads the manifest.
+The same checks run in the resolver, so they also protect notebook-only/interactive
+use that loads only the manifest.
 
 ---
 
 ## How to run
 
-### A. Reproducible, end-to-end (Snakemake)
+### A. Produce the results (Snakemake)
+
+The result NC files (verification aggregates, scoremaps, GRIB) are produced by
+the **experiment** workflow, driven by the `experiment:` config blocks — not by
+the publication target:
 
 ```bash
-evalml publication config/varda-single_paper.yaml          # full chain
-evalml publication config/varda-single_paper.yaml --dry-run   # preview the DAG
-evalml publication config/varda-single_paper.yaml --report report.html
+evalml experiment config/varda-single_paper_stations.yaml
+evalml experiment config/varda-single_paper_forecaster_scoremaps.yaml   # scoremaps (gridded truth)
 ```
 
-This builds the manifest, runs inference + verification as needed, then renders
-the figures via thin wrapper rules. Figures land under `output/figures/...`.
+Scoremaps are produced when `experiment.scoremaps.enabled: true` in the config.
+
+### B. Write the manifest (Snakemake)
+
+```bash
+evalml publication config/varda-single_paper_stations.yaml
+evalml publication config/varda-single_paper_stations.yaml --dry-run    # preview (one cheap rule)
+```
+
+`publication_all` runs a single cheap localrule (`publication_manifest`) and
+stops — it records where the results live; it does **not** produce or depend on
+them. Regenerate it any time the config changes.
 
 ```mermaid
 flowchart LR
-    A["inference_execute<br/>(per init_time)"] --> B["verification_metrics<br/>+ aggregation"]
-    B --> C["verif_aggregated_*.nc"]
-    M["publication_manifest"] --> F1 & F2 & F3
-    C --> F1["publication_figures"]
-    C --> F2["publication_meteogram"]
-    C --> F3["publication_scoremaps*"]
-    F1 & F2 & F3 --> ALL["publication_all"]
-    classDef opt stroke-dasharray: 4 4
-    class F3 opt
+    subgraph exp["evalml experiment"]
+        A["inference + verification"] --> C["verif_aggregated_*.nc<br/>scoremaps/*.nc"]
+    end
+    M["evalml publication<br/>= publication_manifest"] --> MAN["manifest.json"]
+    C -. recorded in .-> MAN
+    MAN --> NB["notebooks/publication/*.py"] --> F["figures"]
 ```
-`*` scoremaps only run when `scoremaps.enabled` **and** truth is gridded.
 
-### B. Standalone CLI (no Snakemake)
+### C. Rendering the figures (notebooks)
 
-Use this to re-render from data that already exists, or to target a custom output
-location — it never triggers the inference/verification rerun cascade.
+The three notebooks in `notebooks/publication/` are standalone — they load the
+manifest, resolve all paths through the `Manifest` API, apply the shared
+`evalml.publication.style` matplotlib style, and write figures to
+`output/figures/<truth_slug>/<figure>/` via `figures_dir(m.output_root, m.truth["label"])`.
+
+| Notebook | Figures produced |
+|---|---|
+| `leadtime.py` | Lead-time score curves (RMSE/bias/ETS) |
+| `meteogram.py` | Single-station meteogram (requires jretrieve + eckit stack) |
+| `scoremaps.py` | Spatial skill-score maps (requires gridded/zarr truth) |
+| `scorecards.py` | Combined multi-section scorecard (short-range + medium-range) |
+
+**Manifest discovery** (precedence, highest first):
+
+1. `$EVALML_MANIFEST` environment variable — explicit path.
+2. `truth=<label>` keyword in the notebook's `load_manifest()` call — selects among
+   several auto-discovered manifests.
+3. Auto-discovery: if exactly one manifest exists under `output/publication/`, it is
+   used without any argument.
+
+**Configured defaults** come from the `publication:` block written into the manifest
+at build time. Every parameter (station, init time, steps, params, …) can be
+overridden in the notebook cell where `m.validate_request(...)` is called — change
+the value in that cell and re-run.
+
+**Interactive (Marimo):**
 
 ```bash
-# ensure the manifest exists (cheap; no inference) — lands under output/publication/<truth>/
-evalml make config/varda-single_paper.yaml output/publication/<truth>/manifest.json
-
-# discover what's available — no hashes typed (auto-finds the manifest; --truth <label> if several)
-python -m evalml.publication list
-
-# render (default --output is figures/<truth>/<figure>)
-python -m evalml.publication figures
-python -m evalml.publication meteogram
-python -m evalml.publication scoremaps
+marimo edit notebooks/publication/leadtime.py
 ```
 
-Ad-hoc overrides (anything not given falls back to the manifest's configured case):
+**Headless:**
 
 ```bash
-python -m evalml.publication meteogram --station GVE --init-time 202504030600
-python -m evalml.publication scoremaps --baseline ICON-CH2-CTRL --leadtime 48 --params T_2M,SP_10M
-python -m evalml.publication scoremaps --leadtime 6 --leadtime 24   # repeat for one figure per lead time
-python -m evalml.publication list      --truth KENDA-CH1            # pick a truth when several exist
-python -m evalml.publication figures   --manifest /other/output/publication/KENDA-CH1/manifest.json
+EVALML_MANIFEST=output/publication/SwissMetNet/manifest.json \
+  marimo run notebooks/publication/leadtime.py
 ```
-
-`--output` controls **where figures are written** and is independent of where data
-is read (the manifest's `output_root`) — so you can drop paper plots anywhere:
-
-```bash
-python -m evalml.publication figures --output /scratch/.../paper_figs/leadtime
-```
-
-### C. Interactive notebooks
-
-```bash
-export EVALML_MANIFEST=output/publication/<truth>/manifest.json
-marimo edit workflow/scripts/publication_meteogram.py
-```
-
-The notebooks load their defaults from the manifest (no cryptic hash defaults). If
-no manifest is found they fall back to built-in demo defaults and print a warning.
 
 ---
 
 ## Where figures are stored
 
-| Path source | Figure | Location | Files |
-|---|---|---|---|
-| Snakemake | leadtime | `output/figures/<truth>/leadtime/` | `publication_figures_rmse_bias.pdf/.png`, `..._ets.pdf/.png`, `.html` |
-| Snakemake | meteogram | `output/figures/<truth>/meteogram/` | `publication_meteogram.pdf/.png`, `.html` |
-| Snakemake | scoremaps | `output/figures/<truth>/scoremaps/` | `publication_scoremaps.pdf/.png`, `.html` |
-| CLI (default) | any | `./figures/<truth>/<name>/` (cwd-relative) | same filenames |
-| CLI `--output X` | any | `X/` | same filenames |
+Notebooks write figures to `output/figures/<truth_slug>/<figure>/` by default,
+resolved via `figures_dir(m.output_root, m.truth["label"])`:
+
+| Figure | Location | Files |
+|---|---|---|
+| leadtime | `output/figures/<truth>/leadtime/` | `publication_figures_rmse_bias.pdf/.png`, `publication_figures_ets.pdf/.png`, `publication_figures_rmse_bias_skill.pdf/.png`, `publication_figures_ets_skill.pdf/.png`, `publication_figures.html` |
+| meteogram | `output/figures/<truth>/meteogram/` | `publication_meteogram.pdf/.png` |
+| scoremaps | `output/figures/<truth>/scoremaps/` | `publication_scoremaps_<step>h.pdf/.png` (one per lead time), `publication_scoremaps.html` |
 
 ---
 
@@ -318,15 +266,12 @@ no manifest is found they fall back to built-in demo defaults and print a warnin
 **"Nothing to be done" but figures missing / or a 800-job rerun cascade.**
 Snakemake's default rerun-triggers include `code`/`params`; editing code or config
 makes it want to recompute everything. If the data already exists and you only want
-the figures, either use the standalone CLI (Section B), or restrict triggers:
+to re-render figures, just run the notebook — it never triggers the
+inference/verification cascade. To also avoid a Snakemake rerun for the manifest,
+restrict triggers:
 ```bash
-evalml publication config/varda-single_paper.yaml -- --rerun-triggers mtime
+evalml publication config/varda-single_paper_stations.yaml -- --rerun-triggers mtime
 ```
-
-**`MissingInputException` with `--allowed-rules`.** `--allowed-rules` is a strict
-whitelist that also forbids the rules producing the inputs. Drop it; use
-`--forcerun publication_figures` to force a re-render, or target a rule with
-`evalml make` and let Snakemake resolve dependencies.
 
 **Meteogram: `jretrieve credentials not found`.** The meteogram fetches station
 obs live from `jretrievedwh`. Put `JRETRIEVE_CLIENT_ID` / `JRETRIEVE_CLIENT_SECRET`
@@ -348,22 +293,38 @@ figures code.
 ```
 src/evalml/
   resolution.py          # pure, importable: resolve_leadtimes, resolve_baseline_id
-  config.py              # PublicationConfig + PublicationScoreMapsConfig + ConfigModel validators
+  config.py              # PublicationConfig + PublicationScoremapsConfig + ConfigModel validators
   publication/
     manifest.py          # build_manifest (pure), write/load
     resolver.py          # Manifest, Participant, validate_request, ResolutionError
-    cli.py / __main__.py # python -m evalml.publication
-workflow/rules/publication.smk   # publication_manifest + thin figure rules
-workflow/scripts/publication_*.py # manifest-aware figure scripts
-tests/unit/test_resolution.py, test_publication_config.py, test_publication_manifest.py
+    style.py             # mplstyle_path() + packaged publication.mplstyle
+notebooks/publication/
+  leadtime.py            # lead-time score figures
+  meteogram.py           # single-station meteogram
+  scoremaps.py           # spatial skill-score maps
+  scorecards.py          # combined multi-section scorecard
+workflow/rules/publication.smk   # publication_manifest rule; publication_all target
+workflow/scripts/
+  verification_plot_metrics.py   # shared metric-plotting helpers (used by leadtime notebook)
+  meteogram_derivations.py       # derived-variable helpers (used by meteogram notebook)
+tests/unit/
+  test_resolution.py
+  test_publication_config.py
+  test_publication_manifest.py
+  test_publication_style.py
 ```
 
 Design rules of thumb:
 - The manifest is the single source of truth for paths; never split a `run_id`
   (it contains `/`), only `str.format`-join templates.
-- The Snakemake scoremap input function resolves files from in-memory globals via
-  the *same* template the CLI uses, so the declared inputs always match what the
-  CLI plots.
+- `evalml publication` only writes the manifest; result NC files are produced by
+  the experiment workflow. The notebooks open whatever result files exist at the
+  paths the manifest records — a missing file surfaces as a clear `FileNotFoundError`,
+  the cue to (re)run `evalml experiment`.
 - Coherence checks live in `ConfigModel` (fail the launch early) **and** in the
   resolver (protect manifest-only callers).
-```
+- Notebooks reach `workflow/scripts/` helpers via a small kernel-safe bootstrap that
+  prepends `workflow/scripts` and `src` to `sys.path` at the top of each notebook.
+- `evalml.resolution` must stay import-light and free of Snakemake globals so that
+  `workflow/rules/common.smk`, standalone notebooks, and the test suite can all
+  import it without a Snakemake process.

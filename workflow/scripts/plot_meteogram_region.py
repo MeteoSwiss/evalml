@@ -21,8 +21,7 @@ import numpy as np
 from data_input import parse_steps, load_truth_data
 from verification import ShapefileSpatialAggregationMasks
 
-# Shared look for the paper figures (sibling module, on sys.path when run directly).
-from publication_style import line_style, param_label
+from evalml.publication.style import line_style, param_label, mplstyle_path
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -98,7 +97,7 @@ def main():
     # Lead time in hours since init.
     lead_hours = (times - np.datetime64(init_time)) / np.timedelta64(1, "h")
 
-    plt.style.use(Path(__file__).resolve().parent / "publication.mplstyle")
+    plt.style.use(mplstyle_path())
     fig, ax = plt.subplots(figsize=(8, 3.0))
     ax.plot(
         lead_hours,

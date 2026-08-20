@@ -1,176 +1,140 @@
 import marimo
 
-__generated_with = "0.23.9"
-app = marimo.App(width="full")
+__generated_with = "0.23.3"
+app = marimo.App()
 
 
 @app.cell
 def _():
     import sys
     from pathlib import Path
-    import marimo as mo
 
-    _script_dir = Path(__file__).resolve().parent  # workflow/scripts/
-    sys.path.append(str(_script_dir))
-    project_root = _script_dir.parent.parent  # repo root
-    return Path, mo, project_root, sys
+    # Repo root = two levels up from notebooks/publication/. Notebooks run with cwd
+    # at the repo root when invoked via nbconvert; fall back by walking up from cwd.
+    PROJECT_ROOT = Path.cwd().resolve()
+    if not (PROJECT_ROOT / "workflow").is_dir():
+        # Walk up until we find the repo root (contains both workflow/ and src/).
+        for _p in [PROJECT_ROOT] + list(PROJECT_ROOT.parents):
+            if (_p / "workflow").is_dir() and (_p / "src").is_dir():
+                PROJECT_ROOT = _p
+                break
+    # verification_plot_metrics lives in workflow/scripts (shared with the main
+    # workflow, deliberately not moved); plotting/data_input/verification come from
+    # the editable src/ install. Style is a proper package import (no path hack).
+    sys.path.insert(0, str(PROJECT_ROOT / "workflow" / "scripts"))
+    sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
+    import matplotlib.pyplot as plt
+    from evalml.publication import style
 
-@app.cell
-def _(mo, sys):
-    # Defaults come from the publication manifest when available (no stale hashes);
-    # otherwise fall back to built-in demo strings with a visible warning.
-    import os
-
-    _DEMO_VERIF = (
-        "output/data/baselines/baseline-7e02/verif_aggregated_2b83.nc"
-        " output/data/runs/temporal_downscaler-f927-1ee3-on-forecaster-c304-23e7/495c/verif_aggregated_2b83.nc"
-    )
-    _DEMO_SOURCES = "ICON-CH1-CTRL,Varda-Single"
-    try:
-        from evalml.publication.manifest import load_manifest
-
-        _m = load_manifest(os.environ.get("EVALML_MANIFEST"))
-        _pairs = _m.verif_paths()
-        _VERIF_DEFAULT = " ".join(p for p, _ in _pairs)
-        _SOURCE_DEFAULT = ",".join(label for _, label in _pairs)
-    except Exception as _exc:  # noqa: BLE001
-        print(
-            f"[publication_figures] no manifest ({_exc}); using built-in demo "
-            "defaults which may not match your config."
-        )
-        _VERIF_DEFAULT = _DEMO_VERIF
-        _SOURCE_DEFAULT = _DEMO_SOURCES
-
-    _cli = mo.cli_args()
-    if not _cli and len(sys.argv) > 1:
-        import argparse
-
-        _p = argparse.ArgumentParser()
-        _p.add_argument("--verif_files", default=_VERIF_DEFAULT)
-        _p.add_argument("--sources", default=_SOURCE_DEFAULT)
-        _p.add_argument("--output", default="figures/debug")
-        _parsed, _ = _p.parse_known_args()
-        _default_verif = _parsed.verif_files
-        _default_sources = _parsed.sources
-        _default_output = _parsed.output
-        _is_script = True
-    else:
-        _default_verif = _cli.get("verif_files", default=_VERIF_DEFAULT)
-        _default_sources = _cli.get("sources", default=_SOURCE_DEFAULT)
-        _default_output = _cli.get("output", default="figures/debug")
-        _is_script = bool(_cli)
-
-    verif_input = mo.ui.text(
-        value=_default_verif, label="Verification files (space-separated)"
-    )
-    sources_input = mo.ui.text(
-        value=_default_sources, label="Sources (comma-separated)"
-    )
-    output_input = mo.ui.text(value=_default_output, label="Output directory")
-
-    mo.vstack([verif_input, sources_input, output_input]) if not _is_script else None
-    return output_input, sources_input, verif_input
+    plt.style.use(style.mplstyle_path())
+    return PROJECT_ROOT, Path, plt
 
 
 @app.cell
-def _(output_input, sources_input, verif_input):
-    verif_files = verif_input.value.split() if verif_input.value else []
-    sources = [s.strip() for s in sources_input.value.split(",") if s.strip()]
-    output_dir = output_input.value
-    return output_dir, sources, verif_files
-
-
-@app.cell
-def _(Path, project_root, verif_files):
-    import xarray as xr
+def _(PROJECT_ROOT, Path):
+    import pandas as _pd
+    import xarray as _xr
+    from evalml.publication.manifest import load_manifest, figures_dir
     from verification_plot_metrics import (
         _ensure_unique_lead_time as ensure_unique_lead_time,
         _select_best_sources as select_best_sources,
+        decode_metric as _decode_metric,
     )
+
+    m = load_manifest(PROJECT_ROOT / "output/manifests/manifest_varda-single_paper_stations.json")
+    m.validate_request("figures")
+
+    pairs = m.verif_paths()
+    output_dir = str(PROJECT_ROOT / figures_dir(m.output_root, m.truth["label"]) / "leadtime")
 
     def _abs(f):
         p = Path(f)
-        return p if p.is_absolute() else project_root / p
+        return p if p.is_absolute() else PROJECT_ROOT / p
 
-    _dfs = [xr.open_dataset(_abs(f)) for f in verif_files]
-    _dfs = [ensure_unique_lead_time(d) for d in _dfs]
-    _dfs = select_best_sources(_dfs)
-    ds = xr.concat(_dfs, dim="source", join="outer")
-    return (ds,)
-
-
-@app.cell
-def _(ds):
-    from verification_plot_metrics import decode_metric as _decode_metric
-
-    def ds_to_df(dataset):
-        """Convert a verification xarray Dataset to a tidy DataFrame."""
-        _nonspatial_vars = [
-            d for d in dataset.data_vars if "spatial" not in d and "." in d
-        ]
+    def _load_participant_df(path, label):
+        """Load one verification .nc and return a tidy DataFrame labelled with label."""
+        _ds = _xr.open_dataset(_abs(path))
+        [_ds] = select_best_sources([ensure_unique_lead_time(_ds)])
+        _src_vals = [s for s in _ds.source.values if not str(s).startswith("truth-")]
+        if not _src_vals:
+            return None
+        _ds = _ds.sel(source=_src_vals)
+        _vars = [v for v in _ds.data_vars if "spatial" not in v and "." in v]
+        if not _vars:
+            return None
         _df = (
-            dataset[_nonspatial_vars]
+            _ds[_vars]
             .to_array("stack")
             .to_dataframe(name="value")
             .reset_index()
         )
-        _df[["param", "metric"]] = _df["stack"].str.split(".", n=1, expand=True)
-        _df["metric"] = _df["metric"].apply(_decode_metric)
-        _df.drop(columns=["stack"], inplace=True)
+        _df[["param", "metric_raw"]] = _df["stack"].str.split(".", n=1, expand=True)
+        _df["metric"] = _df["metric_raw"].apply(_decode_metric)
         _df["step"] = _df["step"].dt.total_seconds() / 3600
         _df["init_hour"] = _df["init_hour"].astype(str).str.zfill(2) + ":00 UTC"
-        _df["init_hour"] = _df["init_hour"].where(
-            _df["init_hour"] != "-999:00 UTC", "all"
-        )
-        return _df
+        _df["init_hour"] = _df["init_hour"].where(_df["init_hour"] != "-999:00 UTC", "all")
+        _df["source"] = label
+        return _df.drop(columns=["stack"])
 
-    df = ds_to_df(ds)
-    return ds_to_df, df
+    _parts = [_load_participant_df(p, lbl) for p, lbl in pairs]
+
+    df = _pd.concat([p for p in _parts if p is not None], ignore_index=True)
+    sources = [lbl for _, lbl in pairs]
+    return df, output_dir, sources
 
 
 @app.cell
 def _(df):
     df_all = df[
-        (df["region"] == "all") & (df["season"] == "all") & (df["init_hour"] == "all")
+        (df["region"] == "icon") & (df["season"] == "all") & (df["init_hour"] == "all")
     ].copy()
     return (df_all,)
 
 
 @app.cell
-def _(ds, ds_to_df, sources):
-    import xarray as _xr
+def _(df, sources):
+    import pandas as _pd
 
-    def compute_skill_ds(dataset, srcs):
-        """Compute 1 - Score(baseline) / Score(Varda-Single) for all baselines.
+    def compute_skill_df(dataframe, all_sources):
+        """Compute 1 - Score(other) / Score(Varda-Single) per source.
 
-        Only processes sources explicitly listed in srcs (minus Varda-Single),
-        so dataset sources not requested by the user (e.g. truth sources) are
-        excluded. For BIAS variables, scores are squared before taking the ratio
-        so that the denominator is always non-negative.
+        General formula: skill = (S_fcst - S_baseline) / (S_perfect - S_baseline)
+        where S_fcst = comparison source, S_baseline = Varda (reference),
+        S_perfect = 1 for ETS metrics, 0 for all others (RMSE, BIAS², MAE, …).
+        BIAS is squared first so it is a proper non-negative score before the ratio.
         """
-        _varda_src = next((s for s in srcs if "Varda" in s and "Single" in s), None)
-        _baseline_srcs = [s for s in srcs if s != _varda_src]
-        _available = set(dataset.source.values.tolist())
-        _baseline_srcs = [s for s in _baseline_srcs if s in _available]
-        _varda = dataset.sel(source=_varda_src)
-        _baselines = dataset.sel(source=_baseline_srcs)
-        _skill_vars = {}
-        for _var in _baselines.data_vars:
-            _metric_raw = _var.split(".", 1)[1] if "." in _var else ""
-            _b = _baselines[_var].astype(float)
-            _v = _varda[_var].astype(float)
-            if _metric_raw == "BIAS":
-                _b = _b**2
-                _v = _v**2
-            _skill_vars[_var] = _xr.where(_v != 0, 1 - _b / _v, float("nan"))
-        return _xr.Dataset(_skill_vars)
+        _varda_src = next((s for s in all_sources if "Varda" in s and "Single" in s), None)
+        _other_srcs = [s for s in all_sources if s != _varda_src]
+        _join_cols = ["param", "metric", "metric_raw", "step", "region", "season", "init_hour"]
+        _varda = (
+            dataframe[dataframe["source"] == _varda_src][_join_cols + ["value"]]
+            .rename(columns={"value": "_v"})
+        )
+        _result_parts = []
+        for _src in _other_srcs:
+            _src_df = dataframe[dataframe["source"] == _src].copy()
+            if _src_df.empty:
+                continue
+            _merged = _src_df.merge(_varda, on=_join_cols, how="left")
+            _is_ets = _merged["metric_raw"].str.startswith("ETS")
+            _is_bias = _merged["metric_raw"] == "BIAS"
+            _s_perfect = _is_ets.astype(float)  # 1 for ETS, 0 for RMSE/BIAS²/…
+            # Square BIAS to make it a non-negative score before applying the formula
+            _s_fcst = _merged["value"].where(~_is_bias, _merged["value"] ** 2)
+            _s_baseline = _merged["_v"].where(~_is_bias, _merged["_v"] ** 2)
+            _denom = _s_perfect - _s_baseline
+            _merged["value"] = (_s_fcst - _s_baseline) / _denom
+            _merged.loc[_denom.abs() < 1e-12, "value"] = float("nan")
+            _result_parts.append(_merged.drop(columns=["_v"]))
+        if not _result_parts:
+            return dataframe.iloc[:0].copy()
+        return _pd.concat(_result_parts, ignore_index=True)
 
     skill_sources = [s for s in sources if not ("Varda" in s and "Single" in s)]
-    ds_skill = compute_skill_ds(ds, sources)
-    _df_skill = ds_to_df(ds_skill)
+    _df_skill = compute_skill_df(df, sources)
     df_skill_all = _df_skill[
-        (_df_skill["region"] == "all")
+        (_df_skill["region"] == "icon")
         & (_df_skill["season"] == "all")
         & (_df_skill["init_hour"] == "all")
     ].copy()
@@ -178,14 +142,12 @@ def _(ds, ds_to_df, sources):
 
 
 @app.cell
-def _(Path):
+def _():
     import matplotlib.pyplot as _plt
     import matplotlib.ticker as _mticker
     import numpy as _np
 
-    from publication_style import line_style as _line_style
-
-    _plt.style.use(Path(__file__).resolve().parent / "publication.mplstyle")
+    from evalml.publication.style import line_style as _line_style
 
     _XSCALE_KW = dict(
         functions=(
@@ -195,13 +157,14 @@ def _(Path):
     )
     _XTICKS = _mticker.FixedLocator([0, 3, 6, 12, 24, 36, 48, 72, 96, 120])
 
-    def plot_panels(panels, df, sources):
+    def plot_panels(panels, df, sources, legend_ncol=None):
         """Draw one figure from a panel-spec DataFrame.
 
         panels columns: row_id, col_id, param_name, metric, param_text,
                         title_x, title_y, zero_line
         df may contain raw scores or pre-computed skill scores; sources
         must match the source values present in df.
+        legend_ncol: columns in the figure legend (default: all sources in one row).
         """
         nrows = panels["row_id"].max() + 1
         ncols = panels["col_id"].max() + 1
@@ -216,7 +179,7 @@ def _(Path):
                 if grp.empty:
                     continue
                 ax.plot(grp["step"], grp["value"], label=src, **_line_style(src))
-                if "Varda" in src and "Single" in src:
+                if ("Varda" in src and "Single" in src) or "AIFS" in src:
                     m6 = grp[grp["step"] % 6 == 0]
                     ax.plot(
                         m6["step"],
@@ -230,7 +193,7 @@ def _(Path):
             ax.xaxis.set_major_locator(_XTICKS)
             if p.zero_line:
                 ax.axhline(
-                    0, color="black", linestyle="dashed", linewidth=0.7, zorder=0
+                    0, color="0.6", linestyle="solid", linewidth=0.7, zorder=0
                 )
             if p.param_text:
                 ax.text(
@@ -256,27 +219,39 @@ def _(Path):
         )
         handles = [handles[i] for i in _order]
         labels = [labels[i] for i in _order]
+        _ncol = legend_ncol if legend_ncol is not None else len(sources)
+        _legend_rows = (len(labels) + _ncol - 1) // _ncol
         fig.legend(
             handles,
             labels,
             loc="lower center",
-            ncol=len(sources),
+            ncol=_ncol,
             bbox_to_anchor=(0.5, 0.02),
+            fontsize=_plt.rcParams["axes.labelsize"],
         )
         fig.tight_layout()
-        fig.subplots_adjust(bottom=0.2)
+        fig.subplots_adjust(bottom=0.12 + 0.08 * _legend_rows)
         return fig
 
     return (plot_panels,)
 
 
 @app.cell
-def _(Path, df_all, mo, output_dir, plot_panels, sources):
+def _(
+    Path,
+    df_all,
+    df_skill_all,
+    output_dir,
+    plot_panels,
+    plt,
+    skill_sources,
+    sources,
+):
     import matplotlib.pyplot as _plt
     import pandas as _pd
-    from publication_style import param_label as _param_label
+    from evalml.publication.style import param_label as _param_label
 
-    _PARAMS = ["T_2M", "TOT_PREC", "U_10M"]
+    _PARAMS = ["T_2M", "TOT_PREC1", "SP_10M"]
     _METRICS = ["RMSE", "BIAS"]
 
     _panels = _pd.DataFrame(
@@ -298,21 +273,15 @@ def _(Path, df_all, mo, output_dir, plot_panels, sources):
 
     _out = Path(output_dir)
     _out.mkdir(parents=True, exist_ok=True)
-    _fig = plot_panels(_panels, df_all, sources)
+    _fig = plot_panels(_panels, df_all, sources, legend_ncol=(len(sources) + 1) // 2)
     _fname = _out / "publication_figures_rmse_bias.pdf"
     _fig.savefig(_fname, bbox_inches="tight")
     _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
     _plt.close(_fig)
 
-    mo.image(str(_fname.with_suffix(".png")))
-    return
-
-
-@app.cell
-def _(Path, df_all, mo, output_dir, plot_panels, sources):
     import matplotlib.pyplot as _plt
     import pandas as _pd
-    from publication_style import param_label as _param_label
+    from evalml.publication.style import param_label as _param_label
 
     def _find_ets(metrics, op, threshold):
         return next((m for m in metrics if m.endswith(f"{op} {threshold}")), None)
@@ -322,11 +291,11 @@ def _(Path, df_all, mo, output_dir, plot_panels, sources):
     )
     _prec_ets = sorted(
         m
-        for m in df_all[df_all["param"] == "TOT_PREC"]["metric"].unique()
+        for m in df_all[df_all["param"] == "TOT_PREC1"]["metric"].unique()
         if "ETS" in m
     )
     _wind_ets = sorted(
-        m for m in df_all[df_all["param"] == "U_10M"]["metric"].unique() if "ETS" in m
+        m for m in df_all[df_all["param"] == "SP_10M"]["metric"].unique() if "ETS" in m
     )
 
     _specs = [
@@ -340,16 +309,16 @@ def _(Path, df_all, mo, output_dir, plot_panels, sources):
         (
             0,
             1,
-            "TOT_PREC",
+            "TOT_PREC1",
             _find_ets(_prec_ets, ">", "0.0"),
-            f"{_param_label('TOT_PREC')} > 0 mm",
+            f"{_param_label('TOT_PREC1')} > 0 mm",
         ),
         (
             0,
             2,
-            "U_10M",
+            "SP_10M",
             _find_ets(_wind_ets, ">", "5.0"),
-            f"{_param_label('U_10M')} > 5 m/s",
+            f"{_param_label('SP_10M')} > 5 m/s",
         ),
         (
             1,
@@ -361,16 +330,16 @@ def _(Path, df_all, mo, output_dir, plot_panels, sources):
         (
             1,
             1,
-            "TOT_PREC",
+            "TOT_PREC1",
             _find_ets(_prec_ets, ">", "5.0"),
-            f"{_param_label('TOT_PREC')} > 5 mm",
+            f"{_param_label('TOT_PREC1')} > 5 mm",
         ),
         (
             1,
             2,
-            "U_10M",
+            "SP_10M",
             _find_ets(_wind_ets, ">", "10.0"),
-            f"{_param_label('U_10M')} > 10 m/s",
+            f"{_param_label('SP_10M')} > 10 m/s",
         ),
     ]
     _panels = _pd.DataFrame(
@@ -391,23 +360,17 @@ def _(Path, df_all, mo, output_dir, plot_panels, sources):
 
     _out = Path(output_dir)
     _out.mkdir(parents=True, exist_ok=True)
-    _fig = plot_panels(_panels, df_all, sources)
+    _fig = plot_panels(_panels, df_all, [s for s in sources if "AIFS" not in s])
     _fname = _out / "publication_figures_ets.pdf"
     _fig.savefig(_fname, bbox_inches="tight")
     _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
     _plt.close(_fig)
 
-    mo.image(str(_fname.with_suffix(".png")))
-    return
-
-
-@app.cell
-def _(Path, df_skill_all, mo, output_dir, plot_panels, skill_sources):
     import matplotlib.pyplot as _plt
     import pandas as _pd
-    from publication_style import param_label as _param_label
+    from evalml.publication.style import param_label as _param_label
 
-    _PARAMS = ["T_2M", "TOT_PREC", "U_10M"]
+    _PARAMS = ["T_2M", "TOT_PREC1", "SP_10M"]
     _METRICS = ["RMSE", "BIAS"]
     _SKILL_LABELS = {"RMSE": "RMSE skill", "BIAS": "Bias² skill"}
 
@@ -436,15 +399,9 @@ def _(Path, df_skill_all, mo, output_dir, plot_panels, skill_sources):
     _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
     _plt.close(_fig)
 
-    mo.image(str(_fname.with_suffix(".png")))
-    return
-
-
-@app.cell
-def _(Path, df_skill_all, mo, output_dir, plot_panels, skill_sources):
     import matplotlib.pyplot as _plt
     import pandas as _pd
-    from publication_style import param_label as _param_label
+    from evalml.publication.style import param_label as _param_label
 
     def _find_ets(metrics, op, threshold):
         return next((m for m in metrics if m.endswith(f"{op} {threshold}")), None)
@@ -456,12 +413,12 @@ def _(Path, df_skill_all, mo, output_dir, plot_panels, skill_sources):
     )
     _prec_ets = sorted(
         m
-        for m in df_skill_all[df_skill_all["param"] == "TOT_PREC"]["metric"].unique()
+        for m in df_skill_all[df_skill_all["param"] == "TOT_PREC1"]["metric"].unique()
         if "ETS" in m
     )
     _wind_ets = sorted(
         m
-        for m in df_skill_all[df_skill_all["param"] == "U_10M"]["metric"].unique()
+        for m in df_skill_all[df_skill_all["param"] == "SP_10M"]["metric"].unique()
         if "ETS" in m
     )
 
@@ -476,16 +433,16 @@ def _(Path, df_skill_all, mo, output_dir, plot_panels, skill_sources):
         (
             0,
             1,
-            "TOT_PREC",
+            "TOT_PREC1",
             _find_ets(_prec_ets, ">", "0.0"),
-            f"{_param_label('TOT_PREC')} > 0 mm",
+            f"{_param_label('TOT_PREC1')} > 0 mm",
         ),
         (
             0,
             2,
-            "U_10M",
+            "SP_10M",
             _find_ets(_wind_ets, ">", "5.0"),
-            f"{_param_label('U_10M')} > 5 m/s",
+            f"{_param_label('SP_10M')} > 5 m/s",
         ),
         (
             1,
@@ -497,16 +454,16 @@ def _(Path, df_skill_all, mo, output_dir, plot_panels, skill_sources):
         (
             1,
             1,
-            "TOT_PREC",
+            "TOT_PREC1",
             _find_ets(_prec_ets, ">", "5.0"),
-            f"{_param_label('TOT_PREC')} > 5 mm",
+            f"{_param_label('TOT_PREC1')} > 5 mm",
         ),
         (
             1,
             2,
-            "U_10M",
+            "SP_10M",
             _find_ets(_wind_ets, ">", "10.0"),
-            f"{_param_label('U_10M')} > 10 m/s",
+            f"{_param_label('SP_10M')} > 10 m/s",
         ),
     ]
     _panels = _pd.DataFrame(
@@ -527,7 +484,7 @@ def _(Path, df_skill_all, mo, output_dir, plot_panels, skill_sources):
 
     _out = Path(output_dir)
     _out.mkdir(parents=True, exist_ok=True)
-    _fig = plot_panels(_panels, df_skill_all, skill_sources)
+    _fig = plot_panels(_panels, df_skill_all, [s for s in skill_sources if "AIFS" not in s])
     _fname = _out / "publication_figures_ets_skill.pdf"
     _fig.savefig(_fname, bbox_inches="tight")
     _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
@@ -542,7 +499,7 @@ def _(Path, df_skill_all, mo, output_dir, plot_panels, skill_sources):
         "</body></html>"
     )
 
-    mo.image(str(_fname.with_suffix(".png")))
+    plt.show()
     return
 
 

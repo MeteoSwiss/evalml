@@ -1,120 +1,62 @@
 import marimo
 
-__generated_with = "0.23.9"
-app = marimo.App(width="full")
+__generated_with = "0.23.7"
+app = marimo.App()
 
 
 @app.cell
 def _():
     import sys
     import time
+    import logging
     from pathlib import Path
 
-    import marimo as mo
+    # Repo root: cwd when run from repo root, else walk up (nbconvert runs with
+    # cwd = the notebook's own directory; no module-level path variable is available
+    # in a Jupyter kernel, so we never rely on one).
+    PROJECT_ROOT = Path.cwd().resolve()
+    if not (PROJECT_ROOT / "workflow").is_dir():
+        for _p in [PROJECT_ROOT] + list(PROJECT_ROOT.parents):
+            if (_p / "workflow").is_dir() and (_p / "src").is_dir():
+                PROJECT_ROOT = _p
+                break
+    sys.path.insert(0, str(PROJECT_ROOT / "workflow" / "scripts"))
+    sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-    _script_dir = Path(__file__).resolve().parent  # workflow/scripts/
-    sys.path.append(str(_script_dir))
-    project_root = _script_dir.parent.parent
-    return Path, mo, project_root, sys, time
-
-
-@app.cell
-def _():
-    import logging
-
-    LOG = logging.getLogger(__name__)
+    LOG = logging.getLogger("meteogram")
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
-    return (LOG,)
+
+    import matplotlib.pyplot as plt
+    from evalml.publication import style
+
+    plt.style.use(style.mplstyle_path())
+    return LOG, PROJECT_ROOT, Path, plt, time
 
 
 @app.cell
-def _(mo, sys):
-    # Interactive defaults come from the publication manifest when available (no
-    # stale hashes); otherwise fall back to built-in demo strings with a warning.
-    import os
+def _():
+    from evalml.publication.manifest import load_manifest, figures_dir
 
-    _RUN = "output/data/runs/temporal_downscaler-f927-1ee3-on-forecaster-c304-23e7/495c"
-    _FORECAST_DEFAULT = f"{_RUN}/202504010000/grib"
-    _BASELINES_DEFAULT = (
-        "/store_new/mch/msopr/osm/ICON-CH1-EPS|0/33/1|mean|ICON-CH1-EPS mean;"
-        "/store_new/mch/msopr/osm/ICON-CH2-EPS|0/120/1|mean|ICON-CH2-EPS mean"
-    )
-    _STEPS_DEFAULT = "0/120/1"
-    _LABEL_DEFAULT = "Varda-Single"
-    _DATE_DEFAULT = "202504010000"
-    _STATION_DEFAULT = "KLO"
-    _PARAMS_DEFAULT = "T_2M,TOT_PREC,SP_10M,DD_10M"
-    try:
-        from evalml.publication.manifest import load_manifest
+    m = load_manifest()
+    _mg = m.publication.get("meteogram") or {}
 
-        _m = load_manifest(os.environ.get("EVALML_MANIFEST"))
-        _mg = _m.publication.get("meteogram") or {}
-        _DATE_DEFAULT = _mg.get("init_time", _DATE_DEFAULT)
-        _STATION_DEFAULT = _mg.get("station", _STATION_DEFAULT)
-        if _mg.get("params"):
-            _PARAMS_DEFAULT = ",".join(_mg["params"])
-        _cand = _m.get_candidate()
-        _FORECAST_DEFAULT = _m.grib_dir(_cand, _DATE_DEFAULT)
-        _STEPS_DEFAULT = _cand.steps
-        _LABEL_DEFAULT = _cand.label
-        _BASELINES_DEFAULT = _m.meteogram_baseline_specs() or _BASELINES_DEFAULT
-    except Exception as _exc:  # noqa: BLE001
-        print(
-            f"[publication_meteogram] no manifest ({_exc}); using built-in demo "
-            "defaults which may not match your config."
-        )
+    # Configured case; override any of these variables in-cell to retarget.
+    date = _mg.get("init_time", "202504010000")
+    station = _mg.get("station", "SIO")
+    display_params = _mg.get("params", ["T_2M", "TOT_PREC1", "SP_10M", "DD_10M"])
 
-    _cli = mo.cli_args()
-    if not _cli and len(sys.argv) > 1:
-        import argparse
+    m.validate_request("meteogram", init_time=date)
 
-        _p = argparse.ArgumentParser()
-        _p.add_argument("--forecast", default=_FORECAST_DEFAULT)
-        _p.add_argument("--forecast_steps", default=_STEPS_DEFAULT)
-        _p.add_argument("--forecast_label", default=_LABEL_DEFAULT)
-        _p.add_argument("--baseline", action="append", default=None)
-        _p.add_argument("--date", default=_DATE_DEFAULT)
-        _p.add_argument("--station", default=_STATION_DEFAULT)
-        _p.add_argument("--params", default=_PARAMS_DEFAULT)
-        _p.add_argument("--output", default="figures/meteogram")
-        _a, _ = _p.parse_known_args()
-        forecast = _a.forecast
-        forecast_steps = _a.forecast_steps
-        forecast_label = _a.forecast_label
-        baselines_raw = ";".join(_a.baseline) if _a.baseline else _BASELINES_DEFAULT
-        date = _a.date
-        station = _a.station
-        params_raw = _a.params
-        output_dir = _a.output
-        _is_script = True
-    else:
-        forecast = _cli.get("forecast", default=_FORECAST_DEFAULT)
-        forecast_steps = _cli.get("forecast_steps", default=_STEPS_DEFAULT)
-        forecast_label = _cli.get("forecast_label", default=_LABEL_DEFAULT)
-        baselines_raw = _cli.get("baseline", default=_BASELINES_DEFAULT)
-        date = _cli.get("date", default=_DATE_DEFAULT)
-        station = _cli.get("station", default=_STATION_DEFAULT)
-        params_raw = _cli.get("params", default=_PARAMS_DEFAULT)
-        output_dir = _cli.get("output", default="figures/meteogram")
-        _is_script = bool(_cli)
-    return (
-        baselines_raw,
-        date,
-        forecast,
-        forecast_label,
-        forecast_steps,
-        output_dir,
-        params_raw,
-        station,
-    )
+    _cand = m.get_candidate()
+    forecast = m.grib_dir(_cand, date)
+    forecast_steps = _cand.steps
+    forecast_label = _cand.label
+    output_dir = str(figures_dir(m.output_root, m.truth["label"]) / "meteogram")
 
-
-@app.cell
-def _(baselines_raw, params_raw):
-    # Parse the structured baseline string: "root|steps|member|label;root|..."
+    # Parse the structured baseline spec "root|steps|member|label;..." from the manifest.
     def _parse_baselines(raw):
         out = []
         for spec in [s for s in raw.split(";") if s.strip()]:
@@ -122,14 +64,23 @@ def _(baselines_raw, params_raw):
             out.append({"root": root, "steps": steps, "member": member, "label": label})
         return out
 
-    baselines = _parse_baselines(baselines_raw)
-    display_params = [p.strip() for p in params_raw.split(",") if p.strip()]
-    return baselines, display_params
+    baselines = _parse_baselines(m.meteogram_baseline_specs())
+    return (
+        baselines,
+        date,
+        display_params,
+        forecast,
+        forecast_label,
+        forecast_steps,
+        output_dir,
+        station,
+    )
 
 
 @app.cell
 def _(
     LOG,
+    PROJECT_ROOT,
     Path,
     baselines,
     date,
@@ -137,7 +88,6 @@ def _(
     forecast,
     forecast_label,
     forecast_steps,
-    project_root,
     station,
     time,
 ):
@@ -157,11 +107,11 @@ def _(
 
     import pandas as pd
 
-    from publication_style import OBS_LABEL
+    from evalml.publication.style import OBS_LABEL
 
     def _abs(p):
         p = Path(p)
-        return p if p.is_absolute() else project_root / p
+        return p if p.is_absolute() else PROJECT_ROOT / p
 
     init_time = datetime.strptime(str(date), "%Y%m%d%H%M")
     base_params = expand_to_base_params(display_params)
@@ -229,32 +179,29 @@ def _(
     df,
     display_params,
     init_time,
-    mo,
     output_dir,
+    plt,
     source_order,
     station,
     time,
 ):
-    import matplotlib.pyplot as plt
     import matplotlib.ticker as mticker
-
-    from publication_style import line_style, param_label
+    from evalml.publication.style import line_style, param_label
 
     LOG.info("meteogram: rendering plot")
     _t0 = time.perf_counter()
-    plt.style.use(Path(__file__).resolve().parent / "publication.mplstyle")
-
-    _UNITS = {"T_2M": "K", "TOT_PREC": "mm", "SP_10M": "m/s", "DD_10M": "deg"}
-
+    _UNITS = {
+        "T_2M": "K",
+        "TOT_PREC": "mm",
+        "TOT_PREC1": "mm",
+        "SP_10M": "m/s",
+        "DD_10M": "deg",
+    }
     _fig, _axes = plt.subplots(
-        len(display_params),
-        1,
-        figsize=(8, 2.6 * len(display_params)),
-        sharex=True,
+        len(display_params), 1, figsize=(8, 2.6 * len(display_params)), sharex=True
     )
     if len(display_params) == 1:
         _axes = [_axes]
-
     for _ax, _p in zip(_axes, display_params):
         _sub = df[df["param"] == _p]
         for _src in source_order:
@@ -263,12 +210,8 @@ def _(
                 continue
             _style = line_style(_src)
             if _p == "DD_10M":
-                # Wind direction is circular: draw everything (incl. observations)
-                # as markers so the 0<->360 wraparound doesn't create spurious
-                # vertical segments.
                 _style = {**_style, "linestyle": "none", "marker": ".", "markersize": 5}
             elif _src == OBS_LABEL:
-                # Observations as a continuous line (no markers) in all other panels.
                 _style = {
                     **_style,
                     "linestyle": "-",
@@ -284,19 +227,21 @@ def _(
         if _p == "DD_10M":
             _ax.set_ylim(0, 360)
             _ax.set_yticks([0, 90, 180, 270, 360])
-        # Lead-time x-axis (hours since init): major every 24 h, minor every 6 h
         _ax.xaxis.set_major_locator(mticker.MultipleLocator(24))
-        _ax.xaxis.set_minor_locator(mticker.MultipleLocator(6))
+        _ax.xaxis.set_minor_locator(
+            mticker.MultipleLocator(6)
+        )  # Wind direction is circular: draw everything (incl. observations)
         _ax.grid(
             True, axis="x", which="major", color="0.6", linewidth=0.8, linestyle="--"
-        )
+        )  # as markers so the 0<->360 wraparound doesn't create spurious
         _ax.grid(
             True, axis="x", which="minor", color="0.8", linewidth=0.6, linestyle=":"
-        )
-
+        )  # vertical segments.
     _axes[-1].set_xlabel("Lead time (h)")
     _axes[0].set_xlim(left=0)
-    _handles, _labels = _axes[0].get_legend_handles_labels()
+    _handles, _labels = _axes[
+        0
+    ].get_legend_handles_labels()  # Observations as a continuous line (no markers) in all other panels.
     _fig.legend(
         _handles,
         _labels,
@@ -306,9 +251,7 @@ def _(
     )
     _fig.suptitle(f"{station} — Init time {init_time:%Y-%m-%d %H:%M}")
     _fig.tight_layout(rect=[0, 0.05, 1, 0.99])
-
     LOG.info("meteogram: plot rendered in %.1fs", time.perf_counter() - _t0)
-
     _out = Path(output_dir)
     _out.mkdir(parents=True, exist_ok=True)
     _fname = _out / "publication_meteogram.pdf"
@@ -319,12 +262,9 @@ def _(
     plt.close(_fig)
     LOG.info("meteogram: figures saved in %.1fs", time.perf_counter() - _t0)
     (_out / "publication_meteogram.html").write_text(
-        "<!doctype html><html><body>"
-        '<img src="publication_meteogram.png" style="max-width:100%">'
-        "</body></html>"
+        '<!doctype html><html><body><img src="publication_meteogram.png" style="max-width:100%"></body></html>'
     )
-
-    mo.image(str(_fname.with_suffix(".png")))
+    plt.show()  # Lead-time x-axis (hours since init): major every 24 h, minor every 6 h
     return
 
 

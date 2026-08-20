@@ -24,19 +24,30 @@ SCHEMA_VERSION = 1
 # station-based and analysis-based runs don't overwrite each other:
 #   <output_root>/publication/<truth_slug>/manifest.json
 #   <output_root>/figures/<truth_slug>/<figure>/
-PUBLICATION_RELDIR = "publication"
-MANIFEST_NAME = "manifest.json"
+MANIFESTS_RELDIR = "manifests"
+MANIFEST_PREFIX = "manifest_"
+MANIFEST_SUFFIX = ".json"
 
 
 def truth_slug(label: str) -> str:
     """Filesystem-safe slug of a truth label (e.g. 'KENDA-CH1', 'SwissMetNet').
 
-    Used to namespace the manifest and figure directories. Any character outside
+    Used to namespace figure directories. Any character outside
     ``[A-Za-z0-9._-]`` becomes ``_``; runs of ``_`` collapse. Two truths sharing a
     label will collide — labels are expected to be distinct.
     """
     slug = re.sub(r"[^A-Za-z0-9._-]+", "_", str(label).strip()).strip("_")
     return slug or "truth"
+
+
+def config_slug(config_name: str) -> str:
+    """Filesystem-safe slug derived from the config file stem.
+
+    Used to namespace the manifest so each config file produces a distinct path.
+
+    Example: ``'config/varda-single_paper_analysis.yaml'`` → ``'varda-single_paper_analysis'``
+    """
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", Path(config_name).stem).strip("_") or "config"
 
 
 # Path templates, relative to ``output_root``. run_id / baseline_id are opaque
@@ -71,6 +82,7 @@ def build_manifest(
     output_root: str,
     publication_cfg: dict | None,
     master_hash: str,
+    config_slug: str | None = None,
     generated_at: str | None = None,
 ) -> dict:
     """Assemble the manifest dict from the in-memory workflow globals.
@@ -162,6 +174,7 @@ def build_manifest(
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "master_hash": master_hash,
+        "config_slug": config_slug,
         "output_root": output_root,
         "truth": {
             "label": (truth_cfg or {}).get("label"),
@@ -194,11 +207,10 @@ def write_manifest(path, manifest: dict) -> None:
         f.write("\n")
 
 
-def manifest_path(output_root: str, truth_label: str) -> Path:
-    """Manifest location for a given truth label: ``<root>/publication/<slug>/manifest.json``."""
-    return (
-        Path(output_root) / PUBLICATION_RELDIR / truth_slug(truth_label) / MANIFEST_NAME
-    )
+def manifest_path(output_root: str, config_name: str) -> Path:
+    """Manifest location for a given config: ``<root>/manifests/manifest_<config_slug>.json``."""
+    slug = config_slug(config_name)
+    return Path(output_root) / MANIFESTS_RELDIR / f"{MANIFEST_PREFIX}{slug}{MANIFEST_SUFFIX}"
 
 
 def figures_dir(output_root: str, truth_label: str) -> Path:
@@ -207,9 +219,9 @@ def figures_dir(output_root: str, truth_label: str) -> Path:
 
 
 def discover_manifests(output_root: str = "output") -> list[Path]:
-    """All per-truth manifests under ``<root>/publication/*/manifest.json``."""
-    base = Path(output_root) / PUBLICATION_RELDIR
-    return sorted(base.glob(f"*/{MANIFEST_NAME}"))
+    """All config manifests under ``<root>/manifests/manifest_*.json``."""
+    base = Path(output_root) / MANIFESTS_RELDIR
+    return sorted(base.glob(f"{MANIFEST_PREFIX}*{MANIFEST_SUFFIX}"))
 
 
 def _manifest_label(p: Path) -> str:
@@ -225,23 +237,36 @@ def default_manifest_path(
 ) -> Path:
     """Resolve the manifest location.
 
-    Precedence: ``$EVALML_MANIFEST`` > the ``truth`` label's subdir > the sole
-    discovered manifest. Raises if several truths exist (ambiguous) or none do.
+    Precedence: ``$EVALML_MANIFEST`` > the sole discovered manifest (or the one
+    matching ``truth``). Raises if several manifests exist without a ``truth``
+    filter, or none do.
     """
     env = os.environ.get("EVALML_MANIFEST")
     if env:
         return Path(env)
     root = output_root or "output"
-    if truth:
-        return manifest_path(root, truth)
     found = discover_manifests(root)
-    if len(found) == 1:
-        return found[0]
     if not found:
         raise FileNotFoundError(
-            f"No publication manifest under {Path(root) / PUBLICATION_RELDIR}/. "
+            f"No publication manifest under {Path(root) / MANIFESTS_RELDIR}/. "
             f"Generate one with `evalml publication <config>` (or set $EVALML_MANIFEST)."
         )
+    if truth:
+        matched = [p for p in found if _manifest_label(p) == truth]
+        if len(matched) == 1:
+            return matched[0]
+        if not matched:
+            avail = [_manifest_label(p) for p in found]
+            raise FileNotFoundError(
+                f"No manifest with truth '{truth}' found. Available: {avail}."
+            )
+        slugs = [p.parent.name for p in matched]
+        raise ValueError(
+            f"Multiple manifests with truth '{truth}' found (slugs: {slugs}). "
+            f"Select one with --manifest <path> or $EVALML_MANIFEST."
+        )
+    if len(found) == 1:
+        return found[0]
     raise ValueError(
         f"Multiple publication manifests found (truths: {[_manifest_label(p) for p in found]}). "
         f"Select one with --truth <label> or --manifest <path>."
@@ -256,8 +281,7 @@ def load_manifest_dict(path=None, truth: str | None = None) -> dict:
         hint = (
             f" Available truths: {avail}."
             if avail
-            else " Generate it with "
-            "`evalml publication <config>` (or set $EVALML_MANIFEST)."
+            else " Generate it with `evalml publication <config>` (or set $EVALML_MANIFEST)."
         )
         raise FileNotFoundError(f"Publication manifest not found at {p}.{hint}")
     with p.open() as f:

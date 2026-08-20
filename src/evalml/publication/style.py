@@ -1,14 +1,19 @@
 """Shared visual style for the publication figures.
 
 Source of truth for colors, markers, line styles, and human-readable parameter
-labels used by ``publication_figures.py``, ``publication_meteogram.py``, and
-``publication_scoremaps.py``.  Font sizes and layout defaults live in
-``publication.mplstyle``; apply it with::
+labels used by the publication notebooks (``notebooks/publication/*.py``) and
+by ``plot_meteogram_region.py``.  Font sizes and layout defaults live in the
+packaged ``publication.mplstyle``; apply it with::
 
-    plt.style.use(Path(__file__).parent / "publication.mplstyle")
+    import matplotlib.pyplot as plt
+    from evalml.publication import style
+    plt.style.use(style.mplstyle_path())
 
 Tweak the look of the paper figures here.
 """
+
+from importlib import resources
+from pathlib import Path
 
 from matplotlib.colors import LinearSegmentedColormap
 
@@ -20,6 +25,7 @@ COLOR_OBS = "#4ecb8d"
 COLOR_CH1 = "#008dff"
 COLOR_CH2 = "#003a7d"
 COLOR_VARDA = "#d83034"
+COLOR_AIFS = "#2ca02c"
 
 # Skill score colormap: red = baseline better, blue = model better.
 # ColorBrewer RdBu palette. The deep RdBu ends (#b2182b/#2166ac) are reserved for
@@ -120,8 +126,20 @@ def line_style(src: str) -> dict:
         if "CH2" in src
         else COLOR_VARDA
         if "Varda" in src
+        else COLOR_AIFS
+        if "AIFS" in src
         else "gray"
     )
     linestyle = "--" if "EPS mean" in src else "-"
     linewidth = 2.25 if "Varda" in src else 1.5
     return dict(color=color, linestyle=linestyle, linewidth=linewidth)
+
+
+def mplstyle_path() -> Path:
+    """Filesystem path to the packaged publication matplotlib style.
+
+    Apply with ``plt.style.use(mplstyle_path())``. Kept as a function (not a
+    module constant) so ``importlib.resources`` resolves it lazily and works
+    both from the editable checkout and an installed wheel.
+    """
+    return Path(resources.files("evalml.publication") / "publication.mplstyle")
