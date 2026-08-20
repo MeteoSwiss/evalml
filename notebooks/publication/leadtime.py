@@ -33,77 +33,55 @@ def _():
 
 @app.cell
 def _(PROJECT_ROOT, Path):
-    import warnings
-    import xarray as xr
+    import pandas as _pd
+    import xarray as _xr
     from evalml.publication.manifest import load_manifest, figures_dir
     from verification_plot_metrics import (
         _ensure_unique_lead_time as ensure_unique_lead_time,
         _select_best_sources as select_best_sources,
-        decode_metric,
+        decode_metric as _decode_metric,
     )
 
-    # Auto-discovers output/publication/<truth>/manifest.json (or $EVALML_MANIFEST,
-    # or set truth=... below when several truths exist).
     m = load_manifest(PROJECT_ROOT / "output/manifests/manifest_varda-single_paper_stations.json")
     m.validate_request("figures")
 
-    pairs = m.verif_paths()  # [(path, label), ...]
-    sources = [label for _, label in pairs]
+    pairs = m.verif_paths()
     output_dir = str(PROJECT_ROOT / figures_dir(m.output_root, m.truth["label"]) / "leadtime")
 
     def _abs(f):
         p = Path(f)
         return p if p.is_absolute() else PROJECT_ROOT / p
 
-    # Build a mapping from internal source IDs (stored in the .nc source coordinate)
-    # to the human-readable labels from the manifest.  Each participant file contains
-    # the participant's own internal ID plus a truth-* source; we skip the truth entry.
-    _id_to_label = {}
-    for _path, _label in pairs:
-        _ds_tmp = xr.open_dataset(_abs(_path))
-        for _sid in _ds_tmp.source.values:
-            if not str(_sid).startswith("truth-"):
-                _id_to_label[str(_sid)] = _label
-        _ds_tmp.close()
-
-    _dfs = [xr.open_dataset(_abs(p)) for p, _ in pairs]
-    _dfs = [ensure_unique_lead_time(d) for d in _dfs]
-    _dfs = select_best_sources(_dfs)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        ds = xr.concat(_dfs, dim="source", join="outer")
-
-    # Rename source coordinate values from internal IDs to manifest labels.
-    _new_source_vals = [_id_to_label.get(str(s), str(s)) for s in ds.source.values]
-    ds = ds.assign_coords(source=_new_source_vals)
-    return decode_metric, ds, output_dir, sources
-
-
-@app.cell
-def _(decode_metric, ds):
-    def ds_to_df(dataset):
-        """Convert a verification xarray Dataset to a tidy DataFrame."""
-        _nonspatial_vars = [
-            d for d in dataset.data_vars if "spatial" not in d and "." in d
-        ]
+    def _load_participant_df(path, label):
+        """Load one verification .nc and return a tidy DataFrame labelled with label."""
+        _ds = _xr.open_dataset(_abs(path))
+        [_ds] = select_best_sources([ensure_unique_lead_time(_ds)])
+        _src_vals = [s for s in _ds.source.values if not str(s).startswith("truth-")]
+        if not _src_vals:
+            return None
+        _ds = _ds.sel(source=_src_vals)
+        _vars = [v for v in _ds.data_vars if "spatial" not in v and "." in v]
+        if not _vars:
+            return None
         _df = (
-            dataset[_nonspatial_vars]
+            _ds[_vars]
             .to_array("stack")
             .to_dataframe(name="value")
             .reset_index()
         )
-        _df[["param", "metric"]] = _df["stack"].str.split(".", n=1, expand=True)
-        _df["metric"] = _df["metric"].apply(decode_metric)
-        _df.drop(columns=["stack"], inplace=True)
+        _df[["param", "metric_raw"]] = _df["stack"].str.split(".", n=1, expand=True)
+        _df["metric"] = _df["metric_raw"].apply(_decode_metric)
         _df["step"] = _df["step"].dt.total_seconds() / 3600
         _df["init_hour"] = _df["init_hour"].astype(str).str.zfill(2) + ":00 UTC"
-        _df["init_hour"] = _df["init_hour"].where(
-            _df["init_hour"] != "-999:00 UTC", "all"
-        )
-        return _df
+        _df["init_hour"] = _df["init_hour"].where(_df["init_hour"] != "-999:00 UTC", "all")
+        _df["source"] = label
+        return _df.drop(columns=["stack"])
 
-    df = ds_to_df(ds)
-    return df, ds_to_df
+    _parts = [_load_participant_df(p, lbl) for p, lbl in pairs]
+
+    df = _pd.concat([p for p in _parts if p is not None], ignore_index=True)
+    sources = [lbl for _, lbl in pairs]
+    return df, output_dir, sources
 
 
 @app.cell
@@ -115,39 +93,48 @@ def _(df):
 
 
 @app.cell
-def _(ds, ds_to_df, sources):
-    import xarray as _xr
+def _(df, sources):
+    import pandas as _pd
 
-    def compute_skill_ds(dataset, srcs):
-        """Compute 1 - Score(baseline) / Score(Varda-Single) for all baselines.
+    def compute_skill_df(dataframe, all_sources):
+        """Compute 1 - Score(other) / Score(Varda-Single) per source.
 
-        Only processes sources explicitly listed in srcs (minus Varda-Single),
-        so dataset sources not requested by the user (e.g. truth sources) are
-        excluded. For BIAS variables, scores are squared before taking the ratio
-        so that the denominator is always non-negative.
+        General formula: skill = (S_fcst - S_baseline) / (S_perfect - S_baseline)
+        where S_fcst = comparison source, S_baseline = Varda (reference),
+        S_perfect = 1 for ETS metrics, 0 for all others (RMSE, BIAS², MAE, …).
+        BIAS is squared first so it is a proper non-negative score before the ratio.
         """
-        _varda_src = next((s for s in srcs if "Varda" in s and "Single" in s), None)
-        _baseline_srcs = [s for s in srcs if s != _varda_src]
-        _available = set(dataset.source.values.tolist())
-        _baseline_srcs = [s for s in _baseline_srcs if s in _available]
-        _varda = dataset.sel(source=_varda_src)
-        _baselines = dataset.sel(source=_baseline_srcs)
-        _skill_vars = {}
-        for _var in _baselines.data_vars:
-            _metric_raw = _var.split(".", 1)[1] if "." in _var else ""
-            _b = _baselines[_var].astype(float)
-            _v = _varda[_var].astype(float)
-            if _metric_raw == "BIAS":
-                _b = _b**2
-                _v = _v**2
-            _skill_vars[_var] = _xr.where(_v != 0, 1 - _b / _v, float("nan"))
-        return _xr.Dataset(_skill_vars)
+        _varda_src = next((s for s in all_sources if "Varda" in s and "Single" in s), None)
+        _other_srcs = [s for s in all_sources if s != _varda_src]
+        _join_cols = ["param", "metric", "metric_raw", "step", "region", "season", "init_hour"]
+        _varda = (
+            dataframe[dataframe["source"] == _varda_src][_join_cols + ["value"]]
+            .rename(columns={"value": "_v"})
+        )
+        _result_parts = []
+        for _src in _other_srcs:
+            _src_df = dataframe[dataframe["source"] == _src].copy()
+            if _src_df.empty:
+                continue
+            _merged = _src_df.merge(_varda, on=_join_cols, how="left")
+            _is_ets = _merged["metric_raw"].str.startswith("ETS")
+            _is_bias = _merged["metric_raw"] == "BIAS"
+            _s_perfect = _is_ets.astype(float)  # 1 for ETS, 0 for RMSE/BIAS²/…
+            # Square BIAS to make it a non-negative score before applying the formula
+            _s_fcst = _merged["value"].where(~_is_bias, _merged["value"] ** 2)
+            _s_baseline = _merged["_v"].where(~_is_bias, _merged["_v"] ** 2)
+            _denom = _s_perfect - _s_baseline
+            _merged["value"] = (_s_fcst - _s_baseline) / _denom
+            _merged.loc[_denom.abs() < 1e-12, "value"] = float("nan")
+            _result_parts.append(_merged.drop(columns=["_v"]))
+        if not _result_parts:
+            return dataframe.iloc[:0].copy()
+        return _pd.concat(_result_parts, ignore_index=True)
 
     skill_sources = [s for s in sources if not ("Varda" in s and "Single" in s)]
-    ds_skill = compute_skill_ds(ds, sources)
-    _df_skill = ds_to_df(ds_skill)
+    _df_skill = compute_skill_df(df, sources)
     df_skill_all = _df_skill[
-        (_df_skill["region"] == "all")
+        (_df_skill["region"] == "icon")
         & (_df_skill["season"] == "all")
         & (_df_skill["init_hour"] == "all")
     ].copy()
@@ -170,13 +157,14 @@ def _():
     )
     _XTICKS = _mticker.FixedLocator([0, 3, 6, 12, 24, 36, 48, 72, 96, 120])
 
-    def plot_panels(panels, df, sources):
+    def plot_panels(panels, df, sources, legend_ncol=None):
         """Draw one figure from a panel-spec DataFrame.
 
         panels columns: row_id, col_id, param_name, metric, param_text,
                         title_x, title_y, zero_line
         df may contain raw scores or pre-computed skill scores; sources
         must match the source values present in df.
+        legend_ncol: columns in the figure legend (default: all sources in one row).
         """
         nrows = panels["row_id"].max() + 1
         ncols = panels["col_id"].max() + 1
@@ -191,7 +179,7 @@ def _():
                 if grp.empty:
                     continue
                 ax.plot(grp["step"], grp["value"], label=src, **_line_style(src))
-                if "Varda" in src and "Single" in src:
+                if ("Varda" in src and "Single" in src) or "AIFS" in src:
                     m6 = grp[grp["step"] % 6 == 0]
                     ax.plot(
                         m6["step"],
@@ -205,7 +193,7 @@ def _():
             ax.xaxis.set_major_locator(_XTICKS)
             if p.zero_line:
                 ax.axhline(
-                    0, color="black", linestyle="dashed", linewidth=0.7, zorder=0
+                    0, color="0.6", linestyle="solid", linewidth=0.7, zorder=0
                 )
             if p.param_text:
                 ax.text(
@@ -231,15 +219,18 @@ def _():
         )
         handles = [handles[i] for i in _order]
         labels = [labels[i] for i in _order]
+        _ncol = legend_ncol if legend_ncol is not None else len(sources)
+        _legend_rows = (len(labels) + _ncol - 1) // _ncol
         fig.legend(
             handles,
             labels,
             loc="lower center",
-            ncol=len(sources),
+            ncol=_ncol,
             bbox_to_anchor=(0.5, 0.02),
+            fontsize=_plt.rcParams["axes.labelsize"],
         )
         fig.tight_layout()
-        fig.subplots_adjust(bottom=0.2)
+        fig.subplots_adjust(bottom=0.12 + 0.08 * _legend_rows)
         return fig
 
     return (plot_panels,)
@@ -282,7 +273,7 @@ def _(
 
     _out = Path(output_dir)
     _out.mkdir(parents=True, exist_ok=True)
-    _fig = plot_panels(_panels, df_all, sources)
+    _fig = plot_panels(_panels, df_all, sources, legend_ncol=(len(sources) + 1) // 2)
     _fname = _out / "publication_figures_rmse_bias.pdf"
     _fig.savefig(_fname, bbox_inches="tight")
     _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
@@ -369,7 +360,7 @@ def _(
 
     _out = Path(output_dir)
     _out.mkdir(parents=True, exist_ok=True)
-    _fig = plot_panels(_panels, df_all, sources)
+    _fig = plot_panels(_panels, df_all, [s for s in sources if "AIFS" not in s])
     _fname = _out / "publication_figures_ets.pdf"
     _fig.savefig(_fname, bbox_inches="tight")
     _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
@@ -493,7 +484,7 @@ def _(
 
     _out = Path(output_dir)
     _out.mkdir(parents=True, exist_ok=True)
-    _fig = plot_panels(_panels, df_skill_all, skill_sources)
+    _fig = plot_panels(_panels, df_skill_all, [s for s in skill_sources if "AIFS" not in s])
     _fname = _out / "publication_figures_ets_skill.pdf"
     _fig.savefig(_fname, bbox_inches="tight")
     _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
