@@ -515,6 +515,54 @@
       "title": "ForecasterItem",
       "type": "object"
     },
+    "GRIBForecasterConfig": {
+      "additionalProperties": false,
+      "description": "Pre-generated GRIB from a forecaster, produced by a workflow outside evalml.",
+      "properties": {
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The label for the run that will be used in experiment results such as reports and figures.",
+          "title": "Label"
+        },
+        "root": {
+          "description": "Root directory of pre-generated GRIB from the external workflow, laid out as root/{init_time}/grib/*.grib (init_time formatted YYYYMMDDHHMM), matching evalml's own internal per-run GRIB layout.",
+          "minLength": 1,
+          "title": "Root",
+          "type": "string"
+        },
+        "steps": {
+          "description": "Forecast lead times in hours this run produces, formatted as 'start/end/step'.",
+          "title": "Steps",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "steps"
+      ],
+      "title": "GRIBForecasterConfig",
+      "type": "object"
+    },
+    "GRIBForecasterItem": {
+      "properties": {
+        "grib_forecaster": {
+          "$ref": "#/$defs/GRIBForecasterConfig"
+        }
+      },
+      "required": [
+        "grib_forecaster"
+      ],
+      "title": "GRIBForecasterItem",
+      "type": "object"
+    },
     "GlobalResources": {
       "description": "Define resource limits that apply across all submissions.\n\nThis model is intended to specify global constraints, such as\nthe maximum number of GPUs that can be allocated in parallel,\nregardless of individual job settings.",
       "properties": {
@@ -866,54 +914,6 @@
       "title": "ShowcaseConfig",
       "type": "object"
     },
-    "SpatialDownscalerConfig": {
-      "additionalProperties": false,
-      "description": "Pre-generated spatial-downscaler GRIB, produced by a workflow outside evalml.",
-      "properties": {
-        "label": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The label for the run that will be used in experiment results such as reports and figures.",
-          "title": "Label"
-        },
-        "root": {
-          "description": "Root directory of pre-generated GRIB from the external workflow, laid out as root/{init_time}/grib/*.grib (init_time formatted YYYYMMDDHHMM), matching evalml's own internal per-run GRIB layout.",
-          "minLength": 1,
-          "title": "Root",
-          "type": "string"
-        },
-        "steps": {
-          "description": "Forecast lead times in hours this run produces, formatted as 'start/end/step'.",
-          "title": "Steps",
-          "type": "string"
-        }
-      },
-      "required": [
-        "root",
-        "steps"
-      ],
-      "title": "SpatialDownscalerConfig",
-      "type": "object"
-    },
-    "SpatialDownscalerItem": {
-      "properties": {
-        "spatial_downscaler": {
-          "$ref": "#/$defs/SpatialDownscalerConfig"
-        }
-      },
-      "required": [
-        "spatial_downscaler"
-      ],
-      "title": "SpatialDownscalerItem",
-      "type": "object"
-    },
     "Stratification": {
       "description": "Stratification settings for the analysis.",
       "properties": {
@@ -1121,7 +1121,7 @@
             "$ref": "#/$defs/TemporalDownscalerItem"
           },
           {
-            "$ref": "#/$defs/SpatialDownscalerItem"
+            "$ref": "#/$defs/GRIBForecasterItem"
           },
           {
             "$ref": "#/$defs/BaselineItem"
