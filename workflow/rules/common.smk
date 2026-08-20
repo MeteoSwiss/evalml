@@ -6,7 +6,7 @@ import hashlib
 import json
 from urllib.parse import urlparse
 
-from evalml.config import THIRD_PARTY_MODEL_TYPES
+from evalml.config import GRIB_MODEL_TYPES
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
@@ -212,7 +212,7 @@ def register_run(model_type, run_config, as_candidate=True):
     """
     run_cfg = copy.deepcopy(run_config)
 
-    if model_type in THIRD_PARTY_MODEL_TYPES:
+    if model_type in GRIB_MODEL_TYPES:
         # No checkpoint/venv/anemoi-inference: identity is just the pre-generated
         # GRIB's source directory and the requested steps.
         env_id = f"{model_type}-{env_entry_hash(run_cfg, model_type)}"
@@ -361,10 +361,10 @@ def env_entry_hash(run_config: dict, model_type: str) -> str:
     - extra_requirements (different dependencies)
     - disable_local_eccodes_definitions (different ECCODES setup)
     - For temporal downscalers: the forecaster's env_id (different upstream model)
-    - Third-party runs (e.g. spatial_downscaler): no environment to build, so this
+    - GRIB-model runs (e.g. spatial_downscaler): no environment to build, so this
       is just the source GRIB directory identity.
     """
-    if model_type in THIRD_PARTY_MODEL_TYPES:
+    if model_type in GRIB_MODEL_TYPES:
         return generate_json_hash({"root": run_config["root"]})
     cfg = {k: v for k, v in run_config.items() if k in ENV_HASH_FIELDS}
     configs_to_hash = [cfg]
@@ -381,10 +381,10 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
     - steps (lead times)
     - config YAML file contents (inference parameters)
     - For temporal downscalers: the forecaster's run_id (which run's outputs to read)
-    - Third-party runs (e.g. spatial_downscaler): no inference config to hash, so
+    - GRIB-model runs (e.g. spatial_downscaler): no inference config to hash, so
       this is just the source GRIB directory identity plus steps.
     """
-    if model_type in THIRD_PARTY_MODEL_TYPES:
+    if model_type in GRIB_MODEL_TYPES:
         return generate_json_hash(
             {"root": run_config["root"], "steps": run_config["steps"]}
         )

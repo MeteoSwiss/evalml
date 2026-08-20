@@ -39,7 +39,7 @@ if config["mec"] is not None:
         """Collect EKF SYNOP, monSYNOP, and reference verSYNOP observation files into the MEC input_obs directory."""
         input:
             inference_ok=lambda wc: expand(
-                rules.inference_execute.output.okfile,
+                _okfile_template(wc),
                 run_id=wc.run_id,
                 init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
             ),
@@ -82,7 +82,7 @@ if config["mec"] is not None:
         input:
             obs_file=rules.prepare_mec_input.output.obs_file,
             inference_ok=lambda wc: expand(
-                rules.inference_execute.output.okfile,
+                _okfile_template(wc),
                 run_id=wc.run_id,
                 init_time=[
                     (

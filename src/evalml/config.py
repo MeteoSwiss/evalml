@@ -85,15 +85,9 @@ class InferenceResources(BaseModel):
 
 
 class RunConfig(BaseModel):
-    # Identity contract: fields that determine the inference ENVIRONMENT (venv, squashfs).
-    # Changing any of these requires a new environment to be built.
-    ENV_FIELDS: ClassVar[FrozenSet[str]] = frozenset(
-        {"checkpoint", "extra_requirements", "disable_local_eccodes_definitions"}
-    )
-    checkpoint: str = Field(
-        ...,
-        description="The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
-    )
+    """Base for a single participant run: fields common to every run type,
+    whether evalml runs inference for it or it stages pre-generated GRIB."""
+
     label: str | None = Field(
         None,
         description="The label for the run that will be used in experiment results such as reports and figures.",
@@ -107,6 +101,26 @@ class RunConfig(BaseModel):
             "Example: '0/120/6' for lead times every 6 hours up to 120 h, "
             "or '0/33/6' up to 30 h."
         ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("steps")
+    def validate_steps(cls, v: str) -> str:
+        return _validate_steps_range(v)
+
+
+class InferenceModelRunConfig(RunConfig):
+    """A run for which evalml itself runs anemoi-inference."""
+
+    # Identity contract: fields that determine the inference ENVIRONMENT (venv, squashfs).
+    # Changing any of these requires a new environment to be built.
+    ENV_FIELDS: ClassVar[FrozenSet[str]] = frozenset(
+        {"checkpoint", "extra_requirements", "disable_local_eccodes_definitions"}
+    )
+    checkpoint: str = Field(
+        ...,
+        description="The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
     )
     extra_requirements: List[str] = Field(
         default_factory=list,
@@ -124,14 +138,28 @@ class RunConfig(BaseModel):
     )
     config: Dict[str, Any] | str
 
-    model_config = {"extra": "forbid"}
 
-    @field_validator("steps")
-    def validate_steps(cls, v: str) -> str:
-        return _validate_steps_range(v)
+class GRIBModelRunConfig(RunConfig):
+    """A run that supplies its own pre-generated GRIB from a workflow outside evalml.
+
+    No checkpoint, venv, or anemoi-inference config: evalml never runs inference for
+    these participants, it only stages their pre-existing GRIB into the same
+    per-run output layout other run types produce. Shared base for spatial_downscaler
+    and future GRIB-supplying experiment sources.
+    """
+
+    root: str = Field(
+        ...,
+        min_length=1,
+        description=(
+            "Root directory of pre-generated GRIB from the external workflow, laid "
+            "out as root/{init_time}/grib/*.grib (init_time formatted YYYYMMDDHHMM), "
+            "matching evalml's own internal per-run GRIB layout."
+        ),
+    )
 
 
-class ForecasterConfig(RunConfig):
+class ForecasterConfig(InferenceModelRunConfig):
     """Single training run stored in MLflow."""
 
     config: Dict[str, Any] | str = Field(
@@ -140,7 +168,7 @@ class ForecasterConfig(RunConfig):
     )
 
 
-class TemporalDownscalerConfig(RunConfig):
+class TemporalDownscalerConfig(InferenceModelRunConfig):
     """Single training run stored in MLflow."""
 
     config: Dict[str, Any] | str = Field(
@@ -154,44 +182,7 @@ class TemporalDownscalerConfig(RunConfig):
     )
 
 
-class ThirdPartyRunConfig(BaseModel):
-    """A run whose inference was produced entirely outside evalml.
-
-    No checkpoint, venv, or anemoi-inference config: evalml never runs inference for
-    these participants, it only stages their pre-existing GRIB into the same
-    per-run output layout other run types produce. Shared base for spatial_downscaler
-    and future third-party experiment sources.
-    """
-
-    label: str | None = Field(
-        None,
-        description="The label for the run that will be used in experiment results such as reports and figures.",
-    )
-    root: str = Field(
-        ...,
-        min_length=1,
-        description=(
-            "Root directory of pre-generated GRIB from the external workflow, laid "
-            "out as root/{init_time}/grib/*.grib (init_time formatted YYYYMMDDHHMM), "
-            "matching evalml's own internal per-run GRIB layout."
-        ),
-    )
-    steps: str = Field(
-        ...,
-        description=(
-            "Forecast lead times in hours this run produces, formatted as "
-            "'start/end/step'."
-        ),
-    )
-
-    model_config = {"extra": "forbid"}
-
-    @field_validator("steps")
-    def validate_steps(cls, v: str) -> str:
-        return _validate_steps_range(v)
-
-
-class SpatialDownscalerConfig(ThirdPartyRunConfig):
+class SpatialDownscalerConfig(GRIBModelRunConfig):
     """Pre-generated spatial-downscaler GRIB, produced by a workflow outside evalml."""
 
 
@@ -257,16 +248,16 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
-# Model types backed by a ThirdPartyRunConfig subclass: evalml never runs inference
+# Model types backed by a GRIBModelRunConfig subclass: evalml never runs inference
 # for these, only stages their pre-existing GRIB. Computed by introspection (rather
-# than hand-maintained) so a new third-party run type is picked up automatically as
-# soon as its *Item class is added below.
-THIRD_PARTY_MODEL_TYPES: FrozenSet[str] = frozenset(
+# than hand-maintained) so a new GRIB-supplying run type is picked up automatically
+# as soon as its *Item class is added below.
+GRIB_MODEL_TYPES: FrozenSet[str] = frozenset(
     field_name
     for item_cls in (ForecasterItem, TemporalDownscalerItem, SpatialDownscalerItem, BaselineItem)
     for field_name, field_info in item_cls.model_fields.items()
     if isinstance(field_info.annotation, type)
-    and issubclass(field_info.annotation, ThirdPartyRunConfig)
+    and issubclass(field_info.annotation, GRIBModelRunConfig)
 )
 
 
@@ -780,10 +771,6 @@ class ConfigModel(BaseModel):
 def generate_config_schema() -> str:
     """Generate the JSON schema for the ConfigModel."""
     return ConfigModel.model_json_schema()
-
-
-# Module-level constants for use in Snakemake and elsewhere
-RUN_ENV_FIELDS = RunConfig.ENV_FIELDS
 
 
 if __name__ == "__main__":

@@ -248,11 +248,11 @@ rule sandbox_all:
 rule inference_all:
     """Run inference for all reference times as defined in the configuration."""
     input:
-        expand(
-            rules.inference_execute.output.okfile,
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=CANDIDATES,
-        ),
+        lambda wc: [
+            _okfile_for(run_id, t.strftime("%Y%m%d%H%M"))
+            for run_id in CANDIDATES
+            for t in REFTIMES
+        ],
     output:
         run_all_ok=touch(OUT_ROOT / "logs/run_inference_all.ok"),
     shell:

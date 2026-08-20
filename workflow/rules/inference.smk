@@ -242,15 +242,14 @@ rule inference_prepare_temporal_downscaler:
         "../scripts/inference_prepare.py"
 
 
+# TODO: consider an INFERENCE_MODEL_TYPES set (mirroring GRIB_MODEL_TYPES, computed
+# in config.py by introspecting *Item classes for InferenceModelRunConfig subclasses)
+# so this dispatch stops hand-enumerating "forecaster"/"temporal_downscaler" by string.
 def _inference_routing_fn(wc):
 
     run_config = RUN_CONFIGS[wc.run_id]
 
-    if run_config["model_type"] in THIRD_PARTY_MODEL_TYPES:
-        # No prepare stage: there's no config.yaml/venv/checkpoint to prepare,
-        # the GRIB already exists outside evalml.
-        return []
-    elif run_config["model_type"] == "forecaster":
+    if run_config["model_type"] == "forecaster":
         input_path = f"logs/inference_prepare_forecaster/{wc.run_id}-{wc.init_time}.ok"
     elif run_config["model_type"] == "temporal_downscaler":
         input_path = (
@@ -262,25 +261,6 @@ def _inference_routing_fn(wc):
     return OUT_ROOT / input_path
 
 
-def _passthrough_grib_source(wc):
-    """Pre-generated GRIB dir for a third-party run (e.g. spatial_downscaler): evalml
-    never runs inference for these, so their GRIB always comes from their own `root`,
-    regardless of whether FIXTURE_ROOT replay is active. None for run types that need
-    real inference (or fixture replay)."""
-    rc = RUN_CONFIGS[wc.run_id]
-    if rc["model_type"] not in THIRD_PARTY_MODEL_TYPES:
-        return None
-    return str((Path(rc["root"]) / wc.init_time / "grib").resolve())
-
-
-def _execute_resource(wc, field, default, passthrough_default=None):
-    """Resolve a resource value, short-circuiting for third-party (passthrough) runs
-    so they never touch RUN_CONFIGS[...]["inference_resources"], which they don't have."""
-    if RUN_CONFIGS[wc.run_id]["model_type"] in THIRD_PARTY_MODEL_TYPES:
-        return default if passthrough_default is None else passthrough_default
-    return get_resource(wc, field, default)
-
-
 if FIXTURE_ROOT:
 
     from snakemake.exceptions import WorkflowError
@@ -290,25 +270,13 @@ if FIXTURE_ROOT:
     _verified_fixtures = set()
 
     def _staged_grib_source(wc):
-        """GRIB to symlink into the run's workdir: a third-party run's own `root`,
-        or (otherwise) the frozen fixture for FIXTURE_ROOT replay."""
-        passthrough = _passthrough_grib_source(wc)
-        p = Path(passthrough) if passthrough else fixture_grib_dir(
-            FIXTURE_ROOT, wc.run_id, wc.init_time
-        )
+        """Frozen fixture GRIB to symlink into the run's workdir for FIXTURE_ROOT replay."""
+        p = fixture_grib_dir(FIXTURE_ROOT, wc.run_id, wc.init_time)
         if not p.exists():
-            if passthrough:
-                raise WorkflowError(
-                    f"Spatial-downscaler GRIB not found at {p}. This run reads "
-                    f"pre-generated GRIB from its own `root`, produced outside evalml."
-                )
             raise WorkflowError(
                 f"Fixture GRIB not found at {p}. Capture it once from a real run "
                 f"with: evalml capture-fixture <config> {FIXTURE_ROOT}"
             )
-        if passthrough:
-            # No MANIFEST.yaml/checksum story for externally-owned data.
-            return str(p)
         # Validate against the manifest checksum once per dir (input functions
         # can be called repeatedly during DAG building; hashing GBs each time
         # would be wasteful). No-op for fixtures without recorded checksums.
@@ -356,38 +324,23 @@ else:
     rule inference_execute:
         input:
             okfile=_inference_routing_fn,
-            image=lambda wc: (
-                []
-                if _passthrough_grib_source(wc)
-                else OUT_ROOT
-                / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs"
-            ),
+            image=lambda wc: OUT_ROOT
+            / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
         output:
             okfile=OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok",
         log:
             OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
         localrule: True
         resources:
-            slurm_partition=lambda wc: _execute_resource(
-                wc, "slurm_partition", "short-shared"
-            ),
-            cpus_per_task=lambda wc: _execute_resource(
-                wc, "cpus_per_task", 24, passthrough_default=1
-            ),
-            mem_mb_per_cpu=lambda wc: _execute_resource(
-                wc, "mem_mb_per_cpu", 8000, passthrough_default=500
-            ),
-            runtime=lambda wc: _execute_resource(
-                wc, "runtime", "40m", passthrough_default="5m"
-            ),
-            gres=lambda wc: f"gpu:{_execute_resource(wc, 'gpu', 1, passthrough_default=0)}",
-            ntasks=lambda wc: _execute_resource(wc, "tasks", 1),
-            gpus=lambda wc: _execute_resource(wc, "gpu", 1, passthrough_default=0),
+            slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
+            cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
+            mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
+            runtime=lambda wc: get_resource(wc, "runtime", "40m"),
+            gres=lambda wc: f"gpu:{get_resource(wc, 'gpu', 1)}",
+            ntasks=lambda wc: get_resource(wc, "tasks", 1),
+            gpus=lambda wc: get_resource(wc, "gpu", 1),
         params:
-            passthrough_source=lambda wc: _passthrough_grib_source(wc) or "",
-            env_path=lambda wc, input: (
-                "" if not input.image else f"{Path(input.image).resolve()}"
-            ),
+            env_path=lambda wc, input: f"{Path(input.image).resolve()}",
             workdir=lambda wc: (
                 OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
             ).resolve(),
@@ -401,51 +354,91 @@ else:
                 set -euo pipefail
 
                 mkdir -p {params.workdir}
+                cd {params.workdir}
 
-                if [ -n "{params.passthrough_source}" ]; then
-                    # Third-party run (e.g. spatial_downscaler): GRIB already exists
-                    # outside evalml, just stage it (mirrors the FIXTURE_ROOT replay
-                    # rule's own symlink guard above).
-                    if [ -L {params.workdir}/grib ]; then
-                        rm -f {params.workdir}/grib
-                    elif [ -e {params.workdir}/grib ]; then
-                        echo "ERROR: {params.workdir}/grib is a real directory (Snakemake-owned inference output), not a passthrough symlink. Refusing to delete it; move it aside and retry." >&2
-                        exit 1
+                _run_inference() {{
+                    local VENV=$1
+                    source "$VENV/bin/activate"
+
+                    if [ "{params.disable_local_definitions}" = "False" ]; then
+                        export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
                     fi
-                    ln -sfn {params.passthrough_source} {params.workdir}/grib
-                else
-                    cd {params.workdir}
 
-                    _run_inference() {{
-                        local VENV=$1
-                        source "$VENV/bin/activate"
+                    CMD_ARGS=()
 
-                        if [ "{params.disable_local_definitions}" = "False" ]; then
-                            export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
-                        fi
+                    # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
+                    if [ {resources.gpus} -gt 1 ]; then
+                        CMD_ARGS+=(runner.parallel.cluster=slurm)
+                    fi
 
-                        CMD_ARGS=()
+                    srun \
+                        --unbuffered \
+                        --partition={resources.slurm_partition} \
+                        --cpus-per-task={resources.cpus_per_task} \
+                        --mem-per-cpu={resources.mem_mb_per_cpu} \
+                        --time={resources.runtime} \
+                        --gres={resources.gres} \
+                        --ntasks={resources.ntasks} \
+                        anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+                }}
+                export -f _run_inference
 
-                        # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
-                        if [ {resources.gpus} -gt 1 ]; then
-                            CMD_ARGS+=(runner.parallel.cluster=slurm)
-                        fi
-
-                        srun \
-                            --unbuffered \
-                            --partition={resources.slurm_partition} \
-                            --cpus-per-task={resources.cpus_per_task} \
-                            --mem-per-cpu={resources.mem_mb_per_cpu} \
-                            --time={resources.runtime} \
-                            --gres={resources.gres} \
-                            --ntasks={resources.ntasks} \
-                            anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
-                    }}
-                    export -f _run_inference
-
-                    squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
-                fi
+                squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
             ) >{log} 2>&1
             touch {output.okfile}
             """
         # fmt: on
+
+
+def _grib_model_source(wc):
+    rc = RUN_CONFIGS[wc.run_id]
+    return str((Path(rc["root"]) / wc.init_time / "grib").resolve())
+
+
+rule grib_model_stage:
+    """Symlink a GRIB-model run's (e.g. spatial_downscaler) pre-generated GRIB,
+    produced entirely outside evalml, into the standard per-run workdir layout."""
+    output:
+        okfile=OUT_ROOT / "logs/grib_model_stage/{run_id}-{init_time}.ok",
+    log:
+        OUT_ROOT / "logs/grib_model_stage/{run_id}-{init_time}.log",
+    localrule: True
+    params:
+        source=_grib_model_source,
+        workdir=lambda wc: (OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}").resolve(),
+    shell:
+        """
+        (
+            set -euo pipefail
+            mkdir -p {params.workdir}
+            if [ -L {params.workdir}/grib ]; then
+                rm -f {params.workdir}/grib
+            elif [ -e {params.workdir}/grib ]; then
+                echo "ERROR: {params.workdir}/grib is a real directory (Snakemake-owned inference output), not a GRIB-model-stage symlink. Refusing to delete it; move it aside and retry." >&2
+                exit 1
+            fi
+            ln -sfn {params.source} {params.workdir}/grib
+        ) >{log} 2>&1
+        touch {output.okfile}
+        """
+
+
+def _okfile_template(wc):
+    """Unexpanded rule-output object for wc.run_id's okfile rule."""
+    model_type = RUN_CONFIGS[wc.run_id]["model_type"]
+    return (
+        rules.grib_model_stage if model_type in GRIB_MODEL_TYPES else rules.inference_execute
+    ).output.okfile
+
+
+def _okfile_for(run_id: str, init_time: str) -> str:
+    model_type = RUN_CONFIGS[run_id]["model_type"]
+    template = (
+        rules.grib_model_stage if model_type in GRIB_MODEL_TYPES else rules.inference_execute
+    ).output.okfile
+    return template.format(run_id=run_id, init_time=init_time)
+
+
+def inference_okfile(wc):
+    """Drop-in replacement for a hardcoded `rules.inference_execute.output.okfile`."""
+    return _okfile_for(wc.run_id, wc.init_time)

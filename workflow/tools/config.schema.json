@@ -432,11 +432,6 @@
       "additionalProperties": false,
       "description": "Single training run stored in MLflow.",
       "properties": {
-        "checkpoint": {
-          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
-          "title": "Checkpoint",
-          "type": "string"
-        },
         "label": {
           "anyOf": [
             {
@@ -453,6 +448,11 @@
         "steps": {
           "description": "Forecast lead times in hours, formatted as 'start/end/step'. The range includes the start lead time and continues with the given step until reaching or exceeding the end lead time. Example: '0/120/6' for lead times every 6 hours up to 120 h, or '0/33/6' up to 30 h.",
           "title": "Steps",
+          "type": "string"
+        },
+        "checkpoint": {
+          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
+          "title": "Checkpoint",
           "type": "string"
         },
         "extra_requirements": {
@@ -496,8 +496,8 @@
         }
       },
       "required": [
-        "checkpoint",
         "steps",
+        "checkpoint",
         "config"
       ],
       "title": "ForecasterConfig",
@@ -883,21 +883,21 @@
           "description": "The label for the run that will be used in experiment results such as reports and figures.",
           "title": "Label"
         },
+        "steps": {
+          "description": "Forecast lead times in hours, formatted as 'start/end/step'. The range includes the start lead time and continues with the given step until reaching or exceeding the end lead time. Example: '0/120/6' for lead times every 6 hours up to 120 h, or '0/33/6' up to 30 h.",
+          "title": "Steps",
+          "type": "string"
+        },
         "root": {
           "description": "Root directory of pre-generated GRIB from the external workflow, laid out as root/{init_time}/grib/*.grib (init_time formatted YYYYMMDDHHMM), matching evalml's own internal per-run GRIB layout.",
           "minLength": 1,
           "title": "Root",
           "type": "string"
-        },
-        "steps": {
-          "description": "Forecast lead times in hours this run produces, formatted as 'start/end/step'.",
-          "title": "Steps",
-          "type": "string"
         }
       },
       "required": [
-        "root",
-        "steps"
+        "steps",
+        "root"
       ],
       "title": "SpatialDownscalerConfig",
       "type": "object"
@@ -959,11 +959,6 @@
       "additionalProperties": false,
       "description": "Single training run stored in MLflow.",
       "properties": {
-        "checkpoint": {
-          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
-          "title": "Checkpoint",
-          "type": "string"
-        },
         "label": {
           "anyOf": [
             {
@@ -980,6 +975,11 @@
         "steps": {
           "description": "Forecast lead times in hours, formatted as 'start/end/step'. The range includes the start lead time and continues with the given step until reaching or exceeding the end lead time. Example: '0/120/6' for lead times every 6 hours up to 120 h, or '0/33/6' up to 30 h.",
           "title": "Steps",
+          "type": "string"
+        },
+        "checkpoint": {
+          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
+          "title": "Checkpoint",
           "type": "string"
         },
         "extra_requirements": {
@@ -1035,8 +1035,8 @@
         }
       },
       "required": [
-        "checkpoint",
         "steps",
+        "checkpoint",
         "config"
       ],
       "title": "TemporalDownscalerConfig",
