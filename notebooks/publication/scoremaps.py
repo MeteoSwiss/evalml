@@ -99,7 +99,7 @@ def _(PROJECT_ROOT):
     region = _sm.get("region", "switzerland")
     season = _sm.get("season", "all")
     candidate_label = m.get_candidate().label
-    output = figures_dir(PROJECT_ROOT, m.truth["label"]) / "scoremaps"
+    output = figures_dir(PROJECT_ROOT / "output", m.truth["label"]) / "scoremaps"
 
     cand = m.get_candidate()
     base = m.resolve_baseline(baseline_label)
