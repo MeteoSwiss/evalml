@@ -25,8 +25,15 @@ input:
                   # bbox: [45.7, 48.0, 5.8, 10.8]
                   group: "1,2"
                   variables: [T_2M, TD_2M, U_10M, V_10M, TOT_PREC]
-                  use_limitation: 20
+                  use_limitation: 40
                   run_mode: "devt"
+                  # Extra trim on top of group/bbox above, matching
+                  # notebooks/d_eff_generator.ipynb's station selection exactly —
+                  # keeps the retrieved stations a subset of whatever
+                  # nudge_toward_observation's d_eff_file cache below was built
+                  # from (a station outside that cache raises an error there).
+                  station_filter_mode: domain
+                  domain_bbox: [45.7, 48.0, 5.8, 10.8]
             - forward_transform_filter:
                 clean_observation:
                   obs_path_in: observation/nudging_station_obs_raw.parquet
@@ -36,12 +43,37 @@ input:
                   obs_path: observation/nudging_station_obs.parquet
                   nudge_variables: [T_2M, TD_2M, U_10M, V_10M]
                   icon_grid_dir: /scratch/mch/llanzila/sruc/aux_files
-                  k: 3
-                  power: 4.0
-                  max_dist: 0.12    # in degrees, ~12 km
+                  topo_file: /scratch/mch/llanzila/sruc/aux_files/topo_descriptors_icon_R19B08.nc
+                  dem_barrier_file: /store_new/mch/msclim/appclim/data/grids/topodem/v2/topo/radar_100/topo_DEM_1000M.nc
+                  weight_power: 2.0
+                  max_dist: 50.0 #44.528      # km, station influence radius (was 0.4 projected degrees; 0.4 * 111.32 km/deg)
+                  n_barrier_samples: 50 #40 
+                  n_barrier_width_samples: 3
+                  barrier_width_m: 1500
+                  elev_scale: 50 #26.949      # m/km, ridge height adding 1 km of effective distance (was 3000 m/deg; 3000 / 111.32 km/deg)
+                  elev_diff_scale: 100 #35.932     # m/km, endpoint elevation difference adding 1 km (was 4000 m/deg; 4000 / 111.32 km/deg)
+                  min_topo_w: 0.2
+                  lim_effective: 0.0
+                  # Station reliability (v4): shrinks a station's own influence radius
+                  # (rather than uniformly down-weighting its contribution) when its
+                  # residual disagrees with what its neighbours predict for it via a
+                  # leave-one-out spatial-consistency check. number_of_std is the Tukey
+                  # biweight rejection threshold in robust (median/MAD) sigmas; a station
+                  # at or beyond this many sigmas of disagreement gets reliability=0 and
+                  # its radius shrinks to reliability_min_dist_frac * max_dist (never all
+                  # the way to zero). Set use_reliability_check: false to fall back to the
+                  # pre-v4 behaviour (a single global max_dist shared by every station).
+                  use_reliability_check: true
+                  number_of_std: 5.0
+                  reliability_min_dist_frac: 0.1
+                  # Saves a 3-panel PNG (station residual, station reliability, gridded
+                  # correction) per nudged variable per reference time. No effect unless
+                  # use_reliability_check is true; never affects the nudging correction
+                  # itself (plotting failures are logged and skipped).
+                  plot_dir: output/nudging_reliability_diagnostics
                   run_mode: "devt"
                   # Stations to withhold from nudging (held-out for cross-validation).
-                  exclude_stations:
+                  exclude_stations: 
                     - COY
                     - FRE
                     - RUE

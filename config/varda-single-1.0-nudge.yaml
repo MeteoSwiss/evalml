@@ -5,31 +5,31 @@ description: |
 config_label: varda-single-1.0-nudge
 
 dates:
-  # start: 2025-01-01T06:00
-  # end: 2025-12-31T06:00
-  # frequency: 102h
-  - 2025-01-02T00:00
-  - 2025-04-02T06:00
-  - 2025-07-02T12:00
-  - 2025-11-02T18:00
+  start: 2025-01-01T06:00
+  end: 2025-12-31T06:00
+  frequency: 18h #294h
+  # - 2025-01-02T00:00
+  # - 2025-04-02T06:00
+  # - 2025-07-02T12:00
+  # - 2025-11-02T18:00
 
 runs:
-  - temporal_downscaler:
-      checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
-      label: Varda-rapid-0.1-nudge-all
-      steps: 0/12/1
-      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi_nudge_all.yaml
-      extra_requirements:
-        - anemoi-datasets==0.5.35
-        - -e /scratch/mch/llanzila/sruc/anemoi-plugins-meteoswiss
-        # - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@f91315e
-        - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
-      forecaster:
-        checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
-        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
-        steps: 0/12/6
-        extra_requirements:
-          - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
+  # - temporal_downscaler:
+  #     checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
+  #     label: Varda-rapid-0.1-nudge-all
+  #     steps: 0/12/1
+  #     config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi_nudge_all.yaml
+  #     extra_requirements:
+  #       - anemoi-datasets==0.5.35
+  #       - -e /scratch/mch/llanzila/sruc/anemoi-plugins-meteoswiss
+  #       # - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@f91315e
+  #       - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
+  #     forecaster:
+  #       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
+  #       config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+  #       steps: 0/12/6
+  #       extra_requirements:
+  #         - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
 
   - temporal_downscaler:
       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
@@ -71,10 +71,10 @@ runs:
   #     label: ICON-CH2-CTRL
   #     root: /store_new/mch/msopr/osm/ICON-CH2-EPS
   #     steps: 0/12/1
-  - baseline:
-      label: ICON-CH1-CTRL
-      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
-      steps: 0/12/1
+  # - baseline:
+  #     label: ICON-CH1-CTRL
+  #     root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+  #     steps: 0/12/1
 
 truth:
   label: SwissMetNet
@@ -133,7 +133,6 @@ experiment:
       - BIA
       - CEV
       - OTL
-  scorecards:
     enabled: true
     sections:
       nowcasting:
@@ -146,16 +145,16 @@ experiment:
           - "T_2M:RMSE,R2,ETS"
           - "TOT_PREC:RMSE,R2,ETS"
           - "TD_2M:RMSE,R2,ETS"
-      short_range:
-        baseline: ICON-CH1-CTRL
-        lead_times: "6/12/6"
-        stratification: region
-        variables:
-          - "U_10M:RMSE,R2,ETS"
-          - "V_10M:RMSE,R2,ETS"
-          - "T_2M:RMSE,R2,ETS"
-          - "TOT_PREC:RMSE,R2,ETS"
-          - "TD_2M:RMSE,R2,ETS"
+      # short_range:
+      #   baseline: ICON-CH1-CTRL
+      #   lead_times: "6/12/6"
+      #   stratification: region
+      #   variables:
+      #     - "U_10M:RMSE,R2,ETS"
+      #     - "V_10M:RMSE,R2,ETS"
+      #     - "T_2M:RMSE,R2,ETS"
+      #     - "TOT_PREC:RMSE,R2,ETS"
+      #     - "TD_2M:RMSE,R2,ETS"
       # medium_range:
       #   baseline: ICON-CH2-CTRL
       #   lead_times: "24/24/24"
@@ -171,10 +170,11 @@ experiment:
 showcase:
   params:
     - T_2M
+    - TD_2M
     - U_10M
     - V_10M
   meteograms:
-    enabled: true
+    enabled: false
     stations: [JUN, KLO, LUG, GVE] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
   animations:
     fps: 0.5
