@@ -210,6 +210,7 @@ def _():
                 ax.set_title(
                     p.title_y, x=-0.25, y=0.5, rotation=90, va="center", loc="left"
                 )
+            ax.yaxis.set_major_locator(_mticker.MaxNLocator(nbins=4, prune="both"))
             if p.row_id == nrows - 1:
                 ax.set_xlabel("Lead time (h)")
         axes[0, 0].set_xlim(-1, 126)
