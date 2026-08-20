@@ -50,8 +50,8 @@ SKILL_CMAP = LinearSegmentedColormap.from_list(
 SKILL_GREY = "#ffffff"
 # Levels capped at ±0.55 (0.10 spacing); the central bin [−0.05, 0.05] is SKILL_GREY.
 SKILL_LEVELS = [
-    -3.0,
-    -1.0,
+    -0.75,
+    -0.5,
     -0.25,
     -0.15,
     -0.05,

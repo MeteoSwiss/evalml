@@ -24,3 +24,23 @@ lines.linewidth     : 1.5
 
 # Legend
 legend.frameon      : False
+
+# Grid — grey solid lines
+axes.grid           : True
+grid.color          : 0.75
+grid.linestyle      : solid
+grid.linewidth      : 0.5
+
+# Ticks — face outwards, bottom and left only
+xtick.direction     : out
+xtick.top           : False
+ytick.direction     : out
+ytick.right         : False
+
+# Spines — black box on all four sides
+axes.spines.top     : True
+axes.spines.right   : True
+axes.edgecolor      : black
+
+# Grid below data lines
+axes.axisbelow      : True
