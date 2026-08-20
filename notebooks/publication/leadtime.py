@@ -49,7 +49,7 @@ def _(PROJECT_ROOT, Path):
 
     pairs = m.verif_paths()  # [(path, label), ...]
     sources = [label for _, label in pairs]
-    output_dir = str(figures_dir(m.output_root, m.truth["label"]) / "leadtime")
+    output_dir = str(PROJECT_ROOT / figures_dir(m.output_root, m.truth["label"]) / "leadtime")
 
     def _abs(f):
         p = Path(f)
