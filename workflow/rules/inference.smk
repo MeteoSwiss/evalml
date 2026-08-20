@@ -242,6 +242,9 @@ rule inference_prepare_temporal_downscaler:
         "../scripts/inference_prepare.py"
 
 
+# TODO: consider an INFERENCE_MODEL_TYPES set (mirroring GRIB_MODEL_TYPES, computed
+# in config.py by introspecting *Item classes for InferenceModelRunConfig subclasses)
+# so this dispatch stops hand-enumerating "forecaster"/"temporal_downscaler" by string.
 def _inference_routing_fn(wc):
 
     run_config = RUN_CONFIGS[wc.run_id]
@@ -266,7 +269,8 @@ if FIXTURE_ROOT:
 
     _verified_fixtures = set()
 
-    def _fixture_grib(wc):
+    def _staged_grib_source(wc):
+        """Frozen fixture GRIB to symlink into the run's workdir for FIXTURE_ROOT replay."""
         p = fixture_grib_dir(FIXTURE_ROOT, wc.run_id, wc.init_time)
         if not p.exists():
             raise WorkflowError(
@@ -286,7 +290,7 @@ if FIXTURE_ROOT:
 
     rule inference_execute:
         input:
-            grib=_fixture_grib,
+            grib=_staged_grib_source,
         output:
             okfile=OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok",
         log:
@@ -328,13 +332,11 @@ else:
             OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
         localrule: True
         resources:
-            slurm_partition=lambda wc: get_resource(
-                wc, "slurm_partition", "short-shared"
-            ),
+            slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
             cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
             mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
             runtime=lambda wc: get_resource(wc, "runtime", "40m"),
-            gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
+            gres=lambda wc: f"gpu:{get_resource(wc, 'gpu', 1)}",
             ntasks=lambda wc: get_resource(wc, "tasks", 1),
             gpus=lambda wc: get_resource(wc, "gpu", 1),
         params:
@@ -351,6 +353,7 @@ else:
             (
                 set -euo pipefail
 
+                mkdir -p {params.workdir}
                 cd {params.workdir}
 
                 _run_inference() {{
@@ -385,3 +388,57 @@ else:
             touch {output.okfile}
             """
         # fmt: on
+
+
+def _grib_model_source(wc):
+    rc = RUN_CONFIGS[wc.run_id]
+    return str((Path(rc["root"]) / wc.init_time / "grib").resolve())
+
+
+rule grib_model_stage:
+    """Symlink a GRIB-model run's (e.g. spatial_downscaler) pre-generated GRIB,
+    produced entirely outside evalml, into the standard per-run workdir layout."""
+    output:
+        okfile=OUT_ROOT / "logs/grib_model_stage/{run_id}-{init_time}.ok",
+    log:
+        OUT_ROOT / "logs/grib_model_stage/{run_id}-{init_time}.log",
+    localrule: True
+    params:
+        source=_grib_model_source,
+        workdir=lambda wc: (OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}").resolve(),
+    shell:
+        """
+        (
+            set -euo pipefail
+            mkdir -p {params.workdir}
+            if [ -L {params.workdir}/grib ]; then
+                rm -f {params.workdir}/grib
+            elif [ -e {params.workdir}/grib ]; then
+                echo "ERROR: {params.workdir}/grib is a real directory (Snakemake-owned inference output), not a GRIB-model-stage symlink. Refusing to delete it; move it aside and retry." >&2
+                exit 1
+            fi
+            ln -sfn {params.source} {params.workdir}/grib
+        ) >{log} 2>&1
+        touch {output.okfile}
+        """
+
+
+def _okfile_template(wc):
+    """Unexpanded rule-output object for wc.run_id's okfile rule."""
+    model_type = RUN_CONFIGS[wc.run_id]["model_type"]
+    return (
+        rules.grib_model_stage if model_type in GRIB_MODEL_TYPES else rules.inference_execute
+    ).output.okfile
+
+
+def _okfile_for(run_id: str, init_time: str) -> str:
+    model_type = RUN_CONFIGS[run_id]["model_type"]
+    template = (
+        rules.grib_model_stage if model_type in GRIB_MODEL_TYPES else rules.inference_execute
+    ).output.okfile
+    return template.format(run_id=run_id, init_time=init_time)
+
+
+def inference_okfile(wc):
+    """Drop-in replacement for a hardcoded `rules.inference_execute.output.okfile`."""
+    return _okfile_for(wc.run_id, wc.init_time)
