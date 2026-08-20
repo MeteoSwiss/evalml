@@ -204,8 +204,10 @@ rule verification_scoremaps:
         ),
         truth=config["truth"]["root"],
     output:
-        OUT_ROOT
-        / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
+        protected(
+            OUT_ROOT
+            / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc"
+        ),
     log:
         OUT_ROOT
         / f"logs/verification_scoremaps/{{run_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
@@ -244,8 +246,10 @@ rule verification_scoremaps_baseline:
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth=config["truth"]["root"],
     output:
-        OUT_ROOT
-        / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
+        protected(
+            OUT_ROOT
+            / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc"
+        ),
     log:
         OUT_ROOT
         / f"logs/verification_scoremaps_baseline/{{baseline_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
