@@ -104,7 +104,7 @@ def _(df, sources):
         S_perfect = 1 for ETS metrics, 0 for all others (RMSE, BIAS², MAE, …).
         BIAS is squared first so it is a proper non-negative score before the ratio.
         """
-        _varda_src = next((s for s in all_sources if "Varda" in s and "Single" in s), None)
+        _varda_src = next((s for s in all_sources if "Varda" in s and "single" in s), None)
         _other_srcs = [s for s in all_sources if s != _varda_src]
         _join_cols = ["param", "metric", "metric_raw", "step", "region", "season", "init_hour"]
         _varda = (
@@ -131,7 +131,7 @@ def _(df, sources):
             return dataframe.iloc[:0].copy()
         return _pd.concat(_result_parts, ignore_index=True)
 
-    skill_sources = [s for s in sources if not ("Varda" in s and "Single" in s)]
+    skill_sources = [s for s in sources if not ("Varda" in s and "single" in s)]
     _df_skill = compute_skill_df(df, sources)
     df_skill_all = _df_skill[
         (_df_skill["region"] == "icon")
@@ -179,7 +179,7 @@ def _():
                 if grp.empty:
                     continue
                 ax.plot(grp["step"], grp["value"], label=src, **_line_style(src))
-                if ("Varda" in src and "Single" in src) or "AIFS" in src:
+                if ("Varda" in src and "single" in src) or "AIFS" in src:
                     m6 = grp[grp["step"] % 6 == 0]
                     ax.plot(
                         m6["step"],
