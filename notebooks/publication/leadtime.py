@@ -109,7 +109,7 @@ def _(decode_metric, ds):
 @app.cell
 def _(df):
     df_all = df[
-        (df["region"] == "all") & (df["season"] == "all") & (df["init_hour"] == "all")
+        (df["region"] == "icon") & (df["season"] == "all") & (df["init_hour"] == "all")
     ].copy()
     return (df_all,)
 
@@ -260,7 +260,7 @@ def _(
     import pandas as _pd
     from evalml.publication.style import param_label as _param_label
 
-    _PARAMS = ["T_2M", "TOT_PREC", "U_10M"]
+    _PARAMS = ["T_2M", "TOT_PREC1", "SP_10M"]
     _METRICS = ["RMSE", "BIAS"]
 
     _panels = _pd.DataFrame(
@@ -300,11 +300,11 @@ def _(
     )
     _prec_ets = sorted(
         m
-        for m in df_all[df_all["param"] == "TOT_PREC"]["metric"].unique()
+        for m in df_all[df_all["param"] == "TOT_PREC1"]["metric"].unique()
         if "ETS" in m
     )
     _wind_ets = sorted(
-        m for m in df_all[df_all["param"] == "U_10M"]["metric"].unique() if "ETS" in m
+        m for m in df_all[df_all["param"] == "SP_10M"]["metric"].unique() if "ETS" in m
     )
 
     _specs = [
@@ -318,16 +318,16 @@ def _(
         (
             0,
             1,
-            "TOT_PREC",
+            "TOT_PREC1",
             _find_ets(_prec_ets, ">", "0.0"),
-            f"{_param_label('TOT_PREC')} > 0 mm",
+            f"{_param_label('TOT_PREC1')} > 0 mm",
         ),
         (
             0,
             2,
-            "U_10M",
+            "SP_10M",
             _find_ets(_wind_ets, ">", "5.0"),
-            f"{_param_label('U_10M')} > 5 m/s",
+            f"{_param_label('SP_10M')} > 5 m/s",
         ),
         (
             1,
@@ -339,16 +339,16 @@ def _(
         (
             1,
             1,
-            "TOT_PREC",
+            "TOT_PREC1",
             _find_ets(_prec_ets, ">", "5.0"),
-            f"{_param_label('TOT_PREC')} > 5 mm",
+            f"{_param_label('TOT_PREC1')} > 5 mm",
         ),
         (
             1,
             2,
-            "U_10M",
+            "SP_10M",
             _find_ets(_wind_ets, ">", "10.0"),
-            f"{_param_label('U_10M')} > 10 m/s",
+            f"{_param_label('SP_10M')} > 10 m/s",
         ),
     ]
     _panels = _pd.DataFrame(
@@ -379,7 +379,7 @@ def _(
     import pandas as _pd
     from evalml.publication.style import param_label as _param_label
 
-    _PARAMS = ["T_2M", "TOT_PREC", "U_10M"]
+    _PARAMS = ["T_2M", "TOT_PREC1", "SP_10M"]
     _METRICS = ["RMSE", "BIAS"]
     _SKILL_LABELS = {"RMSE": "RMSE skill", "BIAS": "Bias² skill"}
 
@@ -422,12 +422,12 @@ def _(
     )
     _prec_ets = sorted(
         m
-        for m in df_skill_all[df_skill_all["param"] == "TOT_PREC"]["metric"].unique()
+        for m in df_skill_all[df_skill_all["param"] == "TOT_PREC1"]["metric"].unique()
         if "ETS" in m
     )
     _wind_ets = sorted(
         m
-        for m in df_skill_all[df_skill_all["param"] == "U_10M"]["metric"].unique()
+        for m in df_skill_all[df_skill_all["param"] == "SP_10M"]["metric"].unique()
         if "ETS" in m
     )
 
@@ -442,16 +442,16 @@ def _(
         (
             0,
             1,
-            "TOT_PREC",
+            "TOT_PREC1",
             _find_ets(_prec_ets, ">", "0.0"),
-            f"{_param_label('TOT_PREC')} > 0 mm",
+            f"{_param_label('TOT_PREC1')} > 0 mm",
         ),
         (
             0,
             2,
-            "U_10M",
+            "SP_10M",
             _find_ets(_wind_ets, ">", "5.0"),
-            f"{_param_label('U_10M')} > 5 m/s",
+            f"{_param_label('SP_10M')} > 5 m/s",
         ),
         (
             1,
@@ -463,16 +463,16 @@ def _(
         (
             1,
             1,
-            "TOT_PREC",
+            "TOT_PREC1",
             _find_ets(_prec_ets, ">", "5.0"),
-            f"{_param_label('TOT_PREC')} > 5 mm",
+            f"{_param_label('TOT_PREC1')} > 5 mm",
         ),
         (
             1,
             2,
-            "U_10M",
+            "SP_10M",
             _find_ets(_wind_ets, ">", "10.0"),
-            f"{_param_label('U_10M')} > 10 m/s",
+            f"{_param_label('SP_10M')} > 10 m/s",
         ),
     ]
     _panels = _pd.DataFrame(
