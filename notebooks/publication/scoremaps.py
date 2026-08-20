@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.7"
+__generated_with = "0.23.3"
 app = marimo.App()
 
 
@@ -59,7 +59,6 @@ def _():
     ekp.schema.borders["edgecolor"] = "black"
     ekp.schema.borders["linewidth"] = 1.0
     ekp.schema.coastlines["resolution"] = "high"
-
     return (
         COLOR_SKILL_BASELINE_BETTER,
         COLOR_SKILL_MODEL_BETTER,
@@ -67,6 +66,7 @@ def _():
         Gridliner,
         LOG,
         PARAM_LABELS,
+        PROJECT_ROOT,
         Path,
         SCORE_LABELS,
         SKILL_CMAP,
@@ -83,23 +83,23 @@ def _():
 
 
 @app.cell
-def _(Path):
+def _(PROJECT_ROOT):
     from evalml.publication.manifest import load_manifest, figures_dir
 
-    m = load_manifest()
+    m = load_manifest(PROJECT_ROOT / "output/manifests/manifest_varda-single_paper_forecaster_scoremaps.json")
     _sm = m.publication.get("scoremaps") or {}
 
     # Configured case; override in-cell to retarget.
     params = _sm.get("params", ["T_2M", "SP_10M"])
     scores = _sm.get("scores", ["MSE_SKILL", "BIAS_CONTRIB"])
     leadtimes = [
-        int(s) for s in (_sm.get("steps") or [24])
+        int(s) for s in (_sm.get("steps") or [6])
     ]  # Lead times from publication.scoremaps.steps (default [24]). Set 'steps' in the config's publication.scoremaps so these match the files publication_all builds.
     baseline_label = _sm.get("baseline_label", "ICON-CH1-CTRL")
     region = _sm.get("region", "switzerland")
     season = _sm.get("season", "all")
     candidate_label = m.get_candidate().label
-    output = figures_dir(m.output_root, m.truth["label"]) / "scoremaps"
+    output = figures_dir(PROJECT_ROOT, m.truth["label"]) / "scoremaps"
 
     cand = m.get_candidate()
     base = m.resolve_baseline(baseline_label)
@@ -108,10 +108,10 @@ def _(Path):
 
     # Leadtime-major ordering (all params for leadtimes[0], then leadtimes[1], ...).
     candidate_files = [
-        Path(m.scoremap_path(cand, p, lt)) for lt in leadtimes for p in params
+        PROJECT_ROOT / m.scoremap_path(cand, p, lt) for lt in leadtimes for p in params
     ]
     baseline_files = [
-        Path(m.scoremap_path(base, p, lt)) for lt in leadtimes for p in params
+        PROJECT_ROOT / m.scoremap_path(base, p, lt) for lt in leadtimes for p in params
     ]
     n_params = len(params)
     return (
@@ -344,6 +344,118 @@ def _(
         )
         return fig
 
+    def _make_seasonal_figure(
+        params,
+        candidate_files,
+        baseline_files,
+        plotter,
+        domain,
+        region,
+        style,
+        skill_cmap,
+        skill_norm,
+        candidate_label,
+        baseline_label,
+        leadtime,
+        score="MSE_SKILL",
+        seasons=("DJF", "MAM", "JJA", "SON"),
+    ):
+        season_labels = {
+            "DJF": "Winter (DJF)",
+            "MAM": "Spring (MAM)",
+            "JJA": "Summer (JJA)",
+            "SON": "Autumn (SON)",
+        }
+        nrows = len(seasons)
+        ncols = len(params)
+        init_hour = -999  # "all" sentinel
+        fig = plotter.init_geoaxes(
+            projection=domain["projection"],
+            bbox=domain["extent"],
+            nrows=nrows,
+            ncols=ncols,
+            name=region,
+            size=(6 * ncols, 5 * nrows),
+        )
+        mpl_axes = []
+        for row, seas in enumerate(seasons):
+            for col, (param, cand_file, base_file) in enumerate(
+                zip(params, candidate_files, baseline_files)
+            ):
+                skill_vals = _compute_panel(
+                    score, cand_file, base_file, param, seas, init_hour
+                )
+                LOG.info(
+                    "%s %s %s lt=%dh: skill min=%.3f  max=%.3f  n_nan=%d / %d",
+                    param,
+                    score,
+                    seas,
+                    leadtime,
+                    np.nanmin(skill_vals),
+                    np.nanmax(skill_vals),
+                    int(np.isnan(skill_vals).sum()),
+                    skill_vals.size,
+                )
+                subplot = fig.add_map(row=row, column=col)
+                if np.all(np.isnan(skill_vals)):
+                    LOG.warning(
+                        "All-NaN for %s %s %s lt=%dh — plotting empty panel.",
+                        param,
+                        score,
+                        seas,
+                        leadtime,
+                    )
+                    subplot.ax.set_facecolor("#cccccc")
+                    subplot.standard_layers()
+                else:
+                    plotter.plot_field(subplot, skill_vals, style=style, colorbar=False)
+                _remove_latlon_labels(subplot.ax)
+                mpl_axes.append(subplot.ax)
+                subplot.title(
+                    f"{PARAM_LABELS.get(param, param)} — {season_labels.get(seas, seas)}, +{leadtime}h"
+                )
+        mpl_fig = fig.fig
+        sm = plt.cm.ScalarMappable(cmap=skill_cmap, norm=skill_norm)
+        sm.set_array([])
+        cbar = mpl_fig.colorbar(
+            sm,
+            ax=mpl_axes,
+            orientation="horizontal",
+            location="bottom",
+            fraction=0.04,
+            pad=0.05,
+            aspect=50,
+            extend="both",
+        )
+        cbar.set_ticks(SKILL_LEVELS)
+        cbar.set_ticklabels([f"{v:g}" for v in SKILL_LEVELS])
+        cbar.set_label("Skill  (1 − model / baseline)", labelpad=4)
+        mpl_fig.canvas.draw()
+        renderer = mpl_fig.canvas.get_renderer()
+        label_bbox = cbar.ax.xaxis.label.get_window_extent(renderer)
+        fig_height_px = mpl_fig.get_figheight() * mpl_fig.dpi
+        y_fig = label_bbox.y0 / fig_height_px
+        cb_pos = cbar.ax.get_position()
+        mpl_fig.text(
+            cb_pos.x0,
+            y_fig,
+            f"{baseline_label} better",
+            ha="left",
+            va="top",
+            color=COLOR_SKILL_BASELINE_BETTER,
+            fontsize=plt.rcParams["font.size"],
+        )
+        mpl_fig.text(
+            cb_pos.x1,
+            y_fig,
+            f"{candidate_label} better",
+            ha="right",
+            va="top",
+            color=COLOR_SKILL_MODEL_BETTER,
+            fontsize=plt.rcParams["font.size"],
+        )
+        return fig
+
     assert len(candidate_files) == n_params * len(leadtimes)
     assert len(baseline_files) == n_params * len(leadtimes)
 
@@ -397,8 +509,35 @@ def _(
         out_pngs.append(out_png)
         LOG.info("Saved %s", out_png)
 
+    out_seasonal_pngs = []
+    for i, lt in enumerate(leadtimes):
+        cand_files_lt = candidate_files[i * n_params : (i + 1) * n_params]
+        base_files_lt = baseline_files[i * n_params : (i + 1) * n_params]
+
+        fig_seas = _make_seasonal_figure(
+            params=params,
+            candidate_files=cand_files_lt,
+            baseline_files=base_files_lt,
+            plotter=plotter,
+            domain=domain,
+            region=region,
+            style=style,
+            skill_cmap=skill_cmap,
+            skill_norm=skill_norm,
+            candidate_label=candidate_label,
+            baseline_label=baseline_label,
+            leadtime=lt,
+        )
+
+        out_png = output / f"publication_scoremaps_seasonal_{lt}h.png"
+        out_pdf = output / f"publication_scoremaps_seasonal_{lt}h.pdf"
+        fig_seas.save(out_pdf, bbox_inches="tight", dpi=200)
+        fig_seas.save(out_png, bbox_inches="tight", dpi=200)
+        out_seasonal_pngs.append(out_png)
+        LOG.info("Saved %s", out_png)
+
     img_tags = "".join(
-        f'<img src="{p.name}" style="max-width:100%"><br>' for p in out_pngs
+        f'<img src="{p.name}" style="max-width:100%"><br>' for p in out_pngs + out_seasonal_pngs
     )
     (output / "publication_scoremaps.html").write_text(
         f"<!doctype html><html><body>{img_tags}</body></html>"
