@@ -2,7 +2,7 @@
 description: |
   HiRAD downscaling experiments.
 
-config_label: hirad-forecast-n320-test-1.0
+config_label: hirad-forecast-test-1.0
 
 dates:
   - 2026-07-30T00:00 # Disaggregation errors: I believe tp is sometimes negative in HiRAD. TODO to fix.

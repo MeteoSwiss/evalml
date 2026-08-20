@@ -1111,7 +1111,7 @@
       "title": "Dates"
     },
     "runs": {
-      "description": "List of experiment participants, including forecaster/temporal downscaler/spatial downscaler ML runs and baselines.",
+      "description": "List of experiment participants, including forecaster/temporal downscaler/GRIB-forecaster ML runs and baselines.",
       "items": {
         "anyOf": [
           {

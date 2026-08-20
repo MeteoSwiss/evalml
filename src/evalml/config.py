@@ -159,7 +159,7 @@ class ThirdPartyRunConfig(BaseModel):
 
     No checkpoint, venv, or anemoi-inference config: evalml never runs inference for
     these participants, it only stages their pre-existing GRIB into the same
-    per-run output layout other run types produce. Shared base for spatial_downscaler
+    per-run output layout other run types produce. Shared base for grib_forecaster
     and future third-party experiment sources.
     """
 
@@ -718,7 +718,7 @@ class ConfigModel(BaseModel):
         ForecasterItem | TemporalDownscalerItem | GRIBForecasterItem | BaselineItem
     ] = Field(
         ...,
-        description="List of experiment participants, including forecaster/temporal downscaler/spatial downscaler ML runs and baselines.",
+        description="List of experiment participants, including forecaster/temporal downscaler/GRIB-forecaster ML runs and baselines.",
     )
     truth: TruthConfig | None
     lapse_rate_correction: bool = Field(
