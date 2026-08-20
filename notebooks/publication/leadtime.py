@@ -42,7 +42,7 @@ def _(PROJECT_ROOT, Path):
         decode_metric as _decode_metric,
     )
 
-    m = load_manifest(PROJECT_ROOT / "output/manifests/manifest_varda-single_paper_stations.json")
+    m = load_manifest(PROJECT_ROOT / "output/manifests/manifest_varda-single_paper_analysis.json")
     m.validate_request("figures")
 
     pairs = m.verif_paths()
@@ -147,7 +147,7 @@ def _():
     import matplotlib.ticker as _mticker
     import numpy as _np
 
-    from evalml.publication.style import line_style as _line_style
+    from evalml.publication.style import line_style as _line_style, mplstyle_path as _mplstyle_path
 
     _XSCALE_KW = dict(
         functions=(
@@ -166,73 +166,76 @@ def _():
         must match the source values present in df.
         legend_ncol: columns in the figure legend (default: all sources in one row).
         """
-        nrows = panels["row_id"].max() + 1
-        ncols = panels["col_id"].max() + 1
-        fig, axes = _plt.subplots(
-            nrows, ncols, figsize=(4 * ncols, 3 * nrows), sharex=True
-        )
-        for _, p in panels.iterrows():
-            ax = axes[p.row_id, p.col_id]
-            data = df[(df["param"] == p.param_name) & (df["metric"] == p.metric)]
-            for src in sources:
-                grp = data[data["source"] == src].sort_values("step")
-                if grp.empty:
-                    continue
-                ax.plot(grp["step"], grp["value"], label=src, **_line_style(src))
-                if ("Varda" in src and "single" in src) or "AIFS" in src:
-                    m6 = grp[grp["step"] % 6 == 0]
-                    ax.plot(
-                        m6["step"],
-                        m6["value"],
-                        linestyle="none",
-                        marker="o",
-                        markersize=5,
-                        color=_line_style(src)["color"],
+        with _plt.style.context(_mplstyle_path()):
+            nrows = panels["row_id"].max() + 1
+            ncols = panels["col_id"].max() + 1
+            fig, axes = _plt.subplots(
+                nrows, ncols, figsize=(4 * ncols, 3 * nrows), sharex=True
+            )
+            for _, p in panels.iterrows():
+                ax = axes[p.row_id, p.col_id]
+                data = df[(df["param"] == p.param_name) & (df["metric"] == p.metric)]
+                for src in sources:
+                    grp = data[data["source"] == src].sort_values("step")
+                    if grp.empty:
+                        continue
+                    ax.plot(grp["step"], grp["value"], label=src, **_line_style(src))
+                    if ("Varda" in src and "single" in src) or "AIFS" in src:
+                        m6 = grp[grp["step"] % 6 == 0]
+                        ax.plot(
+                            m6["step"],
+                            m6["value"],
+                            linestyle="none",
+                            marker="o",
+                            markersize=5,
+                            color=_line_style(src)["color"],
+                        )
+                ax.set_xscale("function", **_XSCALE_KW)
+                ax.xaxis.set_major_locator(_XTICKS)
+                if p.zero_line:
+                    ax.axhline(
+                        0, color="black", linestyle="dashed", linewidth=0.7, zorder=1.5
                     )
-            ax.set_xscale("function", **_XSCALE_KW)
-            ax.xaxis.set_major_locator(_XTICKS)
-            if p.zero_line:
-                ax.axhline(
-                    0, color="0.6", linestyle="solid", linewidth=0.7, zorder=0
-                )
-            if p.param_text:
-                ax.text(
-                    0.97,
-                    0.97,
-                    p.param_text,
-                    transform=ax.transAxes,
-                    ha="right",
-                    va="top",
-                )
-            if p.title_x:
-                ax.set_title(p.title_x, loc="center", y=1.05)
-            if p.title_y:
-                ax.set_title(
-                    p.title_y, x=-0.25, y=0.5, rotation=90, va="center", loc="left"
-                )
-            ax.yaxis.set_major_locator(_mticker.MaxNLocator(nbins=4, prune="both"))
-            if p.row_id == nrows - 1:
-                ax.set_xlabel("Lead time (h)")
-        axes[0, 0].set_xlim(-1, 126)
-        handles, labels = axes[0, 0].get_legend_handles_labels()
-        _order = sorted(
-            range(len(labels)), key=lambda i: (0 if "Varda" in labels[i] else 1)
-        )
-        handles = [handles[i] for i in _order]
-        labels = [labels[i] for i in _order]
-        _ncol = legend_ncol if legend_ncol is not None else len(sources)
-        _legend_rows = (len(labels) + _ncol - 1) // _ncol
-        fig.legend(
-            handles,
-            labels,
-            loc="lower center",
-            ncol=_ncol,
-            bbox_to_anchor=(0.5, 0.02),
-            fontsize=_plt.rcParams["axes.labelsize"],
-        )
-        fig.tight_layout()
-        fig.subplots_adjust(bottom=0.12 + 0.08 * _legend_rows)
-        return fig
+                if p.param_text:
+                    ax.text(
+                        0.97,
+                        0.97,
+                        p.param_text,
+                        transform=ax.transAxes,
+                        ha="right",
+                        va="top",
+                    )
+                if p.title_x:
+                    ax.set_title(p.title_x, loc="center", y=1.05)
+                if p.title_y:
+                    ax.set_title(
+                        p.title_y, x=-0.25, y=0.5, rotation=90, va="center", loc="left"
+                    )
+                ymin, ymax = ax.get_ylim()
+                ax.set_ylim(min(ymin, 0), max(ymax, 0))
+                ax.yaxis.set_major_locator(_mticker.MaxNLocator(nbins=4, prune="both"))
+                if p.row_id == nrows - 1:
+                    ax.set_xlabel("Lead time (h)")
+            axes[0, 0].set_xlim(-1, 126)
+            handles, labels = axes[0, 0].get_legend_handles_labels()
+            _order = sorted(
+                range(len(labels)), key=lambda i: (0 if "Varda" in labels[i] else 1)
+            )
+            handles = [handles[i] for i in _order]
+            labels = [labels[i] for i in _order]
+            _ncol = legend_ncol if legend_ncol is not None else len(sources)
+            _legend_rows = (len(labels) + _ncol - 1) // _ncol
+            fig.legend(
+                handles,
+                labels,
+                loc="lower center",
+                ncol=_ncol,
+                bbox_to_anchor=(0.5, 0.02),
+                fontsize=_plt.rcParams["axes.labelsize"],
+            )
+            fig.tight_layout()
+            fig.subplots_adjust(bottom=0.12 + 0.08 * _legend_rows)
+            return fig
 
     return (plot_panels,)
 
