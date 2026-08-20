@@ -191,8 +191,8 @@ class ThirdPartyRunConfig(BaseModel):
         return _validate_steps_range(v)
 
 
-class SpatialDownscalerConfig(ThirdPartyRunConfig):
-    """Pre-generated spatial-downscaler GRIB, produced by a workflow outside evalml."""
+class GRIBForecasterConfig(ThirdPartyRunConfig):
+    """Pre-generated GRIB from a forecaster, produced by a workflow outside evalml."""
 
 
 class BaselineConfig(BaseModel):
@@ -249,8 +249,8 @@ class TemporalDownscalerItem(BaseModel):
     temporal_downscaler: TemporalDownscalerConfig
 
 
-class SpatialDownscalerItem(BaseModel):
-    spatial_downscaler: SpatialDownscalerConfig
+class GRIBForecasterItem(BaseModel):
+    grib_forecaster: GRIBForecasterConfig
 
 
 class BaselineItem(BaseModel):
@@ -263,7 +263,7 @@ class BaselineItem(BaseModel):
 # soon as its *Item class is added below.
 THIRD_PARTY_MODEL_TYPES: FrozenSet[str] = frozenset(
     field_name
-    for item_cls in (ForecasterItem, TemporalDownscalerItem, SpatialDownscalerItem, BaselineItem)
+    for item_cls in (ForecasterItem, TemporalDownscalerItem, GRIBForecasterItem, BaselineItem)
     for field_name, field_info in item_cls.model_fields.items()
     if isinstance(field_info.annotation, type)
     and issubclass(field_info.annotation, ThirdPartyRunConfig)
@@ -715,7 +715,7 @@ class ConfigModel(BaseModel):
     )
     dates: Dates | ExplicitDates
     runs: List[
-        ForecasterItem | TemporalDownscalerItem | SpatialDownscalerItem | BaselineItem
+        ForecasterItem | TemporalDownscalerItem | GRIBForecasterItem | BaselineItem
     ] = Field(
         ...,
         description="List of experiment participants, including forecaster/temporal downscaler/spatial downscaler ML runs and baselines.",

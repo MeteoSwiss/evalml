@@ -361,7 +361,7 @@ def env_entry_hash(run_config: dict, model_type: str) -> str:
     - extra_requirements (different dependencies)
     - disable_local_eccodes_definitions (different ECCODES setup)
     - For temporal downscalers: the forecaster's env_id (different upstream model)
-    - Third-party runs (e.g. spatial_downscaler): no environment to build, so this
+    - Third-party runs (e.g. grib_forecaster): no environment to build, so this
       is just the source GRIB directory identity.
     """
     if model_type in THIRD_PARTY_MODEL_TYPES:
@@ -381,7 +381,7 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
     - steps (lead times)
     - config YAML file contents (inference parameters)
     - For temporal downscalers: the forecaster's run_id (which run's outputs to read)
-    - Third-party runs (e.g. spatial_downscaler): no inference config to hash, so
+    - Third-party runs (e.g. grib_forecaster): no inference config to hash, so
       this is just the source GRIB directory identity plus steps.
     """
     if model_type in THIRD_PARTY_MODEL_TYPES:

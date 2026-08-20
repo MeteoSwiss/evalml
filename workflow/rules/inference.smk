@@ -263,7 +263,7 @@ def _inference_routing_fn(wc):
 
 
 def _passthrough_grib_source(wc):
-    """Pre-generated GRIB dir for a third-party run (e.g. spatial_downscaler): evalml
+    """Pre-generated GRIB dir for a third-party run (e.g. grib_forecaster): evalml
     never runs inference for these, so their GRIB always comes from their own `root`,
     regardless of whether FIXTURE_ROOT replay is active. None for run types that need
     real inference (or fixture replay)."""
@@ -403,7 +403,7 @@ else:
                 mkdir -p {params.workdir}
 
                 if [ -n "{params.passthrough_source}" ]; then
-                    # Third-party run (e.g. spatial_downscaler): GRIB already exists
+                    # Third-party run (e.g. grib_forecaster): GRIB already exists
                     # outside evalml, just stage it (mirrors the FIXTURE_ROOT replay
                     # rule's own symlink guard above).
                     if [ -L {params.workdir}/grib ]; then

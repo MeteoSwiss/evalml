@@ -10,7 +10,7 @@ dates:
 
 
 runs:
-  - spatial_downscaler:
+  - grib_forecaster:
       root: '/store_new/mch/msopr/ml/evalml/hirad_grib_data'
       label: HiRAD-downscaling-N320
       steps: 0/12/1
