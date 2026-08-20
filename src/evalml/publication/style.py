@@ -25,7 +25,7 @@ COLOR_OBS = "#4ecb8d"
 COLOR_CH1 = "#008dff"
 COLOR_CH2 = "#003a7d"
 COLOR_VARDA = "#d83034"
-COLOR_AIFS = "#2ca02c"
+COLOR_AIFS = "#8923c4"
 
 # Skill score colormap: red = baseline better, blue = model better.
 # ColorBrewer RdBu palette. The deep RdBu ends (#b2182b/#2166ac) are reserved for
@@ -50,18 +50,16 @@ SKILL_CMAP = LinearSegmentedColormap.from_list(
 SKILL_GREY = "#ffffff"
 # Levels capped at ±0.55 (0.10 spacing); the central bin [−0.05, 0.05] is SKILL_GREY.
 SKILL_LEVELS = [
-    -0.55,
-    -0.45,
-    -0.35,
+    -3.0,
+    -1.0,
     -0.25,
     -0.15,
     -0.05,
     0.05,
     0.15,
     0.25,
-    0.35,
-    0.45,
-    0.55,
+    0.5,
+    0.75,
 ]
 
 # Human-readable score names used in panel titles / labels.
