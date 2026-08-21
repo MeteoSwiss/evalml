@@ -172,7 +172,7 @@ rule verification_metrics_plot:
     resources:
         cpus_per_task=16,
         mem_mb=50_000,
-        runtime="20m",
+        runtime="60m",
     params:
         label_map=",".join(
             "{}:{}".format(
