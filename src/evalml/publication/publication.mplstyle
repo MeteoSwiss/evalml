@@ -3,7 +3,7 @@
 
 # Font family
 font.family         : sans-serif
-font.sans-serif     : Helvetica
+font.sans-serif     : Liberation Sans
 
 # Figure DPI (screen / PDF rendering; PNG exports pass an explicit dpi= argument)
 figure.dpi          : 250
