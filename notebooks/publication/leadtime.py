@@ -165,7 +165,7 @@ def _():
         """Draw one figure from a panel-spec DataFrame.
 
         panels columns: row_id, col_id, param_name, metric, param_text,
-                        title_x, title_y, zero_line
+                        title_x, title_y, horizontal_line
         df may contain raw scores or pre-computed skill scores; sources
         must match the source values present in df.
         legend_ncol: columns in the figure legend (default: all sources in one row).
@@ -196,10 +196,9 @@ def _():
                         )
                 ax.set_xscale("function", **_XSCALE_KW)
                 ax.xaxis.set_major_locator(_XTICKS)
-                if p.zero_line:
-                    ax.axhline(
-                        p.horizontal_line, color="black", linestyle="dashed", linewidth=0.7, zorder=1.5
-                    )
+                ax.axhline(
+                    p.horizontal_line, color="black", linestyle="dashed", linewidth=0.7, zorder=1.5
+                )
                 if p.param_text:
                     ax.text(
                         0.97,
@@ -215,14 +214,12 @@ def _():
                     ax.set_title(
                         p.title_y, x=-0.25, y=0.5, rotation=90, va="center", loc="left"
                     )
-                if p.zero_line:
-                    _margin = _plt.rcParams.get('axes.ymargin', 0.05)
-                    _ymin, _ymax = ax.get_ylim()
-                    _span = (_ymax - _ymin) / (1 + 2 * _margin)
-                    _lo = min(_ymin + _margin * _span, p.horizontal_line)
-                    _hi = max(_ymax - _margin * _span, p.horizontal_line)
-                    _new_span = _hi - _lo
-                    ax.set_ylim(_lo - _margin * _new_span, _hi + _margin * _new_span)
+                _margin = 0.05
+                _ymin, _ymax = ax.get_ylim()
+                _span = _ymax - _ymin
+                _lo = max(-2, _ymin - _margin * _span)
+                _hi = _ymax + _margin * _span
+                ax.set_ylim(_lo, _hi)
                 ax.yaxis.set_major_locator(_mticker.MaxNLocator(nbins=4))
                 if p.row_id == nrows - 1:
                     ax.set_xlabel("Lead time (h)")
@@ -275,12 +272,12 @@ def _(
         _prec = sorted(m for m in df[df["param"] == "TOT_PREC1"]["metric"].unique() if "ETS" in m)
         _wind = sorted(m for m in df[df["param"] == "SP_10M"]["metric"].unique() if "ETS" in m)
         return [
-            (0, 0, "T_2M", _find_ets(_t2m, "<", "273.15"), f"{_param_label('T_2M')} < 0 °C"),
-            (0, 1, "TOT_PREC1", _find_ets(_prec, ">", "0.0"), f"{_param_label('TOT_PREC1')} > 0 mm"),
-            (0, 2, "SP_10M", _find_ets(_wind, ">", "5.0"), f"{_param_label('SP_10M')} > 5 m/s"),
-            (1, 0, "T_2M", _find_ets(_t2m, ">", "298.15"), f"{_param_label('T_2M')} > 25 °C"),
-            (1, 1, "TOT_PREC1", _find_ets(_prec, ">", "5.0"), f"{_param_label('TOT_PREC1')} > 5 mm"),
-            (1, 2, "SP_10M", _find_ets(_wind, ">", "10.0"), f"{_param_label('SP_10M')} > 10 m/s"),
+            (0, 0, "T_2M", _find_ets(_t2m, "<", "273.15"), "< 0 °C"),
+            (0, 1, "TOT_PREC1", _find_ets(_prec, ">", "0.0"), "> 0 mm"),
+            (0, 2, "SP_10M", _find_ets(_wind, ">", "5.0"), "> 5 m/s"),
+            (1, 0, "T_2M", _find_ets(_t2m, ">", "298.15"), "> 25 °C"),
+            (1, 1, "TOT_PREC1", _find_ets(_prec, ">", "5.0"), "> 5 mm"),
+            (1, 2, "SP_10M", _find_ets(_wind, ">", "10.0"), "> 10 m/s"),
         ]
 
     def _build_combined_panels(df, metric_labels):
@@ -294,7 +291,6 @@ def _(
                 "param_text": "",
                 "title_x": _param_label(param) if row_id == 0 else "",
                 "title_y": label if col_id == 0 else "",
-                "zero_line": True,
                 "horizontal_line": 0,
             }
             for row_id, (metric, label) in enumerate(metric_labels.items())
@@ -308,9 +304,8 @@ def _(
                 "metric": metric,
                 "param_text": param_text,
                 "title_x": "",
-                "title_y": "ETS" if col_id == 0 and ets_row == 0 else "",
-                "zero_line": True,
-                "horizontal_line": 1,
+                "title_y": "ETS" if col_id == 0 else "",
+                "horizontal_line": None,
             }
             for ets_row, col_id, param, metric, param_text in _ets_specs(df)
         ]
@@ -321,7 +316,7 @@ def _(
 
     _panels = _build_combined_panels(df_all, {"RMSE": "RMSE", "BIAS": "BIAS"})
     _fig = plot_panels(_panels, df_all, sources, legend_ncol=(len(sources) + 1) // 2)
-    _fname = _out / "publication_figures.pdf"
+    _fname = _out / "publication_leadtime.pdf"
     _fig.savefig(_fname, bbox_inches="tight")
     _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
     _plt.close(_fig)
@@ -332,15 +327,15 @@ def _(
     _fig_skill = plot_panels(
         _panels_skill, df_skill_all, skill_sources, legend_ncol=(len(skill_sources) + 1) // 2
     )
-    _fname_skill = _out / "publication_figures_skill.pdf"
+    _fname_skill = _out / "publication_leadtime_skill.pdf"
     _fig_skill.savefig(_fname_skill, bbox_inches="tight")
     _fig_skill.savefig(_fname_skill.with_suffix(".png"), dpi=200, bbox_inches="tight")
     _plt.close(_fig_skill)
 
-    (_out / "publication_figures.html").write_text(
+    (_out / "publication_leadtime.html").write_text(
         "<!doctype html><html><body>"
-        '<img src="publication_figures.png" style="max-width:100%"><br>'
-        '<img src="publication_figures_skill.png" style="max-width:100%">'
+        '<img src="publication_leadtime.png" style="max-width:100%"><br>'
+        '<img src="publication_leadtime_skill.png" style="max-width:100%">'
         "</body></html>"
     )
 
