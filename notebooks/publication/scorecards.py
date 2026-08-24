@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.7"
+__generated_with = "0.23.3"
 app = marimo.App(width="full")
 
 
@@ -63,8 +63,8 @@ def _():
         COLOR_SKILL_BASELINE_BETTER,
         COLOR_SKILL_MODEL_BETTER,
         DEFAULT_PLOT_CFG,
-        Path,
         PROJECT_ROOT,
+        Path,
         draw_data_rows,
         draw_legend,
         draw_slice_headers,
@@ -119,7 +119,7 @@ def _(PROJECT_ROOT, mo, sys):
             )
         except Exception as _exc:
             _manifest_default = str(
-                PROJECT_ROOT / "output/publication/SwissMetNet/manifest.json"
+                PROJECT_ROOT / "output/manifests/manifest_varda-single_paper_stations.json"
             )
             print(
                 f"[publication_scorecard] manifest auto-discovery failed ({_exc}); "
@@ -141,7 +141,7 @@ def _(PROJECT_ROOT, mo, sys):
     else:
         manifest_path = _cli.get("manifest", default=_manifest_default)
         output_dir = _cli.get("output", default=_output_default)
-        candidate = _cli.get("candidate", default=None)
+        candidate = _cli.get("candidate", default="Varda-single")
     return candidate, manifest_path, output_dir
 
 
@@ -277,14 +277,15 @@ def _(
 
     import copy
     import textwrap as _tw
+    import xarray as xr
 
     _PARAM_WRAP = 20  # wrap parameter names after ~20 chars
     _REGION_WRAP = 12  # wrap region names after ~12 chars
 
     excluded_data_vars = [
-        "TOT_PREC1.ETS_gt_0p0",
+        "TOT_PREC1.ETS_gt_0p1",
         "TOT_PREC1.ETS_gt_10p0",
-        "TOT_PREC6.ETS_gt_0p0",
+        "TOT_PREC6.ETS_gt_0p1",
         "TOT_PREC6.ETS_gt_1p0",
         "TOT_PREC6.ETS_gt_10p0",
         "TOT_PREC6.ETS_gt_50p0",
@@ -309,7 +310,7 @@ def _(
         _diff = load_relative_diff(_cfg)
         _diff = filter_diff(_diff, _cfg)
         _diff = _diff.drop_vars([v for v in excluded_data_vars if v in _diff.data_vars])
-        _diff = _diff.drop_sel(region="jura")
+        _diff = _diff.sel(region = xr.DataArray(["icon", "jura", "mittelland", "alpen"], dims = "region"))
         _diff = _diff.rename(
             {
                 v: f"{_tw.fill(param_label(v.rsplit('.', 1)[0]), width=_PARAM_WRAP)}.{v.rsplit('.', 1)[1]}"
@@ -378,22 +379,20 @@ def _(
         + small_fs * 1.4
     ) / 72
 
-    # Vertical layout: one panel per section, stacked top-to-bottom.
-    _inter_panel_gap_in = figure_cfg.get("inter_panel_gap_in", 0)
+    # Horizontal layout: panels side by side.
     panel_widths = [lay["data_w_in"] for _, _, _, lay in panels]
-    panel_heights = [
+    panel_height = (
         figure_cfg["title_margin_in"]
-        + (_inter_panel_gap_in if i > 0 else 0)
         + legend_h_in
-        + figure_cfg["row_height"] * (lay["y_top"] - lay["y_bottom"])
-        for i, (_, _, _, lay) in enumerate(panels)
-    ]
-    fig_width = max(panel_widths)
-    fig_height = sum(panel_heights)
+        + figure_cfg["row_height"]
+        * max(lay["y_top"] - lay["y_bottom"] for _, _, _, lay in panels)
+    )
+    fig_width = sum(panel_widths)
+    fig_height = panel_height
 
     LOG.info("scorecard: rendering figure (%.1f × %.1f in)", fig_width, fig_height)
     _fig = plt.figure(figsize=(fig_width, fig_height))
-    _subfigs = _fig.subfigures(len(panels), 1, height_ratios=panel_heights)
+    _subfigs = _fig.subfigures(1, len(panels), width_ratios=panel_widths)
     if len(panels) == 1:
         _subfigs = [_subfigs]
 
@@ -406,17 +405,16 @@ def _(
         _strat_dim = _cfg.get("stratification", "region")
         _model_source = _cfg["model"]["label"]
         _baseline_source = _cfg["baseline"]["label"]
-        _panel_h = panel_heights[_i]
+        _subfig_w_in = panel_widths[_i]
 
         _ax = _subfig.add_subplot(1, 1, 1)
         _ax.set_xlim(_lay["xlim_left"], _lay["plot_width"])
         _ax.set_ylim(_lay["y_bottom"], _lay["y_top"])
         _ax.axis("off")
 
-        _inter_gap = _inter_panel_gap_in if _i > 0 else 0
         _subfig.subplots_adjust(
-            top=1 - (figure_cfg["title_margin_in"] + _inter_gap) / _panel_h,
-            bottom=legend_h_in / _panel_h,
+            top=1 - figure_cfg["title_margin_in"] / panel_height,
+            bottom=legend_h_in / panel_height,
         )
 
         # Align the group-label left edge with the title's left anchor (subfig x=0.01).
@@ -428,14 +426,14 @@ def _(
         )
         _group_dx_in = (
             _title_x - _ax_pos.x0 - _ax_pos.width * _metric_x_frac
-        ) * fig_width
+        ) * _subfig_w_in
         _group_transform = _ax.transData + ScaledTranslation(
             _group_dx_in,
             0,
             _fig.dpi_scale_trans,
         )
         _letter = chr(ord("a") + _i)
-        _title_y = (1 - _inter_gap / _panel_h) if _inter_gap > 0 else 0.99
+        _title_y = 0.99
         _subfig.text(
             _title_x,
             _title_y,
