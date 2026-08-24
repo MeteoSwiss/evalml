@@ -128,7 +128,7 @@ def _(df, sources):
             _s_fcst = _merged["value"].where(~_is_bias, _merged["value"] ** 2)
             _s_baseline = _merged["_v"].where(~_is_bias, _merged["_v"] ** 2)
             _denom = _s_perfect - _s_baseline
-            _merged["value"] = (_s_fcst - _s_baseline) / _denom
+            _merged["value"] = ((_s_fcst - _s_baseline) / _denom).clip(lower=-10, upper=1)
             _merged.loc[_denom.abs() < 1e-12, "value"] = float("nan")
             _result_parts.append(_merged.drop(columns=["_v"]))
         if not _result_parts:
@@ -141,6 +141,7 @@ def _(df, sources):
         (_df_skill["region"] == "icon")
         & (_df_skill["season"] == "all")
         & (_df_skill["init_hour"] == "all")
+        & (_df_skill["metric"] != "BIAS")
     ].copy()
     return df_skill_all, skill_sources
 
@@ -216,9 +217,12 @@ def _():
                     )
                 _margin = 0.05
                 _ymin, _ymax = ax.get_ylim()
-                _span = _ymax - _ymin
-                _lo = max(-2, _ymin - _margin * _span)
-                _hi = _ymax + _margin * _span
+                # Clamp first, then compute span so the margin doesn't inflate
+                # _hi when extreme negative values widen the raw autoscale range.
+                _lo_clamp = max(-2, _ymin)
+                _clamped_span = _ymax - _lo_clamp
+                _lo = _lo_clamp - _margin * _clamped_span
+                _hi = _ymax + _margin * _clamped_span
                 ax.set_ylim(_lo, _hi)
                 ax.yaxis.set_major_locator(_mticker.MaxNLocator(nbins=4))
                 if p.row_id == nrows - 1:
@@ -232,16 +236,17 @@ def _():
             labels = [labels[i] for i in _order]
             _ncol = legend_ncol if legend_ncol is not None else len(sources)
             _legend_rows = (len(labels) + _ncol - 1) // _ncol
+            _subplot_bottom = 0.12 + 0.08 * _legend_rows
             fig.legend(
                 handles,
                 labels,
-                loc="lower center",
+                loc="upper center",
                 ncol=_ncol,
-                bbox_to_anchor=(0.5, 0.02),
+                bbox_to_anchor=(0.5, _subplot_bottom - 0.05),
                 fontsize=_plt.rcParams["axes.labelsize"],
             )
             fig.tight_layout()
-            fig.subplots_adjust(bottom=0.12 + 0.08 * _legend_rows)
+            fig.subplots_adjust(bottom=_subplot_bottom)
             return fig
 
     return (plot_panels,)
@@ -281,7 +286,7 @@ def _(
         ]
 
     def _build_combined_panels(df, metric_labels):
-        """Build a 4-row panel spec: rows 0-1 from metric_labels, rows 2-3 from ETS specs."""
+        """Build panel spec: score rows from metric_labels, then ETS rows."""
         _score_rows = [
             {
                 "row_id": row_id,
@@ -296,9 +301,10 @@ def _(
             for row_id, (metric, label) in enumerate(metric_labels.items())
             for col_id, param in enumerate(_PARAMS)
         ]
+        _ets_offset = len(metric_labels)
         _ets_rows = [
             {
-                "row_id": ets_row + 2,
+                "row_id": ets_row + _ets_offset,
                 "col_id": col_id,
                 "param_name": param,
                 "metric": metric,
@@ -322,7 +328,7 @@ def _(
     _plt.close(_fig)
 
     _panels_skill = _build_combined_panels(
-        df_skill_all, {"RMSE": "RMSE skill", "BIAS": "Bias² skill"}
+        df_skill_all, {"RMSE": "RMSE skill"}
     )
     _fig_skill = plot_panels(
         _panels_skill, df_skill_all, skill_sources, legend_ncol=(len(skill_sources) + 1) // 2
