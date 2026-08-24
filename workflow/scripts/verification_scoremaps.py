@@ -2,10 +2,11 @@
 
 For a fixed lead time and variable, iterates over all initialisation times
 (discovered under a run directory, or taken from --reftimes for baselines),
-loads the corresponding forecast field and the matching truth slice from a
-reference zarr, maps the forecast onto the truth grid, and accumulates running
-error statistics without ever holding the full time series in memory.  The
-final BIAS / RMSE / MAE / STDE maps are written to a NetCDF file.
+loads the corresponding forecast field and the matching truth slice (from a
+reference zarr or DWH station observations via jretrieve), maps the forecast
+onto the truth grid or station locations, and accumulates running error
+statistics without ever holding the full time series in memory.  The final
+BIAS / RMSE / MAE / STDE maps are written to a NetCDF file.
 
 Forecasts load through data_input.load_forecast_data, which routes by source:
 ML run directories (GRIB files), INCA (NetCDF archive), or otherwise the ICON
@@ -261,7 +262,18 @@ def main(args: Namespace) -> None:
         truth_ds = load_truth_data(
             args.truth, reftime, [args.step], [args.param], lazy_ds=truth_lazy
         )
-        truth_ds = truth_ds.isel(time=0)
+        # For zarr, load_truth_data returns exactly one time step at valid_time.
+        # For jretrieve, it returns hourly obs from reftime to reftime+step, so
+        # we must select by valid_time rather than using isel(time=0).
+        try:
+            truth_ds = truth_ds.sel(time=valid_time)
+        except KeyError:
+            raise ValueError(
+                f"Truth has no observation at valid time {valid_time} "
+                f"(reftime={reftime.strftime(DATETIME_FMT)}, step={args.step}h). "
+                "All configured initialisations must be available; blacklist "
+                "genuinely-absent dates in the experiment config."
+            )
         truth_slice = truth_ds[args.param]
 
         if first_iter:
@@ -468,7 +480,11 @@ if __name__ == "__main__":
         "--truth",
         type=Path,
         required=True,
-        help="Path to the reference zarr dataset.",
+        help=(
+            "Path to the reference truth: a zarr dataset "
+            "(e.g. /path/to/truth.zarr) or a jretrieve selector string "
+            "(e.g. jretrievedwh:SwissMetNet)."
+        ),
     )
     parser.add_argument(
         "--step",
