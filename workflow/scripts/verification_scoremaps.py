@@ -312,6 +312,35 @@ def main(args: Namespace) -> None:
         truth_vals = truth_slice.values
         error = fcst_vals - truth_vals  # shape: spatial dims of truth
 
+        # jretrieve drops stations with all-NaN observations (dropna), so the
+        # station count can differ between reftimes. Reindex the error to the
+        # reference station set so accumulator shapes stay consistent; missing
+        # stations become NaN and are excluded by the valid mask below.
+        # 
+        # TODO: address the issue that only stations from the first reftime that
+        # is read are processed, i.e. if a station is not available from jretrieve
+        # for the first reftime, it will not enter the scoremaps computation.
+        if ref_truth_slice is not None and error.shape != ref_truth_slice.shape:
+            LOG.warning(
+                "reftime=%s: truth has %d stations vs reference %d; "
+                "reindexing error to reference station set (missing → NaN).",
+                reftime.strftime(DATETIME_FMT),
+                error.size,
+                ref_truth_slice.size,
+            )
+            ref_values_idx = ref_truth_slice.coords.get("values")
+            if ref_values_idx is not None:
+                error_da = xr.DataArray(
+                    error, dims=truth_slice.dims, coords=truth_slice.coords
+                )
+                error = error_da.reindex(values=ref_values_idx.values).values
+            else:
+                raise RuntimeError(
+                    f"Spatial shape mismatch: error {error.shape} vs reference "
+                    f"{ref_truth_slice.shape}, and truth has no 'values' index "
+                    f"to reindex by. Check truth data consistency."
+                )
+
         if first_iter:
             n_nan_mapped = int(np.isnan(fcst_vals).sum())
             LOG.info(
