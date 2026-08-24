@@ -54,7 +54,11 @@ def _(PROJECT_ROOT, Path):
 
     def _load_participant_df(path, label):
         """Load one verification .nc and return a tidy DataFrame labelled with label."""
-        _ds = _xr.open_dataset(_abs(path))
+        try:
+            _ds = _xr.open_dataset(_abs(path))
+        except Exception as e:
+            print(f"Skipping {label} ({path}): {e}")
+            return None
         [_ds] = select_best_sources([ensure_unique_lead_time(_ds)])
         _src_vals = [s for s in _ds.source.values if not str(s).startswith("truth-")]
         if not _src_vals:
@@ -77,10 +81,10 @@ def _(PROJECT_ROOT, Path):
         _df["source"] = label
         return _df.drop(columns=["stack"])
 
-    _parts = [_load_participant_df(p, lbl) for p, lbl in pairs]
+    _loaded = [(lbl, _load_participant_df(p, lbl)) for p, lbl in pairs]
 
-    df = _pd.concat([p for p in _parts if p is not None], ignore_index=True)
-    sources = [lbl for _, lbl in pairs]
+    df = _pd.concat([part for _, part in _loaded if part is not None], ignore_index=True)
+    sources = [lbl for lbl, part in _loaded if part is not None]
     return df, output_dir, sources
 
 
@@ -166,6 +170,7 @@ def _():
         must match the source values present in df.
         legend_ncol: columns in the figure legend (default: all sources in one row).
         """
+        horizontal_line = 1 if "ETS" in df["metric"] else 0
         with _plt.style.context(_mplstyle_path()):
             nrows = panels["row_id"].max() + 1
             ncols = panels["col_id"].max() + 1
@@ -194,7 +199,7 @@ def _():
                 ax.xaxis.set_major_locator(_XTICKS)
                 if p.zero_line:
                     ax.axhline(
-                        0, color="black", linestyle="dashed", linewidth=0.7, zorder=1.5
+                        horizontal_line, color="black", linestyle="dashed", linewidth=0.7, zorder=1.5
                     )
                 if p.param_text:
                     ax.text(
@@ -211,9 +216,15 @@ def _():
                     ax.set_title(
                         p.title_y, x=-0.25, y=0.5, rotation=90, va="center", loc="left"
                     )
-                ymin, ymax = ax.get_ylim()
-                ax.set_ylim(min(ymin, 0), max(ymax, 0))
-                ax.yaxis.set_major_locator(_mticker.MaxNLocator(nbins=4, prune="both"))
+                if p.zero_line:
+                    _margin = _plt.rcParams.get('axes.ymargin', 0.05)
+                    _ymin, _ymax = ax.get_ylim()
+                    _span = (_ymax - _ymin) / (1 + 2 * _margin)
+                    _lo = min(_ymin + _margin * _span, horizontal_line)
+                    _hi = max(_ymax - _margin * _span, horizontal_line)
+                    _new_span = _hi - _lo
+                    ax.set_ylim(_lo - _margin * _new_span, _hi + _margin * _new_span)
+                ax.yaxis.set_major_locator(_mticker.MaxNLocator(nbins=4))
                 if p.row_id == nrows - 1:
                     ax.set_xlabel("Lead time (h)")
             axes[0, 0].set_xlim(-1, 126)
@@ -268,7 +279,7 @@ def _(
                 "param_text": "",
                 "title_x": _param_label(param) if row_id == 0 else "",
                 "title_y": metric if col_id == 0 else "",
-                "zero_line": metric == "BIAS",
+                "zero_line": True,
             }
             for row_id, metric in enumerate(_METRICS)
             for col_id, param in enumerate(_PARAMS)
