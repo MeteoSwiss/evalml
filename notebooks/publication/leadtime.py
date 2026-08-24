@@ -170,7 +170,6 @@ def _():
         must match the source values present in df.
         legend_ncol: columns in the figure legend (default: all sources in one row).
         """
-        horizontal_line = 1 if "ETS" in df["metric"] else 0
         with _plt.style.context(_mplstyle_path()):
             nrows = panels["row_id"].max() + 1
             ncols = panels["col_id"].max() + 1
@@ -199,7 +198,7 @@ def _():
                 ax.xaxis.set_major_locator(_XTICKS)
                 if p.zero_line:
                     ax.axhline(
-                        horizontal_line, color="black", linestyle="dashed", linewidth=0.7, zorder=1.5
+                        p.horizontal_line, color="black", linestyle="dashed", linewidth=0.7, zorder=1.5
                     )
                 if p.param_text:
                     ax.text(
@@ -220,8 +219,8 @@ def _():
                     _margin = _plt.rcParams.get('axes.ymargin', 0.05)
                     _ymin, _ymax = ax.get_ylim()
                     _span = (_ymax - _ymin) / (1 + 2 * _margin)
-                    _lo = min(_ymin + _margin * _span, horizontal_line)
-                    _hi = max(_ymax - _margin * _span, horizontal_line)
+                    _lo = min(_ymin + _margin * _span, p.horizontal_line)
+                    _hi = max(_ymax - _margin * _span, p.horizontal_line)
                     _new_span = _hi - _lo
                     ax.set_ylim(_lo - _margin * _new_span, _hi + _margin * _new_span)
                 ax.yaxis.set_major_locator(_mticker.MaxNLocator(nbins=4))
@@ -267,10 +266,26 @@ def _(
     from evalml.publication.style import param_label as _param_label
 
     _PARAMS = ["T_2M", "TOT_PREC1", "SP_10M"]
-    _METRICS = ["RMSE", "BIAS"]
 
-    _panels = _pd.DataFrame(
-        [
+    def _find_ets(metrics, op, threshold):
+        return next((m for m in metrics if m.endswith(f"{op} {threshold}")), None)
+
+    def _ets_specs(df):
+        _t2m = sorted(m for m in df[df["param"] == "T_2M"]["metric"].unique() if "ETS" in m)
+        _prec = sorted(m for m in df[df["param"] == "TOT_PREC1"]["metric"].unique() if "ETS" in m)
+        _wind = sorted(m for m in df[df["param"] == "SP_10M"]["metric"].unique() if "ETS" in m)
+        return [
+            (0, 0, "T_2M", _find_ets(_t2m, "<", "273.15"), f"{_param_label('T_2M')} < 0 °C"),
+            (0, 1, "TOT_PREC1", _find_ets(_prec, ">", "0.0"), f"{_param_label('TOT_PREC1')} > 0 mm"),
+            (0, 2, "SP_10M", _find_ets(_wind, ">", "5.0"), f"{_param_label('SP_10M')} > 5 m/s"),
+            (1, 0, "T_2M", _find_ets(_t2m, ">", "298.15"), f"{_param_label('T_2M')} > 25 °C"),
+            (1, 1, "TOT_PREC1", _find_ets(_prec, ">", "5.0"), f"{_param_label('TOT_PREC1')} > 5 mm"),
+            (1, 2, "SP_10M", _find_ets(_wind, ">", "10.0"), f"{_param_label('SP_10M')} > 10 m/s"),
+        ]
+
+    def _build_combined_panels(df, metric_labels):
+        """Build a 4-row panel spec: rows 0-1 from metric_labels, rows 2-3 from ETS specs."""
+        _score_rows = [
             {
                 "row_id": row_id,
                 "col_id": col_id,
@@ -278,239 +293,54 @@ def _(
                 "metric": metric,
                 "param_text": "",
                 "title_x": _param_label(param) if row_id == 0 else "",
-                "title_y": metric if col_id == 0 else "",
+                "title_y": label if col_id == 0 else "",
                 "zero_line": True,
+                "horizontal_line": 0,
             }
-            for row_id, metric in enumerate(_METRICS)
+            for row_id, (metric, label) in enumerate(metric_labels.items())
             for col_id, param in enumerate(_PARAMS)
         ]
-    )
+        _ets_rows = [
+            {
+                "row_id": ets_row + 2,
+                "col_id": col_id,
+                "param_name": param,
+                "metric": metric,
+                "param_text": param_text,
+                "title_x": "",
+                "title_y": "ETS" if col_id == 0 and ets_row == 0 else "",
+                "zero_line": True,
+                "horizontal_line": 1,
+            }
+            for ets_row, col_id, param, metric, param_text in _ets_specs(df)
+        ]
+        return _pd.DataFrame(_score_rows + _ets_rows)
 
     _out = Path(output_dir)
     _out.mkdir(parents=True, exist_ok=True)
+
+    _panels = _build_combined_panels(df_all, {"RMSE": "RMSE", "BIAS": "BIAS"})
     _fig = plot_panels(_panels, df_all, sources, legend_ncol=(len(sources) + 1) // 2)
-    _fname = _out / "publication_figures_rmse_bias.pdf"
+    _fname = _out / "publication_figures.pdf"
     _fig.savefig(_fname, bbox_inches="tight")
     _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
     _plt.close(_fig)
 
-    import matplotlib.pyplot as _plt
-    import pandas as _pd
-    from evalml.publication.style import param_label as _param_label
-
-    def _find_ets(metrics, op, threshold):
-        return next((m for m in metrics if m.endswith(f"{op} {threshold}")), None)
-
-    _t2m_ets = sorted(
-        m for m in df_all[df_all["param"] == "T_2M"]["metric"].unique() if "ETS" in m
+    _panels_skill = _build_combined_panels(
+        df_skill_all, {"RMSE": "RMSE skill", "BIAS": "Bias² skill"}
     )
-    _prec_ets = sorted(
-        m
-        for m in df_all[df_all["param"] == "TOT_PREC1"]["metric"].unique()
-        if "ETS" in m
+    _fig_skill = plot_panels(
+        _panels_skill, df_skill_all, skill_sources, legend_ncol=(len(skill_sources) + 1) // 2
     )
-    _wind_ets = sorted(
-        m for m in df_all[df_all["param"] == "SP_10M"]["metric"].unique() if "ETS" in m
-    )
-
-    _specs = [
-        (
-            0,
-            0,
-            "T_2M",
-            _find_ets(_t2m_ets, "<", "273.15"),
-            f"{_param_label('T_2M')} < 0 °C",
-        ),
-        (
-            0,
-            1,
-            "TOT_PREC1",
-            _find_ets(_prec_ets, ">", "0.0"),
-            f"{_param_label('TOT_PREC1')} > 0 mm",
-        ),
-        (
-            0,
-            2,
-            "SP_10M",
-            _find_ets(_wind_ets, ">", "5.0"),
-            f"{_param_label('SP_10M')} > 5 m/s",
-        ),
-        (
-            1,
-            0,
-            "T_2M",
-            _find_ets(_t2m_ets, ">", "298.15"),
-            f"{_param_label('T_2M')} > 25 °C",
-        ),
-        (
-            1,
-            1,
-            "TOT_PREC1",
-            _find_ets(_prec_ets, ">", "5.0"),
-            f"{_param_label('TOT_PREC1')} > 5 mm",
-        ),
-        (
-            1,
-            2,
-            "SP_10M",
-            _find_ets(_wind_ets, ">", "10.0"),
-            f"{_param_label('SP_10M')} > 10 m/s",
-        ),
-    ]
-    _panels = _pd.DataFrame(
-        [
-            {
-                "row_id": row_id,
-                "col_id": col_id,
-                "param_name": param,
-                "metric": metric,
-                "param_text": param_text,
-                "title_x": _param_label(param) if row_id == 0 else "",
-                "title_y": "ETS" if col_id == 0 else "",
-                "zero_line": False,
-            }
-            for row_id, col_id, param, metric, param_text in _specs
-        ]
-    )
-
-    _out = Path(output_dir)
-    _out.mkdir(parents=True, exist_ok=True)
-    _fig = plot_panels(_panels, df_all, [s for s in sources if "AIFS" not in s])
-    _fname = _out / "publication_figures_ets.pdf"
-    _fig.savefig(_fname, bbox_inches="tight")
-    _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
-    _plt.close(_fig)
-
-    import matplotlib.pyplot as _plt
-    import pandas as _pd
-    from evalml.publication.style import param_label as _param_label
-
-    _PARAMS = ["T_2M", "TOT_PREC1", "SP_10M"]
-    _METRICS = ["RMSE", "BIAS"]
-    _SKILL_LABELS = {"RMSE": "RMSE skill", "BIAS": "Bias² skill"}
-
-    _panels = _pd.DataFrame(
-        [
-            {
-                "row_id": row_id,
-                "col_id": col_id,
-                "param_name": param,
-                "metric": metric,
-                "param_text": "",
-                "title_x": _param_label(param) if row_id == 0 else "",
-                "title_y": _SKILL_LABELS[metric] if col_id == 0 else "",
-                "zero_line": True,
-            }
-            for row_id, metric in enumerate(_METRICS)
-            for col_id, param in enumerate(_PARAMS)
-        ]
-    )
-
-    _out = Path(output_dir)
-    _out.mkdir(parents=True, exist_ok=True)
-    _fig = plot_panels(_panels, df_skill_all, skill_sources)
-    _fname = _out / "publication_figures_rmse_bias_skill.pdf"
-    _fig.savefig(_fname, bbox_inches="tight")
-    _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
-    _plt.close(_fig)
-
-    import matplotlib.pyplot as _plt
-    import pandas as _pd
-    from evalml.publication.style import param_label as _param_label
-
-    def _find_ets(metrics, op, threshold):
-        return next((m for m in metrics if m.endswith(f"{op} {threshold}")), None)
-
-    _t2m_ets = sorted(
-        m
-        for m in df_skill_all[df_skill_all["param"] == "T_2M"]["metric"].unique()
-        if "ETS" in m
-    )
-    _prec_ets = sorted(
-        m
-        for m in df_skill_all[df_skill_all["param"] == "TOT_PREC1"]["metric"].unique()
-        if "ETS" in m
-    )
-    _wind_ets = sorted(
-        m
-        for m in df_skill_all[df_skill_all["param"] == "SP_10M"]["metric"].unique()
-        if "ETS" in m
-    )
-
-    _specs = [
-        (
-            0,
-            0,
-            "T_2M",
-            _find_ets(_t2m_ets, "<", "273.15"),
-            f"{_param_label('T_2M')} < 0 °C",
-        ),
-        (
-            0,
-            1,
-            "TOT_PREC1",
-            _find_ets(_prec_ets, ">", "0.0"),
-            f"{_param_label('TOT_PREC1')} > 0 mm",
-        ),
-        (
-            0,
-            2,
-            "SP_10M",
-            _find_ets(_wind_ets, ">", "5.0"),
-            f"{_param_label('SP_10M')} > 5 m/s",
-        ),
-        (
-            1,
-            0,
-            "T_2M",
-            _find_ets(_t2m_ets, ">", "298.15"),
-            f"{_param_label('T_2M')} > 25 °C",
-        ),
-        (
-            1,
-            1,
-            "TOT_PREC1",
-            _find_ets(_prec_ets, ">", "5.0"),
-            f"{_param_label('TOT_PREC1')} > 5 mm",
-        ),
-        (
-            1,
-            2,
-            "SP_10M",
-            _find_ets(_wind_ets, ">", "10.0"),
-            f"{_param_label('SP_10M')} > 10 m/s",
-        ),
-    ]
-    _panels = _pd.DataFrame(
-        [
-            {
-                "row_id": row_id,
-                "col_id": col_id,
-                "param_name": param,
-                "metric": metric,
-                "param_text": param_text,
-                "title_x": _param_label(param) if row_id == 0 else "",
-                "title_y": "ETS skill" if col_id == 0 else "",
-                "zero_line": True,
-            }
-            for row_id, col_id, param, metric, param_text in _specs
-        ]
-    )
-
-    _out = Path(output_dir)
-    _out.mkdir(parents=True, exist_ok=True)
-    _fig = plot_panels(_panels, df_skill_all, [s for s in skill_sources if "AIFS" not in s])
-    _fname = _out / "publication_figures_ets_skill.pdf"
-    _fig.savefig(_fname, bbox_inches="tight")
-    _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
-    _plt.close(_fig)
+    _fname_skill = _out / "publication_figures_skill.pdf"
+    _fig_skill.savefig(_fname_skill, bbox_inches="tight")
+    _fig_skill.savefig(_fname_skill.with_suffix(".png"), dpi=200, bbox_inches="tight")
+    _plt.close(_fig_skill)
 
     (_out / "publication_figures.html").write_text(
         "<!doctype html><html><body>"
-        '<img src="publication_figures_rmse_bias.png" style="max-width:100%"><br>'
-        '<img src="publication_figures_ets.png" style="max-width:100%"><br>'
-        '<img src="publication_figures_rmse_bias_skill.png" style="max-width:100%"><br>'
-        '<img src="publication_figures_ets_skill.png" style="max-width:100%">'
+        '<img src="publication_figures.png" style="max-width:100%"><br>'
+        '<img src="publication_figures_skill.png" style="max-width:100%">'
         "</body></html>"
     )
 

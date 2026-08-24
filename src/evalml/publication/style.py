@@ -25,7 +25,7 @@ COLOR_OBS = "#4ecb8d"
 COLOR_CH1 = "#008dff"
 COLOR_CH2 = "#003a7d"
 COLOR_VARDA = "#d83034"
-COLOR_AIFS = "#8923c4"
+COLOR_AIFS = "#78399C"
 
 # Skill score colormap: red = baseline better, blue = model better.
 # ColorBrewer RdBu palette. The deep RdBu ends (#b2182b/#2166ac) are reserved for
