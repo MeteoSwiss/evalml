@@ -352,25 +352,16 @@ def unregister(
 ):
     from evalml import store as experiment_store
 
-    argv = [
-        "unregister",
+    experiment_store.cmd_unregister(
         name,
-        "--store",
-        str(store_dir),
-        "--models-store",
-        str(models_store),
-    ]
-    if reason:
-        argv += ["--reason", reason]
-    if dry_run:
-        argv.append("--dry-run")
-    if yes:
-        argv.append("--yes")
-    if keep_results:
-        argv.append("--keep-results")
-    if no_publish:
-        argv.append("--no-publish")
-    experiment_store.main(argv)
+        store=store_dir,
+        models_store=models_store,
+        reason=reason,
+        dry_run=dry_run,
+        yes=yes,
+        keep_results=keep_results,
+        no_publish=no_publish,
+    )
 
 
 @cli.command("list", help="List the experiments registered in the experiment store.")
@@ -385,14 +376,13 @@ def unregister(
 def list_experiments(as_json, rebuild, columns, store_dir, models_store):
     from evalml import store as experiment_store
 
-    argv = ["list", "--store", str(store_dir), "--models-store", str(models_store)]
-    if as_json:
-        argv.append("--json")
-    if rebuild:
-        argv.append("--rebuild")
-    if columns:
-        argv += ["--columns", columns]
-    experiment_store.main(argv)
+    experiment_store.cmd_list(
+        store=store_dir,
+        models_store=models_store,
+        as_json=as_json,
+        rebuild_index=rebuild,
+        columns=columns or experiment_store.DEFAULT_COLUMNS,
+    )
 
 
 @cli.command(help="Publish the experiment store's index to its Confluence page.")
@@ -415,17 +405,12 @@ def list_experiments(as_json, rebuild, columns, store_dir, models_store):
 def publish(page, email, dry_run, store_dir):
     from evalml import store as experiment_store
 
-    if store_dir is None:
-        store_dir = experiment_store.STORE
-
-    argv = ["publish", "--store", str(store_dir)]
-    if page:
-        argv += ["--page", page]
-    if email:
-        argv += ["--email", email]
-    if dry_run:
-        argv.append("--dry-run")
-    experiment_store.main(argv)
+    experiment_store.cmd_publish(
+        store=store_dir if store_dir is not None else experiment_store.STORE,
+        page=page or experiment_store.EXPERIMENTS_PAGE,
+        email=email,
+        dry_run=dry_run,
+    )
 
 
 @cli.command(help="Make a specific file from a workflow defined in the YAML file.")

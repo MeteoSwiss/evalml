@@ -97,6 +97,15 @@ def utf8(stream):
     )
 
 
+def ensure_utf8():
+    """Install the UTF-8 wrappers whichever entry point runs first — `python store.py`
+    and the click commands both pass through the cmd_* functions."""
+    if "utf" not in ((getattr(sys.stdout, "encoding", "") or "").lower()):
+        sys.stdout = utf8(sys.stdout)
+    if "utf" not in ((getattr(sys.stderr, "encoding", "") or "").lower()):
+        sys.stderr = utf8(sys.stderr)
+
+
 def now():
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -614,16 +623,7 @@ def publish_quietly(store):
         log("%s is not the default store — leaving the Confluence page alone" % store)
         return
     try:
-        cmd_publish(
-            argparse.Namespace(
-                store=Path(store),
-                page=EXPERIMENTS_PAGE,
-                site=SITE,
-                email="",
-                token_file=TOKEN_FILE,
-                dry_run=False,
-            )
-        )
+        cmd_publish(store=Path(store))
     except SystemExit as exc:
         log("WARNING: the Confluence page was not updated — %s" % str(exc).strip())
         log(
@@ -717,18 +717,27 @@ def confirm(question):
         return False
 
 
-def cmd_unregister(args):
+def cmd_unregister(
+    name,
+    store=STORE,
+    models_store=MODELS_STORE,
+    reason="",
+    dry_run=False,
+    yes=False,
+    keep_results=False,
+    no_publish=False,
+):
     """Order matters, in the opposite direction to registering: checks first, the rename
     is the pivot (reversible), derived state next, and the copied results are deleted
     last — only once everything agrees the experiment is gone. A failure halfway always
     fails with the data still there, a rename away from being back."""
-    name = args.name
-    target = Path(args.store) / name
-    tomb = orphan(args.store, name)
+    ensure_utf8()
+    target = Path(store) / name
+    tomb = orphan(store, name)
     if not target.exists():
         fail(
             "%s does not exist — nothing to unregister.\n  `evalml list` shows what is in %s"
-            % (target, args.store)
+            % (target, store)
         )
     manifest = check_store_copy(target, name)
     if tomb.exists():
@@ -741,7 +750,7 @@ def cmd_unregister(args):
     files = payload(target)
     size = measure(target)
     lines = ["about to unregister %s:" % name]
-    if args.keep_results:
+    if keep_results:
         lines.append(
             "  store       %s -> %s, contents kept (--keep-results)"
             % (target, tomb.name)
@@ -752,57 +761,52 @@ def cmd_unregister(args):
             "  DELETES     %s — %s" % (human(size), ", ".join(f.name for f in files))
         )
     for model in models:
-        lines.append(
-            "  removes     %s" % model_link_path(args.models_store, model, name)
-        )
-    lines.append(
-        "  index       a line in %s takes it back out" % index_path(args.store)
-    )
+        lines.append("  removes     %s" % model_link_path(models_store, model, name))
+    lines.append("  index       a line in %s takes it back out" % index_path(store))
     lines.append("  the name %s is retired for good" % name)
     log("\n".join(lines))
-    if args.dry_run:
+    if dry_run:
         log("dry run — nothing moved, nothing deleted, nothing written")
         return
-    if not args.yes and not confirm("Unregister %s?" % name):
+    if not yes and not confirm("Unregister %s?" % name):
         fail("cancelled — nothing was touched")
 
     # 1. The pivot: puts the experiment out of reach of anything reading the store.
     target.rename(tomb)
     os.chmod(str(tomb), 0o755)
-    write_note(tomb, name, manifest, args.reason, args.keep_results)
+    write_note(tomb, name, manifest, reason, keep_results)
     log("moved to %s" % tomb)
 
     # 2. The index. Appended, never edited; derived, so it may not fail the unregistration.
     try:
         append(
-            args.store,
+            store,
             "unregister",
             {
                 "name": name,
                 "identity": manifest.get("identity") or "",
                 "location": str(tomb),
-                "reason": args.reason,
-                "kept": args.keep_results,
+                "reason": reason,
+                "kept": keep_results,
             },
         )
     except OSError as exc:
         log(
             "WARNING: %s was not taken out of %s: %s\n  the unregistration is fine — "
-            "`evalml list --rebuild` fixes the index"
-            % (name, index_path(args.store), exc)
+            "`evalml list --rebuild` fixes the index" % (name, index_path(store), exc)
         )
 
     # 3. Our symlinks in the model store. Tolerate everything: report, carry on.
     for model in models:
-        problem = unlink_experiment(args.models_store, model, name)
+        problem = unlink_experiment(models_store, model, name)
         if problem:
             log("WARNING: %s" % problem)
         else:
-            log("removed %s" % model_link_path(args.models_store, model, name))
-    models_page_hint(args.models_store, models)
+            log("removed %s" % model_link_path(models_store, model, name))
+    models_page_hint(models_store, models)
 
     # 4. Last, and only now: the copied results.
-    if not args.keep_results:
+    if not keep_results:
         for path in payload(tomb):
             if path.is_dir():
                 _rmtree_readonly(path)
@@ -811,8 +815,8 @@ def cmd_unregister(args):
                 path.unlink()
         log("deleted the results under %s" % tomb)
 
-    if not args.no_publish:
-        publish_quietly(args.store)
+    if not no_publish:
+        publish_quietly(store)
     print(name)
 
 
@@ -926,27 +930,34 @@ def render_table(records, columns, width):
     return "\n".join(lines)
 
 
-def cmd_list(args):
-    columns = [column.strip() for column in args.columns.split(",") if column.strip()]
-    unknown = [column for column in columns if column not in COLUMNS]
+def cmd_list(
+    store=STORE,
+    models_store=MODELS_STORE,
+    as_json=False,
+    rebuild_index=False,
+    columns=DEFAULT_COLUMNS,
+):
+    ensure_utf8()
+    wanted = [column.strip() for column in columns.split(",") if column.strip()]
+    unknown = [column for column in wanted if column not in COLUMNS]
     if unknown:
         fail(
             "no such column: %s (available: %s)"
             % (", ".join(unknown), ", ".join(COLUMNS))
         )
-    if not Path(args.store).is_dir():
-        fail("store directory %s does not exist" % args.store)
-    store = Path(os.path.abspath(str(args.store)))
+    if not Path(store).is_dir():
+        fail("store directory %s does not exist" % store)
+    store = Path(os.path.abspath(str(store)))
 
     retired, broken = [], []
-    if args.rebuild:
+    if rebuild_index:
         records, problems = scan(store)
         try:
             path = rebuild(store, records)
         except OSError as exc:
             fail("cannot write the index: %s" % exc)
         log("rebuilt %s from %d experiment directory(s)" % (path, len(records)))
-        problems += repair_links(args.models_store, records)
+        problems += repair_links(models_store, records)
     else:
         index = load(store)
         records, retired, broken = (
@@ -958,7 +969,7 @@ def cmd_list(args):
 
     records.sort(key=lambda r: r.get("registered") or "", reverse=True)
 
-    if args.json:
+    if as_json:
         print(
             json.dumps(
                 {
@@ -985,7 +996,7 @@ def cmd_list(args):
         if records:
             print(
                 render_table(
-                    records, columns, shutil.get_terminal_size((120, 24)).columns
+                    records, wanted, shutil.get_terminal_size((120, 24)).columns
                 )
             )
     for problem in problems:
@@ -1002,16 +1013,16 @@ def cmd_list(args):
 # page, not the page; storage-format XHTML over the v2 REST API, stdlib urllib only.
 
 
-def credentials(args):
+def credentials(email="", token_file=TOKEN_FILE):
     """The `email:token` pair Atlassian Cloud authenticates with. The token file may hold
     a bare token or `email:token`; `git config user.email` is the last resort. The token
     is never printed, logged, or passed on a command line."""
     token = os.environ.get("ATLASSIAN_TOKEN") or ""
-    email, source = args.email, "--email"
+    source = "--email"
     if not email:
         email, source = os.environ.get("ATLASSIAN_EMAIL") or "", "$ATLASSIAN_EMAIL"
     if not token:
-        path = args.token_file
+        path = token_file
         if not path.is_file():
             fail("no API token: %s does not exist (or set $ATLASSIAN_TOKEN)" % path)
         try:
@@ -1122,13 +1133,7 @@ class Confluence(object):
 
 
 def escape(text):
-    return (
-        str(text)
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
+    return html.escape(str(text))
 
 
 def paragraphs(*blocks):
@@ -1287,24 +1292,29 @@ def same_table(existing, replacement):
     return normal(old.group(0)) == normal(new.group(0))
 
 
-def cmd_publish(args):
+def cmd_publish(
+    store=STORE,
+    page=EXPERIMENTS_PAGE,
+    site=SITE,
+    email="",
+    token_file=TOKEN_FILE,
+    dry_run=False,
+):
+    ensure_utf8()
     # The page describes *the* store; a test store has no business rewriting it.
-    if (
-        os.path.abspath(str(args.store)) != os.path.abspath(str(STORE))
-        and not args.dry_run
-    ):
+    if os.path.abspath(str(store)) != os.path.abspath(str(STORE)) and not dry_run:
         fail(
             "%s is not the default store (%s) — refusing to rewrite the shared page from it"
-            % (args.store, STORE)
+            % (store, STORE)
         )
-    index = index_path(args.store)
+    index = index_path(store)
     if not index.is_file():
         fail(
             "%s does not exist — there is nothing to publish, and publishing an empty table "
             "over a good one would be worse than doing nothing.\n"
             "  Build it first: evalml list --rebuild" % index
         )
-    loaded = load(args.store)
+    loaded = load(store)
     records = sorted(
         loaded["experiments"], key=lambda r: r.get("registered") or "", reverse=True
     )
@@ -1320,25 +1330,23 @@ def cmd_publish(args):
         )
     records = [r for r in records if r not in missing]
 
-    replacement = section(records, args.store, loaded["retired"])
-    if args.dry_run:
+    replacement = section(records, store, loaded["retired"])
+    if dry_run:
         print(replacement)
-        log(
-            "dry run — %d experiment(s), nothing sent to %s" % (len(records), args.site)
-        )
+        log("dry run — %d experiment(s), nothing sent to %s" % (len(records), site))
         return
 
-    if not (args.page or "").strip():
+    if not (page or "").strip():
         fail(
             "the Experiments page has not been created yet — create it in Confluence, then "
             "set EXPERIMENTS_PAGE in %s (or pass --page)" % __file__
         )
 
-    email, token, source = credentials(args)
+    email, token, source = credentials(email, token_file)
     log("authenticating as %s%s" % (email, " (%s)" % source if source else ""))
-    confluence = Confluence(args.site, email, token)
+    confluence = Confluence(site, email, token)
 
-    page = page_id(args.page)
+    page = page_id(page)
     current = confluence.get(page)
     title = current["title"]
     version = current["version"]["number"]
@@ -1373,7 +1381,7 @@ def cmd_publish(args):
             len(records),
             title,
             published,
-            args.site + where if where else "%s/pages/%s" % (args.site, page),
+            site + where if where else "%s/pages/%s" % (site, page),
         )
     )
 
@@ -1424,7 +1432,15 @@ def main(argv=None):
         default=DEFAULT_COLUMNS,
         help="comma-separated, from: %s" % ", ".join(COLUMNS),
     )
-    lister.set_defaults(func=cmd_list)
+    lister.set_defaults(
+        func=lambda a: cmd_list(
+            store=a.store,
+            models_store=a.models_store,
+            as_json=a.json,
+            rebuild_index=a.rebuild,
+            columns=a.columns,
+        )
+    )
 
     remover = commands.add_parser(
         "unregister", help="take an experiment back out of the store"
@@ -1458,7 +1474,18 @@ def main(argv=None):
     remover.add_argument(
         "--no-publish", action="store_true", help="do not update the Confluence page"
     )
-    remover.set_defaults(func=cmd_unregister)
+    remover.set_defaults(
+        func=lambda a: cmd_unregister(
+            a.name,
+            store=a.store,
+            models_store=a.models_store,
+            reason=a.reason,
+            dry_run=a.dry_run,
+            yes=a.yes,
+            keep_results=a.keep_results,
+            no_publish=a.no_publish,
+        )
+    )
 
     publisher = commands.add_parser(
         "publish", help="publish the index to the Confluence page"
@@ -1479,12 +1506,20 @@ def main(argv=None):
         action="store_true",
         help="print what would be published, send nothing",
     )
-    publisher.set_defaults(func=cmd_publish)
+    publisher.set_defaults(
+        func=lambda a: cmd_publish(
+            store=a.store,
+            page=a.page,
+            site=a.site,
+            email=a.email,
+            token_file=a.token_file,
+            dry_run=a.dry_run,
+        )
+    )
 
     args = parser.parse_args(argv)
     args.func(args)
 
 
 if __name__ == "__main__":
-    sys.stdout, sys.stderr = utf8(sys.stdout), utf8(sys.stderr)
     main()
