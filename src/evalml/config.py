@@ -1,9 +1,13 @@
+import re
 from pathlib import Path
 from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
+
+MODEL_REGISTRY_ROOT = Path("/store_new/mch/msopr/ml/models")
+REGISTERED_MODEL_PATTERN = re.compile(r"^[a-z]+-[a-z]+$")
 
 PREDEFINED_REGIONS: Dict[str, List[float]] = {
     "global": [-180, 180, -90, 90],
@@ -76,7 +80,9 @@ class RunConfig(BaseModel):
     )
     checkpoint: str = Field(
         ...,
-        description="The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
+        description="The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, "
+        "a local checkpoint path, or a registered model name (e.g. 'amber-ridge') resolved "
+        f"against {MODEL_REGISTRY_ROOT}.",
     )
     label: str | None = Field(
         None,
@@ -109,6 +115,23 @@ class RunConfig(BaseModel):
     config: Dict[str, Any] | str
 
     model_config = {"extra": "forbid"}
+
+    @field_validator("checkpoint")
+    def resolve_registered_model(cls, v: str) -> str:
+        """Resolve a registered model name (e.g. 'amber-ridge') to its checkpoint path."""
+        if not REGISTERED_MODEL_PATTERN.match(v):
+            return v
+        model_dir = MODEL_REGISTRY_ROOT / v
+        if not model_dir.is_dir():
+            raise ValueError(
+                f"Registered model '{v}' not found in the model registry: {model_dir}"
+            )
+        checkpoint = model_dir / "inference-last.ckpt"
+        if not checkpoint.exists():
+            raise ValueError(
+                f"Registered model '{v}' has no 'inference-last.ckpt' in {model_dir}"
+            )
+        return str(checkpoint)
 
     @field_validator("steps")
     def validate_steps(cls, v: str) -> str:

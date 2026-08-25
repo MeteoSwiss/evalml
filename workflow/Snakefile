@@ -137,9 +137,22 @@ onerror:
 SCOREMAPS_CONFIGS = config.get("experiment", {}).get("scoremaps") or {}
 
 
+rule experiment_config:
+    """Copy the config into the results directory, so the results are self-describing
+and registerable into the experiment store (`evalml register`)."""
+    input:
+        CONFIG_FILE,
+    output:
+        RESULTS_DIR / "config.yaml",
+    localrule: True
+    shell:
+        "cp {input} {output}"
+
+
 rule experiment_all:
     """Target rule for experiment workflow."""
     input:
+        rules.experiment_config.output,
         expand(
             rules.report_experiment_dashboard.output,
             experiment=EXPERIMENT_NAME,
