@@ -80,6 +80,19 @@ REGION_LABELS = {
     "alpen": "Alps"
 }
 
+# Physical units per parameter — used to annotate threshold-based metric labels.
+PARAM_UNITS = {
+    "T_2M": "K",
+    "TD_2M": "K",
+    "TOT_PREC1": "mm",
+    "TOT_PREC6": "mm",
+    "SP_10M": "m/s",
+    "DD_10M": "°",
+    "U_10M": "m/s",
+    "V_10M": "m/s",
+    "PMSL": "hPa",
+}
+
 # Human-readable variable names (used for panel titles / labels).
 PARAM_LABELS = {
     "T_2M": "2m Temperature",
