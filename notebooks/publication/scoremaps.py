@@ -21,6 +21,7 @@ def _():
 
     import logging
 
+    import cartopy.crs as ccrs
     import earthkit.plots as ekp
     import matplotlib.colors as mcolors
     import numpy as np
@@ -76,6 +77,7 @@ def _():
         SKILL_GREY,
         SKILL_LEVELS,
         StatePlotter,
+        ccrs,
         ekp,
         mcolors,
         np,
@@ -117,6 +119,39 @@ def _(PROJECT_ROOT):
         PROJECT_ROOT / m.scoremap_path(base, p, lt) for lt in leadtimes for p in params
     ]
     n_params = len(params)
+
+    # Optional station-based scoremaps: look for a stations manifest containing
+    # the same run/baseline IDs. If found, build parallel file lists (may include
+    # paths that don't exist – missing files are handled gracefully at plot time).
+    station_candidate_files = None
+    station_baseline_files = None
+    _station_manifests = [
+        PROJECT_ROOT / f"output/manifests/{name}"
+        for name in [
+            "manifest_varda-single_paper_forecaster_stations_scoremaps.json",
+            "manifest_varda-single_paper_forecaster_stations.json",
+        ]
+    ]
+    for _smp in _station_manifests:
+        if not _smp.exists():
+            continue
+        _sm_st = load_manifest(_smp)
+        if _sm_st.truth.get("gridded", True):
+            continue  # must be station-based
+        _by_id = {p.id: p for p in _sm_st.participants()}
+        _st_cand = _by_id.get(cand.id)
+        _st_base = _by_id.get(base.id)
+        if _st_cand and _st_base:
+            station_candidate_files = [
+                PROJECT_ROOT / _sm_st.scoremap_path(_st_cand, p, lt)
+                for lt in leadtimes for p in params
+            ]
+            station_baseline_files = [
+                PROJECT_ROOT / _sm_st.scoremap_path(_st_base, p, lt)
+                for lt in leadtimes for p in params
+            ]
+            break
+
     return (
         baseline_files,
         baseline_label,
@@ -129,6 +164,8 @@ def _(PROJECT_ROOT):
         region,
         scores,
         season,
+        station_baseline_files,
+        station_candidate_files,
     )
 
 
@@ -151,6 +188,7 @@ def _(
     baseline_label,
     candidate_files,
     candidate_label,
+    ccrs,
     ekp,
     leadtimes,
     mcolors,
@@ -162,6 +200,8 @@ def _(
     region,
     scores,
     season,
+    station_baseline_files,
+    station_candidate_files,
     to_hex,
     xr,
 ):
@@ -228,6 +268,60 @@ def _(
             base_v = _load_raw(base_file, score=metric, **kw)
             return 1.0 - cand_v / base_v
 
+    def _load_station_raw(nc_file: Path, param: str, score: str, season: str, init_hour: int):
+        """Return (vals, lons, lats) from a station scoremap, or None if file missing."""
+        if not Path(nc_file).exists():
+            return None
+        ds = xr.open_dataset(nc_file)
+        var = f"{param}.{score}"
+        if var not in ds:
+            return None
+        vals = ds[var].sel(season=season, init_hour=init_hour).values
+        lons = ds["longitude"].values
+        lats = ds["latitude"].values
+        return vals, lons, lats
+
+    def _compute_station_panel(
+        metric: str,
+        cand_file: Path,
+        base_file: Path,
+        param: str,
+        season: str,
+        init_hour: int,
+    ):
+        """Compute skill at station locations. Returns (skill_vals, lons, lats) or None."""
+        kw = dict(param=param, season=season, init_hour=init_hour)
+        try:
+            with np.errstate(invalid="ignore", divide="ignore"):
+                if metric == "MSE_SKILL":
+                    res_c = _load_station_raw(cand_file, score="RMSE", **kw)
+                    res_b = _load_station_raw(base_file, score="RMSE", **kw)
+                    if res_c is None or res_b is None:
+                        return None
+                    rmse_c, lons, lats = res_c
+                    rmse_b = res_b[0]
+                    return 1.0 - rmse_c**2 / rmse_b**2, lons, lats
+                if metric == "BIAS_CONTRIB":
+                    res_c = _load_station_raw(cand_file, score="BIAS", **kw)
+                    res_b = _load_station_raw(base_file, score="BIAS", **kw)
+                    res_rb = _load_station_raw(base_file, score="RMSE", **kw)
+                    if res_c is None or res_b is None or res_rb is None:
+                        return None
+                    bias_c, lons, lats = res_c
+                    bias_b = res_b[0]
+                    rmse_b = res_rb[0]
+                    return (bias_b**2 - bias_c**2) / rmse_b**2, lons, lats
+                res_c = _load_station_raw(cand_file, score=metric, **kw)
+                res_b = _load_station_raw(base_file, score=metric, **kw)
+                if res_c is None or res_b is None:
+                    return None
+                cand_v, lons, lats = res_c
+                base_v = res_b[0]
+                return 1.0 - cand_v / base_v, lons, lats
+        except Exception as exc:
+            LOG.warning("Station panel skipped (%s): %s", metric, exc)
+            return None
+
     def _remove_latlon_labels(ax) -> None:
         for child in getattr(ax, "_children", []) + getattr(ax, "_gridliners", []):
             if not isinstance(child, Gridliner):
@@ -260,10 +354,15 @@ def _(
         skill_norm,
         candidate_label,
         baseline_label,
+        station_arrays=None,
+        show_field=True,
     ):
         """Plot a grid of skill score maps.
 
-        skill_arrays : List[List[np.ndarray]], indexed [row][col].
+        skill_arrays   : List[List[np.ndarray]], indexed [row][col].
+        station_arrays : optional List[List[(skill_vals, lons, lats) | None]], same shape.
+                         When provided, station skill scores are overlaid as scatter points.
+        show_field     : if False, skip plotting the gridded field (station-only variant).
         row_labels / col_labels : matching label strings for margin annotations.
         """
         nrows = len(row_labels)
@@ -292,12 +391,27 @@ def _(
                     skill_vals.size,
                 )
                 subplot = fig.add_map(row=row, column=col)
-                if np.all(np.isnan(skill_vals)):
-                    LOG.warning("All-NaN (%s | %s) — plotting empty panel.", row_label, col_label)
-                    subplot.ax.set_facecolor("#cccccc")
-                    subplot.standard_layers()
-                else:
+                if show_field and not np.all(np.isnan(skill_vals)):
                     plotter.plot_field(subplot, skill_vals, style=style, colorbar=False)
+                else:
+                    if show_field:
+                        LOG.warning("All-NaN (%s | %s) — plotting empty panel.", row_label, col_label)
+                        subplot.ax.set_facecolor("#cccccc")
+                    subplot.standard_layers()
+                if station_arrays is not None:
+                    _st = station_arrays[row][col]
+                    if _st is not None:
+                        _st_skill, _st_lons, _st_lats = _st
+                        _mask = ~np.isnan(_st_skill)
+                        if _mask.any():
+                            subplot.ax.scatter(
+                                _st_lons[_mask], _st_lats[_mask],
+                                c=_st_skill[_mask],
+                                cmap=skill_cmap, norm=skill_norm,
+                                s=50, zorder=5,
+                                edgecolors="k", linewidths=0.8,
+                                transform=ccrs.PlateCarree(),
+                            )
                 _remove_latlon_labels(subplot.ax)
                 if col == 0:
                     row_axes[row] = subplot.ax
@@ -423,19 +537,37 @@ def _(
             [_compute_panel(score, cf, bf, param, season, -999) for score in scores]
             for param, cf, bf in zip(params, cand_files_lt, base_files_lt)
         ]
-        fig = _make_map_figure(
+        _fig_kw = dict(
             skill_arrays=skill_arrays,
             row_labels=[PARAM_LABELS.get(p, p) for p in params],
             col_labels=[SCORE_LABELS.get(s, s) for s in scores],
-            **_common,
         )
 
+        fig = _make_map_figure(**_fig_kw, **_common)
         out_png = output / f"publication_scoremaps_{lt}h.png"
-        out_pdf = output / f"publication_scoremaps_{lt}h.pdf"
-        fig.save(out_pdf, bbox_inches="tight", dpi=200)
         fig.save(out_png, bbox_inches="tight", dpi=200)
         out_pngs.append(out_png)
         LOG.info("Saved %s", out_png)
+
+        if station_candidate_files is not None:
+            _st_cand_lt = station_candidate_files[i * n_params : (i + 1) * n_params]
+            _st_base_lt = station_baseline_files[i * n_params : (i + 1) * n_params]
+            _station_arrays = [
+                [_compute_station_panel(score, cf, bf, param, season, -999) for score in scores]
+                for param, cf, bf in zip(params, _st_cand_lt, _st_base_lt)
+            ]
+
+            fig_st_only = _make_map_figure(**_fig_kw, station_arrays=_station_arrays, show_field=False, **_common)
+            out_png_st_only = output / f"publication_scoremaps_{lt}h_stations_only.png"
+            fig_st_only.save(out_png_st_only, bbox_inches="tight", dpi=200)
+            out_pngs.append(out_png_st_only)
+            LOG.info("Saved %s", out_png_st_only)
+
+            fig_st = _make_map_figure(**_fig_kw, station_arrays=_station_arrays, **_common)
+            out_png_st = output / f"publication_scoremaps_{lt}h_stations.png"
+            fig_st.save(out_png_st, bbox_inches="tight", dpi=200)
+            out_pngs.append(out_png_st)
+            LOG.info("Saved %s", out_png_st)
 
     out_seasonal_pngs = []
     for i, lt in enumerate(leadtimes):
@@ -455,8 +587,6 @@ def _(
         )
 
         out_png = output / f"publication_scoremaps_seasonal_{lt}h.png"
-        out_pdf = output / f"publication_scoremaps_seasonal_{lt}h.pdf"
-        fig_seas.save(out_pdf, bbox_inches="tight", dpi=200)
         fig_seas.save(out_png, bbox_inches="tight", dpi=200)
         out_seasonal_pngs.append(out_png)
         LOG.info("Saved %s", out_png)
