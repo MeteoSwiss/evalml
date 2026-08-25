@@ -79,17 +79,18 @@ def test_lifecycle(tmp_path, models_store):
     stamped = body.replace('ac:name="anchor"', 'ac:name="anchor" ac:macro-id="1"')
     assert store.same_table(stamped, body)
     with pytest.raises(SystemExit, match="not the default store"):
-        store.main(["publish", "--store", str(exp_store)])
+        store.cmd_publish(store=exp_store)
 
     # Derived state is repairable...
     store.index_path(exp_store).unlink()
     link.unlink()
-    argv = ["--store", str(exp_store), "--models-store", str(models_store)]
-    store.main(["list", "--rebuild"] + argv)
+    store.cmd_list(store=exp_store, models_store=models_store, rebuild_index=True)
     assert store.index_path(exp_store).is_file() and link.is_symlink()
 
     # ...and unregistering tombstones the name, unlinks, and deletes the payload last.
-    store.main(["unregister", name, "--yes", "--no-publish"] + argv)
+    store.cmd_unregister(
+        name, store=exp_store, models_store=models_store, yes=True, no_publish=True
+    )
     tomb = store.orphan(exp_store, name)
     assert not (exp_store / name).exists() and (tomb / "NOTE.txt").is_file()
     assert not (tomb / "results").exists() and not link.is_symlink()
@@ -123,15 +124,6 @@ def test_refusals(tmp_path, models_store, monkeypatch):
         )
     monkeypatch.setattr(os, "getuid", lambda uid=os.getuid(): uid + 1)
     with pytest.raises(SystemExit, match="not you"):  # only the owner unregisters
-        store.main(
-            [
-                "unregister",
-                name,
-                "--yes",
-                "--no-publish",
-                "--store",
-                str(exp_store),
-                "--models-store",
-                str(models_store),
-            ]
+        store.cmd_unregister(
+            name, store=exp_store, models_store=models_store, yes=True, no_publish=True
         )

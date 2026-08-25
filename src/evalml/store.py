@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """The experiment store: promote finished evaluations into a shared, immutable archive.
 
-    evalml register RESULTS_DIR [NAME]       (in the evalml venv — reads the config YAML)
+    evalml register RESULTS_DIR [NAME]       (reads the config YAML — see evalml.registration)
     evalml list | unregister | publish       (thin wrappers around this module)
-    python src/evalml/store.py list          (no venv: a login node's python3 is enough)
 
 Layout, mirroring the model store devml maintains at /store_new/mch/msopr/ml/models:
 
@@ -35,16 +34,13 @@ and are never reused: an unregistered experiment leaves an `.orphaned-<name>` to
 behind, and that name stays spent. Listing skips `.tmp.*` (a registration in progress)
 and `.orphaned-*` (one taken back out).
 
-This module is deliberately python 3.6 + stdlib only, like devml's store tooling: an
-inventory of the store must run on a login node with the system python, no venv, no
-evalml environment. The parts that need more (reading the config YAML at registration)
-live in evalml.registration, the in-venv tier.
+This module owns the store itself — layout, index, symlinks, Confluence page.
+Registering (reading the config YAML, collecting evalml's provenance) lives in
+evalml.registration.
 """
 
-import argparse
 import base64
 import html
-import io
 import json
 import os
 import pwd
@@ -56,10 +52,9 @@ import textwrap
 from datetime import datetime
 from pathlib import Path
 
+from evalml.config import MODEL_REGISTRY_ROOT as MODELS_STORE  # devml's model store
+
 STORE = Path("/store_new/mch/msopr/ml/experiments")
-# devml's model store. Deliberately re-stated rather than imported from evalml.config:
-# that is the in-venv tier, and this file must not need it.
-MODELS_STORE = Path("/store_new/mch/msopr/ml/models")
 
 INDEX = "index.jsonl"
 MANIFEST = "experiment.json"
@@ -87,23 +82,6 @@ def log(message):
 
 def fail(message):
     raise SystemExit("[experiment-store] error: %s" % message)
-
-
-def utf8(stream):
-    """Force UTF-8 out whatever the locale says: descriptions carry em-dashes and degree
-    signs, and under a C locale on 3.6 printing one is a UnicodeEncodeError."""
-    return io.TextIOWrapper(
-        stream.buffer, encoding="utf-8", errors="replace", line_buffering=True
-    )
-
-
-def ensure_utf8():
-    """Install the UTF-8 wrappers whichever entry point runs first — `python store.py`
-    and the click commands both pass through the cmd_* functions."""
-    if "utf" not in ((getattr(sys.stdout, "encoding", "") or "").lower()):
-        sys.stdout = utf8(sys.stdout)
-    if "utf" not in ((getattr(sys.stderr, "encoding", "") or "").lower()):
-        sys.stderr = utf8(sys.stderr)
 
 
 def now():
@@ -456,8 +434,8 @@ def repair_links(models_store, records):
 
 
 # ── registration ────────────────────────────────────────────────────────────
-# The in-venv tier (evalml.registration) reads the config YAML and hands everything
-# store-shaped down to here; from this point on it is stdlib only.
+# evalml.registration reads the config YAML and hands everything store-shaped down
+# to here.
 
 
 def describe_registration(results_dir, name, meta, store, models_store):
@@ -731,7 +709,6 @@ def cmd_unregister(
     is the pivot (reversible), derived state next, and the copied results are deleted
     last — only once everything agrees the experiment is gone. A failure halfway always
     fails with the data still there, a rename away from being back."""
-    ensure_utf8()
     target = Path(store) / name
     tomb = orphan(store, name)
     if not target.exists():
@@ -937,7 +914,6 @@ def cmd_list(
     rebuild_index=False,
     columns=DEFAULT_COLUMNS,
 ):
-    ensure_utf8()
     wanted = [column.strip() for column in columns.split(",") if column.strip()]
     unknown = [column for column in wanted if column not in COLUMNS]
     if unknown:
@@ -1010,7 +986,7 @@ def cmd_list(
 
 # ── Confluence ──────────────────────────────────────────────────────────────
 # Mirrors devml's model_publish.py: the tool owns a marker-delimited section of the
-# page, not the page; storage-format XHTML over the v2 REST API, stdlib urllib only.
+# page, not the page; storage-format XHTML over the v2 REST API via urllib.
 
 
 def credentials(email="", token_file=TOKEN_FILE):
@@ -1068,7 +1044,7 @@ def page_id(reference):
     )
 
 
-class Confluence(object):
+class Confluence:
     def __init__(self, site, email, token):
         self.site = site.rstrip("/")
         self.auth = base64.b64encode(("%s:%s" % (email, token)).encode("utf-8")).decode(
@@ -1300,7 +1276,6 @@ def cmd_publish(
     token_file=TOKEN_FILE,
     dry_run=False,
 ):
-    ensure_utf8()
     # The page describes *the* store; a test store has no business rewriting it.
     if os.path.abspath(str(store)) != os.path.abspath(str(STORE)) and not dry_run:
         fail(
@@ -1398,128 +1373,3 @@ def cmd_publish(
             "table instead of replacing this one; fix that before running it again."
             % HEADING
         )
-
-
-# ── the command ─────────────────────────────────────────────────────────────
-
-
-def main(argv=None):
-    parser = argparse.ArgumentParser(
-        description="The evalml experiment store (registering needs the evalml venv: `evalml register`).",
-    )
-    commands = parser.add_subparsers(dest="command")
-    commands.required = True
-
-    lister = commands.add_parser("list", help="what is in the experiment store")
-    lister.add_argument("--store", type=Path, default=STORE, help="default: %s" % STORE)
-    lister.add_argument(
-        "--models-store",
-        type=Path,
-        default=MODELS_STORE,
-        help="default: %s" % MODELS_STORE,
-    )
-    lister.add_argument(
-        "--json", action="store_true", help="print the inventory as JSON"
-    )
-    lister.add_argument(
-        "--rebuild",
-        action="store_true",
-        help="rewrite %s from the experiment directories and repair missing symlinks"
-        % INDEX,
-    )
-    lister.add_argument(
-        "--columns",
-        default=DEFAULT_COLUMNS,
-        help="comma-separated, from: %s" % ", ".join(COLUMNS),
-    )
-    lister.set_defaults(
-        func=lambda a: cmd_list(
-            store=a.store,
-            models_store=a.models_store,
-            as_json=a.json,
-            rebuild_index=a.rebuild,
-            columns=a.columns,
-        )
-    )
-
-    remover = commands.add_parser(
-        "unregister", help="take an experiment back out of the store"
-    )
-    remover.add_argument(
-        "name", help="the experiment's name, as `evalml list` shows it"
-    )
-    remover.add_argument(
-        "--store", type=Path, default=STORE, help="default: %s" % STORE
-    )
-    remover.add_argument(
-        "--models-store",
-        type=Path,
-        default=MODELS_STORE,
-        help="default: %s" % MODELS_STORE,
-    )
-    remover.add_argument(
-        "--reason", default="", help="why, recorded in NOTE.txt and in the index"
-    )
-    remover.add_argument(
-        "--dry-run", action="store_true", help="print the plan, then stop"
-    )
-    remover.add_argument(
-        "--yes", "-y", action="store_true", help="skip the confirmation prompt"
-    )
-    remover.add_argument(
-        "--keep-results",
-        action="store_true",
-        help="tombstone the directory but leave its contents alone",
-    )
-    remover.add_argument(
-        "--no-publish", action="store_true", help="do not update the Confluence page"
-    )
-    remover.set_defaults(
-        func=lambda a: cmd_unregister(
-            a.name,
-            store=a.store,
-            models_store=a.models_store,
-            reason=a.reason,
-            dry_run=a.dry_run,
-            yes=a.yes,
-            keep_results=a.keep_results,
-            no_publish=a.no_publish,
-        )
-    )
-
-    publisher = commands.add_parser(
-        "publish", help="publish the index to the Confluence page"
-    )
-    publisher.add_argument(
-        "--store", type=Path, default=STORE, help="default: %s" % STORE
-    )
-    publisher.add_argument("--page", default=EXPERIMENTS_PAGE, help="page id or URL")
-    publisher.add_argument("--site", default=SITE, help="default: %s" % SITE)
-    publisher.add_argument(
-        "--email", default="", help="the Atlassian account the token belongs to"
-    )
-    publisher.add_argument(
-        "--token-file", type=Path, default=TOKEN_FILE, help="default: %s" % TOKEN_FILE
-    )
-    publisher.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="print what would be published, send nothing",
-    )
-    publisher.set_defaults(
-        func=lambda a: cmd_publish(
-            store=a.store,
-            page=a.page,
-            site=a.site,
-            email=a.email,
-            token_file=a.token_file,
-            dry_run=a.dry_run,
-        )
-    )
-
-    args = parser.parse_args(argv)
-    args.func(args)
-
-
-if __name__ == "__main__":
-    main()

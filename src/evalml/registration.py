@@ -1,11 +1,10 @@
-"""Registering an experiment: the in-venv half of the experiment store.
+"""Registering an experiment: the config-reading half of the experiment store.
 
-`evalml.store` is the stdlib-only tier — it owns the store layout, the index, the
-symlinks and the Confluence page, and must run on a login node's system python. This
-module is the half that needs the evalml environment: it reads the results directory's
-`config.yaml` (PyYAML), extracts what the store records — description, registered
-models, baselines — adds evalml's own provenance (version, commit, dirty state), and
-hands a store-shaped payload to `evalml.store.register`.
+`evalml.store` owns the store layout, the index, the symlinks and the Confluence page.
+This module reads the results directory's `config.yaml`, extracts what the store
+records — description, registered models, baselines — adds evalml's own provenance
+(version, commit, dirty state), and hands a store-shaped payload to
+`evalml.store.register`.
 
 What identifies an evaluation: the results directory's basename,
 `{date}_{config-label}_{confighash}` — the name the workflow itself derives for one

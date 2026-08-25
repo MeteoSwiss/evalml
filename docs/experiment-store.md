@@ -28,10 +28,6 @@ results, pass `--config`. `NAME` is a slug (`^[a-z0-9][a-z0-9-]*$`), defaulting 
 symlink, Confluence anchor — and is **never reused**: unregistering leaves an
 `.orphaned-<name>` tombstone.
 
-`list` and `publish` need no venv: `python src/evalml/store.py list` runs on a login
-node's system python (3.6, stdlib only). Registering reads the config YAML and needs
-the venv.
-
 ## Layout and atomicity
 
 ```
@@ -115,7 +111,6 @@ adds anchors there.
 
 Credentials, exactly like devml: a token in `~/.atlassian-token` (bare or
 `email:token`), or `$ATLASSIAN_TOKEN`/`$ATLASSIAN_EMAIL`, with `git config user.email`
-as the fallback address; `python src/evalml/store.py publish` also takes `--email`,
-`--token-file`, and `--site`. The token is never printed or logged. Register and
-unregister publish at the end; a publish failure only warns, and publish refuses to
-touch the real page from any non-default `--store`.
+as the fallback address (`evalml publish --email` overrides it). The token is never
+printed or logged. Register and unregister publish at the end; a publish failure only
+warns, and publish refuses to touch the real page from any non-default `--store`.
