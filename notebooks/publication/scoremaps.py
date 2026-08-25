@@ -161,6 +161,15 @@ def _(
     to_hex,
     xr,
 ):
+    from evalml.publication.style import figure_width
+
+    # Scoremaps are a single-column figure; fix the print width and keep the
+    # map grid's height proportional.
+    _FIG_WIDTH = figure_width(1)
+
+    def _fig_size(ncols, nrows):
+        return (_FIG_WIDTH, _FIG_WIDTH * 5 * nrows / (6 * ncols))
+
     # Tighter geographic crop for publication: roughly equal visual margins around Switzerland.
     PUB_EXTENTS = {
         "switzerland": [5.6, 10.8, 45.6, 48.0],
@@ -265,7 +274,7 @@ def _(
             nrows=nrows,
             ncols=ncols,
             name=region,
-            size=(6 * ncols, 5 * nrows),
+            size=_fig_size(ncols, nrows),
         )
         mpl_axes = []
         for row, (param, cand_file, base_file) in enumerate(
@@ -375,7 +384,7 @@ def _(
             nrows=nrows,
             ncols=ncols,
             name=region,
-            size=(6 * ncols, 5 * nrows),
+            size=_fig_size(ncols, nrows),
         )
         mpl_axes = []
         for row, seas in enumerate(seasons):

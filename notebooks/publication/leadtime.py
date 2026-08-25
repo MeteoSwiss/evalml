@@ -152,7 +152,11 @@ def _():
     import matplotlib.ticker as _mticker
     import numpy as _np
 
-    from evalml.publication.style import line_style as _line_style, mplstyle_path as _mplstyle_path
+    from evalml.publication.style import (
+        line_style as _line_style,
+        mplstyle_path as _mplstyle_path,
+        figure_width as _figure_width,
+    )
 
     _XSCALE_KW = dict(
         functions=(
@@ -174,8 +178,10 @@ def _():
         with _plt.style.context(_mplstyle_path()):
             nrows = panels["row_id"].max() + 1
             ncols = panels["col_id"].max() + 1
+            # Fixed page width (2-column); height proportional to the grid.
+            _w = _figure_width(2)
             fig, axes = _plt.subplots(
-                nrows, ncols, figsize=(4 * ncols, 3 * nrows), sharex=True
+                nrows, ncols, figsize=(_w, _w * 0.75 * nrows / ncols), sharex=True
             )
             for _, p in panels.iterrows():
                 ax = axes[p.row_id, p.col_id]

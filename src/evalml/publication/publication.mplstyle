@@ -1,26 +1,28 @@
 ## Publication figure style for evalml paper figures.
 ## Apply with: plt.style.use(mplstyle_path())  # from evalml.publication.style
+## Every publication notebook uses THIS style and nothing else, so text appears
+## identical across figures. Figures are placed in the paper at 100% (no
+## resizing), so these point sizes are the on-page sizes — tune them here.
 
-# Font family
+# Font family — real Helvetica where installed, else Liberation Sans (a
+# metric-identical Helvetica clone: same shapes and spacing), else DejaVu.
 font.family         : sans-serif
-font.sans-serif     : Liberation Sans
+font.sans-serif     : Helvetica, Liberation Sans, Arial, DejaVu Sans
 
 # Figure DPI (screen / PDF rendering; PNG exports pass an explicit dpi= argument)
 figure.dpi          : 250
 
-# Two-level font-size hierarchy:
-#   16 pt  — titles, axis labels, legend, suptitle  (identifies what is shown)
-#   13 pt  — tick values, in-panel annotations      (reads specific numbers)
-font.size           : 13    # base size for text() / annotate()
-axes.titlesize      : 16    # ax.set_title()
-axes.labelsize      : 13    # ax.set_xlabel() / ax.set_ylabel()
-xtick.labelsize     : 13
-ytick.labelsize     : 13
-legend.fontsize     : 13    # fig.legend() / ax.legend()
-figure.titlesize    : 16    # fig.suptitle()
+# Absolute point sizes (figures are printed at 100%, so pt == on-page pt).
+font.size           : 7    # base size for text() / annotate()
+axes.titlesize      : 8    # ax.set_title()
+axes.labelsize      : 7    # ax.set_xlabel() / ax.set_ylabel()
+xtick.labelsize     : 6
+ytick.labelsize     : 6
+legend.fontsize     : 7    # fig.legend() / ax.legend()
+figure.titlesize    : 8    # fig.suptitle()
 
 # Lines — overridden per-source by line_style() in style.py
-lines.linewidth     : 1.5
+lines.linewidth     : 0.8
 
 # Legend
 legend.frameon      : False
@@ -31,16 +33,21 @@ grid.color          : 0.75
 grid.linestyle      : solid
 grid.linewidth      : 0.5
 
-# Ticks — face outwards, bottom and left only
+# Ticks — face outwards, bottom and left only, thin
 xtick.direction     : out
 xtick.top           : False
 ytick.direction     : out
 ytick.right         : False
+xtick.major.width   : 0.5
+ytick.major.width   : 0.5
+xtick.minor.width   : 0.4
+ytick.minor.width   : 0.4
 
-# Spines — black box on all four sides
+# Spines — thin black box on all four sides
 axes.spines.top     : True
 axes.spines.right   : True
 axes.edgecolor      : black
+axes.linewidth      : 0.5
 
 # Grid below data lines
 axes.axisbelow      : True

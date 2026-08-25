@@ -30,18 +30,8 @@ def _():
     import matplotlib.pyplot as plt
     from evalml.publication import style
 
+    # All publication figures use this one shared style (fonts, family, sizes).
     plt.style.use(style.mplstyle_path())
-    # A multi-panel, page-width figure is scaled down in the paper, so bump the
-    # font sizes above the shared defaults for legibility.
-    plt.rcParams.update(
-        {
-            "axes.titlesize": 18,
-            "axes.labelsize": 15,
-            "xtick.labelsize": 13,
-            "ytick.labelsize": 13,
-            "legend.fontsize": 15,
-        }
-    )
     return LOG, PROJECT_ROOT, Path, datetime, plt
 
 
@@ -67,20 +57,21 @@ def _(PROJECT_ROOT):
     MANIFEST = PROJECT_ROOT / "output/manifests/manifest_varda-single_meteogram_20250321.json"
     INIT = "202503210000"
     BASELINE_LABELS = {"ICON-CH1-CTRL", "ICON-CH2-CTRL"}  # CTRL (fast) or the EPS means
-    FIGSIZE = (13.0, 6.4)          # None -> auto (5.4*ncols, 2.7*nrows)
-    SUPTITLE = "ALT — Init time 2025-03-21 00:00"
+    COLUMNS = 2                    # print width: 2 = page-wide (5.7in), 1 = single column (3.35in)
+    FIG_NAME = "ALT_202503210000"  # goes into the saved filename (no on-figure title)
     PANEL_LABELS = True            # draw (a), (b), ...
 
     def comparison_panels(cases, params):
         """Build a params x cases grid: cols = cases (station, init), rows = params.
-        Top-row panels get a '<station> - <init>' title.
+        Top-row panels get the station name as a column title (the init time is
+        shown in the x-axis label).
         """
         panels = []
         for col, (station, init) in enumerate(cases):
             for row, p in enumerate(params):
                 panel = {"row": row, "col": col, "param": p, "station": station, "init": init}
                 if row == 0:
-                    panel["title"] = f"{station} — {init[:4]}-{init[4:6]}-{init[6:8]} {init[8:10]}:{init[10:12]}"
+                    panel["title"] = station
                 panels.append(panel)
         return panels
 
@@ -109,11 +100,11 @@ def _(PROJECT_ROOT):
     m = load_manifest(MANIFEST)
     return (
         BASELINE_LABELS,
-        FIGSIZE,
+        COLUMNS,
+        FIG_NAME,
         INIT,
         PANELS,
         PANEL_LABELS,
-        SUPTITLE,
         m,
     )
 
@@ -190,14 +181,14 @@ def _(BASELINE_LABELS, INIT, LOG, PANELS, Path, datetime, m):
 
 @app.cell
 def _(
-    FIGSIZE,
+    COLUMNS,
+    FIG_NAME,
     INIT,
     LOG,
     OBS_LABEL,
     PANELS,
     PANEL_LABELS,
     Path,
-    SUPTITLE,
     datetime,
     df,
     m,
@@ -206,9 +197,12 @@ def _(
 ):
     import matplotlib.ticker as mticker
     from evalml.publication.manifest import figures_dir
-    from evalml.publication.style import line_style, param_label
+    from evalml.publication.style import figure_width, line_style, param_label
 
-    _UNITS = {"T_2M": "K", "PMSL": "hPa", "SP_10M": "m/s", "DD_10M": "deg", "U_10M": "m/s", "V_10M": "m/s"}
+    _UNITS = {"T_2M": "°C", "TD_2M": "°C", "PMSL": "hPa", "SP_10M": "m/s", "DD_10M": "deg", "U_10M": "m/s", "V_10M": "m/s"}
+    # Additive offsets applied before plotting (temperatures stored in K → °C).
+    # Not applied to A−B differences (a temperature difference is the same in K and °C).
+    _OFFSET = {"T_2M": -273.15, "TD_2M": -273.15}
 
     def _series(src, panel):
         """(lead_hours, values) for one source in one panel; handles differences."""
@@ -237,7 +231,9 @@ def _(
 
     nrows = max(p["row"] for p in PANELS) + 1
     ncols = max(p["col"] for p in PANELS) + 1
-    figsize = FIGSIZE or (5.4 * ncols, 2.7 * nrows)
+    # Fixed print width; height proportional to the grid (~0.5 * cell width per row).
+    width = figure_width(COLUMNS)
+    figsize = (width, width * 0.5 * nrows / ncols)
     fig, axes = plt.subplots(nrows, ncols, figsize=figsize, sharex=True, squeeze=False)
 
     used = {(p["row"], p["col"]) for p in PANELS}
@@ -246,21 +242,27 @@ def _(
             if (r, c) not in used:
                 axes[r][c].axis("off")
 
+    # Panel letters (a),(b),… in reading order: left-to-right, top-to-bottom.
+    _label_index = {rc: k for k, rc in enumerate(sorted(used))}
+
     legend = {}
-    for i, p in enumerate(PANELS):
+    for p in PANELS:
         ax = axes[p["row"]][p["col"]]
         scale = p.get("scale", 1.0)
+        # Offset: default K→°C for temperatures, but never for a difference.
+        offset = 0.0 if p.get("minus_station") else p.get("offset", _OFFSET.get(p["param"], 0.0))
         is_dd = p["param"] == "DD_10M"
+        p_init = datetime.strptime(p.get("init", INIT), "%Y%m%d%H%M")
         for src in source_order:
             lead, vals = _series(src, p)
             if lead is None:
                 continue
             stl = line_style(src)
             if is_dd:
-                stl = {**stl, "linestyle": "none", "marker": ".", "markersize": 5}
+                stl = {**stl, "linestyle": "none", "marker": ".", "markersize": 3}
             elif src == OBS_LABEL:
-                stl = {**stl, "linestyle": "-", "marker": "none", "linewidth": 1.5}
-            (ln,) = ax.plot(lead, vals * scale, label=src, **stl)
+                stl = {**stl, "linestyle": "-", "marker": "none", "linewidth": 1.0}
+            (ln,) = ax.plot(lead, vals * scale + offset, label=src, **stl)
             legend.setdefault(src, ln)
         if is_dd:
             ax.set_ylim(0, 360)
@@ -269,8 +271,8 @@ def _(
             ax.axhline(0, color="black", linewidth=0.7, linestyle="dashed", zorder=0)
         ax.xaxis.set_major_locator(mticker.MultipleLocator(24))
         ax.xaxis.set_minor_locator(mticker.MultipleLocator(6))
-        ax.grid(True, axis="x", which="major", color="0.6", linewidth=0.8, linestyle="--")
-        ax.grid(True, axis="x", which="minor", color="0.85", linewidth=0.6, linestyle=":")
+        ax.grid(True, axis="x", which="major", color="0.75", linewidth=0.5, linestyle="solid")
+        ax.grid(True, axis="x", which="minor", color="0.85", linewidth=0.4, linestyle="solid")
         ax.set_xlim(left=0)
         unit = p.get("unit", _UNITS.get(p["param"], ""))
         ylabel = p.get("ylabel", param_label(p["param"]))
@@ -278,24 +280,24 @@ def _(
         if p.get("title"):
             ax.set_title(p["title"])
         if p["row"] == nrows - 1:
-            ax.set_xlabel("Lead time (h)")
+            ax.set_xlabel(f"Lead time from {p_init:%Y-%m-%d %H:%M} (h)")
         if PANEL_LABELS:
-            ax.text(0.015, 0.94, f"({chr(97 + i)})", transform=ax.transAxes,
+            _letter = chr(97 + _label_index[(p["row"], p["col"])])
+            ax.text(0.015, 0.94, f"({_letter})", transform=ax.transAxes,
                     fontweight="bold", va="top", ha="left")
 
     order = [OBS_LABEL] + [s for s in source_order if s != OBS_LABEL]
     handles = [legend[s] for s in order if s in legend]
     labels = [s for s in order if s in legend]
     fig.legend(handles, labels, loc="lower center", ncol=len(labels), bbox_to_anchor=(0.5, 0.0))
-    if SUPTITLE:
-        fig.suptitle(SUPTITLE, y=0.99)
-    fig.tight_layout(rect=[0, 0.06, 1, 0.97 if SUPTITLE else 0.99])
+    fig.tight_layout(rect=[0, 0.06, 1, 0.99])
 
     out = Path(figures_dir(m.output_root, m.truth["label"])) / "meteogram"
     out.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out / "publication_meteogram.pdf", bbox_inches="tight")
-    fig.savefig(out / "publication_meteogram.png", dpi=200, bbox_inches="tight")
-    LOG.info("meteogram: saved to %s", out)
+    stem = f"publication_meteogram_{FIG_NAME}" if FIG_NAME else "publication_meteogram"
+    fig.savefig(out / f"{stem}.pdf", bbox_inches="tight")
+    fig.savefig(out / f"{stem}.png", dpi=200, bbox_inches="tight")
+    LOG.info("meteogram: saved to %s/%s", out, stem)
     plt.show()
     return
 
