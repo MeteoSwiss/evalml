@@ -21,6 +21,7 @@ def _():
 
     import logging
 
+    import cartopy.crs as ccrs
     import earthkit.plots as ekp
     import matplotlib.colors as mcolors
     import numpy as np
@@ -59,6 +60,8 @@ def _():
     ekp.schema.borders["edgecolor"] = "black"
     ekp.schema.borders["linewidth"] = 1.0
     ekp.schema.coastlines["resolution"] = "high"
+
+    SCALING = 0.85 # scale figure size to control relative size of labels
     return (
         COLOR_SKILL_BASELINE_BETTER,
         COLOR_SKILL_MODEL_BETTER,
@@ -68,11 +71,13 @@ def _():
         PARAM_LABELS,
         PROJECT_ROOT,
         Path,
+        SCALING,
         SCORE_LABELS,
         SKILL_CMAP,
         SKILL_GREY,
         SKILL_LEVELS,
         StatePlotter,
+        ccrs,
         ekp,
         mcolors,
         np,
@@ -114,6 +119,39 @@ def _(PROJECT_ROOT):
         PROJECT_ROOT / m.scoremap_path(base, p, lt) for lt in leadtimes for p in params
     ]
     n_params = len(params)
+
+    # Optional station-based scoremaps: look for a stations manifest containing
+    # the same run/baseline IDs. If found, build parallel file lists (may include
+    # paths that don't exist – missing files are handled gracefully at plot time).
+    station_candidate_files = None
+    station_baseline_files = None
+    _station_manifests = [
+        PROJECT_ROOT / f"output/manifests/{name}"
+        for name in [
+            "manifest_varda-single_paper_forecaster_stations_scoremaps.json",
+            "manifest_varda-single_paper_forecaster_stations.json",
+        ]
+    ]
+    for _smp in _station_manifests:
+        if not _smp.exists():
+            continue
+        _sm_st = load_manifest(_smp)
+        if _sm_st.truth.get("gridded", True):
+            continue  # must be station-based
+        _by_id = {p.id: p for p in _sm_st.participants()}
+        _st_cand = _by_id.get(cand.id)
+        _st_base = _by_id.get(base.id)
+        if _st_cand and _st_base:
+            station_candidate_files = [
+                PROJECT_ROOT / _sm_st.scoremap_path(_st_cand, p, lt)
+                for lt in leadtimes for p in params
+            ]
+            station_baseline_files = [
+                PROJECT_ROOT / _sm_st.scoremap_path(_st_base, p, lt)
+                for lt in leadtimes for p in params
+            ]
+            break
+
     return (
         baseline_files,
         baseline_label,
@@ -126,6 +164,8 @@ def _(PROJECT_ROOT):
         region,
         scores,
         season,
+        station_baseline_files,
+        station_candidate_files,
     )
 
 
@@ -138,6 +178,7 @@ def _(
     LOG,
     PARAM_LABELS,
     Path,
+    SCALING,
     SCORE_LABELS,
     SKILL_CMAP,
     SKILL_GREY,
@@ -147,6 +188,7 @@ def _(
     baseline_label,
     candidate_files,
     candidate_label,
+    ccrs,
     ekp,
     leadtimes,
     mcolors,
@@ -158,6 +200,8 @@ def _(
     region,
     scores,
     season,
+    station_baseline_files,
+    station_candidate_files,
     to_hex,
     xr,
 ):
@@ -233,6 +277,60 @@ def _(
             base_v = _load_raw(base_file, score=metric, **kw)
             return 1.0 - cand_v / base_v
 
+    def _load_station_raw(nc_file: Path, param: str, score: str, season: str, init_hour: int):
+        """Return (vals, lons, lats) from a station scoremap, or None if file missing."""
+        if not Path(nc_file).exists():
+            return None
+        ds = xr.open_dataset(nc_file)
+        var = f"{param}.{score}"
+        if var not in ds:
+            return None
+        vals = ds[var].sel(season=season, init_hour=init_hour).values
+        lons = ds["longitude"].values
+        lats = ds["latitude"].values
+        return vals, lons, lats
+
+    def _compute_station_panel(
+        metric: str,
+        cand_file: Path,
+        base_file: Path,
+        param: str,
+        season: str,
+        init_hour: int,
+    ):
+        """Compute skill at station locations. Returns (skill_vals, lons, lats) or None."""
+        kw = dict(param=param, season=season, init_hour=init_hour)
+        try:
+            with np.errstate(invalid="ignore", divide="ignore"):
+                if metric == "MSE_SKILL":
+                    res_c = _load_station_raw(cand_file, score="RMSE", **kw)
+                    res_b = _load_station_raw(base_file, score="RMSE", **kw)
+                    if res_c is None or res_b is None:
+                        return None
+                    rmse_c, lons, lats = res_c
+                    rmse_b = res_b[0]
+                    return 1.0 - rmse_c**2 / rmse_b**2, lons, lats
+                if metric == "BIAS_CONTRIB":
+                    res_c = _load_station_raw(cand_file, score="BIAS", **kw)
+                    res_b = _load_station_raw(base_file, score="BIAS", **kw)
+                    res_rb = _load_station_raw(base_file, score="RMSE", **kw)
+                    if res_c is None or res_b is None or res_rb is None:
+                        return None
+                    bias_c, lons, lats = res_c
+                    bias_b = res_b[0]
+                    rmse_b = res_rb[0]
+                    return (bias_b**2 - bias_c**2) / rmse_b**2, lons, lats
+                res_c = _load_station_raw(cand_file, score=metric, **kw)
+                res_b = _load_station_raw(base_file, score=metric, **kw)
+                if res_c is None or res_b is None:
+                    return None
+                cand_v, lons, lats = res_c
+                base_v = res_b[0]
+                return 1.0 - cand_v / base_v, lons, lats
+        except Exception as exc:
+            LOG.warning("Station panel skipped (%s): %s", metric, exc)
+            return None
+
     def _remove_latlon_labels(ax) -> None:
         for child in getattr(ax, "_children", []) + getattr(ax, "_gridliners", []):
             if not isinstance(child, Gridliner):
@@ -249,114 +347,11 @@ def _(
         ax.set_xlabel("")
         ax.set_ylabel("")
 
-    def _make_figure(
-        params,
-        scores,
-        candidate_files,
-        baseline_files,
-        plotter,
-        domain,
-        region,
-        style,
-        skill_cmap,
-        skill_norm,
-        season,
-        candidate_label,
-        baseline_label,
-        leadtime,
-    ):
-        nrows = len(params)
-        ncols = len(scores)
-        init_hour = -999  # "all" sentinel
-        fig = plotter.init_geoaxes(
-            projection=domain["projection"],
-            bbox=domain["extent"],
-            nrows=nrows,
-            ncols=ncols,
-            name=region,
-            size=_fig_size(ncols, nrows),
-        )
-        mpl_axes = []
-        for row, (param, cand_file, base_file) in enumerate(
-            zip(params, candidate_files, baseline_files)
-        ):
-            for col, score in enumerate(scores):
-                skill_vals = _compute_panel(
-                    score, cand_file, base_file, param, season, init_hour
-                )
-                LOG.info(
-                    "%s %s lt=%dh: skill min=%.3f  max=%.3f  n_nan=%d / %d",
-                    param,
-                    score,
-                    leadtime,
-                    np.nanmin(skill_vals),
-                    np.nanmax(skill_vals),
-                    int(np.isnan(skill_vals).sum()),
-                    skill_vals.size,
-                )
-                subplot = fig.add_map(row=row, column=col)
-                if np.all(np.isnan(skill_vals)):
-                    LOG.warning(
-                        "All-NaN for %s %s lt=%dh — plotting empty panel.",
-                        param,
-                        score,
-                        leadtime,
-                    )
-                    subplot.ax.set_facecolor("#cccccc")
-                    subplot.standard_layers()
-                else:
-                    plotter.plot_field(subplot, skill_vals, style=style, colorbar=False)
-                _remove_latlon_labels(subplot.ax)
-                mpl_axes.append(subplot.ax)
-                subplot.title(
-                    f"{PARAM_LABELS.get(param, param)} — {SCORE_LABELS.get(score, score)}, +{leadtime}h"
-                )
-        mpl_fig = fig.fig
-        sm = plt.cm.ScalarMappable(cmap=skill_cmap, norm=skill_norm)
-        sm.set_array([])
-        cbar = mpl_fig.colorbar(
-            sm,
-            ax=mpl_axes,
-            orientation="horizontal",
-            location="bottom",
-            fraction=0.04,
-            pad=0.05,
-            aspect=50,
-            extend="both",
-        )
-        cbar.set_ticks(SKILL_LEVELS)
-        cbar.set_ticklabels([f"{v:g}" for v in SKILL_LEVELS])
-        cbar.set_label("Skill  (1 − model / baseline)", labelpad=4)
-        mpl_fig.canvas.draw()
-        renderer = mpl_fig.canvas.get_renderer()
-        label_bbox = cbar.ax.xaxis.label.get_window_extent(renderer)
-        fig_height_px = mpl_fig.get_figheight() * mpl_fig.dpi
-        y_fig = label_bbox.y0 / fig_height_px
-        cb_pos = cbar.ax.get_position()
-        mpl_fig.text(
-            cb_pos.x0,
-            y_fig,
-            f"{baseline_label} better",
-            ha="left",
-            va="top",
-            color=COLOR_SKILL_BASELINE_BETTER,
-            fontsize=plt.rcParams["font.size"],
-        )
-        mpl_fig.text(
-            cb_pos.x1,
-            y_fig,
-            f"{candidate_label} better",
-            ha="right",
-            va="top",
-            color=COLOR_SKILL_MODEL_BETTER,
-            fontsize=plt.rcParams["font.size"],
-        )
-        return fig
 
-    def _make_seasonal_figure(
-        params,
-        candidate_files,
-        baseline_files,
+    def _make_map_figure(
+        skill_arrays,
+        row_labels,
+        col_labels,
         plotter,
         domain,
         region,
@@ -365,19 +360,19 @@ def _(
         skill_norm,
         candidate_label,
         baseline_label,
-        leadtime,
-        score="MSE_SKILL",
-        seasons=("DJF", "MAM", "JJA", "SON"),
+        station_arrays=None,
+        show_field=True,
     ):
-        season_labels = {
-            "DJF": "Winter (DJF)",
-            "MAM": "Spring (MAM)",
-            "JJA": "Summer (JJA)",
-            "SON": "Autumn (SON)",
-        }
-        nrows = len(seasons)
-        ncols = len(params)
-        init_hour = -999  # "all" sentinel
+        """Plot a grid of skill score maps.
+
+        skill_arrays   : List[List[np.ndarray]], indexed [row][col].
+        station_arrays : optional List[List[(skill_vals, lons, lats) | None]], same shape.
+                         When provided, station skill scores are overlaid as scatter points.
+        show_field     : if False, skip plotting the gridded field (station-only variant).
+        row_labels / col_labels : matching label strings for margin annotations.
+        """
+        nrows = len(row_labels)
+        ncols = len(col_labels)
         fig = plotter.init_geoaxes(
             projection=domain["projection"],
             bbox=domain["extent"],
@@ -387,43 +382,81 @@ def _(
             size=_fig_size(ncols, nrows),
         )
         mpl_axes = []
-        for row, seas in enumerate(seasons):
-            for col, (param, cand_file, base_file) in enumerate(
-                zip(params, candidate_files, baseline_files)
-            ):
-                skill_vals = _compute_panel(
-                    score, cand_file, base_file, param, seas, init_hour
-                )
+        row_axes = {}
+        panel_idx = 0
+        for row, row_label in enumerate(row_labels):
+            for col, col_label in enumerate(col_labels):
+                skill_vals = skill_arrays[row][col]
                 LOG.info(
-                    "%s %s %s lt=%dh: skill min=%.3f  max=%.3f  n_nan=%d / %d",
-                    param,
-                    score,
-                    seas,
-                    leadtime,
+                    "(%s | %s) skill min=%.3f  max=%.3f  n_nan=%d / %d",
+                    row_label,
+                    col_label,
                     np.nanmin(skill_vals),
                     np.nanmax(skill_vals),
                     int(np.isnan(skill_vals).sum()),
                     skill_vals.size,
                 )
                 subplot = fig.add_map(row=row, column=col)
-                if np.all(np.isnan(skill_vals)):
-                    LOG.warning(
-                        "All-NaN for %s %s %s lt=%dh — plotting empty panel.",
-                        param,
-                        score,
-                        seas,
-                        leadtime,
-                    )
-                    subplot.ax.set_facecolor("#cccccc")
-                    subplot.standard_layers()
-                else:
+                if show_field and not np.all(np.isnan(skill_vals)):
                     plotter.plot_field(subplot, skill_vals, style=style, colorbar=False)
+                else:
+                    if show_field:
+                        LOG.warning("All-NaN (%s | %s) — plotting empty panel.", row_label, col_label)
+                        subplot.ax.set_facecolor("#cccccc")
+                    subplot.standard_layers()
+                if station_arrays is not None:
+                    _st = station_arrays[row][col]
+                    if _st is not None:
+                        _st_skill, _st_lons, _st_lats = _st
+                        _mask = ~np.isnan(_st_skill)
+                        if _mask.any():
+                            subplot.ax.scatter(
+                                _st_lons[_mask], _st_lats[_mask],
+                                c=_st_skill[_mask],
+                                cmap=skill_cmap, norm=skill_norm,
+                                s=50, zorder=5,
+                                edgecolors="k", linewidths=0.8,
+                                transform=ccrs.PlateCarree(),
+                            )
                 _remove_latlon_labels(subplot.ax)
+                if col == 0:
+                    row_axes[row] = subplot.ax
                 mpl_axes.append(subplot.ax)
-                subplot.title(
-                    f"{PARAM_LABELS.get(param, param)} — {season_labels.get(seas, seas)}, +{leadtime}h"
+                subplot.ax.text(
+                    0.03,
+                    0.97,
+                    f"({chr(ord('a') + panel_idx)})",
+                    transform=subplot.ax.transAxes,
+                    ha="left",
+                    va="top",
+                    fontsize=plt.rcParams["axes.titlesize"],
+                    bbox=dict(facecolor="white", edgecolor="none", alpha=0.6, pad=2),
                 )
+                panel_idx += 1
+                if row == 0:
+                    subplot.ax.text(
+                        0.5,
+                        1.03,
+                        col_label,
+                        transform=subplot.ax.transAxes,
+                        ha="center",
+                        va="bottom",
+                        fontsize=plt.rcParams["axes.titlesize"],
+                        clip_on=False,
+                    )
         mpl_fig = fig.fig
+        for row, row_label in enumerate(row_labels):
+            row_axes[row].text(
+                -0.05,
+                0.5,
+                row_label,
+                transform=row_axes[row].transAxes,
+                ha="right",
+                va="center",
+                fontsize=plt.rcParams["axes.titlesize"],
+                rotation=90,
+                clip_on=False,
+            )
         sm = plt.cm.ScalarMappable(cmap=skill_cmap, norm=skill_norm)
         sm.set_array([])
         cbar = mpl_fig.colorbar(
@@ -444,9 +477,10 @@ def _(
         label_bbox = cbar.ax.xaxis.label.get_window_extent(renderer)
         fig_height_px = mpl_fig.get_figheight() * mpl_fig.dpi
         y_fig = label_bbox.y0 / fig_height_px
-        cb_pos = cbar.ax.get_position()
+        axes_x0 = min(ax.get_position().x0 for ax in mpl_axes)
+        axes_x1 = max(ax.get_position().x1 for ax in mpl_axes)
         mpl_fig.text(
-            cb_pos.x0,
+            axes_x0,
             y_fig,
             f"{baseline_label} better",
             ha="left",
@@ -455,7 +489,7 @@ def _(
             fontsize=plt.rcParams["font.size"],
         )
         mpl_fig.text(
-            cb_pos.x1,
+            axes_x1,
             y_fig,
             f"{candidate_label} better",
             ha="right",
@@ -489,58 +523,76 @@ def _(
 
     style, skill_cmap, skill_norm = _build_skill_artifacts()
 
+    _season_labels = {
+        "DJF": "Winter (DJF)", "MAM": "Spring (MAM)",
+        "JJA": "Summer (JJA)", "SON": "Autumn (SON)",
+    }
+    _seasons = ("DJF", "MAM", "JJA", "SON")
+    _common = dict(
+        plotter=plotter, domain=domain, region=region,
+        style=style, skill_cmap=skill_cmap, skill_norm=skill_norm,
+        candidate_label=candidate_label, baseline_label=baseline_label,
+    )
+
     out_pngs = []
     for i, lt in enumerate(leadtimes):
         cand_files_lt = candidate_files[i * n_params : (i + 1) * n_params]
         base_files_lt = baseline_files[i * n_params : (i + 1) * n_params]
 
-        fig = _make_figure(
-            params=params,
-            scores=scores,
-            candidate_files=cand_files_lt,
-            baseline_files=base_files_lt,
-            plotter=plotter,
-            domain=domain,
-            region=region,
-            style=style,
-            skill_cmap=skill_cmap,
-            skill_norm=skill_norm,
-            season=season,
-            candidate_label=candidate_label,
-            baseline_label=baseline_label,
-            leadtime=lt,
+        skill_arrays = [
+            [_compute_panel(score, cf, bf, param, season, -999) for score in scores]
+            for param, cf, bf in zip(params, cand_files_lt, base_files_lt)
+        ]
+        _fig_kw = dict(
+            skill_arrays=skill_arrays,
+            row_labels=[PARAM_LABELS.get(p, p) for p in params],
+            col_labels=[SCORE_LABELS.get(s, s) for s in scores],
         )
 
+        fig = _make_map_figure(**_fig_kw, **_common)
         out_png = output / f"publication_scoremaps_{lt}h.png"
-        out_pdf = output / f"publication_scoremaps_{lt}h.pdf"
-        fig.save(out_pdf, bbox_inches="tight", dpi=200)
         fig.save(out_png, bbox_inches="tight", dpi=200)
         out_pngs.append(out_png)
         LOG.info("Saved %s", out_png)
+
+        if station_candidate_files is not None:
+            _st_cand_lt = station_candidate_files[i * n_params : (i + 1) * n_params]
+            _st_base_lt = station_baseline_files[i * n_params : (i + 1) * n_params]
+            _station_arrays = [
+                [_compute_station_panel(score, cf, bf, param, season, -999) for score in scores]
+                for param, cf, bf in zip(params, _st_cand_lt, _st_base_lt)
+            ]
+
+            fig_st_only = _make_map_figure(**_fig_kw, station_arrays=_station_arrays, show_field=False, **_common)
+            out_png_st_only = output / f"publication_scoremaps_{lt}h_stations_only.png"
+            fig_st_only.save(out_png_st_only, bbox_inches="tight", dpi=200)
+            out_pngs.append(out_png_st_only)
+            LOG.info("Saved %s", out_png_st_only)
+
+            fig_st = _make_map_figure(**_fig_kw, station_arrays=_station_arrays, **_common)
+            out_png_st = output / f"publication_scoremaps_{lt}h_stations.png"
+            fig_st.save(out_png_st, bbox_inches="tight", dpi=200)
+            out_pngs.append(out_png_st)
+            LOG.info("Saved %s", out_png_st)
 
     out_seasonal_pngs = []
     for i, lt in enumerate(leadtimes):
         cand_files_lt = candidate_files[i * n_params : (i + 1) * n_params]
         base_files_lt = baseline_files[i * n_params : (i + 1) * n_params]
 
-        fig_seas = _make_seasonal_figure(
-            params=params,
-            candidate_files=cand_files_lt,
-            baseline_files=base_files_lt,
-            plotter=plotter,
-            domain=domain,
-            region=region,
-            style=style,
-            skill_cmap=skill_cmap,
-            skill_norm=skill_norm,
-            candidate_label=candidate_label,
-            baseline_label=baseline_label,
-            leadtime=lt,
+        skill_arrays = [
+            [_compute_panel("MSE_SKILL", cf, bf, param, seas, -999)
+             for param, cf, bf in zip(params, cand_files_lt, base_files_lt)]
+            for seas in _seasons
+        ]
+        fig_seas = _make_map_figure(
+            skill_arrays=skill_arrays,
+            row_labels=[_season_labels[s] for s in _seasons],
+            col_labels=[PARAM_LABELS.get(p, p) for p in params],
+            **_common,
         )
 
         out_png = output / f"publication_scoremaps_seasonal_{lt}h.png"
-        out_pdf = output / f"publication_scoremaps_seasonal_{lt}h.pdf"
-        fig_seas.save(out_pdf, bbox_inches="tight", dpi=200)
         fig_seas.save(out_png, bbox_inches="tight", dpi=200)
         out_seasonal_pngs.append(out_png)
         LOG.info("Saved %s", out_png)
