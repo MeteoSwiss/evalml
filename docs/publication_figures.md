@@ -42,7 +42,7 @@ flowchart TD
         builder["manifest.py<br/>build / load"]
         resolver["resolver.py<br/>Manifest + validate_request"]
     end
-    notebooks["notebooks/publication/<br/>leadtime.py / meteogram.py / scoremaps.py"]
+    notebooks["notebooks/publication/<br/>leadtime.py / meteogram.py /<br/>scorecards.py / scoremaps.py"]
     figs["figures: .pdf / .png"]
 
     cfg --> common --> manrule --> manifest
@@ -208,17 +208,50 @@ flowchart LR
 
 ### C. Rendering the figures (notebooks)
 
-The three notebooks in `notebooks/publication/` are standalone — they load the
+The notebooks in `notebooks/publication/` are standalone — they load the
 manifest, resolve all paths through the `Manifest` API, apply the shared
 `evalml.publication.style` matplotlib style, and write figures to
 `output/figures/<truth_slug>/<figure>/` via `figures_dir(m.output_root, m.truth["label"])`.
 
-| Notebook | Figures produced |
-|---|---|
-| `leadtime.py` | Lead-time score curves (RMSE/bias/ETS) |
-| `meteogram.py` | Single-station meteogram (requires jretrieve + eckit stack) |
-| `scoremaps.py` | Spatial skill-score maps (requires gridded/zarr truth) |
-| `scorecards.py` | Combined multi-section scorecard (short-range + medium-range) |
+#### Figure catalog
+
+**`leadtime.py` — Lead-time verification curves.** Scores (RMSE, bias, ETS, …)
+plotted against lead time, one line per source (candidate + baselines), for a
+chosen region/season/init-hour slice. Produces two figures: raw scores and
+skill relative to the candidate.
+- *Needs:* a verification manifest (station **or** gridded truth) with
+  `verif_aggregated` NC files.
+- *Output:* `publication_leadtime.{pdf,png}`, `publication_leadtime_skill.{pdf,png}`,
+  `publication_leadtime.html`.
+
+**`meteogram.py` — Station meteograms (panel-driven).** Per-station forecast
+time series (2m temperature, pressure, wind speed/direction, U/V wind
+components, and station A−B differences such as PMSL ALT−LUG), one line per
+source over the forecast range. Layout is an explicit `PANELS` grid — each
+panel places a param (or a difference) at a `(row, col)` cell; the
+`comparison_panels()` helper builds a multi-station comparison (e.g. SIO vs
+KLO).
+- *Needs:* a meteogram manifest (candidate GRIB under `output/`, baseline
+  ICON-EPS archive refs), station observations from jretrieve, and the matched
+  eccodes/eckit stack. EPS-mean baselines average the whole ensemble and are
+  slow (~40 min/column); CTRL members are single-member and fast.
+- *Output:* `publication_meteogram.{pdf,png,html}`.
+
+**`scorecards.py` — Scorecard tables.** Candidate skill against a baseline as a
+coloured grid of variable × lead time, split into sections (e.g. short-range vs
+`ICON-CH1-CTRL` at `6/33/6`, medium-range vs `ICON-CH2-CTRL` at `24/120/24`),
+scores RMSE + ETS, stratified by region.
+- *Needs:* a verification manifest (station truth) containing the referenced
+  baselines.
+- *Output:* `publication_scorecard.{pdf,png}`, `publication_scorecards.html`.
+
+**`scoremaps.py` — Spatial skill-score maps.** 2-D skill maps (MSE skill and the
+bias contribution to it) for each parameter at chosen lead times, candidate vs
+baseline; plus a per-season variant.
+- *Needs:* a **gridded (zarr) truth** manifest with scoremap NC files (produced
+  via `experiment.scoremaps` / `publication.scoremaps`); earthkit + cartopy.
+- *Output:* `publication_scoremaps_<lt>h.{pdf,png}`,
+  `publication_scoremaps_seasonal_<lt>h.{pdf,png}`, `publication_scoremaps.html`.
 
 **Manifest discovery** (precedence, highest first):
 
@@ -255,9 +288,10 @@ resolved via `figures_dir(m.output_root, m.truth["label"])`:
 
 | Figure | Location | Files |
 |---|---|---|
-| leadtime | `output/figures/<truth>/leadtime/` | `publication_figures_rmse_bias.pdf/.png`, `publication_figures_ets.pdf/.png`, `publication_figures_rmse_bias_skill.pdf/.png`, `publication_figures_ets_skill.pdf/.png`, `publication_figures.html` |
-| meteogram | `output/figures/<truth>/meteogram/` | `publication_meteogram.pdf/.png` |
-| scoremaps | `output/figures/<truth>/scoremaps/` | `publication_scoremaps_<step>h.pdf/.png` (one per lead time), `publication_scoremaps.html` |
+| leadtime | `output/figures/<truth>/leadtime/` | `publication_leadtime.pdf/.png`, `publication_leadtime_skill.pdf/.png`, `publication_leadtime.html` |
+| meteogram | `output/figures/<truth>/meteogram/` | `publication_meteogram.pdf/.png/.html` |
+| scorecards | `output/figures/<truth>/scorecards/` | `publication_scorecard.pdf/.png`, `publication_scorecards.html` |
+| scoremaps | `output/figures/<truth>/scoremaps/` | `publication_scoremaps_<step>h.pdf/.png` (one per lead time), `publication_scoremaps_seasonal_<step>h.pdf/.png`, `publication_scoremaps.html` |
 
 ---
 
@@ -300,9 +334,9 @@ src/evalml/
     style.py             # mplstyle_path() + packaged publication.mplstyle
 notebooks/publication/
   leadtime.py            # lead-time score figures
-  meteogram.py           # single-station meteogram
-  scoremaps.py           # spatial skill-score maps
+  meteogram.py           # station meteograms (panel-driven; supports station A-B diffs)
   scorecards.py          # combined multi-section scorecard
+  scoremaps.py           # spatial skill-score maps
 workflow/rules/publication.smk   # publication_manifest rule; publication_all target
 workflow/scripts/
   verification_plot_metrics.py   # shared metric-plotting helpers (used by leadtime notebook)
