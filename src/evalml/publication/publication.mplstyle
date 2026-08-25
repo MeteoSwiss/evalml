@@ -4,10 +4,13 @@
 ## identical across figures. Figures are placed in the paper at 100% (no
 ## resizing), so these point sizes are the on-page sizes — tune them here.
 
-# Font family — real Helvetica where installed, else Liberation Sans (a
-# metric-identical Helvetica clone: same shapes and spacing), else DejaVu.
+# Font family — Liberation Sans (a metric-identical Helvetica clone: same shapes
+# and spacing). Pinned explicitly (rather than listing Helvetica first) because
+# Helvetica isn't installed here, so this is what actually renders — being
+# explicit avoids the findfont fallback and its warning. DejaVu is the ultimate
+# safety net if Liberation Sans is ever missing.
 font.family         : sans-serif
-font.sans-serif     : Helvetica, Liberation Sans, Arial, DejaVu Sans
+font.sans-serif     : Liberation Sans, DejaVu Sans
 
 # Figure DPI (screen / PDF rendering; PNG exports pass an explicit dpi= argument)
 figure.dpi          : 250
@@ -38,16 +41,16 @@ xtick.direction     : out
 xtick.top           : False
 ytick.direction     : out
 ytick.right         : False
-xtick.major.width   : 0.5
-ytick.major.width   : 0.5
-xtick.minor.width   : 0.4
-ytick.minor.width   : 0.4
+xtick.major.width   : 0.4
+ytick.major.width   : 0.4
+xtick.minor.width   : 0.3
+ytick.minor.width   : 0.3
 
 # Spines — thin black box on all four sides
 axes.spines.top     : True
 axes.spines.right   : True
 axes.edgecolor      : black
-axes.linewidth      : 0.5
+axes.linewidth      : 0.4
 
 # Grid below data lines
 axes.axisbelow      : True

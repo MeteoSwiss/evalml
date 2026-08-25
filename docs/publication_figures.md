@@ -253,6 +253,26 @@ baseline; plus a per-season variant.
 - *Output:* `publication_scoremaps_<lt>h.{pdf,png}`,
   `publication_scoremaps_seasonal_<lt>h.{pdf,png}`, `publication_scoremaps.html`.
 
+**`plot_meteogram_region.py` — Region areal-mean time series (Valais precip
+case study).** A **standalone script** (not a marimo notebook, and not
+manifest-driven): it averages the truth over the points inside a region polygon
+and plots the series in the shared publication style. Single-column figure
+(3.35 in). Run it by hand:
+
+```bash
+python workflow/scripts/plot_meteogram_region.py \
+  --truth /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr \
+  --truth_label "KENDA-CH1" \
+  --shapefile /store_new/mch/msopr/ml/regions/cantons/valais.shp \
+  --date 202506271800 --steps 0/120/1 --param TOT_PREC1 \
+  --outfn output/results/valais.png
+```
+
+- *Needs:* a truth source (a gridded analysis `.zarr`, or `jretrievedwh:1,2`
+  observations) and a region shapefile in EPSG:2056.
+- *Output:* the `--outfn` PNG **and a `.pdf` alongside**. Put the region/date in
+  the `--outfn` name (there is no on-figure title, by convention).
+
 **Manifest discovery** (precedence, highest first):
 
 1. `$EVALML_MANIFEST` environment variable — explicit path.
@@ -341,6 +361,7 @@ workflow/rules/publication.smk   # publication_manifest rule; publication_all ta
 workflow/scripts/
   verification_plot_metrics.py   # shared metric-plotting helpers (used by leadtime notebook)
   meteogram_derivations.py       # derived-variable helpers (used by meteogram notebook)
+  plot_meteogram_region.py       # standalone region areal-mean figure (Valais precip); uses the shared style
 tests/unit/
   test_resolution.py
   test_publication_config.py
