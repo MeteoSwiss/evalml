@@ -1248,6 +1248,9 @@ def _load_icon_baseline_from_grib(
                 )
                 if "number" in ds.dims:
                     ds = ds.isel(number=0, drop=True)
+                for _p, _comps in DERIVED_PARAMS.items():
+                    if all(c in ds.data_vars for c in _comps):
+                        ds = ds.assign({_p: compute_derived(ds, _p)})
                 acc = ds if acc is None else acc + ds
                 n_loaded += 1
             except Exception as exc:
