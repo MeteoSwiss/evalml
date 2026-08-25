@@ -59,6 +59,8 @@ def _():
     ekp.schema.borders["edgecolor"] = "black"
     ekp.schema.borders["linewidth"] = 1.0
     ekp.schema.coastlines["resolution"] = "high"
+
+    SCALING = 0.85 # scale figure size to control relative size of labels
     return (
         COLOR_SKILL_BASELINE_BETTER,
         COLOR_SKILL_MODEL_BETTER,
@@ -68,6 +70,7 @@ def _():
         PARAM_LABELS,
         PROJECT_ROOT,
         Path,
+        SCALING,
         SCORE_LABELS,
         SKILL_CMAP,
         SKILL_GREY,
@@ -138,6 +141,7 @@ def _(
     LOG,
     PARAM_LABELS,
     Path,
+    SCALING,
     SCORE_LABELS,
     SKILL_CMAP,
     SKILL_GREY,
@@ -240,6 +244,10 @@ def _(
         ax.set_xlabel("")
         ax.set_ylabel("")
 
+    _LABEL_W = 0.8   # inches left of panels for row labels
+    _TITLE_H = 0.4   # inches above panels for column titles
+    _LEGEND_H = 0.8  # inches below panels for colorbar + labels
+
     def _make_figure(
         params,
         scores,
@@ -265,9 +273,11 @@ def _(
             nrows=nrows,
             ncols=ncols,
             name=region,
-            size=(6 * ncols, 5 * nrows),
+            size=(6 * SCALING * ncols + _LABEL_W, 4.4 * SCALING * nrows + _TITLE_H + _LEGEND_H),
         )
         mpl_axes = []
+        row_axes = {}
+        panel_idx = 0
         for row, (param, cand_file, base_file) in enumerate(
             zip(params, candidate_files, baseline_files)
         ):
@@ -298,11 +308,44 @@ def _(
                 else:
                     plotter.plot_field(subplot, skill_vals, style=style, colorbar=False)
                 _remove_latlon_labels(subplot.ax)
+                if col == 0:
+                    row_axes[row] = subplot.ax
                 mpl_axes.append(subplot.ax)
-                subplot.title(
-                    f"{PARAM_LABELS.get(param, param)} — {SCORE_LABELS.get(score, score)}, +{leadtime}h"
+                subplot.ax.text(
+                    0.03,
+                    0.97,
+                    f"({chr(ord('a') + panel_idx)})",
+                    transform=subplot.ax.transAxes,
+                    ha="left",
+                    va="top",
+                    fontsize=plt.rcParams["axes.titlesize"],
+                    bbox=dict(facecolor="white", edgecolor="none", alpha=0.6, pad=2),
                 )
+                panel_idx += 1
+                if row == 0:
+                    subplot.ax.text(
+                        0.5,
+                        1.03,
+                        SCORE_LABELS.get(score, score),
+                        transform=subplot.ax.transAxes,
+                        ha="center",
+                        va="bottom",
+                        fontsize=plt.rcParams["axes.titlesize"],
+                        clip_on=False,
+                    )
         mpl_fig = fig.fig
+        for row, param in enumerate(params):
+            row_axes[row].text(
+                -0.05,
+                0.5,
+                PARAM_LABELS.get(param, param),
+                transform=row_axes[row].transAxes,
+                ha="right",
+                va="center",
+                fontsize=plt.rcParams["axes.titlesize"],
+                rotation=90,
+                clip_on=False,
+            )
         sm = plt.cm.ScalarMappable(cmap=skill_cmap, norm=skill_norm)
         sm.set_array([])
         cbar = mpl_fig.colorbar(
@@ -323,9 +366,10 @@ def _(
         label_bbox = cbar.ax.xaxis.label.get_window_extent(renderer)
         fig_height_px = mpl_fig.get_figheight() * mpl_fig.dpi
         y_fig = label_bbox.y0 / fig_height_px
-        cb_pos = cbar.ax.get_position()
+        axes_x0 = min(ax.get_position().x0 for ax in mpl_axes)
+        axes_x1 = max(ax.get_position().x1 for ax in mpl_axes)
         mpl_fig.text(
-            cb_pos.x0,
+            axes_x0,
             y_fig,
             f"{baseline_label} better",
             ha="left",
@@ -334,7 +378,7 @@ def _(
             fontsize=plt.rcParams["font.size"],
         )
         mpl_fig.text(
-            cb_pos.x1,
+            axes_x1,
             y_fig,
             f"{candidate_label} better",
             ha="right",
@@ -375,9 +419,11 @@ def _(
             nrows=nrows,
             ncols=ncols,
             name=region,
-            size=(6 * ncols, 5 * nrows),
+            size=(6 * SCALING * ncols + _LABEL_W, 4.4 * SCALING * nrows + _TITLE_H + _LEGEND_H),
         )
         mpl_axes = []
+        row_axes = {}
+        panel_idx = 0
         for row, seas in enumerate(seasons):
             for col, (param, cand_file, base_file) in enumerate(
                 zip(params, candidate_files, baseline_files)
@@ -410,11 +456,44 @@ def _(
                 else:
                     plotter.plot_field(subplot, skill_vals, style=style, colorbar=False)
                 _remove_latlon_labels(subplot.ax)
+                if col == 0:
+                    row_axes[row] = subplot.ax
                 mpl_axes.append(subplot.ax)
-                subplot.title(
-                    f"{PARAM_LABELS.get(param, param)} — {season_labels.get(seas, seas)}, +{leadtime}h"
+                subplot.ax.text(
+                    0.03,
+                    0.97,
+                    f"({chr(ord('a') + panel_idx)})",
+                    transform=subplot.ax.transAxes,
+                    ha="left",
+                    va="top",
+                    fontsize=plt.rcParams["axes.titlesize"],
+                    bbox=dict(facecolor="white", edgecolor="none", alpha=0.6, pad=2),
                 )
+                panel_idx += 1
+                if row == 0:
+                    subplot.ax.text(
+                        0.5,
+                        1.03,
+                        PARAM_LABELS.get(param, param),
+                        transform=subplot.ax.transAxes,
+                        ha="center",
+                        va="bottom",
+                        fontsize=plt.rcParams["axes.titlesize"],
+                        clip_on=False,
+                    )
         mpl_fig = fig.fig
+        for row, seas in enumerate(seasons):
+            row_axes[row].text(
+                -0.05,
+                0.5,
+                season_labels.get(seas, seas),
+                transform=row_axes[row].transAxes,
+                ha="right",
+                va="center",
+                fontsize=plt.rcParams["axes.titlesize"],
+                rotation=90,
+                clip_on=False,
+            )
         sm = plt.cm.ScalarMappable(cmap=skill_cmap, norm=skill_norm)
         sm.set_array([])
         cbar = mpl_fig.colorbar(
@@ -435,9 +514,10 @@ def _(
         label_bbox = cbar.ax.xaxis.label.get_window_extent(renderer)
         fig_height_px = mpl_fig.get_figheight() * mpl_fig.dpi
         y_fig = label_bbox.y0 / fig_height_px
-        cb_pos = cbar.ax.get_position()
+        axes_x0 = min(ax.get_position().x0 for ax in mpl_axes)
+        axes_x1 = max(ax.get_position().x1 for ax in mpl_axes)
         mpl_fig.text(
-            cb_pos.x0,
+            axes_x0,
             y_fig,
             f"{baseline_label} better",
             ha="left",
@@ -446,7 +526,7 @@ def _(
             fontsize=plt.rcParams["font.size"],
         )
         mpl_fig.text(
-            cb_pos.x1,
+            axes_x1,
             y_fig,
             f"{candidate_label} better",
             ha="right",
