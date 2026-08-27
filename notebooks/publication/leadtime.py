@@ -198,7 +198,7 @@ def _():
                             m6["value"],
                             linestyle="none",
                             marker="o",
-                            markersize=5,
+                            markersize=3,
                             color=_line_style(src)["color"],
                         )
                 ax.set_xscale("function", **_XSCALE_KW)
@@ -219,7 +219,7 @@ def _():
                     ax.set_title(p.title_x, loc="center", y=1.05)
                 if p.title_y:
                     ax.set_title(
-                        p.title_y, x=-0.25, y=0.5, rotation=90, va="center", loc="left"
+                        p.title_y, x=-0.33, y=0.5, rotation=90, va="center", loc="left"
                     )
                 _margin = 0.05
                 _ymin, _ymax = ax.get_ylim()
