@@ -24,6 +24,18 @@ ytick.labelsize     : 6
 legend.fontsize     : 7    # fig.legend() / ax.legend()
 figure.titlesize    : 8    # fig.suptitle()
 
+# Mathtext in the regular sans font, so inline symbols (e.g. $S$, $S_\mathrm{BIAS}$)
+# match the surrounding Liberation Sans instead of falling back to DejaVu math.
+mathtext.default    : regular
+
+# Text colours — full black everywhere. earthkit's Figure() resets these to a
+# dark grey (#333333); pinning them here means re-applying this style (as the
+# scoremaps/teaser notebooks do) restores true black.
+text.color          : black
+axes.labelcolor     : black
+xtick.color         : black
+ytick.color         : black
+
 # Lines — overridden per-source by line_style() in style.py
 lines.linewidth     : 0.8
 

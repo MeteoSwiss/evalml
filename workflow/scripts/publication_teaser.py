@@ -73,7 +73,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 # the light temperature field.
 OUTLINE_COLOR = "#e8e8e8"
 CALLOUT_COLOR = "#4d4d4d"
-CAPTION_COLOR = "#333333"
+CAPTION_COLOR = "black"  # full black, consistent with the other publication figures
 BG_COLOR = "white"  # figure/axes background (overridden by --dark)
 DARK_BG = "black"  # background for the dark variant
 GLOW = False  # soft halo around each panel (enabled by --dark)

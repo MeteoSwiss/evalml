@@ -445,15 +445,16 @@ def _(
                 if col == 0:
                     row_axes[row] = subplot.ax
                 mpl_axes.append(subplot.ax)
+                # Panel letters styled identically to the meteogram for
+                # cross-figure consistency: bold, top-left, inherit the base size.
                 subplot.ax.text(
-                    0.03,
-                    0.97,
+                    0.015,
+                    0.94,
                     f"({chr(ord('a') + panel_idx)})",
                     transform=subplot.ax.transAxes,
                     ha="left",
                     va="top",
-                    fontsize=plt.rcParams["axes.titlesize"],
-                    fontweight="normal",
+                    fontweight="bold",
                 )
                 panel_idx += 1
                 if row == 0:
