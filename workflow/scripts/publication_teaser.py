@@ -31,7 +31,7 @@ Runs standalone (no Snakemake), reading the inference-sandbox GRIB layout::
 import logging
 import sys
 from argparse import ArgumentParser
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import cartopy.crs as ccrs
@@ -56,7 +56,10 @@ _script_dir = Path(__file__).resolve().parent
 sys.path.append(str(_script_dir))
 sys.path.append(str(_script_dir.parent.parent / "src"))
 
-plt.style.use(_script_dir / "publication.mplstyle")
+from evalml.publication.style import figure_width, mplstyle_path  # noqa: E402
+
+# Shared publication style, so the teaser's text/lines match every other figure.
+plt.style.use(mplstyle_path())
 
 from plotting import DOMAINS, StatePlotter  # noqa: E402
 from plotting.compat import load_from_grib_file  # noqa: E402
@@ -77,7 +80,7 @@ GLOW = False  # soft halo around each panel (enabled by --dark)
 ekp.schema.borders["edgecolor"] = "none"  # off everywhere; added manually on regional
 ekp.schema.coastlines["resolution"] = "high"
 ekp.schema.coastlines["edgecolor"] = OUTLINE_COLOR
-ekp.schema.coastlines["linewidth"] = 0.8
+ekp.schema.coastlines["linewidth"] = 0.4
 
 GLOBAL_DOMAIN = "globe"
 REGIONAL_DOMAIN = "switzerland"
@@ -558,10 +561,14 @@ def make_teaser(
         nrows=len(FIELDS),
         ncols=len(columns),
         name="teaser",
-        # Width sized so each column is ~as wide as the globe is tall, otherwise
-        # the height-limited globe letterboxes and leaves wide inter-column gaps.
-        size=(13.5, 10),
+        # 2-column page width; keep the original 13.5:10 aspect so the globes
+        # stay square and columns don't letterbox.
+        size=(figure_width(2), figure_width(2) * 10.0 / 13.5),
     )
+    # init_geoaxes builds an ekp.Figure, which resets the global rcParams to
+    # earthkit's house style; re-assert the shared publication style so fonts and
+    # lines match the rest of the paper.
+    plt.style.use(mplstyle_path())
     mpl_fig = fig.fig
     mpl_fig.set_facecolor(BG_COLOR)
 
@@ -573,6 +580,9 @@ def make_teaser(
             plotter = l_plotter if is_zoom else g_plotter
             field = _preprocess(spec["key"], state["fields"])
             style = _field_style(spec["key"], is_regional=is_zoom)
+            # Thinner coastline "land mask" on the global panels than on the zooms
+            # (the schema is read at draw time, so set it per panel).
+            ekp.schema.coastlines["linewidth"] = 0.4 if is_zoom else 0.25
             subplot = fig.add_map(row=row, column=col)
             # Every column gets its own colorbar, sized to the column width.
             if colcfg.get("tripcolor"):
@@ -603,10 +613,10 @@ def make_teaser(
                 )
             if is_zoom:
                 subplot.ax.set_extent(colcfg["extent"], crs=ccrs.PlateCarree())
-                _add_regional_borders(subplot.ax, color=OUTLINE_COLOR, linewidth=0.8)
+                _add_regional_borders(subplot.ax, color=OUTLINE_COLOR, linewidth=0.4)
             if colcfg["box"] is not None:
                 _draw_extent_box(
-                    subplot.ax, colcfg["box"], color=CALLOUT_COLOR, linewidth=1.6
+                    subplot.ax, colcfg["box"], color=CALLOUT_COLOR, linewidth=0.7
                 )
             if col == 1:
                 subplot.ax.text(
@@ -616,7 +626,7 @@ def make_teaser(
                     transform=subplot.ax.transAxes,
                     ha="left",
                     va="bottom",
-                    fontsize=12,
+                    fontsize=plt.rcParams["axes.titlesize"],
                     color=CAPTION_COLOR,
                 )
             _strip_chrome(subplot.ax)
@@ -630,26 +640,30 @@ def make_teaser(
                 axes[src + 1],
                 columns[src]["box"],
                 color=CALLOUT_COLOR,
-                linewidth=1.3,
+                linewidth=0.5,
             )
 
-    valid = lam_state["valid_time"].strftime("%Y-%m-%d %H:%M UTC")
+    # Caption shows the forecast initialisation time + lead time (valid time is
+    # init + lead, so labelling it "valid … + lead h" would double-count).
+    init = (lam_state["valid_time"] - timedelta(hours=lead_time)).strftime(
+        "%Y-%m-%d %H:%M UTC"
+    )
     mpl_fig.text(
         0.015,
         0.985,
         "Varda-Single",
         ha="left",
         va="top",
-        fontsize=14,
+        fontsize=plt.rcParams["axes.titlesize"],
         color=CAPTION_COLOR,
     )
     mpl_fig.text(
         0.015,
         0.955,
-        f"valid {valid}  ·  +{lead_time} h",
+        f"init {init}  ·  +{lead_time} h",
         ha="left",
         va="top",
-        fontsize=10,
+        fontsize=plt.rcParams["font.size"],
         color=CAPTION_COLOR,
     )
 
@@ -668,10 +682,14 @@ def make_teaser(
         except (AttributeError, TypeError):
             pass
 
+    # PNG only: the teaser's forecast fields have ~1M points, so a vector PDF
+    # would balloon to hundreds of MB.
     out_png = output / "publication_teaser.png"
-    out_pdf = output / "publication_teaser.pdf"
-    fig.save(out_pdf, bbox_inches="tight", dpi=300)
-    fig.save(out_png, bbox_inches="tight", dpi=300)
+    # Save at the exact figure size so the output is exactly the 2-column print
+    # width. earthkit's Figure.save defaults to bbox_inches="tight" (which would
+    # trim ~0.1 in off), so pass None explicitly; the constrained layout already
+    # fills the canvas.
+    fig.save(out_png, dpi=250, bbox_inches=None)
     LOG.info("Saved %s", out_png)
 
     (output / "publication_teaser.html").write_text(
