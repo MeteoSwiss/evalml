@@ -127,7 +127,7 @@ def main():
     outfn = Path(args.outfn)
     outfn.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
-    fig.savefig(outfn, dpi=200, bbox_inches="tight")
+    fig.savefig(outfn, dpi=250, bbox_inches="tight")
     fig.savefig(outfn.with_suffix(".pdf"), bbox_inches="tight")  # vector for the paper
     plt.close(fig)
     LOG.info("saved: %s (+ .pdf)", outfn)

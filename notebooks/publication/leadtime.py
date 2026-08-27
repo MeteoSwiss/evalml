@@ -330,7 +330,7 @@ def _(
     _fig = plot_panels(_panels, df_all, sources, legend_ncol=(len(sources) + 1) // 2)
     _fname = _out / "publication_leadtime.pdf"
     _fig.savefig(_fname, bbox_inches="tight")
-    _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
+    _fig.savefig(_fname.with_suffix(".png"), dpi=250, bbox_inches="tight")
     _plt.close(_fig)
 
     _panels_skill = _build_combined_panels(
@@ -341,7 +341,7 @@ def _(
     )
     _fname_skill = _out / "publication_leadtime_skill.pdf"
     _fig_skill.savefig(_fname_skill, bbox_inches="tight")
-    _fig_skill.savefig(_fname_skill.with_suffix(".png"), dpi=200, bbox_inches="tight")
+    _fig_skill.savefig(_fname_skill.with_suffix(".png"), dpi=250, bbox_inches="tight")
     _plt.close(_fig_skill)
 
     (_out / "publication_leadtime.html").write_text(

@@ -296,7 +296,7 @@ def _(
     out.mkdir(parents=True, exist_ok=True)
     stem = f"publication_meteogram_{FIG_NAME}" if FIG_NAME else "publication_meteogram"
     fig.savefig(out / f"{stem}.pdf", bbox_inches="tight")
-    fig.savefig(out / f"{stem}.png", dpi=200, bbox_inches="tight")
+    fig.savefig(out / f"{stem}.png", dpi=250, bbox_inches="tight")
     LOG.info("meteogram: saved to %s/%s", out, stem)
     plt.show()
     return
