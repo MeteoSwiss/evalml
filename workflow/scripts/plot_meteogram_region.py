@@ -127,8 +127,10 @@ def main():
     outfn = Path(args.outfn)
     outfn.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
-    fig.savefig(outfn, dpi=250, bbox_inches="tight")
-    fig.savefig(outfn.with_suffix(".pdf"), bbox_inches="tight")  # vector for the paper
+    # Save at the exact figure size (tight_layout already fits the content) so
+    # the output is exactly the nominal single-column print width.
+    fig.savefig(outfn, dpi=250)
+    fig.savefig(outfn.with_suffix(".pdf"))  # vector for the paper
     plt.close(fig)
     LOG.info("saved: %s (+ .pdf)", outfn)
 

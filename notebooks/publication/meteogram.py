@@ -295,8 +295,10 @@ def _(
     out = Path(figures_dir(m.output_root, m.truth["label"])) / "meteogram"
     out.mkdir(parents=True, exist_ok=True)
     stem = f"publication_meteogram_{FIG_NAME}" if FIG_NAME else "publication_meteogram"
-    fig.savefig(out / f"{stem}.pdf", bbox_inches="tight")
-    fig.savefig(out / f"{stem}.png", dpi=250, bbox_inches="tight")
+    # Save at the exact figure size (tight_layout above already fits the content
+    # inside the canvas) so the output is exactly the nominal print width.
+    fig.savefig(out / f"{stem}.pdf")
+    fig.savefig(out / f"{stem}.png", dpi=250)
     LOG.info("meteogram: saved to %s/%s", out, stem)
     plt.show()
     return

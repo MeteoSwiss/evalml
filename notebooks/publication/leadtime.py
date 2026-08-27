@@ -252,7 +252,10 @@ def _():
                 fontsize=_plt.rcParams["axes.labelsize"],
             )
             fig.tight_layout()
-            fig.subplots_adjust(bottom=_subplot_bottom)
+            # Reserve left margin so the rotated row labels (placed at x=-0.33,
+            # outside the axes) stay inside the canvas — needed because we save at
+            # the exact figure width (no tight bbox) for consistent print sizing.
+            fig.subplots_adjust(bottom=_subplot_bottom, left=0.15)
             return fig
 
     return (plot_panels,)
@@ -329,8 +332,8 @@ def _(
     _panels = _build_combined_panels(df_all, {"RMSE": "RMSE", "BIAS": "BIAS"})
     _fig = plot_panels(_panels, df_all, sources, legend_ncol=(len(sources) + 1) // 2)
     _fname = _out / "publication_leadtime.pdf"
-    _fig.savefig(_fname, bbox_inches="tight")
-    _fig.savefig(_fname.with_suffix(".png"), dpi=250, bbox_inches="tight")
+    _fig.savefig(_fname)
+    _fig.savefig(_fname.with_suffix(".png"), dpi=250)
     _plt.close(_fig)
 
     _panels_skill = _build_combined_panels(
@@ -340,8 +343,8 @@ def _(
         _panels_skill, df_skill_all, skill_sources, legend_ncol=(len(skill_sources) + 1) // 2
     )
     _fname_skill = _out / "publication_leadtime_skill.pdf"
-    _fig_skill.savefig(_fname_skill, bbox_inches="tight")
-    _fig_skill.savefig(_fname_skill.with_suffix(".png"), dpi=250, bbox_inches="tight")
+    _fig_skill.savefig(_fname_skill)
+    _fig_skill.savefig(_fname_skill.with_suffix(".png"), dpi=250)
     _plt.close(_fig_skill)
 
     (_out / "publication_leadtime.html").write_text(

@@ -498,6 +498,16 @@ def _(
         cbar.set_ticks(SKILL_LEVELS)
         cbar.set_ticklabels([f"{v:g}" for v in SKILL_LEVELS])
         cbar.set_label("Skill  (1 − model / baseline)", labelpad=4, fontweight="normal")
+        # Reserve a bottom band so the "… better" annotations placed below the
+        # colorbar stay inside the canvas — needed because we save at the exact
+        # figure size (no tight bbox), and those manual texts aren't managed by
+        # earthkit's constrained layout.
+        _eng = mpl_fig.get_layout_engine()
+        if _eng is not None:
+            try:
+                _eng.set(rect=(0, 0.06, 1, 1))
+            except (AttributeError, TypeError):
+                pass
         mpl_fig.canvas.draw()
         renderer = mpl_fig.canvas.get_renderer()
         label_bbox = cbar.ax.xaxis.label.get_window_extent(renderer)
@@ -579,7 +589,7 @@ def _(
 
         fig = _make_map_figure(**_fig_kw, **_common)
         out_png = output / f"publication_scoremaps_{lt}h.png"
-        fig.save(out_png, bbox_inches="tight", dpi=250)
+        fig.save(out_png, bbox_inches=None, dpi=250)
         out_pngs.append(out_png)
         LOG.info("Saved %s", out_png)
 
@@ -593,13 +603,13 @@ def _(
 
             fig_st_only = _make_map_figure(**_fig_kw, station_arrays=_station_arrays, show_field=False, **_common)
             out_png_st_only = output / f"publication_scoremaps_{lt}h_stations_only.png"
-            fig_st_only.save(out_png_st_only, bbox_inches="tight", dpi=250)
+            fig_st_only.save(out_png_st_only, bbox_inches=None, dpi=250)
             out_pngs.append(out_png_st_only)
             LOG.info("Saved %s", out_png_st_only)
 
             fig_st = _make_map_figure(**_fig_kw, station_arrays=_station_arrays, **_common)
             out_png_st = output / f"publication_scoremaps_{lt}h_stations.png"
-            fig_st.save(out_png_st, bbox_inches="tight", dpi=250)
+            fig_st.save(out_png_st, bbox_inches=None, dpi=250)
             out_pngs.append(out_png_st)
             LOG.info("Saved %s", out_png_st)
 
@@ -621,7 +631,7 @@ def _(
         )
 
         out_png = output / f"publication_scoremaps_seasonal_{lt}h.png"
-        fig_seas.save(out_png, bbox_inches="tight", dpi=250)
+        fig_seas.save(out_png, bbox_inches=None, dpi=250)
         out_seasonal_pngs.append(out_png)
         LOG.info("Saved %s", out_png)
 
