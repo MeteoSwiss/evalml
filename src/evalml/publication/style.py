@@ -79,8 +79,8 @@ SCORE_LABELS = {
     "STDE": "STDE",
     "BIAS": "Bias",
     "MAE": "MAE",
-    "MSE_SKILL": "MSE skill",
-    "BIAS_CONTRIB": "Contribution of bias to MSE skill",
+    "MSE_SKILL": "MSE skill\n($S$)",
+    "BIAS_CONTRIB": "Bias contribution to MSE skill\n($S_\\mathrm{BIAS}$)",
 }
 
 REGION_LABELS = {

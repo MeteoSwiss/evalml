@@ -55,11 +55,13 @@ def _():
     # Force the standard map furniture (drawn by `subplot.standard_layers()` inside
     # StatePlotter.plot_field) to high-resolution Natural Earth geometry. Otherwise
     # it defaults to medium (50m), leaving a fuzzy low-res border.
-    # We also darken/thicken the country borders slightly for publication legibility.
+    # Thin black country borders + coastlines to match the light print aesthetic
+    # (the previous 1.0 pt was too heavy at page-column size).
     ekp.schema.borders["resolution"] = "high"
     ekp.schema.borders["edgecolor"] = "black"
-    ekp.schema.borders["linewidth"] = 1.0
+    ekp.schema.borders["linewidth"] = 0.5
     ekp.schema.coastlines["resolution"] = "high"
+    ekp.schema.coastlines["linewidth"] = 0.4
 
     SCALING = 0.85 # scale figure size to control relative size of labels
     return (
@@ -205,7 +207,7 @@ def _(
     to_hex,
     xr,
 ):
-    from evalml.publication.style import figure_width
+    from evalml.publication.style import figure_width, mplstyle_path
 
     # Scoremaps are a single-column figure; fix the print width and keep the
     # map grid's height proportional.
@@ -213,6 +215,16 @@ def _(
 
     def _fig_size(ncols, nrows):
         return (_FIG_WIDTH, _FIG_WIDTH * 5 * nrows / (6 * ncols))
+
+    # earthkit's ekp.Figure() resets matplotlib's global rcParams to its own house
+    # style (a grey 1.0 pt frame, its own fonts). Read the shared frame width and
+    # colour straight from the style file so we can restore the thin black frame
+    # regardless of that pollution.
+    import matplotlib as _mpl
+
+    _pub_rc = _mpl.rc_params_from_file(mplstyle_path(), use_default_template=False)
+    _FRAME_LW = float(_pub_rc.get("axes.linewidth", 0.4))
+    _FRAME_COLOR = _pub_rc.get("axes.edgecolor", "black")
 
     # Tighter geographic crop for publication: roughly equal visual margins around Switzerland.
     PUB_EXTENTS = {
@@ -381,6 +393,10 @@ def _(
             name=region,
             size=_fig_size(ncols, nrows),
         )
+        # init_geoaxes constructs an ekp.Figure, which clobbers the global
+        # rcParams with earthkit's house style. Re-assert the publication style so
+        # the panel fonts, labels and colorbar match the rest of the paper.
+        plt.style.use(mplstyle_path())
         mpl_axes = []
         row_axes = {}
         panel_idx = 0
@@ -419,6 +435,13 @@ def _(
                                 transform=ccrs.PlateCarree(),
                             )
                 _remove_latlon_labels(subplot.ax)
+                # Match the meteogram frame: cartopy's GeoAxes 'geo' spine is
+                # created with earthkit's grey 1.0 pt style, so force it to the
+                # shared thin black outline (values read from the style file, so
+                # they're immune to earthkit's rcParam pollution).
+                for _sp in subplot.ax.spines.values():
+                    _sp.set_linewidth(_FRAME_LW)
+                    _sp.set_edgecolor(_FRAME_COLOR)
                 if col == 0:
                     row_axes[row] = subplot.ax
                 mpl_axes.append(subplot.ax)
@@ -430,7 +453,7 @@ def _(
                     ha="left",
                     va="top",
                     fontsize=plt.rcParams["axes.titlesize"],
-                    bbox=dict(facecolor="white", edgecolor="none", alpha=0.6, pad=2),
+                    fontweight="normal",
                 )
                 panel_idx += 1
                 if row == 0:
@@ -442,6 +465,7 @@ def _(
                         ha="center",
                         va="bottom",
                         fontsize=plt.rcParams["axes.titlesize"],
+                        fontweight="normal",
                         clip_on=False,
                     )
         mpl_fig = fig.fig
@@ -454,6 +478,7 @@ def _(
                 ha="right",
                 va="center",
                 fontsize=plt.rcParams["axes.titlesize"],
+                fontweight="normal",
                 rotation=90,
                 clip_on=False,
             )
@@ -471,7 +496,7 @@ def _(
         )
         cbar.set_ticks(SKILL_LEVELS)
         cbar.set_ticklabels([f"{v:g}" for v in SKILL_LEVELS])
-        cbar.set_label("Skill  (1 − model / baseline)", labelpad=4)
+        cbar.set_label("Skill  (1 − model / baseline)", labelpad=4, fontweight="normal")
         mpl_fig.canvas.draw()
         renderer = mpl_fig.canvas.get_renderer()
         label_bbox = cbar.ax.xaxis.label.get_window_extent(renderer)
@@ -487,6 +512,7 @@ def _(
             va="top",
             color=COLOR_SKILL_BASELINE_BETTER,
             fontsize=plt.rcParams["font.size"],
+            fontweight="normal",
         )
         mpl_fig.text(
             axes_x1,
@@ -496,6 +522,7 @@ def _(
             va="top",
             color=COLOR_SKILL_MODEL_BETTER,
             fontsize=plt.rcParams["font.size"],
+            fontweight="normal",
         )
         return fig
 
@@ -551,7 +578,7 @@ def _(
 
         fig = _make_map_figure(**_fig_kw, **_common)
         out_png = output / f"publication_scoremaps_{lt}h.png"
-        fig.save(out_png, bbox_inches="tight", dpi=200)
+        fig.save(out_png, bbox_inches="tight", dpi=250)
         out_pngs.append(out_png)
         LOG.info("Saved %s", out_png)
 
@@ -565,13 +592,13 @@ def _(
 
             fig_st_only = _make_map_figure(**_fig_kw, station_arrays=_station_arrays, show_field=False, **_common)
             out_png_st_only = output / f"publication_scoremaps_{lt}h_stations_only.png"
-            fig_st_only.save(out_png_st_only, bbox_inches="tight", dpi=200)
+            fig_st_only.save(out_png_st_only, bbox_inches="tight", dpi=250)
             out_pngs.append(out_png_st_only)
             LOG.info("Saved %s", out_png_st_only)
 
             fig_st = _make_map_figure(**_fig_kw, station_arrays=_station_arrays, **_common)
             out_png_st = output / f"publication_scoremaps_{lt}h_stations.png"
-            fig_st.save(out_png_st, bbox_inches="tight", dpi=200)
+            fig_st.save(out_png_st, bbox_inches="tight", dpi=250)
             out_pngs.append(out_png_st)
             LOG.info("Saved %s", out_png_st)
 
@@ -593,7 +620,7 @@ def _(
         )
 
         out_png = output / f"publication_scoremaps_seasonal_{lt}h.png"
-        fig_seas.save(out_png, bbox_inches="tight", dpi=200)
+        fig_seas.save(out_png, bbox_inches="tight", dpi=250)
         out_seasonal_pngs.append(out_png)
         LOG.info("Saved %s", out_png)
 
