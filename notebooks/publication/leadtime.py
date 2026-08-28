@@ -152,7 +152,11 @@ def _():
     import matplotlib.ticker as _mticker
     import numpy as _np
 
-    from evalml.publication.style import line_style as _line_style, mplstyle_path as _mplstyle_path
+    from evalml.publication.style import (
+        line_style as _line_style,
+        mplstyle_path as _mplstyle_path,
+        figure_width as _figure_width,
+    )
 
     _XSCALE_KW = dict(
         functions=(
@@ -174,8 +178,10 @@ def _():
         with _plt.style.context(_mplstyle_path()):
             nrows = panels["row_id"].max() + 1
             ncols = panels["col_id"].max() + 1
+            # Fixed page width (2-column); height proportional to the grid.
+            _w = _figure_width(2)
             fig, axes = _plt.subplots(
-                nrows, ncols, figsize=(4 * ncols, 3 * nrows), sharex=True
+                nrows, ncols, figsize=(_w, _w * 0.75 * nrows / ncols), sharex=True
             )
             for _, p in panels.iterrows():
                 ax = axes[p.row_id, p.col_id]
@@ -192,7 +198,7 @@ def _():
                             m6["value"],
                             linestyle="none",
                             marker="o",
-                            markersize=5,
+                            markersize=3,
                             color=_line_style(src)["color"],
                         )
                 ax.set_xscale("function", **_XSCALE_KW)
@@ -213,7 +219,7 @@ def _():
                     ax.set_title(p.title_x, loc="center", y=1.05)
                 if p.title_y:
                     ax.set_title(
-                        p.title_y, x=-0.25, y=0.5, rotation=90, va="center", loc="left"
+                        p.title_y, x=-0.33, y=0.5, rotation=90, va="center", loc="left"
                     )
                 _margin = 0.05
                 _ymin, _ymax = ax.get_ylim()
@@ -244,9 +250,14 @@ def _():
                 ncol=_ncol,
                 bbox_to_anchor=(0.5, _subplot_bottom - 0.05),
                 fontsize=_plt.rcParams["axes.labelsize"],
+                handlelength=3.0,   # wide enough to show the dashed EPS-mean line styles
+                handletextpad=0.5,
             )
             fig.tight_layout()
-            fig.subplots_adjust(bottom=_subplot_bottom)
+            # Reserve left margin so the rotated row labels (placed at x=-0.33,
+            # outside the axes) stay inside the canvas — needed because we save at
+            # the exact figure width (no tight bbox) for consistent print sizing.
+            fig.subplots_adjust(bottom=_subplot_bottom, left=0.15)
             return fig
 
     return (plot_panels,)
@@ -323,8 +334,8 @@ def _(
     _panels = _build_combined_panels(df_all, {"RMSE": "RMSE", "BIAS": "BIAS"})
     _fig = plot_panels(_panels, df_all, sources, legend_ncol=(len(sources) + 1) // 2)
     _fname = _out / "publication_leadtime.pdf"
-    _fig.savefig(_fname, bbox_inches="tight")
-    _fig.savefig(_fname.with_suffix(".png"), dpi=200, bbox_inches="tight")
+    _fig.savefig(_fname)
+    _fig.savefig(_fname.with_suffix(".png"), dpi=250)
     _plt.close(_fig)
 
     _panels_skill = _build_combined_panels(
@@ -334,8 +345,8 @@ def _(
         _panels_skill, df_skill_all, skill_sources, legend_ncol=(len(skill_sources) + 1) // 2
     )
     _fname_skill = _out / "publication_leadtime_skill.pdf"
-    _fig_skill.savefig(_fname_skill, bbox_inches="tight")
-    _fig_skill.savefig(_fname_skill.with_suffix(".png"), dpi=200, bbox_inches="tight")
+    _fig_skill.savefig(_fname_skill)
+    _fig_skill.savefig(_fname_skill.with_suffix(".png"), dpi=250)
     _plt.close(_fig_skill)
 
     (_out / "publication_leadtime.html").write_text(

@@ -17,6 +17,19 @@ from pathlib import Path
 
 from matplotlib.colors import LinearSegmentedColormap
 
+# Print widths (inches). Figures are placed in the paper at 100% (no resizing),
+# so set a figure's WIDTH to one of these by its column span; keep the height
+# proportional. Font sizes are absolute (in publication.mplstyle), so text
+# appears the same size on every figure regardless of width.
+FIG_WIDTH_1COL = 3.35   # single column
+FIG_WIDTH_2COL = 5.7    # spans both columns (page width)
+
+
+def figure_width(columns: int) -> float:
+    """Print width in inches for a 1- or 2-column figure."""
+    return FIG_WIDTH_2COL if columns >= 2 else FIG_WIDTH_1COL
+
+
 # Label used for the station-observations source (overlaid in the meteogram).
 OBS_LABEL = "Observations"
 
@@ -66,8 +79,8 @@ SCORE_LABELS = {
     "STDE": "STDE",
     "BIAS": "Bias",
     "MAE": "MAE",
-    "MSE_SKILL": "MSE skill",
-    "BIAS_CONTRIB": "Contribution of bias to MSE skill",
+    "MSE_SKILL": "MSE skill\n($S$)",
+    "BIAS_CONTRIB": "Bias contribution to MSE skill\n($S_\\mathrm{BIAS}$)",
 }
 
 REGION_LABELS = {
@@ -127,7 +140,7 @@ def line_style(src: str) -> dict:
             color=COLOR_OBS,
             linestyle="none",
             marker="o",
-            markersize=3.5,
+            markersize=2.5,
         )
     color = (
         COLOR_CH1
@@ -141,7 +154,7 @@ def line_style(src: str) -> dict:
         else "gray"
     )
     linestyle = "--" if "EPS mean" in src else "-"
-    linewidth = 2.25 if "Varda" in src else 1.5
+    linewidth = 1.3 if "Varda" in src else 0.9
     return dict(color=color, linestyle=linestyle, linewidth=linewidth)
 
 
