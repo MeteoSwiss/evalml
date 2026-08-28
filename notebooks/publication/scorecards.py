@@ -43,6 +43,7 @@ def _():
     from evalml.publication.style import (
         COLOR_SKILL_BASELINE_BETTER,
         COLOR_SKILL_MODEL_BETTER,
+        PARAM_UNITS,
         param_label,
         region_label,
     )
@@ -63,6 +64,7 @@ def _():
         COLOR_SKILL_BASELINE_BETTER,
         COLOR_SKILL_MODEL_BETTER,
         DEFAULT_PLOT_CFG,
+        PARAM_UNITS,
         PROJECT_ROOT,
         Path,
         draw_data_rows,
@@ -141,7 +143,7 @@ def _(PROJECT_ROOT, mo, sys):
     else:
         manifest_path = _cli.get("manifest", default=_manifest_default)
         output_dir = _cli.get("output", default=_output_default)
-        candidate = _cli.get("candidate", default="Varda-single")
+        candidate = _cli.get("candidate", default=None)
     return candidate, manifest_path, output_dir
 
 
@@ -198,6 +200,7 @@ def _(
     COLOR_SKILL_MODEL_BETTER,
     DEFAULT_PLOT_CFG,
     LOG,
+    PARAM_UNITS,
     cand_info,
     filter_diff,
     load_relative_diff,
@@ -205,6 +208,7 @@ def _(
     mo,
     param_label,
     parse_var_metrics,
+    plt,
     region_label,
     section_cfgs,
     timedelta_to_hours,
@@ -241,6 +245,16 @@ def _(
         layout = plot["layout"]
         strat_dim = cfg.get("stratification", "region")
         rows = [tuple(v.rsplit(".", 1)) for v in diff.data_vars]
+        if layout.get("group_as_header"):
+            # Insert a (variable, None) header sentinel before each group's metric
+            # rows so the variable name renders as a subtitle above its metrics.
+            _expanded, _cur = [], None
+            for _g, _m in rows:
+                if _g != _cur:
+                    _expanded.append((_g, None))
+                    _cur = _g
+                _expanded.append((_g, _m))
+            rows = _expanded
         slices = list(diff[strat_dim].values)
         n_leads = diff.sizes["step"]
         lead_hours = [timedelta_to_hours(lt) for lt in diff.step.values]
@@ -282,6 +296,32 @@ def _(
     _PARAM_WRAP = 20  # wrap parameter names after ~20 chars
     _REGION_WRAP = 12  # wrap region names after ~12 chars
 
+    def _top_align(label):
+        """Prepend (n-1) empty lines so va='center' aligns the first visible line with y."""
+        n = label.count("\n") + 1
+        return "\n" * (n - 1) + label
+
+    _THRESHOLD_OPS = {"_gt_": ">", "_ge_": ">=", "_lt_": "<", "_le_": "<="}
+    _K_TO_C_PARAMS = {"T_2M", "TD_2M"}
+
+    def _metric_with_unit(param, metric):
+        """Return a display-ready metric string with physical unit (and K→°C for temperature).
+
+        For temperature params the value is converted and the result is fully decoded so that
+        decode_metric() (called later inside report_scorecard) leaves it unchanged.
+        For other params the raw encoded metric gets a unit suffix appended; decode_metric
+        will then expand '_gt_' → '>' and 'p' → '.' as usual.
+        """
+        for op_enc, op_sym in _THRESHOLD_OPS.items():
+            if op_enc in metric:
+                score, val_raw = metric.split(op_enc, 1)
+                val = float(val_raw.replace("p", "."))
+                if param in _K_TO_C_PARAMS:
+                    return f"{score} {op_sym} {val - 273.15:g} °C"
+                unit = PARAM_UNITS.get(param, "")
+                return f"{metric} {unit}" if unit else metric
+        return metric
+
     excluded_data_vars = [
         "TOT_PREC1.ETS_gt_0p1",
         "TOT_PREC1.ETS_gt_10p0",
@@ -294,8 +334,30 @@ def _(
     plot_cfg = copy.deepcopy(DEFAULT_PLOT_CFG)
     plot_cfg["colors"]["model_better"] = COLOR_SKILL_MODEL_BETTER
     plot_cfg["colors"]["baseline_better"] = COLOR_SKILL_BASELINE_BETTER
-    plot_cfg["figure"]["title_margin_in"] = 0.5  # space between title and axes
+    plot_cfg["figure"]["title_margin_in"] = 0.9  # space between title and axes
     plot_cfg["figure"]["inter_panel_gap_in"] = 1.2  # extra gap above non-first panels
+    # Variable name as a subtitle header row (frees the wide left margin the
+    # wrapped names used to need) so the two sections fit a 2-column (5.7 in) slot.
+    plot_cfg["layout"]["group_as_header"] = True
+    plot_cfg["figure"]["col_width"] = 0.11      # wider lead columns so labels don't collide
+    plot_cfg["figure"]["width_min"] = 0.5       # drop the 5 in/panel floor
+    plot_cfg["figure"]["row_height"] = 0.16     # compact rows (headers add ~4 rows)
+    plot_cfg["figure"]["left_margin_in"] = 0.8  # only the metric labels sit here now
+    plot_cfg["figure"]["width_pad"] = 0.9       # ≈ left_margin_in + small right buffer
+    plot_cfg["dots"]["max_area"] = 35           # keep dots within the ~0.08 in columns
+    plot_cfg["legend"]["width_in"] = 2.5        # narrow dot row -> room for the side texts
+
+    # Inherit font sizes from the mplstyle rather than using the hardcoded defaults.
+    _fs = plt.rcParams["font.size"]              # 7 pt — values / annotations
+    _fs_title = plt.rcParams["axes.titlesize"]   # 8 pt — titles / identifiers
+    _fs_small = plt.rcParams["xtick.labelsize"]  # 6 pt — axis-tick-like labels
+    plot_cfg["fonts"]["title"] = _fs_title
+    plot_cfg["fonts"]["group"] = _fs_title   # variable header subtitle (bold), 8 pt
+    plot_cfg["fonts"]["slice"] = _fs_small   # region column headers (drive col_width)
+    plot_cfg["fonts"]["metric"] = _fs        # metric-row labels, 7 pt
+    plot_cfg["fonts"]["leads"] = _fs_small   # lead-time tick labels
+    plot_cfg["fonts"]["legend"] = _fs_small  # legend side-text and dot labels
+    plot_cfg["legend"]["label_fontsize_factor"] = 1.0  # keep dot labels same size as side-text
 
     LOG.info("scorecard: loading data for %d section(s)", len(section_cfgs))
     panels = []
@@ -313,7 +375,7 @@ def _(
         _diff = _diff.sel(region = xr.DataArray(["icon", "jura", "mittelland", "alpen"], dims = "region"))
         _diff = _diff.rename(
             {
-                v: f"{_tw.fill(param_label(v.rsplit('.', 1)[0]), width=_PARAM_WRAP)}.{v.rsplit('.', 1)[1]}"
+                v: f"{param_label(v.rsplit('.', 1)[0])}.{_metric_with_unit(v.rsplit('.', 1)[0], v.rsplit('.', 1)[1])}"
                 for v in _diff.data_vars
             }
         )
@@ -476,6 +538,28 @@ def _(
         )
         _axes_info.append((_ax, _lay, _sep_ys, _cfg, _model_source, _baseline_source))
 
+    def _combined_label(labels):
+        if len(set(labels)) == 1:
+            return labels[0]
+        prefix = ""
+        for chars in zip(*labels):
+            if len(set(chars)) == 1:
+                prefix += chars[0]
+            else:
+                break
+        suffix = ""
+        for chars in zip(*[l[::-1] for l in labels]):
+            if len(set(chars)) == 1:
+                suffix = chars[0] + suffix
+            else:
+                break
+        n = len(suffix)
+        middles = [l[len(prefix): len(l) - n if n else len(l)] for l in labels]
+        return prefix + "/".join(middles) + suffix
+
+    _unified_baseline = _combined_label([bs for _, _, _, _, _, bs in _axes_info])
+    _unified_model = _combined_label([ms for _, _, _, _, ms, _ in _axes_info])
+
     for _ax, _lay, _sep_ys, _cfg, _model_source, _baseline_source in _axes_info:
         _colors = _cfg["plot"]["colors"]
         _ax_w_in = _ax.get_window_extent().width / _fig.dpi
@@ -496,43 +580,47 @@ def _(
                 lw=hline_cfg["linewidth"],
             )
 
-        _sample_pcts = legend_cfg["sample_pcts"]
-        _neutral_pct = dots["neutral_threshold_pct"]
-        _dot_specs = (
-            [(_sample_pcts[0], _colors["baseline_better"], f"≤-{_sample_pcts[0]}%")]
-            + [(p, _colors["baseline_better"], f"-{p}%") for p in _sample_pcts[1:]]
-            + [(_neutral_pct, _colors["neutral"], f"|Δ|<{_neutral_pct}%")]
-            + [
-                (p, _colors["model_better"], f"+{p}%")
-                for p in reversed(_sample_pcts[1:])
-            ]
-            + [(_sample_pcts[0], _colors["model_better"], f"≥+{_sample_pcts[0]}%")]
-        )
-        _x_span = min(legend_cfg["width_in"] / _ax_w_in, 0.8)
-        _cx = ((_lay["plot_width"] - 1) / 2 - _lay["xlim_left"]) / (
-            _lay["plot_width"] - _lay["xlim_left"]
-        )
-        _x_dots = np.linspace(_cx - _x_span / 2, _cx + _x_span / 2, len(_dot_specs))
-        draw_legend(
-            _ax,
-            _fig,
-            _dot_specs,
-            _x_dots,
-            has_missing,
-            small_fs,
-            neutral_dot_size,
-            _model_source,
-            _baseline_source,
-            _cfg,
-        )
+    # Single spanning legend across all panels.
+    _leg_colors = _axes_info[0][3]["plot"]["colors"]
+    _sample_pcts = legend_cfg["sample_pcts"]
+    _neutral_pct = dots["neutral_threshold_pct"]
+    _dot_specs = (
+        [(_sample_pcts[0], _leg_colors["baseline_better"], f"≤-{_sample_pcts[0]}%")]
+        + [(p, _leg_colors["baseline_better"], f"-{p}%") for p in _sample_pcts[1:]]
+        + [(_neutral_pct, _leg_colors["neutral"], f"|Δ|<{_neutral_pct}%")]
+        + [
+            (p, _leg_colors["model_better"], f"+{p}%")
+            for p in reversed(_sample_pcts[1:])
+        ]
+        + [(_sample_pcts[0], _leg_colors["model_better"], f"≥+{_sample_pcts[0]}%")]
+    )
+    _x_span = min(legend_cfg["width_in"] / fig_width, 0.8)
+    _x_dots = np.linspace(0.5 - _x_span / 2, 0.5 + _x_span / 2, len(_dot_specs))
+    _legend_ax = _fig.add_axes([0, legend_h_in / panel_height, 1, 1e-6])
+    _legend_ax.set_xlim(0, 1)
+    _legend_ax.axis("off")
+    draw_legend(
+        _legend_ax,
+        _fig,
+        _dot_specs,
+        _x_dots,
+        has_missing,
+        small_fs,
+        neutral_dot_size,
+        _unified_model,
+        _unified_baseline,
+        _axes_info[0][3],
+    )
 
     _out = Path(resolved_output)
     _out.mkdir(parents=True, exist_ok=True)
     _pdf = _out / "publication_scorecard.pdf"
     _png = _out / "publication_scorecard.png"
     LOG.info("scorecard: saving figures to %s", _out)
-    _fig.savefig(_pdf, bbox_inches="tight")
-    _fig.savefig(_png, dpi=200, bbox_inches="tight")
+    # Save at the exact figure size (no tight bbox) so the output is exactly the
+    # 2-column print width, consistent with the other publication figures.
+    _fig.savefig(_pdf)
+    _fig.savefig(_png, dpi=250)
     plt.close(_fig)
     LOG.info("scorecard: figures saved")
     (_out / "publication_scorecards.html").write_text(

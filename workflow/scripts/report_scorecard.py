@@ -348,7 +348,9 @@ def _measure_label_sizes(plot: dict, rows: list, slices: list, strat_dim: str) -
     slice_label_h_rows = bbox.height / fig.dpi / row_height
     plt.close(fig)
 
-    longest_metric = max((decode_metric(metric) for _, metric in rows), key=len)
+    longest_metric = max(
+        (decode_metric(metric) for _, metric in rows if metric is not None), key=len
+    )
     fig2, _ = plt.subplots(dpi=dpi)
     t2 = fig2.axes[0].text(
         0, 0, longest_metric, fontsize=fonts["metric"], fontfamily=font_sans
@@ -383,15 +385,35 @@ def _draw_data_rows(
     lower_is_better = cfg["metric_directions"].get("lower_is_better") or []
     higher_is_better = cfg["metric_directions"].get("higher_is_better") or []
 
+    group_as_header = layout.get("group_as_header", False)
     cur_group = None
     group_separator_ys = []
 
     for row_idx, (group, metric) in enumerate(rows):
         y = -row_idx  # rows run top-to-bottom from y=0
+
+        # Header row (sentinel metric=None): the variable name as a subtitle
+        # spanning above its metric rows, drawn with no dots.
+        if metric is None:
+            ax.text(
+                layout["metric_x"],
+                y,
+                group,
+                ha="left",
+                va="center",
+                fontsize=fonts["group"],
+                fontweight="bold",
+                transform=group_transform,
+            )
+            if row_idx > 0:
+                group_separator_ys.append(y + 0.5)
+            cur_group = group
+            continue
+
         var_name = f"{group}.{metric}"
 
-        if group != cur_group:
-            # New variable group: draw the bold group label shifted left of the metric labels.
+        if not group_as_header and group != cur_group:
+            # Legacy layout: bold group label shifted left of the metric labels.
             ax.text(
                 layout["metric_x"],
                 y,
