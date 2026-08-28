@@ -250,6 +250,8 @@ def _():
                 ncol=_ncol,
                 bbox_to_anchor=(0.5, _subplot_bottom - 0.05),
                 fontsize=_plt.rcParams["axes.labelsize"],
+                handlelength=3.0,   # wide enough to show the dashed EPS-mean line styles
+                handletextpad=0.5,
             )
             fig.tight_layout()
             # Reserve left margin so the rotated row labels (placed at x=-0.33,
