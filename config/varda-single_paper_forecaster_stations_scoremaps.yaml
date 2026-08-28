@@ -21,7 +21,7 @@ runs:
 
 truth:
   label: SwissMetNet
-  root: jretrieve:1,2
+  root: jretrieve:1
 
 experiment:
   params:
