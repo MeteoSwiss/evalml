@@ -288,11 +288,14 @@ python workflow/scripts/plot_region_map.py
 
 - *Stations are the **verified** set, not a raw station list:* they come from the
   per-parameter station-verification files `<PARAM>_<lt>_caa0.nc` (`caa0` = the
-  SwissMetNet truth hash) in the paper store, which hold the exact coordinates
-  scored per parameter (T_2M 187, SP_10M 151, PMSL 59, TOT_PREC6 277). Do **not**
-  reconstruct the set from a jretrieve group query (`stn_group_id 1,2` returns
-  ~2000 candidates, not what was verified). Per-parameter counts print to the log
-  for the caption.
+  SwissMetNet truth hash) in the paper store. Each file carries the station code
+  (`nat_abbr`) on its `values` coordinate; the stations are **unioned by that
+  code** across the four files (T_2M 187, SP_10M 151, PMSL 59, TOT_PREC6 277 →
+  294 distinct). Do **not** reconstruct the set from a jretrieve group query
+  (`stn_group_id 1,2` returns ~2000 candidates, not what was verified), and don't
+  union by coordinate (a site logs its sensors a few metres apart, which would
+  split one station into two symbols). Per-parameter counts print to the log for
+  the caption.
 - *Needs:* region shapefiles under
   `/scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517/`, the paper store
   `*_caa0.nc` files, and the Copernicus DEM tile (all **read-only**);

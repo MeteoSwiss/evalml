@@ -98,18 +98,19 @@ VERIF_PARAM_TAGS = {
 }
 HIGHLIGHT_META_PARAM = "tre200s0"  # any current param; only used to fetch coords
 
-# Station categories encoded by marker SHAPE (all black, no edge), in draw +
-# legend order (least → most complete drawn last, so the sparse "all parameters"
-# sites sit on top): cross → open circle → filled circle.
+# Station categories encoded by marker SHAPE (all black, thin outlines), in draw
+# + legend order (least → most complete drawn last, so the sparse "all
+# parameters" sites sit on top): cross → open triangle → open circle.
 STATION_COLOR = "black"
 STATION_CATEGORIES = [
     ("precip", "Precipitation only",
      dict(marker="+", s=7, c=STATION_COLOR, linewidths=0.35), 3.1),
     ("no_pressure", "Without pressure",
-     dict(marker="o", s=6, facecolors="none", edgecolors=STATION_COLOR,
+     dict(marker="^", s=8, facecolors="none", edgecolors=STATION_COLOR,
           linewidths=0.35), 3.3),
     ("all", "All parameters",
-     dict(marker="o", s=7, c=STATION_COLOR, linewidths=0.0), 3.5),
+     dict(marker="o", s=6, facecolors="none", edgecolors=STATION_COLOR,
+          linewidths=0.35), 3.5),
 ]
 
 
@@ -130,13 +131,15 @@ def _classify(tags: set) -> str:
 def load_verified_stations() -> gpd.GeoDataFrame:
     """Stations used in the paper's verification, from the evalml result files.
 
-    Reads each parameter's station file and unions the stations by **exact**
-    coordinate, tagging each with the parameter networks it reports; the category
-    then encodes observation completeness. (No spatial merge — a site whose sensors
-    are recorded a few metres apart therefore stays as separate points.)
+    Each ``*_caa0.nc`` file carries the station code (``nat_abbr``, e.g. ``ALT``)
+    on its ``values`` coordinate. Union the stations by that code — robust to a
+    site's sensors being recorded at slightly different coordinates across the
+    parameter files — tagging each with the parameter networks it reports and
+    keeping one representative location (the first file it appears in). The
+    category then encodes observation completeness.
     """
-    tags_by_key: dict = {}
-    coord_by_key: dict = {}
+    tags_by_id: dict = {}
+    coord_by_id: dict = {}
     per_param: dict = {}
     for param, tag in VERIF_PARAM_TAGS.items():
         matches = sorted(VERIF_STORE.glob(f"**/{param}_*_caa0.nc"))
@@ -144,17 +147,17 @@ def load_verified_stations() -> gpd.GeoDataFrame:
             LOG.warning("no station-verification file found for %s", param)
             continue
         ds = xr.open_dataset(matches[0])
+        codes = np.asarray(ds["values"].values).astype(str)
         lat = np.asarray(ds["latitude"].values, dtype=float)
         lon = np.asarray(ds["longitude"].values, dtype=float)
-        per_param[param] = len(lat)
-        for la, lo in zip(lat, lon):
-            key = (la, lo)
-            tags_by_key.setdefault(key, set()).add(tag)
-            coord_by_key[key] = (la, lo)
+        per_param[param] = len(codes)
+        for code, la, lo in zip(codes, lat, lon):
+            tags_by_id.setdefault(code, set()).add(tag)
+            coord_by_id.setdefault(code, (la, lo))  # keep first-seen location
 
     lons, lats, cats = [], [], []
-    for key, tags in tags_by_key.items():
-        la, lo = coord_by_key[key]
+    for code, tags in tags_by_id.items():
+        la, lo = coord_by_id[code]
         lons.append(lo)
         lats.append(la)
         cats.append(_classify(tags))
@@ -170,7 +173,7 @@ def load_verified_stations() -> gpd.GeoDataFrame:
     LOG.info("  stations with total precip   : %d", per_param.get("TOT_PREC6", 0))
     LOG.info("  stations with wind speed     : %d", per_param.get("SP_10M", 0))
     counts = gdf["category"].value_counts().to_dict()
-    LOG.info("  --- by symbol (exact-coordinate union) ---")
+    LOG.info("  --- by symbol (union by station code) ---")
     LOG.info("  all parameters (filled dot)  : %d", counts.get("all", 0))
     LOG.info("  without pressure (open dot)  : %d", counts.get("no_pressure", 0))
     LOG.info("  precipitation only (cross)   : %d", counts.get("precip", 0))
@@ -367,10 +370,10 @@ def main():
     # Station-type legend in the (widened) empty NW corner, marker styles matching
     # the scatters. No counts on the figure (they go in the caption); no frame.
     station_handles = [
-        Line2D([], [], linestyle="none", marker="o", markersize=3.0,
-               markerfacecolor=STATION_COLOR, markeredgecolor=STATION_COLOR,
-               label="All parameters"),
         Line2D([], [], linestyle="none", marker="o", markersize=3.2,
+               markerfacecolor="none", markeredgecolor=STATION_COLOR, markeredgewidth=0.45,
+               label="All parameters"),
+        Line2D([], [], linestyle="none", marker="^", markersize=3.4,
                markerfacecolor="none", markeredgecolor=STATION_COLOR, markeredgewidth=0.45,
                label="Without pressure"),
         Line2D([], [], linestyle="none", marker="+", markersize=3.6,
