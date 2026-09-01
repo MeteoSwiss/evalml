@@ -110,8 +110,8 @@ PARAM_UNITS = {
 PARAM_LABELS = {
     "T_2M": "2m Temperature",
     "TD_2M": "2m Dew Point Temperature",
-    "TOT_PREC1": "Total Precipitation (hourly)",
-    "TOT_PREC6": "Total Precipitation (6-hourly)",
+    "TOT_PREC1": "Tot. precipitation (hourly)",
+    "TOT_PREC6": "Tot. precipitation (6-hourly)",
     "SP_10M": "Wind Speed",
     "PMSL": "Sea Level Pressure",
     "DD_10M": "Wind Direction",

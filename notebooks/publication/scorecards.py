@@ -334,27 +334,31 @@ def _(
     plot_cfg = copy.deepcopy(DEFAULT_PLOT_CFG)
     plot_cfg["colors"]["model_better"] = COLOR_SKILL_MODEL_BETTER
     plot_cfg["colors"]["baseline_better"] = COLOR_SKILL_BASELINE_BETTER
-    plot_cfg["figure"]["title_margin_in"] = 0.9  # space between title and axes
+    plot_cfg["figure"]["title_margin_in"] = 0.4  # space between title and axes
+    plot_cfg["layout"]["slice_y"] = 1.7          # region titles: lifted off the lead labels
     plot_cfg["figure"]["inter_panel_gap_in"] = 1.2  # extra gap above non-first panels
     # Variable name as a subtitle header row (frees the wide left margin the
     # wrapped names used to need) so the two sections fit a 2-column (5.7 in) slot.
     plot_cfg["layout"]["group_as_header"] = True
-    plot_cfg["figure"]["col_width"] = 0.11      # wider lead columns so labels don't collide
+    plot_cfg["figure"]["col_width"] = 0.11      # space the lead-time columns
     plot_cfg["figure"]["width_min"] = 0.5       # drop the 5 in/panel floor
-    plot_cfg["figure"]["row_height"] = 0.16     # compact rows (headers add ~4 rows)
-    plot_cfg["figure"]["left_margin_in"] = 0.8  # only the metric labels sit here now
-    plot_cfg["figure"]["width_pad"] = 0.9       # ≈ left_margin_in + small right buffer
+    plot_cfg["figure"]["row_height"] = 0.16     # compact rows
+    plot_cfg["figure"]["left_margin_in"] = 0.52  # only the metric labels sit here now
+    plot_cfg["figure"]["width_pad"] = 0.55       # ≈ left_margin_in + small right buffer
+                                                 # (smaller -> less gap between the 2 sections)
     plot_cfg["dots"]["max_area"] = 35           # keep dots within the ~0.08 in columns
     plot_cfg["legend"]["width_in"] = 2.5        # narrow dot row -> room for the side texts
+    plot_cfg["legend"]["dot_below_pt"] = 24      # move the legend up, closer to the grid
+    plot_cfg["legend"]["label_below_pt"] = 34
 
     # Inherit font sizes from the mplstyle rather than using the hardcoded defaults.
     _fs = plt.rcParams["font.size"]              # 7 pt — values / annotations
     _fs_title = plt.rcParams["axes.titlesize"]   # 8 pt — titles / identifiers
     _fs_small = plt.rcParams["xtick.labelsize"]  # 6 pt — axis-tick-like labels
     plot_cfg["fonts"]["title"] = _fs_title
-    plot_cfg["fonts"]["group"] = _fs_title   # variable header subtitle (bold), 8 pt
+    plot_cfg["fonts"]["group"] = _fs         # variable header subtitle (bold), 7 pt
     plot_cfg["fonts"]["slice"] = _fs_small   # region column headers (drive col_width)
-    plot_cfg["fonts"]["metric"] = _fs        # metric-row labels, 7 pt
+    plot_cfg["fonts"]["metric"] = _fs_small  # metric-row labels, 6 pt
     plot_cfg["fonts"]["leads"] = _fs_small   # lead-time tick labels
     plot_cfg["fonts"]["legend"] = _fs_small  # legend side-text and dot labels
     plot_cfg["legend"]["label_fontsize_factor"] = 1.0  # keep dot labels same size as side-text
