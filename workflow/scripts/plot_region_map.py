@@ -36,7 +36,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import shapely
 import xarray as xr
-from matplotlib.colors import LightSource
+from matplotlib.colors import LightSource, to_rgb
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
@@ -61,6 +61,19 @@ REGION_DIR = Path("/scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517")
 # the shared publication palette (style.REGION_COLORS).
 REGIONS = ("jura", "mittelland", "alpen")
 
+# Translucent region fill over the hillshade. The legend swatches are tinted by
+# the same alpha over the mean relief brightness so they match the on-map colour
+# (a plain fill-over-white swatch looks too pale next to the shaded map).
+REGION_FILL_ALPHA = 0.35
+_HILLSHADE_MEAN = 0.62
+
+
+def _legend_region_facecolor(name: str):
+    """Region colour as it appears on the map (fill over mean hillshade)."""
+    rgb = np.array(to_rgb(region_color(name)))
+    tint = REGION_FILL_ALPHA * rgb + (1 - REGION_FILL_ALPHA) * _HILLSHADE_MEAN
+    return tuple(np.clip(tint, 0.0, 1.0))
+
 # Stations to highlight (nat_abbr) — the meteogram case-study sites. Each maps to
 # a text-label offset in points, tuned to keep the code clear of the ring marker.
 HIGHLIGHT_STATIONS = {
@@ -82,6 +95,11 @@ COPERNICUS_DEM_TILE = Path(
     "/scratch/mch/csteger/projects/topo_comparison/Copernicus_DEM"
     "/COPERNICUS_N50-N40_E000-E020.nc"
 )
+
+# Local cache of the strided DEM subset — the store tile is 5 GB and (currently)
+# very slow to read; the cache keeps re-renders fast. Delete it to force a
+# re-read (e.g. if EXTENT changes the cache key already handles that).
+DEM_CACHE_DIR = Path("output/.cache")
 
 
 # evalml station-verification result files. `<PARAM>_<lt>_caa0.nc` (caa0 = the
@@ -219,13 +237,23 @@ def load_hillshade(bounds, region_union, target_px: int = 1400, vert_exag: float
     shaded. Returns ``(masked_intensity, imshow_extent)`` for ``ax.imshow``.
     """
     lon0, lon1, lat0, lat1 = bounds
-    da = xr.open_dataset(COPERNICUS_DEM_TILE)["elevation"]  # lat descending
-    da = da.sel(lat=slice(lat1 + 0.3, lat0 - 0.3), lon=slice(lon0 - 0.2, lon1 + 0.2))
-    step = max(1, int(da.sizes["lon"] / target_px))
-    da = da.isel(lat=slice(None, None, step), lon=slice(None, None, step))
-    elev = da.values.astype("float32")
-    lons = da["lon"].values
-    lats = da["lat"].values
+    cache = DEM_CACHE_DIR / f"dem_{lon0}_{lon1}_{lat0}_{lat1}_{target_px}.npz"
+    if cache.is_file():
+        z = np.load(cache)
+        elev, lons, lats = z["elev"], z["lons"], z["lats"]
+    else:
+        da = xr.open_dataset(COPERNICUS_DEM_TILE)["elevation"]  # lat descending
+        da = da.sel(
+            lat=slice(lat1 + 0.3, lat0 - 0.3), lon=slice(lon0 - 0.2, lon1 + 0.2)
+        )
+        step = max(1, int(da.sizes["lon"] / target_px))
+        da = da.isel(lat=slice(None, None, step), lon=slice(None, None, step))
+        elev = da.values.astype("float32")
+        lons = da["lon"].values
+        lats = da["lat"].values
+        DEM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        np.savez(cache, elev=elev, lons=lons, lats=lats)
+        LOG.info("cached DEM subset -> %s", cache)
 
     lon2d, lat2d = np.meshgrid(lons, lats)
     inside = shapely.contains_xy(region_union, lon2d, lat2d)
@@ -280,7 +308,7 @@ def main():
         ax.imshow(
             hillshade, extent=hs_extent, transform=ccrs.PlateCarree(),
             origin="upper", cmap="gray", vmin=0, vmax=1,
-            interpolation="bilinear", zorder=0,
+            interpolation="bilinear", zorder=0, rasterized=True,
         )
     except (FileNotFoundError, OSError) as exc:
         LOG.warning("hillshade unavailable (%s); drawing without relief", exc)
@@ -293,7 +321,7 @@ def main():
             crs=ccrs.PlateCarree(),
             facecolor=color,
             edgecolor=color,
-            alpha=0.35,
+            alpha=REGION_FILL_ALPHA,
             linewidth=0.4,
             zorder=1,
         )
@@ -330,18 +358,13 @@ def main():
             transform=ccrs.PlateCarree(), zorder=zorder, **style,
         )
 
-    # Highlighted case-study stations: a ring marker (white fill, dark-red edge +
-    # centre dot) reads cleanly over the dots without shouting.
+    # Highlighted case-study stations: a small white-filled ring with a dark-red
+    # edge (matches the legend marker exactly — no centre dot).
     ax.scatter(
         highlights.geometry.x, highlights.geometry.y,
         transform=ccrs.PlateCarree(),
-        s=20, marker="o", facecolors="white", edgecolors=COLOR_VARDA,
+        s=13, marker="o", facecolors="white", edgecolors=COLOR_VARDA,
         linewidths=0.6, zorder=5,
-    )
-    ax.scatter(
-        highlights.geometry.x, highlights.geometry.y,
-        transform=ccrs.PlateCarree(),
-        s=1.8, marker="o", c=COLOR_VARDA, linewidths=0.0, zorder=6,
     )
     to_display = ccrs.PlateCarree()._as_mpl_transform(ax)
     for _, row in highlights.iterrows():
@@ -379,8 +402,8 @@ def main():
         Line2D([], [], linestyle="none", marker="+", markersize=3.6,
                markeredgecolor=STATION_COLOR, markeredgewidth=0.6,
                label="Precipitation only"),
-        Line2D([], [], linestyle="none", marker="o", markersize=4,
-               markerfacecolor="white", markeredgecolor=COLOR_VARDA, markeredgewidth=0.7,
+        Line2D([], [], linestyle="none", marker="o", markersize=3.3,
+               markerfacecolor="white", markeredgecolor=COLOR_VARDA, markeredgewidth=0.6,
                label="Case-study sites"),
     ]
     ax.legend(
@@ -388,10 +411,11 @@ def main():
         labelspacing=0.6, handletextpad=0.6, borderpad=0.4,
     )
 
-    # Region legend below the map (shared style, frameon=False).
+    # Region legend below the map (shared style, frameon=False). Swatches are
+    # tinted to match the on-map colour (fill over relief), not fill over white.
     region_handles = [
-        Patch(facecolor=region_color(name), edgecolor=region_color(name),
-              alpha=0.4, label=region_label(name))
+        Patch(facecolor=_legend_region_facecolor(name), edgecolor="none",
+              label=region_label(name))
         for name in REGIONS
     ]
     fig.legend(
