@@ -273,6 +273,33 @@ python workflow/scripts/plot_meteogram_region.py \
 - *Output:* the `--outfn` PNG **and a `.pdf` alongside**. Put the region/date in
   the `--outfn` name (there is no on-figure title, by convention).
 
+**`plot_region_map.py` — Region + station overview map of Switzerland.** A
+**standalone script** (not a notebook, not manifest-driven). Shades the three
+forecast regions (Jura / Swiss Plateau / Alps) from their LV95 shapefiles over a
+Copernicus-DEM hillshade, and overlays the SwissMetNet stations symbol-coded by
+observation completeness — ● all parameters, ○ without pressure, ＋ precipitation
+only — with the four case-study meteogram sites (SIO/KLO/ALT/LUG) ringed in red.
+Single-column (3.35 in), shared style, no on-figure title.
+
+```bash
+set -a; source .env; set +a      # only for the four case-study coordinates
+python workflow/scripts/plot_region_map.py
+```
+
+- *Stations are the **verified** set, not a raw station list:* they come from the
+  per-parameter station-verification files `<PARAM>_<lt>_caa0.nc` (`caa0` = the
+  SwissMetNet truth hash) in the paper store, which hold the exact coordinates
+  scored per parameter (T_2M 187, SP_10M 151, PMSL 59, TOT_PREC6 277). Do **not**
+  reconstruct the set from a jretrieve group query (`stn_group_id 1,2` returns
+  ~2000 candidates, not what was verified). Per-parameter counts print to the log
+  for the caption.
+- *Needs:* region shapefiles under
+  `/scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517/`, the paper store
+  `*_caa0.nc` files, and the Copernicus DEM tile (all **read-only**);
+  cartopy/geopandas/shapely. jretrieve (`.env`) only for the four case-study
+  coordinates.
+- *Output:* `output/figures/regions/switzerland_regions_stations.{png,pdf}`.
+
 **Manifest discovery** (precedence, highest first):
 
 1. `$EVALML_MANIFEST` environment variable — explicit path.
@@ -312,6 +339,7 @@ resolved via `figures_dir(m.output_root, m.truth["label"])`:
 | meteogram | `output/figures/<truth>/meteogram/` | `publication_meteogram.pdf/.png/.html` |
 | scorecards | `output/figures/<truth>/scorecards/` | `publication_scorecard.pdf/.png`, `publication_scorecards.html` |
 | scoremaps | `output/figures/<truth>/scoremaps/` | `publication_scoremaps_<step>h.pdf/.png` (one per lead time), `publication_scoremaps_seasonal_<step>h.pdf/.png`, `publication_scoremaps.html` |
+| region map | `output/figures/regions/` | `switzerland_regions_stations.pdf/.png` (standalone `plot_region_map.py`) |
 
 ---
 
@@ -362,6 +390,7 @@ workflow/scripts/
   verification_plot_metrics.py   # shared metric-plotting helpers (used by leadtime notebook)
   meteogram_derivations.py       # derived-variable helpers (used by meteogram notebook)
   plot_meteogram_region.py       # standalone region areal-mean figure (Valais precip); uses the shared style
+  plot_region_map.py             # standalone Switzerland region + verified-station map (hillshade); uses the shared style
 tests/unit/
   test_resolution.py
   test_publication_config.py

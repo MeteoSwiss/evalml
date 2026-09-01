@@ -93,6 +93,16 @@ REGION_LABELS = {
     "alpen": "Alps"
 }
 
+# Region fill colours — Paul Tol's "light" qualitative palette (designed
+# colourblind-safe; soft, harmonious pastels that read well as light map fills).
+# Used by the region map (plot_region_map.py); kept here so region colours stay
+# in sync with the paper.
+REGION_COLORS = {
+    "jura": "#77AADD",        # light blue
+    "mittelland": "#EE8866",  # soft orange
+    "alpen": "#44BB99",       # teal-green
+}
+
 # Physical units per parameter — used to annotate threshold-based metric labels.
 PARAM_UNITS = {
     "T_2M": "K",
@@ -128,6 +138,11 @@ def param_label(param: str) -> str:
 def region_label(region: str) -> str:
     """Region label for region"""
     return REGION_LABELS.get(region, region)
+
+
+def region_color(region: str) -> str:
+    """Fill colour for a region (falls back to grey)."""
+    return REGION_COLORS.get(region, "gray")
 
 
 def line_style(src: str) -> dict:
