@@ -347,6 +347,8 @@ def _(
         for child in getattr(ax, "_children", []) + getattr(ax, "_gridliners", []):
             if not isinstance(child, Gridliner):
                 continue
+            # Drop the lat/lon gridlines entirely (labels + lines).
+            child.xlines = child.ylines = False
             try:
                 child.left_labels = child.right_labels = False
                 child.top_labels = child.bottom_labels = False
