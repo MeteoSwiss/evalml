@@ -106,17 +106,22 @@ def baseline_labels(config):
 
 
 def default_name(identity):
-    """A slug from the identity, `{date}_{label}_{hash}` -> `{label-slug}-{date}` — e.g.
-    `20260824_forecasters-ich1-oper_ab12` -> `forecasters-ich1-oper-20260824`.
-    Descriptive and self-dating; a collision (same config registered twice) is refused by
-    the store with a hint to pass an explicit name."""
+    """A slug from the identity, `{date}_{label}_{hash}` -> `{label-slug}-{date}-{hash}` —
+    e.g. `20260824_forecasters-ich1-oper_ab12` -> `forecasters-ich1-oper-20260824-ab12`.
+    The config hash is kept, not just the date: two distinct runs sharing a label and a
+    day (e.g. the same experiment re-run, or run twice with different dates/params) would
+    otherwise both default to the same name, and the second registration would be refused
+    by the store until someone picked another name by hand."""
     parts = identity.split("_")
     if len(parts) >= 3 and re.fullmatch(r"\d{8}", parts[0]):
-        date, label = parts[0], "_".join(parts[1:-1])
+        date, label, confighash = parts[0], "_".join(parts[1:-1]), parts[-1]
     else:
-        date, label = datetime.now().strftime("%Y%m%d"), identity
+        date, label, confighash = datetime.now().strftime("%Y%m%d"), identity, ""
     slug = re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", label.lower())).strip("-")
-    return "%s-%s" % (slug or "experiment", date)
+    name = "%s-%s" % (slug or "experiment", date)
+    if confighash:
+        name += "-%s" % re.sub(r"[^a-z0-9]+", "", confighash.lower())
+    return name
 
 
 def load_config(results_dir, config_path):

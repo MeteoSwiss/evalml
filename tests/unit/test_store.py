@@ -55,7 +55,7 @@ def test_lifecycle(tmp_path, models_store):
 
     # A dry run copies nothing; the real thing is immutable, cross-linked, indexed.
     name = register(results, exp_store, models_store, dry_run=True)
-    assert name == "myexp-20260824" and not (exp_store / name).exists()
+    assert name == "myexp-20260824-ab12" and not (exp_store / name).exists()
     register(results, exp_store, models_store)
     target = exp_store / name
     manifest = json.loads((target / "experiment.json").read_text())
