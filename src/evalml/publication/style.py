@@ -122,9 +122,9 @@ PARAM_LABELS = {
     "TD_2M": "2m Dew Point Temperature",
     "TOT_PREC1": "Total precipitation (hourly)",
     "TOT_PREC6": "Total precipitation (6-hourly)",
-    "SP_10M": "Wind Speed",
-    "PMSL": "Sea Level Pressure",
-    "DD_10M": "Wind Direction",
+    "SP_10M": "10m Wind Speed",
+    "PMSL": "Mean Sea-Level Pressure",
+    "DD_10M": "10m Wind Direction",
     "U_10M": "Eastward Wind",
     "V_10M": "Northward Wind",
 }
