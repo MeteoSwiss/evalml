@@ -433,7 +433,7 @@
       "description": "Single training run stored in MLflow.",
       "properties": {
         "checkpoint": {
-          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
+          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, a local checkpoint path, or a registered model name (e.g. 'amber-ridge') resolved against /store_new/mch/msopr/ml/models.",
           "title": "Checkpoint",
           "type": "string"
         },
@@ -911,7 +911,7 @@
       "description": "Single training run stored in MLflow.",
       "properties": {
         "checkpoint": {
-          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
+          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, a local checkpoint path, or a registered model name (e.g. 'amber-ridge') resolved against /store_new/mch/msopr/ml/models.",
           "title": "Checkpoint",
           "type": "string"
         },
