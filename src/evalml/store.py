@@ -1044,6 +1044,31 @@ def page_id(reference):
     )
 
 
+def _multipart_body(fields, file_field, filename, file_bytes, content_type):
+    """A minimal multipart/form-data body — the one payload shape Confluence's
+    attachment endpoint takes, which is not JSON so `Confluence._call` cannot build it."""
+    import uuid
+
+    boundary = uuid.uuid4().hex
+    parts = []
+    for name, value in fields.items():
+        parts.append(
+            (
+                '--%s\r\nContent-Disposition: form-data; name="%s"\r\n\r\n%s\r\n'
+                % (boundary, name, value)
+            ).encode("utf-8")
+        )
+    parts.append(
+        (
+            '--%s\r\nContent-Disposition: form-data; name="%s"; filename="%s"\r\n'
+            "Content-Type: %s\r\n\r\n" % (boundary, file_field, filename, content_type)
+        ).encode("utf-8")
+    )
+    parts.append(file_bytes)
+    parts.append(("\r\n--%s--\r\n" % boundary).encode("utf-8"))
+    return "multipart/form-data; boundary=%s" % boundary, b"".join(parts)
+
+
 class Confluence:
     def __init__(self, site, email, token):
         self.site = site.rstrip("/")
@@ -1051,17 +1076,10 @@ class Confluence:
             "ascii"
         )
 
-    def _call(self, method, path, payload=None):
+    def _send(self, request, url, method):
         import urllib.error
         import urllib.request
 
-        url = self.site + path
-        data = json.dumps(payload).encode("utf-8") if payload is not None else None
-        request = urllib.request.Request(url, data=data, method=method)
-        request.add_header("Authorization", "Basic " + self.auth)
-        request.add_header("Accept", "application/json")
-        if data:
-            request.add_header("Content-Type", "application/json")
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
                 return json.loads(response.read().decode("utf-8"))
@@ -1091,6 +1109,18 @@ class Confluence:
         except urllib.error.URLError as exc:
             fail("cannot reach %s: %s" % (url, exc.reason))
 
+    def _call(self, method, path, payload=None):
+        import urllib.request
+
+        url = self.site + path
+        data = json.dumps(payload).encode("utf-8") if payload is not None else None
+        request = urllib.request.Request(url, data=data, method=method)
+        request.add_header("Authorization", "Basic " + self.auth)
+        request.add_header("Accept", "application/json")
+        if data:
+            request.add_header("Content-Type", "application/json")
+        return self._send(request, url, method)
+
     def get(self, page):
         return self._call("GET", "/api/v2/pages/%s?body-format=storage" % page)
 
@@ -1106,6 +1136,46 @@ class Confluence:
                 "version": {"number": version, "message": message},
             },
         )
+
+    def find_attachment(self, page, filename):
+        """The absolute download URL of an existing attachment named `filename` on
+        `page`, or None. A GET, never a write — safe to call on every publish."""
+        import urllib.parse
+
+        result = self._call(
+            "GET",
+            "/rest/api/content/%s/child/attachment?filename=%s"
+            % (page, urllib.parse.quote(filename)),
+        )
+        matches = result.get("results") or []
+        if not matches:
+            return None
+        download = ((matches[0].get("_links") or {}).get("download") or "").strip()
+        return self.site + download if download else None
+
+    def upload_attachment(self, page, file_path, filename):
+        """Attach `file_path` to `page` under `filename`, returning its absolute download
+        URL. Confluence Cloud has no v2 upload endpoint — this is the v1 one, and
+        re-uploading under a name that already exists there creates a new version of it
+        rather than erroring, so this is safe to call without checking first."""
+        import urllib.request
+
+        file_path = Path(file_path)
+        content_type, body = _multipart_body(
+            {}, "file", filename, file_path.read_bytes(), "text/html"
+        )
+        url = self.site + "/rest/api/content/%s/child/attachment" % page
+        request = urllib.request.Request(url, data=body, method="POST")
+        request.add_header("Authorization", "Basic " + self.auth)
+        request.add_header("Accept", "application/json")
+        request.add_header("Content-Type", content_type)
+        request.add_header("X-Atlassian-Token", "nocheck")
+        result = self._send(request, url, "POST")
+        attachment = (result.get("results") or [None])[0]
+        if attachment is None:
+            fail("Confluence did not return an attachment for %s" % filename)
+        download = ((attachment.get("_links") or {}).get("download") or "").strip()
+        return self.site + download if download else None
 
 
 def escape(text):
@@ -1146,14 +1216,27 @@ def model_link(name):
 
 PAGE_COLUMNS = (
     ("Name", "name", 140),
-    ("Description", "description", 320),
-    ("Models", "models", 160),
-    ("Baselines", "baselines", 130),
-    ("Registered", "registered", 100),
-    ("By", "by", 80),
-    ("Size", "size", 80),
-    ("Location", "location", 240),
+    ("Description", "description", 280),
+    ("Models", "models", 140),
+    ("Baselines", "baselines", 120),
+    ("Registered", "registered", 90),
+    ("By", "by", 70),
+    ("Size", "size", 70),
+    ("Dashboard", "dashboard_url", 90),
+    ("Location", "location", 200),
 )
+
+
+def dashboard_attachment_name(name):
+    """The attachment filename an experiment's dashboard is uploaded under — stable and
+    unique per experiment name, so re-publishing never creates a duplicate attachment."""
+    return "%s-dashboard.html" % name
+
+
+def dashboard_path(record):
+    """Where a registered experiment's interactive dashboard lives on disk, if it built
+    one — `results/dashboard/dashboard.html`, copied in verbatim by `register`."""
+    return Path(record.get("location") or "") / RESULTS / "dashboard" / "dashboard.html"
 
 
 def page_cell(record, key):
@@ -1173,6 +1256,11 @@ def page_cell(record, key):
         return paragraphs(escape((record.get("registered") or "")[:10]))
     if key == "location":
         return paragraphs("<code>%s</code>" % escape(record.get("location") or ""))
+    if key == "dashboard_url":
+        url = record.get("dashboard_url")
+        if not url:
+            return paragraphs()
+        return paragraphs('<a href="%s">Download</a>' % escape(url))
     return paragraphs(escape(record.get(key) or ""))
 
 
@@ -1268,6 +1356,30 @@ def same_table(existing, replacement):
     return normal(old.group(0)) == normal(new.group(0))
 
 
+def _attach_dashboards(confluence, page, records):
+    """Best-effort: make sure each experiment's dashboard.html is attached to the page
+    under its own name, mutating each record with the resulting `dashboard_url`.
+    Results are immutable once registered, so an experiment whose attachment already
+    exists costs only a lookup here — the (large) upload happens at most once per
+    experiment, no matter how many times the page gets republished afterwards."""
+    for record in records:
+        dashboard = dashboard_path(record)
+        if not dashboard.is_file():
+            continue
+        filename = dashboard_attachment_name(record.get("name") or "")
+        try:
+            url = confluence.find_attachment(page, filename)
+            if url is None:
+                log(
+                    "attaching %s (%s) to the page ..."
+                    % (filename, human(dashboard.stat().st_size))
+                )
+                url = confluence.upload_attachment(page, dashboard, filename)
+            record["dashboard_url"] = url
+        except SystemExit as exc:
+            log("WARNING: could not attach %s: %s" % (filename, str(exc).strip()))
+
+
 def cmd_publish(
     store=STORE,
     page=EXPERIMENTS_PAGE,
@@ -1305,9 +1417,8 @@ def cmd_publish(
         )
     records = [r for r in records if r not in missing]
 
-    replacement = section(records, store, loaded["retired"])
     if dry_run:
-        print(replacement)
+        print(section(records, store, loaded["retired"]))
         log("dry run — %d experiment(s), nothing sent to %s" % (len(records), site))
         return
 
@@ -1320,8 +1431,11 @@ def cmd_publish(
     email, token, source = credentials(email, token_file)
     log("authenticating as %s%s" % (email, " (%s)" % source if source else ""))
     confluence = Confluence(site, email, token)
-
     page = page_id(page)
+
+    _attach_dashboards(confluence, page, records)
+    replacement = section(records, store, loaded["retired"])
+
     current = confluence.get(page)
     title = current["title"]
     version = current["version"]["number"]

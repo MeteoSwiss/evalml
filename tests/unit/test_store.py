@@ -99,6 +99,19 @@ def test_lifecycle(tmp_path, models_store):
     assert [r["name"] for r in loaded["retired"]] == [name]
 
 
+def test_dashboard_cell():
+    assert store.dashboard_attachment_name("myexp-20260824") == (
+        "myexp-20260824-dashboard.html"
+    )
+    record = {"name": "myexp-20260824"}
+    assert store.page_cell(record, "dashboard_url") == "<p />"
+    record["dashboard_url"] = "https://meteoswiss.atlassian.net/wiki/download/x.html"
+    assert store.page_cell(record, "dashboard_url") == (
+        '<p><a href="https://meteoswiss.atlassian.net/wiki/download/x.html">'
+        "Download</a></p>"
+    )
+
+
 def test_refusals(tmp_path, models_store, monkeypatch):
     exp_store = tmp_path / "experiments"
     name = register(make_results(tmp_path, models_store), exp_store, models_store)
