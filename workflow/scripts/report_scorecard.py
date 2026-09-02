@@ -365,7 +365,16 @@ def _measure_label_sizes(plot: dict, rows: list, slices: list, strat_dim: str) -
 
 
 def _draw_data_rows(
-    ax, diff, rows, slices, strat_dim, n_leads, neutral_dot_size, group_transform, cfg
+    ax,
+    diff,
+    rows,
+    slices,
+    strat_dim,
+    n_leads,
+    neutral_dot_size,
+    group_transform,
+    cfg,
+    row_ys=None,
 ) -> list:
     """Draw the variable/metric label column and the dot grid.
 
@@ -390,7 +399,9 @@ def _draw_data_rows(
     group_separator_ys = []
 
     for row_idx, (group, metric) in enumerate(rows):
-        y = -row_idx  # rows run top-to-bottom from y=0
+        # Explicit per-row y positions (non-uniform spacing) if provided,
+        # otherwise the legacy uniform one-row-per-unit layout.
+        y = row_ys[row_idx] if row_ys is not None else -row_idx
 
         # Header row (sentinel metric=None): the variable name as a subtitle
         # spanning above its metric rows, drawn with no dots.
@@ -405,8 +416,8 @@ def _draw_data_rows(
                 fontweight="bold",
                 transform=group_transform,
             )
-            if row_idx > 0:
-                group_separator_ys.append(y + 0.5)
+            # Separator above every group, including the first (above temperature).
+            group_separator_ys.append(y + 0.5)
             cur_group = group
             continue
 
@@ -434,9 +445,10 @@ def _draw_data_rows(
             layout["metric_x"],
             y,
             decode_metric(metric),
-            ha="right",
+            ha="left",
             va="center",
             fontsize=fonts["metric"],
+            transform=group_transform,
         )
 
         for sec_idx, slice_val in enumerate(slices):
@@ -470,13 +482,46 @@ def _draw_data_rows(
     return group_separator_ys
 
 
-def _draw_slice_headers(ax, slices, n_leads, lead_hours, y_bottom, strat_dim, cfg):
-    """Draw slice title labels, vertical separators, and lead-time tick labels."""
+def _line_segments(bottom, top, gaps):
+    """Split the interval ``[bottom, top]`` into segments, removing each gap.
+
+    ``gaps`` is a list of ``(lo, hi)`` intervals to omit (e.g. the bands occupied
+    by variable-header rows).  Returns a list of ``(seg_lo, seg_hi)`` visible
+    segments, sorted bottom-to-top.
+    """
+    gaps = sorted(
+        (max(lo, bottom), min(hi, top))
+        for lo, hi in gaps
+        if hi > bottom and lo < top
+    )
+    segments = []
+    cur = bottom
+    for lo, hi in gaps:
+        if lo > cur:
+            segments.append((cur, lo))
+        cur = max(cur, hi)
+    if cur < top:
+        segments.append((cur, top))
+    return segments
+
+
+def _draw_slice_headers(
+    ax, slices, n_leads, lead_hours, y_bottom, strat_dim, cfg, header_bands=None
+):
+    """Draw slice title labels, vertical separators, and lead-time tick labels.
+
+    ``header_bands`` gives ``(lo, hi)`` y-intervals occupied by variable-header
+    (subtitle) rows; the vertical separators are broken across those bands so the
+    divider does not run through a subtitle.
+    """
     plot = cfg["plot"]
     layout = plot["layout"]
     fonts = plot["fonts"]
     colors = plot["colors"]
     vline = plot["vline"]
+
+    y_top = layout["slice_y"] - vline["label_gap"]
+    segments = _line_segments(y_bottom, y_top, header_bands or [])
 
     for sec_idx, slice_val in enumerate(slices):
         x_off = sec_idx * (n_leads + layout["slice_gap"])
@@ -494,12 +539,13 @@ def _draw_slice_headers(ax, slices, n_leads, lead_hours, y_bottom, strat_dim, cf
         if sec_idx > 0:
             # Vertical separator line centred in the gap between this and the previous slice block
             x_sep = x_off - (layout["slice_gap"] + 1) / 2
-            ax.plot(
-                [x_sep, x_sep],
-                [y_bottom, layout["slice_y"] - vline["label_gap"]],
-                color=colors["vline"],
-                lw=vline["linewidth"],
-            )
+            for seg_lo, seg_hi in segments:
+                ax.plot(
+                    [x_sep, x_sep],
+                    [seg_lo, seg_hi],
+                    color=colors["vline"],
+                    lw=vline["linewidth"],
+                )
 
         for lt_idx, h in enumerate(lead_hours):
             ax.text(

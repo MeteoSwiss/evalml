@@ -268,7 +268,33 @@ def _(
             / (n_leads + layout["slice_gap"]),
         )
         plot_width = len(slices) * (n_leads + layout["slice_gap"]) - layout["slice_gap"]
-        y_bottom = -(len(rows) - 0.5)
+
+        # Non-uniform row positions: metric rows sit close together, header
+        # (parameter-name) rows get extra space so they read as section titles.
+        metric_gap = layout.get("metric_row_gap", 1.0)
+        header_gap = layout.get("header_row_gap", 1.0)
+        row_ys = [0.0]
+        for _i in range(1, len(rows)):
+            _pm, _cm = rows[_i - 1][1], rows[_i][1]
+            _gap = header_gap if (_pm is None or _cm is None) else metric_gap
+            row_ys.append(row_ys[-1] - _gap)
+
+        # Grey dividers above AND below each parameter name; header_bands are the
+        # regions the vertical region-separators are broken across.
+        sep_ys, header_bands = [], []
+        for _i, (_g, _m) in enumerate(rows):
+            if _m is not None:
+                continue
+            _above = (row_ys[_i] + 0.5) if _i == 0 else (row_ys[_i] + row_ys[_i - 1]) / 2
+            _below = (
+                (row_ys[_i] + row_ys[_i + 1]) / 2
+                if _i + 1 < len(rows)
+                else row_ys[_i] - metric_gap / 2
+            )
+            sep_ys.extend([_above, _below])
+            header_bands.append((_below, _above))
+
+        y_bottom = row_ys[-1] - metric_gap / 2
         y_top = layout["slice_y"] + slice_label_h_rows + layout["slice_y_pad"]
         xlim_left = layout["metric_x"] - figure["left_margin_in"] / col_width
         data_w_in = max(
@@ -276,6 +302,9 @@ def _(
         )
         return dict(
             rows=rows,
+            row_ys=row_ys,
+            sep_ys=sep_ys,
+            header_bands=header_bands,
             slices=slices,
             n_leads=n_leads,
             lead_hours=lead_hours,
@@ -336,15 +365,19 @@ def _(
     plot_cfg["colors"]["baseline_better"] = COLOR_SKILL_BASELINE_BETTER
     plot_cfg["figure"]["title_margin_in"] = 0.4  # space between title and axes
     plot_cfg["layout"]["slice_y"] = 1.7          # region titles: lifted off the lead labels
+    plot_cfg["layout"]["leads_y"] = 0.65         # lift lead-time labels above the divider over temperature
     plot_cfg["figure"]["inter_panel_gap_in"] = 1.2  # extra gap above non-first panels
     # Variable name as a subtitle header row (frees the wide left margin the
     # wrapped names used to need) so the two sections fit a 2-column (5.7 in) slot.
     plot_cfg["layout"]["group_as_header"] = True
-    plot_cfg["figure"]["col_width"] = 0.11      # space the lead-time columns
+    plot_cfg["figure"]["col_width"] = 0.103     # space the lead-time columns (squeezed toward 5.7in)
     plot_cfg["figure"]["width_min"] = 0.5       # drop the 5 in/panel floor
     plot_cfg["figure"]["row_height"] = 0.16     # compact rows
-    plot_cfg["figure"]["left_margin_in"] = 0.52  # only the metric labels sit here now
-    plot_cfg["figure"]["width_pad"] = 0.55       # ≈ left_margin_in + small right buffer
+    plot_cfg["colors"]["vline"] = "#999999"     # region separators in grey, not black
+    plot_cfg["layout"]["metric_row_gap"] = 0.75   # tighter spacing between metric rows
+    plot_cfg["layout"]["header_row_gap"] = 1.5    # more breathing room around parameter names
+    plot_cfg["figure"]["left_margin_in"] = 0.30  # metric labels sit here; trimmed to close the gap to col 1
+    plot_cfg["figure"]["width_pad"] = 0.33       # ≈ left_margin_in + small right buffer
                                                  # (smaller -> less gap between the 2 sections)
     plot_cfg["dots"]["max_area"] = 35           # keep dots within the ~0.08 in columns
     plot_cfg["legend"]["width_in"] = 2.5        # narrow dot row -> room for the side texts
@@ -363,20 +396,41 @@ def _(
     plot_cfg["fonts"]["legend"] = _fs_small  # legend side-text and dot labels
     plot_cfg["legend"]["label_fontsize_factor"] = 1.0  # keep dot labels same size as side-text
 
+    import os as _os3
+    import pickle as _pkl
+
+    # Optional local cache of the (expensive) store read, keyed by section name.
+    # Set EVALML_SC_CACHE=1 to reuse cached diffs across runs when iterating on
+    # layout — the slow store read is skipped, only the cheap rename/layout reruns.
+    _use_cache = _os3.environ.get("EVALML_SC_CACHE") == "1"
+
     LOG.info("scorecard: loading data for %d section(s)", len(section_cfgs))
     panels = []
     for _sec in section_cfgs:
         _t0 = _time.perf_counter()
-        LOG.info(
-            "scorecard: loading section %r (candidate vs %s)",
-            _sec["name"],
-            _sec["base_label"],
-        )
         _cfg = _build_panel_cfg(_sec, plot_cfg)
-        _diff = load_relative_diff(_cfg)
-        _diff = filter_diff(_diff, _cfg)
-        _diff = _diff.drop_vars([v for v in excluded_data_vars if v in _diff.data_vars])
-        _diff = _diff.sel(region = xr.DataArray(["icon", "jura", "mittelland", "alpen"], dims = "region"))
+        _cache_fn = f"/tmp/sc_diff_{_sec['name']}.pkl"
+        if _use_cache and _os3.path.exists(_cache_fn):
+            LOG.info("scorecard: loading section %r from cache", _sec["name"])
+            with open(_cache_fn, "rb") as _fh:
+                _diff = _pkl.load(_fh)
+        else:
+            LOG.info(
+                "scorecard: loading section %r (candidate vs %s)",
+                _sec["name"],
+                _sec["base_label"],
+            )
+            _diff = load_relative_diff(_cfg)
+            _diff = filter_diff(_diff, _cfg)
+            _diff = _diff.drop_vars(
+                [v for v in excluded_data_vars if v in _diff.data_vars]
+            )
+            _diff = _diff.sel(
+                region=xr.DataArray(["icon", "jura", "mittelland", "alpen"], dims="region")
+            )
+            if _use_cache:
+                with open(_cache_fn, "wb") as _fh:
+                    _pkl.dump(_diff, _fh)
         _diff = _diff.rename(
             {
                 v: f"{param_label(v.rsplit('.', 1)[0])}.{_metric_with_unit(v.rsplit('.', 1)[0], v.rsplit('.', 1)[1])}"
@@ -478,9 +532,14 @@ def _(
         _ax.set_ylim(_lay["y_bottom"], _lay["y_top"])
         _ax.axis("off")
 
+        # Trim the axes right margin: a small inter-card gap after non-last
+        # panels, near-flush to the figure border for the last panel (removes the
+        # default ~10% right padding).
+        _is_last = _i == len(panels) - 1
         _subfig.subplots_adjust(
             top=1 - figure_cfg["title_margin_in"] / panel_height,
             bottom=legend_h_in / panel_height,
+            right=0.995 if _is_last else 0.97,
         )
 
         # Align the group-label left edge with the title's left anchor (subfig x=0.01).
@@ -498,12 +557,34 @@ def _(
             0,
             _fig.dpi_scale_trans,
         )
+        # Axes-fraction x of the label left edge, so the grey dividers can start
+        # exactly where the labels start (go via display coords: get_position() on
+        # a subfigure axes is figure-relative and can't be used directly here).
+        _lbl_disp_x = _group_transform.transform((layout_cfg["metric_x"], 0))[0]
+        _lay["hline_x0"] = float(
+            _ax.transAxes.inverted().transform((_lbl_disp_x, 0))[0]
+        )
         _letter = chr(ord("a") + _i)
         _title_y = 0.99
-        _subfig.text(
+        # Panel letter "(a)" bold, matching the other publication figures; the
+        # section description follows in the regular weight.
+        _lbl = _subfig.text(
             _title_x,
             _title_y,
-            f"{_letter}) {_section_name} with {_baseline_source} as baseline",
+            f"({_letter})",
+            fontsize=fonts["title"],
+            fontweight="bold",
+            ha="left",
+            va="top",
+        )
+        _lbl_w_frac = (
+            _lbl.get_window_extent(_fig.canvas.get_renderer()).width
+            / _subfig.bbox.width
+        )
+        _subfig.text(
+            _title_x + _lbl_w_frac + 0.008,
+            _title_y,
+            f"{_section_name} with {_baseline_source} as baseline",
             fontsize=fonts["title"],
             ha="left",
             va="top",
@@ -519,7 +600,7 @@ def _(
             return _orig_ax_text(*args, **kwargs)
 
         _ax.text = _left_text
-        _sep_ys = draw_data_rows(
+        draw_data_rows(
             _ax,
             _diff,
             _lay["rows"],
@@ -529,8 +610,10 @@ def _(
             neutral_dot_size,
             _group_transform,
             _cfg,
+            _lay["row_ys"],
         )
         _ax.text = _orig_ax_text
+        _sep_ys = _lay["sep_ys"]
         draw_slice_headers(
             _ax,
             _lay["slices"],
@@ -539,6 +622,7 @@ def _(
             _lay["y_bottom"],
             _strat_dim,
             _cfg,
+            _lay["header_bands"],
         )
         _axes_info.append((_ax, _lay, _sep_ys, _cfg, _model_source, _baseline_source))
 
@@ -566,22 +650,17 @@ def _(
 
     for _ax, _lay, _sep_ys, _cfg, _model_source, _baseline_source in _axes_info:
         _colors = _cfg["plot"]["colors"]
-        _ax_w_in = _ax.get_window_extent().width / _fig.dpi
 
-        _metric_frac = (layout_cfg["metric_x"] - _lay["xlim_left"]) / (
-            _lay["plot_width"] - _lay["xlim_left"]
-        )
-        _hline_x0 = (
-            _metric_frac
-            - ((_lay["metric_label_w_pt"] - hline_cfg["start_pad_pt"]) / 72) / _ax_w_in
-        )
+        # Grey dividers start exactly at the label left edge (clip_on=False so the
+        # segment left of the axes still renders).
         for _sy in _sep_ys:
             _ax.axhline(
                 y=_sy,
-                xmin=_hline_x0,
+                xmin=_lay["hline_x0"],
                 xmax=hline_cfg["x_end"],
                 color=_colors["hline"],
                 lw=hline_cfg["linewidth"],
+                clip_on=False,
             )
 
     # Single spanning legend across all panels.
