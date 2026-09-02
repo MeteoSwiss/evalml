@@ -229,6 +229,36 @@ def _outer_boundary(geom):
     return MultiPolygon([Polygon(g.exterior) for g in geom.geoms])
 
 
+def _add_north_arrow(ax):
+    """North arrow in the empty NE corner (up = north; exact on the projection's
+    central meridian, <~2° off across this extent)."""
+    ax.annotate(
+        "", xy=(0.93, 0.89), xytext=(0.93, 0.78), xycoords="axes fraction",
+        arrowprops=dict(arrowstyle="-|>", color="black", lw=0.6), zorder=6,
+    )
+    ax.text(0.93, 0.905, "N", transform=ax.transAxes, ha="center", va="bottom",
+            fontsize=7, fontweight="bold", zorder=6)
+
+
+def _add_scale_bar(ax, length_km: int = 50):
+    """Horizontal scale bar in the empty SW corner. The axes data units are the
+    Orthographic projection's metres, so a segment of ``length_km`` km is drawn
+    directly (distortion is <0.3% at this scale)."""
+    x0, x1 = ax.get_xlim()
+    y0, y1 = ax.get_ylim()
+    xspan, yspan = x1 - x0, y1 - y0
+    bx0 = x0 + 0.05 * xspan
+    bx1 = bx0 + length_km * 1000.0
+    by = y0 + 0.08 * yspan
+    tick = 0.015 * yspan
+    ax.plot([bx0, bx1], [by, by], color="black", lw=0.6, solid_capstyle="butt",
+            zorder=6)
+    for bx in (bx0, bx1):
+        ax.plot([bx, bx], [by, by + tick], color="black", lw=0.6, zorder=6)
+    ax.text((bx0 + bx1) / 2, by + tick * 1.4, f"{length_km} km",
+            ha="center", va="bottom", fontsize=6, zorder=6)
+
+
 def load_hillshade(bounds, region_union, target_px: int = 1400, vert_exag: float = 2.0):
     """Shaded-relief intensity of the terrain inside Switzerland.
 
@@ -382,6 +412,17 @@ def main():
             bbox=dict(boxstyle="round,pad=0.18", fc="white", ec="0.7", lw=0.3, alpha=0.9),
         )
 
+    # Light lat/lon graticule (1° spacing), labelled on the bottom/left, drawn
+    # under the borders/stations so it stays subtle.
+    gl = ax.gridlines(
+        draw_labels=True, xlocs=range(5, 12), ylocs=range(45, 49),
+        linewidth=0.3, color="0.5", alpha=0.6, linestyle=(0, (2, 2)), zorder=1.5,
+    )
+    gl.top_labels = False
+    gl.right_labels = False
+    gl.xlabel_style = {"size": 6}
+    gl.ylabel_style = {"size": 6}
+
     # Thin black frame (no ticks/labels), matching the shared axes style.
     ax.set_xticks([])
     ax.set_yticks([])
@@ -389,6 +430,10 @@ def main():
         sp.set_visible(True)
         sp.set_edgecolor("black")
         sp.set_linewidth(0.4)
+
+    # Scale bar (SW corner) + north arrow (NE corner).
+    _add_scale_bar(ax, length_km=50)
+    _add_north_arrow(ax)
 
     # Station-type legend in the (widened) empty NW corner, marker styles matching
     # the scatters. No counts on the figure (they go in the caption); no frame.
