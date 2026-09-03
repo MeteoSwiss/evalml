@@ -112,6 +112,7 @@ experiment:
     stratification:
       - region
       - season
+      - init_hour
   scorecards:
     enabled: true
     sections:
