@@ -1,0 +1,69 @@
+EvalML + HiRAD-Gen + Weather Generator
+Attendees: Louis Frey Kerem Tezcan Mary McGlohon
+Agenda:
+•	Status so far
+o	Both HiRAD and WeatherGen workflow: Do own inference, convert results to GRIB (using EvalML templates).
+o	Code on EvalML branch feat/hirad-integration
+•	What are we evaluating against?
+o	HiRAD: observations, because we use reanalysis data
+o	Varda: Also observations, idealy
+o	WeatherGen: Against observaitons, but different datasets avilable
+	Options:
+	Peak weather (precompiled dataset of station observations): https://peakweather.readthedocs.io/latest/index.html
+	Pros: Include stations outside of CH
+	Cons: Only limited time period (up to 2025)
+	SwissMetNet+JRetrieve - recommended as baseline, for now
+	Pros: Updated data, we are knowledgeable of it, consistent within CH
+	Cons: Only includes within CH
+	Could be a Pro: can use larger trimming around boundary
+	MEC station sets
+	Different observations, different contexts available
+	Cons: Requires pressure levels
+•	Time period covered?
+o	Current state:
+	WeatherGenerator: trained until end of 2022, use any time period (minimum 3 months) in 2023 for validation/testing
+	In next 2 years we will update model.
+	Varda: April 2025 - March 2026 is test period
+	HiRAD: Used data through 2021 for training/validation, can test anytime 2022 or later.
+	Forecast-trained model is not yet trained, so for newer model we can train to whatever time period aligns with Varda/WeatherGenerator
+	Later test period would be better (as forecast data is harder to get further back), so decision to align with Varda.
+o	Can we use a full year for test?
+	Kerem: Might be too expensive to run full year, but we can sample from across the year.
+	Daily initializations at most (fine-grained)
+	Initialize forecast every 1-2 days, then 5d of lead time for each init.
+	Would want more seasons, so less frequent initializations.
+	WeatherGen requires a 6h initialization period.
+	As does Varda, and probably HiRAD (assuming IFS is also that)
+	Proposal: Initialize every 54h (2.25 days), so 170 forecasts, 5d rollout (20 steps of forecast-- each step is 6h)
+	Initialization frequency: 54h?
+	Inference is expensive, so less-frequent (54h) is probably good for WG (also HiRAD)
+	
+	Output frequency: 1h vs 6h
+	Varda: 1h or 6h is OK (1h uses the temporal downscaler)
+	For evaluation, 6h makes more sense. 1h doesn’t add anything.
+	Diurnal cycles: 4 points of support is probably OK.
+	Statistical power: more data points would be better
+	Kerem: If we want to compare the quality of Varda temporal interpolator, may want the 1h.
+	Louis: 6h->1h is the temporal downscaler. So we will be directly evaluating the forecaster if we use 6h.
+	Kerem: We have different models-- 6h and 1h models are overlaid. will discuss with Xavier.
+	Kerem: Temporal resolution of station data is sometimes 10m, will that make a difference?
+	Louis: If we go for 6h spacing, could use eitehr hourly temp (average over preceding hour) or instantaneous value. Precip is going to be trickier for accumulation. Presumably Jonas and Claire have accounted for this when they added the JRetrieve to EvalML.
+	Proposal: Start with 6h, then we can expand to hourly later. So we are comparing consistently. (Varda 6h to WG 6h, Varda 1h to WG 1h)
+	Spatial resolution:
+	Varda: ICON CH1 native
+	WG: ICON CH1 native
+	HiRAD: CO1e grid (rotated lat lon)
+	So, all use 1km grids. This is OK given the stations use nearest-neighbor
+	match_forecast_to_truth?
+o	Can EvalML input .zarr directly? GRIB converstion is expensive
+	For now just use GRIB, hopefully conversion doesn’t need to be don etoo often.
+•	What are standard experiment parameters/variables used for EvalML evaluations?
+o	HiRAD: T2M, 10U, 10V, TOT_PREC1
+	Model tends to suffer when too many outputs
+	Wind speed is taken care of in EvalML by default
+o	WG: All the ICON (around 100 or so)
+o	Varda: Also all the ICON
+o	Proposal: For initial analysis, just do the ones that HiRAD uses.
+	WG+Varda comparison later can be more comprehensive.
+https://github.com/MeteoSwiss/evalml/tree/feat/hirad-integration Branch to do development on. (includes GRIB input) sample config for hirad is at: https://github.com/MeteoSwiss/evalml/blob/feat/hirad-integration/tests/integration/configs/hirad.yaml
+•	Louis Frey will make an initial config with experiments proposed on this branch.
