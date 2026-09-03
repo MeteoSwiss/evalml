@@ -136,20 +136,10 @@ experiment:
     enabled: false
 
 showcase:
-  params:
-    - T_2M
-    - SP_10M
-    - TOT_PREC6
   meteograms:
     enabled: false
-    stations: [JUN]
   animations:
-    enabled: true
-    frames_per_second: 5
-    domains:
-      - alps
-      - icon-ch
-      - switzerland
+    enabled: false
 
 locations:
   output_root: output/
