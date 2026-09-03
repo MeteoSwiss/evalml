@@ -1,0 +1,157 @@
+# yaml-language-server: $schema=../../../workflow/tools/config.schema.json
+description: |
+  Three-way comparison of the ML forecasting models WeatherGenerator (WG),
+  HiRAD-Gen and Varda against station observations.
+
+  Setup follows the initial design meeting (Louis Frey, Kerem Tezcan,
+  Mary McGlohon):
+    * Truth: SwissMetNet via jretrieve (recommended baseline for now; PeakWeather
+      and MEC station sets are possible later extensions).
+    * Test period aligned with Varda (Apr 2025 - Mar 2026), initialisations every
+      54 h so all four synoptic hours and all seasons are sampled while keeping
+      inference cost bounded (~162 forecasts).
+    * 5 d rollout, 6-hourly output. Hourly output (Varda temporal downscaler) is
+      deliberately left for a later, separate experiment so that here we compare
+      the forecasters themselves.
+    * Variables restricted to the ones HiRAD produces (T_2M, U_10M, V_10M,
+      precipitation); wind speed SP_10M is derived by evalml. A more
+      comprehensive WG-vs-Varda comparison comes later.
+    * All three models are on 1 km grids (WG/Varda: ICON-CH1 native, HiRAD: CO1e
+      rotated lat/lon), which is fine because station matching is nearest
+      neighbour.
+
+config_label: wg-hirad-varda-comparison-1.0
+
+dates:
+  start: 2025-04-01T00:00
+  end: 2026-03-31T00:00
+  frequency: 54h
+
+runs:
+  # WG and HiRAD run their own inference outside evalml and hand over GRIB
+  # (converted with the evalml templates), so they enter as grib_forecaster runs:
+  # evalml never runs inference for them, it only stages their existing GRIB,
+  # which must be laid out as root/{YYYYMMDDHHMM}/grib/*.grib.
+  # TODO: point `root` at the actual WG GRIB output directory.
+  - grib_forecaster:
+      label: WeatherGenerator
+      root: '/store_new/mch/msopr/ml/evalml/weathergen_grib_data'
+      steps: 0/120/6
+
+  # TODO: point `root` at the GRIB of the forecast-trained HiRAD model once it is
+  # trained (the currently available HiRAD model is reanalysis-based).
+  - grib_forecaster:
+      label: HiRAD-Gen
+      root: '/store_new/mch/msopr/ml/evalml/hirad_grib_data'
+      steps: 0/120/6
+
+  # Varda inference is run by evalml. Only the 6-hourly forecaster is used here;
+  # the temporal downscaler (1 h) is out of scope for this comparison.
+  - forecaster:
+      checkpoint: https://service.meteoswiss.ch/mlstore#/experiments/602/runs/98d4e297f0164f18a0ad50fb01fbff42
+      label: Varda-single
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+      inference_resources:
+        slurm_partition: normal-shared
+      extra_requirements:
+        - anemoi-inference==0.11.1
+
+  # ICON-CH1 only runs out to ~33 h, so ICON-CH2 provides the reference over the
+  # full 5 d range.
+  - baseline:
+      label: ICON-CH1-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/30/6
+  - baseline:
+      label: ICON-CH2-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/6
+
+# HiRAD GRIB has no elevation coordinate yet, so lapse-rate correction has to
+# stay off for a consistent comparison. Turn on once HiRAD GRIB provides it.
+lapse_rate_correction: false
+
+truth:
+  label: SwissMetNet
+  root: jretrievedwh:1,2
+  # Alternatives discussed: PeakWeather (stations outside CH, but only up to
+  # 2025) and MEC station sets (needs pressure levels).
+
+experiment:
+  params:
+    - T_2M
+    - SP_10M
+    - U_10M
+    - V_10M
+    - TOT_PREC1 # hourly accumulation at each 6-hourly output step (HiRAD's variable)
+    - TOT_PREC6 # 6-hourly accumulation, the more meaningful measure at 6 h output
+  stratification:
+    regions:
+      - mittelland
+      - berge
+      - alpennordseite
+      - alpensuedseite
+      - jura
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    TOT_PREC1:
+      gt: [0.0, 0.1, 1, 5, 10]
+    TOT_PREC6:
+      gt: [0.0, 0.1, 5, 10, 20, 50]
+    T_2M:
+      lt: [273.15]
+      gt: [288.15, 298.15]
+    SP_10M:
+      gt: [2.5, 5, 10, 15]
+    U_10M:
+      gt: [2.5, 5, 10, 15]
+    V_10M:
+      gt: [2.5, 5, 10, 15]
+  dashboard:
+    stratification:
+      - region
+      - season
+      - init_hour
+  scorecards:
+    enabled: true
+    sections:
+      short_range:
+        baseline: ICON-CH1-CTRL
+        lead_times: "6/30/6"
+        stratification: region
+        variables:
+          - "T_2M:RMSE,STDE,R2,ETS"
+          - "SP_10M:RMSE,STDE,R2,ETS"
+          - "TOT_PREC6:RMSE,STDE,R2,ETS"
+      medium_range:
+        baseline: ICON-CH2-CTRL
+        lead_times: "24/120/24"
+        stratification: region
+        variables:
+          - "T_2M:RMSE,STDE,R2,ETS"
+          - "SP_10M:RMSE,STDE,R2,ETS"
+          - "TOT_PREC6:RMSE,STDE,R2,ETS"
+  scoremaps:
+    enabled: false
+
+showcase:
+  meteograms:
+    enabled: false
+  animations:
+    enabled: false
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50

@@ -491,13 +491,14 @@
               "type": "string"
             }
           ],
-          "description": "Configuration for the forecaster run. Can be a dictionary of parameters or a path to a configuration file.By default, it will point to resources/inference/configs/forecaster.yaml in the evalml repository.",
+          "description": "Configuration for the forecaster run. Can be a dictionary of parameters or a path to a configuration file.",
           "title": "Config"
         }
       },
       "required": [
         "checkpoint",
-        "steps"
+        "steps",
+        "config"
       ],
       "title": "ForecasterConfig",
       "type": "object"
@@ -512,6 +513,54 @@
         "forecaster"
       ],
       "title": "ForecasterItem",
+      "type": "object"
+    },
+    "GRIBForecasterConfig": {
+      "additionalProperties": false,
+      "description": "Pre-generated GRIB from a forecaster, produced by a workflow outside evalml.",
+      "properties": {
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The label for the run that will be used in experiment results such as reports and figures.",
+          "title": "Label"
+        },
+        "root": {
+          "description": "Root directory of pre-generated GRIB from the external workflow, laid out as root/{init_time}/grib/*.grib (init_time formatted YYYYMMDDHHMM), matching evalml's own internal per-run GRIB layout.",
+          "minLength": 1,
+          "title": "Root",
+          "type": "string"
+        },
+        "steps": {
+          "description": "Forecast lead times in hours this run produces, formatted as 'start/end/step'.",
+          "title": "Steps",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "steps"
+      ],
+      "title": "GRIBForecasterConfig",
+      "type": "object"
+    },
+    "GRIBForecasterItem": {
+      "properties": {
+        "grib_forecaster": {
+          "$ref": "#/$defs/GRIBForecasterConfig"
+        }
+      },
+      "required": [
+        "grib_forecaster"
+      ],
+      "title": "GRIBForecasterItem",
       "type": "object"
     },
     "GlobalResources": {
@@ -969,7 +1018,7 @@
               "type": "string"
             }
           ],
-          "description": "Configuration for the temporal downscaler run. Can be a dictionary of parameters or a path to a configuration file. By default, it will point to resources/inference/configs/temporal_downscaler.yaml in the evalml repository.",
+          "description": "Configuration for the temporal downscaler run. Can be a dictionary of parameters or a path to a configuration file.",
           "title": "Config"
         },
         "forecaster": {
@@ -987,7 +1036,8 @@
       },
       "required": [
         "checkpoint",
-        "steps"
+        "steps",
+        "config"
       ],
       "title": "TemporalDownscalerConfig",
       "type": "object"
@@ -1061,7 +1111,7 @@
       "title": "Dates"
     },
     "runs": {
-      "description": "List of experiment participants, including forecaster/temporal downscaler ML runs and baselines.",
+      "description": "List of experiment participants, including forecaster/temporal downscaler/GRIB-forecaster ML runs and baselines.",
       "items": {
         "anyOf": [
           {
@@ -1069,6 +1119,9 @@
           },
           {
             "$ref": "#/$defs/TemporalDownscalerItem"
+          },
+          {
+            "$ref": "#/$defs/GRIBForecasterItem"
           },
           {
             "$ref": "#/$defs/BaselineItem"
