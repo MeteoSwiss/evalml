@@ -43,6 +43,8 @@ experiment:
   stratification:
     regions:
       - global
+  sal:
+    enabled: false
 
 locations:
   output_root: output/

@@ -270,3 +270,95 @@ rule verification_scoremaps_baseline:
             --member "{params.member}" \
             --output {output} >{log} 2>&1
         """
+
+
+# The SAL scoring raster is experiment-level (not per-participant); pass it from
+# the validated config, which fills in the SalConfig defaults. Absent when there
+# is no sal block at all, in which case these rules never fire and the script's
+# own defaults would apply anyway.
+_SAL_CONFIG = config.get("experiment", {}).get("sal") or {}
+_SAL_ARGS = (
+    f"--grid-extent {' '.join(str(x) for x in _SAL_CONFIG['grid_extent'])} "
+    f"--grid-step-lat {_SAL_CONFIG['grid_step_lat']} "
+    f"--grid-step-lon {_SAL_CONFIG['grid_step_lon']}"
+    if _SAL_CONFIG
+    else ""
+)
+
+
+rule verification_sal:
+    input:
+        "src/verification/__init__.py",
+        "src/verification/spatial.py",
+        "src/verification/sal.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/verification_sal.py",
+        inference_okfiles=lambda wc: expand(
+            rules.inference_execute.output.okfile,
+            init_time=_restrict_reftimes_to_hours(REFTIMES),
+            allow_missing=True,
+        ),
+        truth=config["truth"]["root"],
+    output:
+        OUT_ROOT / f"data/runs/{{run_id}}/sal/{{param}}_{{leadtime}}_{TRUTH_HASH}.csv",
+    log:
+        OUT_ROOT
+        / f"logs/verification_sal/{{run_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
+    resources:
+        cpus_per_task=2,
+        mem_mb=4_000,
+        runtime="60m",
+    params:
+        reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
+        run_root=lambda wc: (Path(OUT_ROOT) / f"data/runs/{wc.run_id}").resolve(),
+        sal_args=_SAL_ARGS,
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run {input.script} \
+            --run_root {params.run_root} \
+            --reftimes {params.reftimes} \
+            --truth {input.truth} \
+            --step {wildcards.leadtime} \
+            --param {wildcards.param} \
+            {params.sal_args} \
+            --output {output} >{log} 2>&1
+        """
+
+
+rule verification_sal_baseline:
+    input:
+        "src/verification/__init__.py",
+        "src/verification/spatial.py",
+        "src/verification/sal.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/verification_sal.py",
+        forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
+        truth=config["truth"]["root"],
+    output:
+        OUT_ROOT
+        / f"data/baselines/{{baseline_id}}/sal/{{param}}_{{leadtime}}_{TRUTH_HASH}.csv",
+    log:
+        OUT_ROOT
+        / f"logs/verification_sal_baseline/{{baseline_id}}-{TRUTH_HASH}-{{param}}-{{leadtime}}.log",
+    resources:
+        cpus_per_task=2,
+        mem_mb=4_000,
+        runtime="60m",
+    params:
+        member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
+        reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
+        sal_args=_SAL_ARGS,
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run {input.script} \
+            --baseline_root {input.forecast} \
+            --reftimes {params.reftimes} \
+            --truth {input.truth} \
+            --step {wildcards.leadtime} \
+            --param {wildcards.param} \
+            --member "{params.member}" \
+            {params.sal_args} \
+            --output {output} >{log} 2>&1
+        """

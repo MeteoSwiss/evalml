@@ -111,6 +111,8 @@ experiment:
           - "TOT_PREC6:RMSE,R2,ETS"
   scoremaps:
     enabled: false
+  sal:
+    enabled: false
 
 showcase:
   params:

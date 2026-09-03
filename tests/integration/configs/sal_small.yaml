@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=../../../workflow/tools/config.schema.json
+description: |
+  Integration-test fixture: minimal experiment exercising the SAL
+  (Structure-Amplitude-Location; Wernli et al. 2008) precipitation
+  verification pipeline -- workflow/scripts/verification_sal.py on top of
+  src/verification/sal.py -- end to end. Baseline data only (no inference, so
+  no GPU and no MLflow) against the gridded KENDA-CH1 analysis zarr.
+  Everything outside the `sal` block is kept to a single cheap value so the
+  fixture stays small. Driven by tests/integration/test_sal_small.py.
+config_label: sal-test
+
+dates:
+  start: 2025-04-01T00:00
+  end: 2025-04-01T06:00
+  frequency: 6h
+
+runs:
+  - baseline:
+      label: ICON-CH2-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/12/6
+
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
+experiment:
+  params:
+    - T_2M
+  stratification:
+    regions:
+      - icon
+  dashboard:
+    stratification:
+      - season
+  sal:
+    enabled: true
+    params:
+      - TOT_PREC6
+    leadtimes:
+      - 6
+      - 12
+
+locations:
+  # Dedicated tree: keeps the test's outputs from colliding with a developer's
+  # own experiments (or another test) under the shared output/ root, which the
+  # test relies on to assert exactly one SAL CSV per (param, leadtime).
+  output_root: output/integration/sal_small/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 1
+  default_resources:
+    slurm_partition: "postproc"
+    slurm_account: s83
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50
