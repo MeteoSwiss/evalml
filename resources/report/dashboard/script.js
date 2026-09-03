@@ -42,6 +42,136 @@ function getSelected(id) {
   return choicesInstances[id] ? choicesInstances[id].getValue(true) : [];
 }
 
+// Initial chart
+updateChart()
+
+
+// ---- System metrics tab ----
+
+const sysDataEl = document.getElementById("sysmetrics-data");
+const sysData = sysDataEl ? JSON.parse(sysDataEl.textContent) : [];
+
+if (sysData.length > 0) {
+  choicesInstances["sys-model-type-select"] = new Choices("#sys-model-type-select", {
+    searchEnabled: false,
+    removeItemButton: true,
+    shouldSort: false,
+    itemSelectText: "",
+    placeholder: false,
+  });
+  document.getElementById("sys-model-type-select").addEventListener("change", updateSysChart);
+
+  choicesInstances["sys-source-select"] = new Choices("#sys-source-select", {
+    searchEnabled: false,
+    removeItemButton: true,
+    shouldSort: false,
+    itemSelectText: "",
+    placeholder: false,
+  });
+  document.getElementById("sys-source-select").addEventListener("change", updateSysChart);
+
+  // Populate metric filter from the data, then initialise Choices on it
+  const sysMetricEl = document.getElementById("sys-metric-select");
+  [...new Set(sysData.map(d => d.metric))].sort().forEach(m => {
+    const opt = document.createElement("option");
+    opt.value = m;
+    opt.textContent = m;
+    opt.selected = true;
+    sysMetricEl.appendChild(opt);
+  });
+  choicesInstances["sys-metric-select"] = new Choices("#sys-metric-select", {
+    searchEnabled: false,
+    removeItemButton: true,
+    shouldSort: false,
+    itemSelectText: "",
+    placeholder: false,
+  });
+  document.getElementById("sys-metric-select").addEventListener("change", updateSysChart);
+
+  const sysSpec = {
+    "data": { "values": sysData },
+    "facet": { "field": "metric", "type": "nominal", "title": null },
+    "columns": 4,
+    "resolve": { "scale": { "x": "shared", "y": "independent" } },
+    "spec": {
+      "params": [
+        {
+          "name": "xZoom",
+          "select": {
+            "type": "interval",
+            "encodings": ["x"],
+            "zoom": "wheel![!event.shiftKey]"
+          },
+          "bind": "scales"
+        }
+      ],
+      "width": 300,
+      "height": 200,
+      "mark": { "type": "line", "point": { "filled": true, "size": 50 } },
+      "encoding": {
+        "x": {
+          "field": "init_time",
+          "type": "temporal",
+          "title": null,
+          "axis": { "labelAngle": -30, "format": "%b %d" }
+        },
+        "y": {
+          "field": "value",
+          "type": "quantitative",
+          "title": null,
+          "scale": { "zero": true }
+        },
+        "color": {
+          "field": "source",
+          "type": "nominal",
+          "legend": { "orient": "top", "title": "Source" }
+        },
+        "shape": {
+          "field": "model_type",
+          "type": "nominal",
+          "legend": { "orient": "top", "title": "Model type" }
+        },
+        "strokeDash": {
+          "field": "model_type",
+          "type": "nominal",
+          "legend": { "orient": "top", "title": "Model type" }
+        },
+        "tooltip": [
+          { "field": "source", "type": "nominal", "title": "Source" },
+          { "field": "model_type", "type": "nominal", "title": "Model type" },
+          { "field": "init_time", "type": "temporal", "title": "Init time", "format": "%Y-%m-%d %H:%M" },
+          { "field": "metric", "type": "nominal", "title": "Metric" },
+          { "field": "value", "type": "quantitative", "title": "Value", "format": ".3f" },
+          { "field": "n_gpu", "type": "quantitative", "title": "GPUs" },
+          { "field": "job_id", "type": "nominal", "title": "Job ID" },
+        ],
+      },
+    },
+  };
+
+  function updateSysChart() {
+    const selectedModelTypes = getSelected("sys-model-type-select");
+    const selectedSources = getSelected("sys-source-select");
+    const selectedMetrics = getSelected("sys-metric-select");
+    const newSpec = JSON.parse(JSON.stringify(sysSpec));
+    const filters = [];
+    if (selectedModelTypes.length > 0) {
+      filters.push({ field: "model_type", oneOf: selectedModelTypes });
+    }
+    if (selectedSources.length > 0) {
+      filters.push({ field: "source", oneOf: selectedSources });
+    }
+    if (selectedMetrics.length > 0) {
+      filters.push({ field: "metric", oneOf: selectedMetrics });
+    }
+    if (filters.length > 0) {
+      newSpec.transform = [{ filter: { and: filters } }];
+    }
+    vegaEmbed("#sys-vis", newSpec, { actions: false });
+  }
+
+  updateSysChart();
+}
 // ---------------------------------------------------------------------------
 // Data
 // ---------------------------------------------------------------------------
