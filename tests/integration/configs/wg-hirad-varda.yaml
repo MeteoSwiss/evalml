@@ -29,19 +29,18 @@ dates:
 
 runs:
   # WG and HiRAD run their own inference outside evalml and hand over GRIB
-  # (converted with the evalml templates), so they enter as third-party runs.
-  # NOTE: `spatial_downscaler` is currently the only third-party run type in the
-  # schema. WG is a forecaster, not a downscaler, so this label is a stop-gap
-  # until a generic third-party forecaster run type exists on this branch.
+  # (converted with the evalml templates), so they enter as grib_forecaster runs:
+  # evalml never runs inference for them, it only stages their existing GRIB,
+  # which must be laid out as root/{YYYYMMDDHHMM}/grib/*.grib.
   # TODO: point `root` at the actual WG GRIB output directory.
-  - spatial_downscaler:
+  - grib_forecaster:
       label: WeatherGenerator
       root: '/store_new/mch/msopr/ml/evalml/weathergen_grib_data'
       steps: 0/120/6
-      
+
   # TODO: point `root` at the GRIB of the forecast-trained HiRAD model once it is
   # trained (the currently available HiRAD model is reanalysis-based).
-  - spatial_downscaler:
+  - grib_forecaster:
       label: HiRAD-Gen
       root: '/store_new/mch/msopr/ml/evalml/hirad_grib_data'
       steps: 0/120/6
