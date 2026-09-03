@@ -107,7 +107,7 @@ rule inference_prepare_env:
             source $VENV/bin/activate
 
             echo "[$(date)] Installing requirements from {input.requirements}..."
-            uv pip install -r {input.requirements}
+            uv pip install --index-strategy unsafe-best-match -r {input.requirements}
 
             echo "[$(date)] Compiling Python bytecode..."
             python -m compileall -j 8 -o 0 -o 1 -o 2 $VENV/lib/python*/site-packages
