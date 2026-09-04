@@ -88,7 +88,18 @@ REGIONAL_DOMAIN = "switzerland"
 VAL_CALANCA_EXTENT = [8.85, 9.42, 46.1, 46.55]
 # Colorbar unit labels. Wind uses mathtext for the exponent so it doesn't depend
 # on a superscript-minus glyph being present in the figure font.
-UNIT_LABEL = {"°C": "(°C)", "m/s": "(m s$^{-1}$)"}
+UNIT_LABEL = {
+    "°C": "(°C)",
+    "m/s": "(m s$^{-1}$)",
+    "hPa": "(hPa)",
+    "g/kg": "(g kg$^{-1}$)",
+}
+
+# Default KENDA-CH1 analysis (anemoi zarr) used for the forecast-vs-analysis
+# comparison panel; the paper truth source. Override with --kenda.
+DEFAULT_KENDA = (
+    "/store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2026-1h-pl13-v2.0.zarr"
+)
 
 # GRIB variable rename maps: {grib_short_name: internal_key}. The regional LAM
 # file uses COSMO names; the global IFS sibling uses ECMWF short names.
@@ -125,7 +136,40 @@ FIELD_STYLES = {
         units="m/s",
         extend="max",
     ),
+    # Mean sea-level pressure (only used in the forecast-vs-analysis comparison).
+    # Levels there are fitted to the case, so these fixed ranges are just fallbacks.
+    "PMSL": dict(
+        cmap="viridis",
+        levels=list(range(980, 1041, 2)),
+        regional_levels=list(range(980, 1041, 2)),
+        units="hPa",
+        extend="both",
+    ),
+    # Lowest-level (1000 hPa) specific humidity, in g/kg (latent; not currently shown).
+    "QV": dict(
+        cmap="YlGnBu",
+        levels=list(np.round(np.arange(0.0, 12.01, 0.5), 2)),
+        regional_levels=list(np.round(np.arange(0.0, 12.01, 0.25), 2)),
+        units="g/kg",
+        extend="max",
+    ),
+    # 2 m dew point (comparison only). A moisture-flavoured green colormap keeps it
+    # visually distinct from the red/blue 2 m temperature row.
+    "TD_2M": dict(
+        cmap="YlGnBu",
+        levels=list(range(-30, 26, 2)),
+        regional_levels=list(range(-15, 21, 1)),
+        units="°C",
+        extend="both",
+    ),
 }
+
+# Fields shown in the forecast-vs-analysis comparison (top row to bottom row).
+COMPARISON_FIELDS = [
+    {"key": "T_2M", "label": "2 m Temperature"},
+    {"key": "SP_10M", "label": "10m wind"},
+    {"key": "TD_2M", "label": "2 m Dew Point Temperature"},
+]
 
 
 def _find_grib(grib_dir: Path, lead_time: int) -> Path:
@@ -196,11 +240,15 @@ def load_states(grib_dir: Path, lead_time: int) -> tuple[dict, dict]:
 
 
 def _preprocess(key: str, fields: dict) -> np.ndarray:
-    """Compute the display field. T_2M: K->degC; SP_10M: |(u, v)|."""
-    if key == "T_2M":
-        return kelvin_to_celsius(fields["T_2M"])
+    """Compute the display field. T_2M/TD_2M: K->degC; SP_10M: |(u, v)|; PMSL: Pa->hPa."""
+    if key in ("T_2M", "TD_2M"):
+        return kelvin_to_celsius(fields[key])
     if key == "SP_10M":
         return ekm_wind.speed(fields["U_10M"], fields["V_10M"])
+    if key == "PMSL":
+        return np.asarray(fields["PMSL"]) * 0.01
+    if key == "QV":
+        return np.asarray(fields["QV"]) * 1000.0  # kg/kg -> g/kg
     raise KeyError(key)
 
 
@@ -505,6 +553,299 @@ def _add_zoom_callout(
         mpl_fig.add_artist(cp)
 
 
+# Regional Varda surface variables loaded via the shared GRIB reader. Specific
+# humidity (QV) is a pressure-level field, loaded separately at its lowest level.
+COMPARISON_LAM_VARS = {"T_2M": "T_2M", "U_10M": "U_10M", "V_10M": "V_10M"}
+# KENDA anemoi-dataset variable names for the same physical fields.
+KENDA_VARS = {
+    "T_2M": "T_2M",
+    "U_10M": "U_10M",
+    "V_10M": "V_10M",
+    "TD_2M": "TD_2M",
+}
+
+
+def _load_grib_field(
+    grib_file: Path, short_name: str, *, level_hpa: int | None = None
+) -> np.ndarray:
+    """Load a single GRIB field by shortName (optionally at one isobaric level).
+
+    cfgrib may name the variable by its ECMWF short name (e.g. TD_2M -> 'd2m'), so
+    the sole data variable is taken rather than indexing by the requested name.
+    """
+    ds = xr.open_dataset(
+        grib_file,
+        engine="cfgrib",
+        backend_kwargs={"indexpath": "", "filter_by_keys": {"shortName": short_name}},
+    )
+    da = ds[list(ds.data_vars)[0]]
+    if level_hpa is not None and "isobaricInhPa" in da.dims:
+        da = da.sel(isobaricInhPa=level_hpa)
+    return np.asarray(da.values).flatten()
+
+
+def load_varda_regional(grib_dir: Path, lead_time: int) -> dict:
+    """Load the regional (LAM) Varda forecast state for the comparison.
+
+    Surface fields (T_2M, 10 m wind) come from the shared GRIB reader; 2 m dew
+    point is added from its GRIB message.
+    """
+    grib_file = _find_grib(grib_dir, lead_time)
+    LOG.info("Loading regional Varda GRIB %s", grib_file)
+    state = _load_state(grib_file, COMPARISON_LAM_VARS, wrap_lon=False)
+    state["fields"]["TD_2M"] = _load_grib_field(grib_file, "TD_2M")
+    return state
+
+
+def load_kenda_analysis(zarr_path: Path, valid_time: datetime) -> dict:
+    """Load the KENDA-CH1 analysis (anemoi zarr) for the field valid time.
+
+    The dataset stores one ``data`` cube (time, variable, ensemble, cell) with the
+    per-cell ``latitudes``/``longitudes`` and the physical variable names in the
+    ``variables`` attribute -- the same ICON-CH1 grid the Varda LAM forecast uses,
+    so both render on the shared mesh. The nearest available analysis step to the
+    forecast valid time is selected (they should coincide).
+    """
+    ds = xr.open_zarr(zarr_path, consolidated=False)
+    var_names = list(ds.attrs["variables"])
+    idx = {k: var_names.index(v) for k, v in KENDA_VARS.items()}
+    dates = ds["dates"].values.astype("datetime64[s]")
+    target = np.datetime64(valid_time.replace(tzinfo=None), "s")
+    ti = int(np.argmin(np.abs(dates - target)))
+    actual = dates[ti].astype("datetime64[s]").astype(object).replace(tzinfo=timezone.utc)
+    if abs((actual - valid_time).total_seconds()) > 3600:
+        LOG.warning(
+            "KENDA analysis nearest step %s is >1h from forecast valid time %s",
+            actual,
+            valid_time,
+        )
+    LOG.info("Loading KENDA analysis %s at %s (cell idx %d)", zarr_path, actual, ti)
+    data = ds["data"]
+    fields = {
+        key: np.asarray(data[ti, vi, 0, :].values, dtype="float64")
+        for key, vi in idx.items()
+    }
+    return dict(
+        longitudes=np.asarray(ds["longitudes"].values).flatten(),
+        latitudes=np.asarray(ds["latitudes"].values).flatten(),
+        valid_time=actual,
+        fields=fields,
+    )
+
+
+def _comparison_range(
+    key: str, varda_field, kenda_field, varda_state, kenda_state, extent
+) -> tuple[float, float]:
+    """Shared (vmin, vmax) for a field across both panels, fitted to the cutout.
+
+    Uses the 2nd/98th percentile of the pooled forecast+analysis values inside the
+    extent so the two columns are directly comparable; wind is pinned to start at 0.
+    """
+    lon0, lon1, lat0, lat1 = extent
+
+    def _clip(field, state):
+        lon, lat = state["longitudes"], state["latitudes"]
+        m = (lon >= lon0) & (lon <= lon1) & (lat >= lat0) & (lat <= lat1)
+        vals = np.asarray(field)[m]
+        return vals[np.isfinite(vals)]
+
+    pooled = np.concatenate(
+        [_clip(varda_field, varda_state), _clip(kenda_field, kenda_state)]
+    )
+    if key == "SP_10M":
+        return 0.0, 10.0
+    return (
+        float(np.floor(np.percentile(pooled, 2))),
+        float(np.ceil(np.percentile(pooled, 98))),
+    )
+
+
+def _frame_map(ax, *, color=None, linewidth: float = 0.5) -> None:
+    """Draw a thin rectangular frame around a map panel (the cartopy 'geo' spine)."""
+    geo = ax.spines.get("geo")
+    if geo is not None:
+        geo.set_visible(True)
+        geo.set_edgecolor(color or CAPTION_COLOR)
+        geo.set_linewidth(linewidth)
+        geo.set_path_effects([])  # clear any glow so the frame stays a crisp line
+
+
+def _diff_range(diff_field, state, extent) -> float:
+    """Symmetric half-range for a difference panel (98th pct of |diff| in extent)."""
+    lon0, lon1, lat0, lat1 = extent
+    lon, lat = state["longitudes"], state["latitudes"]
+    m = (lon >= lon0) & (lon <= lon1) & (lat >= lat0) & (lat <= lat1)
+    v = np.asarray(diff_field)[m]
+    v = v[np.isfinite(v)]
+    return max(float(np.percentile(np.abs(v), 98)), 1e-6)
+
+
+
+class _MapShim:
+    """Adapt a raw cartopy GeoAxes to the small interface ``_tripcolor_panel`` uses."""
+
+    __slots__ = ("ax", "_crs")
+
+    def __init__(self, ax, crs):
+        self.ax = ax
+        self._crs = crs
+
+    def standard_layers(self):  # borders/coastlines are added explicitly elsewhere
+        pass
+
+
+def _inset_colorbar(ax, mappable, *, extend, label):
+    """Colorbar in an inset hugging the right edge of ``ax`` (tracks its drawn box)."""
+    cax = ax.inset_axes([1.045, 0.0, 0.055, 1.0])
+    cbar = ax.figure.colorbar(mappable, cax=cax, extend=extend)
+    cbar.set_label(label, color=CAPTION_COLOR)
+    cbar.ax.tick_params(colors=CAPTION_COLOR)
+    cbar.outline.set_edgecolor(CAPTION_COLOR)
+    return cbar
+
+
+def make_comparison(
+    varda_state: dict,
+    kenda_state: dict,
+    lead_time: int,
+    output: Path,
+    icon_tri=None,
+    *,
+    extent=None,
+) -> Path:
+    """Render the Varda-forecast vs KENDA-analysis comparison over the mid cutout.
+
+    Rows are the ``COMPARISON_FIELDS`` (2 m temperature, 10 m wind, 2 m dew point);
+    columns are the Varda-Single forecast, the corresponding KENDA analysis (same
+    valid time) and their difference (forecast - analysis). Forecast/analysis share
+    one colour scale per field; the difference uses a symmetric diverging scale.
+    All panels are on the shared ICON mesh cropped to the Switzerland extent.
+
+    The maps sit on a fixed equal-cell grid (identical row heights and gaps); each
+    colorbar is an inset on its map, so it never resizes the panels.
+    """
+    output.mkdir(parents=True, exist_ok=True)
+    if extent is None:
+        extent = DOMAINS[REGIONAL_DOMAIN]["extent"]
+    projection = DOMAINS[REGIONAL_DOMAIN]["projection"]
+    plotter = StatePlotter(
+        varda_state["longitudes"], varda_state["latitudes"], output
+    )
+    # Columns: forecast, analysis, and their difference (forecast - analysis).
+    columns = ["Varda-Single", "KENDA analysis", "Difference"]
+    states = {"Varda-Single": varda_state, "KENDA analysis": kenda_state}
+    diff_cmap = plt.get_cmap("RdBu_r")
+    ncols = len(columns)
+    nrows = len(COMPARISON_FIELDS)
+
+    dlon, dlat = extent[1] - extent[0], extent[3] - extent[2]
+    panel_aspect = dlat / dlon
+    width = figure_width(2)
+    height = width * nrows * panel_aspect / ncols * 1.35
+    plt.style.use(mplstyle_path())
+    fig = plt.figure(figsize=(width, height))
+    fig.set_facecolor(BG_COLOR)
+    # A wide spacer column between the analysis (2nd) and difference (3rd) maps
+    # gives the field colorbar room so it never overlaps the difference panel.
+    map_cols = [0, 1, 3]
+    gs = fig.add_gridspec(
+        nrows,
+        4,
+        width_ratios=[1, 1, 0.32, 1],
+        left=0.085,
+        right=0.9,
+        top=0.90,
+        bottom=0.03,
+        wspace=0.12,
+        hspace=0.10,
+    )
+
+    for row, spec in enumerate(COMPARISON_FIELDS):
+        key = spec["key"]
+        vf = _preprocess(key, varda_state["fields"])
+        kf = _preprocess(key, kenda_state["fields"])
+        df = vf - kf
+        vmin, vmax = _comparison_range(key, vf, kf, varda_state, kenda_state, extent)
+        dmax = _diff_range(df, varda_state, extent)
+        cmap = _field_cmap(key)
+        ekp.schema.coastlines["linewidth"] = 0.4
+        _unit = UNIT_LABEL.get(
+            FIELD_STYLES[key]["units"], f"({FIELD_STYLES[key]['units']})"
+        )
+        for col, label in enumerate(columns):
+            ax = fig.add_subplot(gs[row, map_cols[col]], projection=projection)
+            is_diff = label == "Difference"
+            mappable = _tripcolor_panel(
+                _MapShim(ax, projection),
+                df if is_diff else (vf if label == "Varda-Single" else kf),
+                cmap=diff_cmap if is_diff else cmap,
+                levels=[-dmax, dmax] if is_diff else [vmin, vmax],
+                icon_tri=icon_tri,
+                plotter=plotter,
+                extent=extent,
+            )
+            ax.set_extent(extent, crs=ccrs.PlateCarree())
+            _add_regional_borders(ax, color=OUTLINE_COLOR, linewidth=0.4)
+            if key == "SP_10M" and not is_diff:
+                _add_wind_arrows(
+                    ax,
+                    states[label]["longitudes"],
+                    states[label]["latitudes"],
+                    states[label]["fields"]["U_10M"],
+                    states[label]["fields"]["V_10M"],
+                    extent=extent,
+                    nx=26,
+                    ny=19,
+                    pad=0.12,
+                )
+            if row == 0:
+                ax.set_title(label, color=CAPTION_COLOR)
+            if col == 0:
+                ax.text(
+                    -0.06,
+                    0.5,
+                    spec["label"],
+                    transform=ax.transAxes,
+                    rotation=90,
+                    ha="right",
+                    va="center",
+                    fontsize=plt.rcParams["axes.titlesize"],
+                    color=CAPTION_COLOR,
+                )
+            _strip_chrome(ax)
+            _frame_map(ax)
+            # Colorbars: field scale on the analysis column, diff scale on the diff
+            # column. Insets keep every panel the same size -> even rows.
+            if label == "KENDA analysis":
+                _inset_colorbar(
+                    ax, mappable, extend=FIELD_STYLES[key]["extend"], label=_unit
+                )
+            elif is_diff:
+                _inset_colorbar(ax, mappable, extend="both", label=f"Δ {_unit}")
+
+    valid = varda_state["valid_time"].strftime("%Y-%m-%d %H:%M UTC")
+    fig.text(
+        0.015, 0.985, "Varda-Single forecast vs KENDA analysis",
+        ha="left", va="top",
+        fontsize=plt.rcParams["axes.titlesize"], color=CAPTION_COLOR,
+    )
+    fig.text(
+        0.015, 0.955, f"valid {valid}  ·  +{lead_time} h",
+        ha="left", va="top",
+        fontsize=plt.rcParams["font.size"], color=CAPTION_COLOR,
+    )
+
+    out_png = output / "publication_teaser_comparison.png"
+    fig.savefig(out_png, dpi=250)
+    LOG.info("Saved %s", out_png)
+    (output / "publication_teaser_comparison.html").write_text(
+        "<!doctype html><html><body>"
+        '<img src="publication_teaser_comparison.png" style="max-width:100%"></body></html>'
+    )
+    plt.close(fig)
+    return out_png
+
+
 def make_teaser(
     global_state: dict, lam_state: dict, lead_time: int, output: Path, icon_tri=None
 ) -> Path:
@@ -726,6 +1067,13 @@ def main() -> None:
         help="Dark variant: grey background, white text/ticks, white locator "
         "boxes and connector lines.",
     )
+    parser.add_argument(
+        "--kenda",
+        type=str,
+        default=DEFAULT_KENDA,
+        help="KENDA-CH1 analysis (anemoi zarr) for the forecast-vs-analysis "
+        "comparison figure. Pass '' to skip that figure.",
+    )
     args = parser.parse_args()
 
     if args.dark:
@@ -759,6 +1107,20 @@ def main() -> None:
         )
     global_state, lam_state = load_states(Path(args.input), args.leadtime)
     make_teaser(global_state, lam_state, args.leadtime, args.output, icon_tri=icon_tri)
+
+    # Additional figure: Varda forecast next to the KENDA analysis (same valid
+    # time) over the middle (Switzerland) cutout, for T_2M, 10 m wind and PMSL.
+    kenda_path = Path(args.kenda) if args.kenda else None
+    if kenda_path is None:
+        LOG.info("Skipping forecast-vs-analysis comparison (--kenda '').")
+    elif not kenda_path.exists():
+        LOG.warning("KENDA analysis %s not found; skipping comparison.", kenda_path)
+    else:
+        varda_reg = load_varda_regional(Path(args.input), args.leadtime)
+        kenda_state = load_kenda_analysis(kenda_path, varda_reg["valid_time"])
+        make_comparison(
+            varda_reg, kenda_state, args.leadtime, args.output, icon_tri=icon_tri
+        )
 
 
 if __name__ == "__main__":
