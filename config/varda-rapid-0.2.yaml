@@ -7,39 +7,21 @@ config_label: varda-single-1.0-nudge
 dates:
   start: 2025-01-01T06:00
   end: 2025-12-31T06:00
-  frequency: 18h #294h
-  # - 2025-01-02T00:00
+  frequency: 294h
+  # - 2025-03-01T00:00
   # - 2025-04-02T06:00
   # - 2025-07-02T12:00
   # - 2025-11-02T18:00
 
 runs:
-  # - temporal_downscaler:
-  #     checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
-  #     label: Varda-rapid-0.1-nudge-all
-  #     steps: 0/12/1
-  #     config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi_nudge_all.yaml
-  #     extra_requirements:
-  #       - anemoi-datasets==0.5.35
-  #       - -e /scratch/mch/llanzila/sruc/anemoi-plugins-meteoswiss
-  #       # - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@f91315e
-  #       - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
-  #     forecaster:
-  #       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
-  #       config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
-  #       steps: 0/12/6
-  #       extra_requirements:
-  #         - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
-
   - temporal_downscaler:
       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
-      label: Varda-rapid-0.1-nudge-partial
+      label: Varda-rapid-0.1
       steps: 0/12/1
-      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi_nudge_holdout.yaml
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi_with_nudging.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
-        - -e /scratch/mch/llanzila/sruc/anemoi-plugins-meteoswiss
-        # - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@f91315e
+        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@6e6b2dd42e66d9c981bd8f5ccca657f0411e4ccc
         - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
@@ -67,18 +49,15 @@ runs:
       label: INCA
       root: /store_new/mch/msclim/INCA
       steps: 0/6/1
-  # - baseline:
-  #     label: ICON-CH2-CTRL
-  #     root: /store_new/mch/msopr/osm/ICON-CH2-EPS
-  #     steps: 0/12/1
-  # - baseline:
-  #     label: ICON-CH1-CTRL
-  #     root: /store_new/mch/msopr/osm/ICON-CH1-EPS
-  #     steps: 0/12/1
 
 truth:
   label: SwissMetNet
-  root: jretrievedwh:1,2
+  # Retrieve over the broad ICON domain (matching notebooks/d_eff_generator.ipynb's
+  # STATIONS_SEL), then trim to stations within the real Swiss national border
+  # (filter_mode=switzerland) or within a predefined bounding box (filter_mode=domain;domain_bbox=45.7,48.0,5.8,10.8).
+  root: jretrievedwh:bbox=40.5,53.0,0.0,17.5;use_limitation=40;filter_mode=switzerland
+  # root: jretrievedwh:bbox=40.5,53.0,0.0,17.5;use_limitation=40;filter_mode=domain;domain_bbox=45.7,48.0,5.8,10.8
+
 
 experiment:
   params:
@@ -87,6 +66,8 @@ experiment:
     - U_10M
     - V_10M
     - TOT_PREC
+    - PMSL
+    - PS
   stratification:
     regions:
       - mittelland
@@ -107,13 +88,11 @@ experiment:
       gt: [288.15, 298.15]
   dashboard:
     stratification:
-      # - region
-      # - init_hour
       - season
   cross_validation:
     # Stations withheld from nudging in the nudge-partial inference run.
     exclude_stations:
-      - COY
+      - CHM
       - FRE
       - RUE
       - BAS
@@ -122,7 +101,7 @@ experiment:
       - HOE
       - PUY
       - RAG
-      - SAE
+      - EIN
       - ALT
       - GOS
       - COV
@@ -145,25 +124,6 @@ experiment:
           - "T_2M:RMSE,R2,ETS"
           - "TOT_PREC:RMSE,R2,ETS"
           - "TD_2M:RMSE,R2,ETS"
-      # short_range:
-      #   baseline: ICON-CH1-CTRL
-      #   lead_times: "6/12/6"
-      #   stratification: region
-      #   variables:
-      #     - "U_10M:RMSE,R2,ETS"
-      #     - "V_10M:RMSE,R2,ETS"
-      #     - "T_2M:RMSE,R2,ETS"
-      #     - "TOT_PREC:RMSE,R2,ETS"
-      #     - "TD_2M:RMSE,R2,ETS"
-      # medium_range:
-      #   baseline: ICON-CH2-CTRL
-      #   lead_times: "24/24/24"
-      #   stratification: region
-      #   variables:
-      #     - "U_10M:RMSE,R2,ETS"
-      #     - "V_10M:RMSE,R2,ETS"
-      #     - "T_2M:RMSE,R2,ETS"
-      #     - "TOT_PREC:RMSE,R2,ETS"
   scoremaps:
     enabled: false
 

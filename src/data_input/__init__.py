@@ -383,6 +383,51 @@ def _jretrieve_df_to_xarray(df, short_names, catalog) -> xr.Dataset:
     return xr.Dataset(data_vars=data_vars, coords=coords)
 
 
+def _trim_stations_xr(ds: xr.Dataset, filter_mode: str, domain_bbox: list | None) -> xr.Dataset:
+    """Trim the "values" (station) dimension to *filter_mode* — same logic as
+    RetrieveObservation._trim_stations / notebooks/d_eff_generator.ipynb's
+    station-trim cell, adapted for an xarray Dataset with latitude/longitude
+    coords along "values" instead of a pandas DataFrame."""
+    lat = ds["latitude"].values
+    lon = ds["longitude"].values
+
+    if filter_mode == "domain":
+        lat_min, lat_max, lon_min, lon_max = domain_bbox
+        mask = (lat >= lat_min) & (lat <= lat_max) & (lon >= lon_min) & (lon <= lon_max)
+        desc = f"domain bbox {domain_bbox}"
+
+    elif filter_mode == "switzerland":
+        import cartopy.io.shapereader as shpreader
+        from shapely.geometry import Point
+
+        shp_path = shpreader.natural_earth(
+            resolution="10m", category="cultural", name="admin_0_countries"
+        )
+        ch_country = next(
+            r for r in shpreader.Reader(shp_path).records()
+            if r.attributes["ADM0_A3"] == "CHE"
+        )
+        swiss_geom = ch_country.geometry
+
+        def _in_switzerland(lat_, lon_):
+            if pd.isna(lat_) or pd.isna(lon_):
+                return False
+            return swiss_geom.contains(Point(lon_, lat_))
+
+        mask = np.array([_in_switzerland(la, lo) for la, lo in zip(lat, lon)])
+        desc = "Swiss national border (Natural Earth)"
+
+    else:
+        raise ValueError(
+            f"Unknown filter_mode: {filter_mode!r} (expected 'domain' or 'switzerland')"
+        )
+
+    n_before = ds.sizes["values"]
+    ds = ds.isel(values=mask)
+    LOG.info("Station filter [%s]: %d -> %d stations", desc, n_before, ds.sizes["values"])
+    return ds
+
+
 def load_obs_data_from_jretrieve(
     root, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
@@ -413,7 +458,7 @@ def load_obs_data_from_jretrieve(
 
     from data_input import jretrieve as jr
 
-    stations, stage, seq_type = jr.parse_selection(root)
+    stations, stage, seq_type, use_limitation, filter_mode, domain_bbox = jr.parse_selection(root)
     jr.check_prerequisites(stage)
 
     want_uv = "U_10M" in params or "V_10M" in params
@@ -443,8 +488,12 @@ def load_obs_data_from_jretrieve(
         increment_minutes=step_hours * 60,
         seq_type=seq_type,
         stage=stage,
+        use_limitation=use_limitation,
     )
     raw = _jretrieve_df_to_xarray(df, short_names, catalog)
+
+    if filter_mode is not None:
+        raw = _trim_stations_xr(raw, filter_mode, domain_bbox)
 
     out = xr.Dataset(coords=raw.coords)
     for icon, short in DWH_PARAM_MAP.items():
@@ -465,7 +514,21 @@ def load_obs_data_from_jretrieve(
 
     out = out.dropna("values", how="all")
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
-    return _select_valid_times(out, times, strict=True)
+    result = _select_valid_times(out, times, strict=True)
+
+    # Same per-variable station-coverage log as RetrieveObservation, so ground-truth
+    # coverage can be compared directly against what was actually available to nudge.
+    _icon_to_short = {
+        "T_2M": "2t", "TD_2M": "2d", "U_10M": "10u", "V_10M": "10v",
+        "PMSL": "msl", "TOT_PREC": "tp", "VMAX_10M": "vmax",
+    }
+    n_total = result.sizes["values"]
+    for icon, short in _icon_to_short.items():
+        if icon in result.data_vars:
+            n_valid = int(result[icon].notnull().any("time").sum())
+            LOG.info("Stations with valid %s: %d / %d stations", short, n_valid, n_total)
+
+    return result
 
 
 def load_truth_data(

@@ -144,7 +144,7 @@ def main():
 
     # Load station metadata from DWH
     LOG.info("Fetching station metadata from jretrieve (SwissMetNet catalog)")
-    _jr_stations, _jr_stage, _jr_seq_type = jr.parse_selection("jretrievedwh:1,2")
+    _jr_stations, _jr_stage, _jr_seq_type, _, _, _ = jr.parse_selection("jretrievedwh:1,2")
     _catalog = jr.StationCatalog.from_meta(
         jr.fetch_meta(
             stations=_jr_stations,

@@ -251,6 +251,12 @@ rule inference_prepare_temporal_downscaler:
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None
             else _get_forecaster_run_id(wc.run_id)
         ),
+        # Single source of truth for the holdout station set: experiment.cross_validation
+        # in the top-level experiment config. Injected into any nudge_toward_observation
+        # filter found in the inference config (a no-op if the config has none, or if
+        # cross-validation isn't configured for this experiment) — see
+        # inference_prepare.py::_inject_nudging_cross_validation.
+        cross_validation_cfg=CROSS_VALIDATION_CFG,
     script:
         "../scripts/inference_prepare.py"
 

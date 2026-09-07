@@ -41,7 +41,7 @@ rule verification_metrics_baseline:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {input.forecast} \
-            --truth {params.truth} \
+            --truth "{params.truth}" \
             --reftime {wildcards.init_time} \
             --steps "{params.baseline_steps}" \
             --label "{params.baseline_label}" \
@@ -98,7 +98,7 @@ rule verification_metrics:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {params.grib_out_dir} \
-            --truth {params.truth} \
+            --truth "{params.truth}" \
             --reftime {wildcards.init_time} \
             --steps "{params.fcst_steps}" \
             --label "{params.fcst_label}" \
@@ -226,7 +226,7 @@ rule verification_scoremaps:
         uv run {input.script} \
             --run_root {params.run_root} \
             --reftimes {params.reftimes} \
-            --truth {input.truth} \
+            --truth "{input.truth}" \
             --step {wildcards.leadtime} \
             --steps "{params.fcst_steps}" \
             --param {wildcards.param} \
@@ -262,7 +262,7 @@ rule verification_scoremaps_baseline:
         uv run {input.script} \
             --baseline_root {input.forecast} \
             --reftimes {params.reftimes} \
-            --truth {input.truth} \
+            --truth "{input.truth}" \
             --step {wildcards.leadtime} \
             --steps "{params.baseline_steps}" \
             --param {wildcards.param} \
