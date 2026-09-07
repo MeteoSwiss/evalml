@@ -47,7 +47,6 @@ def prepare_config(
         yaml.safe_dump(config, f, sort_keys=False)
 
 
-
 def prepare_workdir(workdir: Path, resources_root: Path):
     """Prepare the working directory for the inference run.
 

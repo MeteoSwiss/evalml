@@ -306,7 +306,10 @@ def _create_station_group_masks(
     is_holdout = np.isin(all_nat_abbr, holdout_stations)
     return xr.DataArray(
         np.stack([np.ones_like(is_holdout), is_holdout, ~is_holdout]),
-        coords={"station_group": ["all", "holdout", "holdin"], "values": values_coord.values},
+        coords={
+            "station_group": ["all", "holdout", "holdin"],
+            "values": values_coord.values,
+        },
         dims=["station_group", "values"],
     )
 
@@ -402,10 +405,14 @@ def verify(
 
     station_masks = None
     if holdout_stations is not None:
-        station_masks = _create_station_group_masks(obs_aligned["values"], holdout_stations)
-        LOG.info("Station group masks created: %d holdout, %d holdin stations",
-                 int(station_masks.sel(station_group="holdout").sum()),
-                 int(station_masks.sel(station_group="holdin").sum()))
+        station_masks = _create_station_group_masks(
+            obs_aligned["values"], holdout_stations
+        )
+        LOG.info(
+            "Station group masks created: %d holdout, %d holdin stations",
+            int(station_masks.sel(station_group="holdout").sum()),
+            int(station_masks.sel(station_group="holdin").sum()),
+        )
 
     scores = []
     statistics = []

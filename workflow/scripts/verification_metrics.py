@@ -123,9 +123,13 @@ def main(args: ScriptConfig):
                 len(all_stations),
             )
         else:
-            LOG.warning("cross_validation_cfg set but no holdout stations selected (check holdout_fraction / exclude_stations).")
+            LOG.warning(
+                "cross_validation_cfg set but no holdout stations selected (check holdout_fraction / exclude_stations)."
+            )
     elif cv_cfg:
-        LOG.warning("cross_validation_cfg set but truth dataset has no 'values' dimension; station stratification skipped.")
+        LOG.warning(
+            "cross_validation_cfg set but truth dataset has no 'values' dimension; station stratification skipped."
+        )
 
     # compute metrics and statistics
     now = datetime.now()

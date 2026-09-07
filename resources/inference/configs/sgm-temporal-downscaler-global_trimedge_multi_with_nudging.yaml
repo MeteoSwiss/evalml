@@ -52,7 +52,7 @@ input:
                   lim_effective: 0.0
                   use_reliability_check: true
                   number_of_std: 5.0
-                  reliability_min_dist_frac: 0.0 
+                  reliability_min_dist_frac: 0.0
                   enable_plotting: true
                   plot_dir: output/nudging_reliability_diagnostics
                   run_mode: "devt"

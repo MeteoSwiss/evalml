@@ -222,9 +222,7 @@ def parse_selection(
         elif key == "domain_bbox":
             domain_bbox = [float(v) for v in value.split(",") if v]
             if len(domain_bbox) != 4:
-                raise ValueError(
-                    "domain_bbox must be lat_min,lat_max,lon_min,lon_max."
-                )
+                raise ValueError("domain_bbox must be lat_min,lat_max,lon_min,lon_max.")
         else:
             raise ValueError(f"Unknown jretrieve selector key: {key!r}")
     if not stations:
