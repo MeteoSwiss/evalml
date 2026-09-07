@@ -59,6 +59,55 @@ def _build_env(stage: str) -> dict[str, str]:
     return env
 
 
+def _check_credentials(conf_dir: Path) -> str | None:
+    """Return a descriptive error string if jretrieve credentials are missing."""
+    client_id = os.environ.get("JRETRIEVE_CLIENT_ID")
+    client_secret = os.environ.get("JRETRIEVE_CLIENT_SECRET")
+
+    dotenv_path = conf_dir / ".env"
+    dotenv_exists = dotenv_path.is_file()
+
+    if not (client_id and client_secret) and dotenv_exists:
+        dotenv: dict[str, str] = {}
+        try:
+            with open(dotenv_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, _, value = line.partition("=")
+                    dotenv[key.strip()] = value.strip().strip('"').strip("'")
+        except OSError:
+            pass
+        client_id = client_id or dotenv.get("JRETRIEVE_CLIENT_ID")
+        client_secret = client_secret or dotenv.get("JRETRIEVE_CLIENT_SECRET")
+
+    if client_id and client_secret:
+        return None
+
+    missing = [
+        name
+        for name, val in (
+            ("JRETRIEVE_CLIENT_ID", client_id),
+            ("JRETRIEVE_CLIENT_SECRET", client_secret),
+        )
+        if not val
+    ]
+    lines = [
+        f"Missing jretrieve credentials: {', '.join(missing)}.",
+        "Credentials must be supplied in one of two ways:",
+        f"  1. Set {' and '.join(missing)} as environment variables.",
+        f"  2. Add them to {dotenv_path}",
+    ]
+    if dotenv_exists:
+        lines.append(
+            f"     (.env file exists but does not contain {' or '.join(missing)})"
+        )
+    else:
+        lines.append("     (.env file not found — create it with the missing keys)")
+    return "\n".join(lines)
+
+
 def check_prerequisites(stage: str = "prod") -> None:
     """Fail-fast validation that the jretrievedwh environment is usable.
 
@@ -73,9 +122,13 @@ def check_prerequisites(stage: str = "prod") -> None:
         _resolve_binary()
     except JretrieveError as e:
         problems.append(str(e))
-    conf_path = Path(__file__).parents[2] / ".jretrievedwh-conf.prod.py"
+    conf_dir = Path(__file__).parents[2]
+    conf_path = conf_dir / ".jretrievedwh-conf.prod.py"
     if not conf_path.is_file():
         problems.append(f"jretrieve conf file not found: {conf_path}")
+    cred_problem = _check_credentials(conf_dir)
+    if cred_problem:
+        problems.append(cred_problem)
     if problems:
         raise JretrieveError(
             "jretrievedwh prerequisites not met:\n  - " + "\n  - ".join(problems)
@@ -302,6 +355,21 @@ def fetch_data(
     return _parse_csv(_run_with_retry(argv, env=_build_env(stage), timeout_s=timeout_s))
 
 
+# Priority for choosing which parameter's metadata row defines a station's
+# single coordinate when several parameters are current at once.
+# Parameters not listed sort last.
+_META_PARAM_PRIORITY: tuple[str, ...] = (
+    "tre200s0",  # T_2M
+    "tde200s0",  # TD_2M
+    "pp0qffs0",  # PMSL
+    "prestas0",  # PS
+    "fkl010z0",  # 10m wind speed
+    "dkl010z0",  # 10m wind direction
+    "rre150h0",  # 1h precip
+    "rre006i0",  # 6h precip
+)
+
+
 @dataclass(frozen=True)
 class StationCatalog:
     """Stable, nat_abbr-sorted station catalog used as the cell axis."""
@@ -319,8 +387,27 @@ class StationCatalog:
 
     @classmethod
     def from_meta(cls, meta: pd.DataFrame) -> "StationCatalog":
+        # A station has one metadata rows per parameter and operational period).
+        # Collapse to one row per station by preferring, in order:
+        #   1. the *current* location (empty/absent op_till),
+        #   2. a fixed parameter priority,
+        #   3. the most recent operational period (largest op_since).
+        # Stations with no current row fall back to their latest period.
+        #
+        # Currently, we select one metadata entry per station, even though they
+        # might vary across parameters. This could be improved in the future, i.e.
+        # the code adapted to handle metadata per station and parameter.
+        m = meta.copy()
+        op_till = m["op_till"]
+        m["_current"] = op_till.isna() | (op_till.astype(str).str.strip() == "")
+        priority = {p: i for i, p in enumerate(_META_PARAM_PRIORITY)}
+        m["_prio"] = m["parameter"].map(priority).fillna(len(priority)).astype(int)
         per_station = (
-            meta.sort_values(["nat_abbr", "parameter", "op_since"], kind="stable")
+            m.sort_values(
+                ["nat_abbr", "_current", "_prio", "op_since"],
+                ascending=[True, False, True, False],
+                kind="stable",
+            )
             .drop_duplicates(subset=["station"], keep="first")
             .sort_values("nat_abbr", kind="stable")
             .reset_index(drop=True)

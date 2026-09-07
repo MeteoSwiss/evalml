@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verification import verify  # noqa: E402
+from verification import verify, apply_lapse_rate_correction_inplace  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
 from data_input import (
     parse_steps,
@@ -105,6 +105,9 @@ def main(args: ScriptConfig):
         (datetime.now() - now).total_seconds(),
     )
 
+    if args.lapse_rate_correction:
+        apply_lapse_rate_correction_inplace(fcst, truth, args.params)
+
     # determine holdout stations for cross-validation station stratification
     # holdout stations are derived from the truth dataset's station list so the
     # same partition is used consistently across all models and baselines.
@@ -129,9 +132,9 @@ def main(args: ScriptConfig):
     results = verify(
         fcst,
         truth,
-        args.label,
-        args.truth_label,
-        args.regions,
+        args.source_id,
+        args.truth_source_id,
+        regions=args.regions,
         threshold_dict=args.threshold_dict,
         holdout_stations=holdout_stations,
     )
@@ -143,6 +146,16 @@ def main(args: ScriptConfig):
     # save results to NetCDF
     now = datetime.now()
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    # Strip any non-NetCDF-serializable attrs (e.g. dicts set by compute_derived)
+    # before writing; those attrs are only meaningful for in-memory use (e.g. plot_meteogram).
+    _netcdf_types = (str, bytes, int, float, list, tuple)
+    results.attrs = {
+        k: v for k, v in results.attrs.items() if isinstance(v, _netcdf_types)
+    }
+    for _var in results.data_vars.values():
+        _var.attrs = {
+            k: v for k, v in _var.attrs.items() if isinstance(v, _netcdf_types)
+        }
     results.earthkit.to_netcdf(args.output)
     LOG.info(
         "Saved verification results to %s in %s seconds",
@@ -187,22 +200,26 @@ if __name__ == "__main__":
         help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
     )
     parser.add_argument(
-        "--label",
+        "--source_id",
         type=str,
-        default="COSMO-E",
-        help="Label for the forecast or baseline data (default: COSMO-E).",
+        required=True,
+        help="Stable identifier for the forecast or baseline source (e.g. run_id or baseline_id).",
     )
     parser.add_argument(
-        "--truth_label",
+        "--truth_source_id",
         type=str,
-        default="COSMO KENDA",
-        help="Label for the truth data (default: COSMO KENDA).",
+        required=True,
+        help="Stable identifier for the truth source (e.g. truth_<TRUTH_HASH>).",
     )
     parser.add_argument(
         "--regions",
-        type=lambda x: [r for r in x.split(",") if r],
-        help="Comma-separated list of shapefile paths defining regions for stratification.",
-        default="",
+        type=json.loads,
+        help=(
+            "JSON list of region specs in config order. "
+            'Each entry is {"type": "bbox", "name": ..., "bbox": [...]} '
+            'or {"type": "shp", "name": ..., "path": ...}.'
+        ),
+        default="[]",
     )
     parser.add_argument(
         "--threshold_dict",
@@ -231,6 +248,12 @@ if __name__ == "__main__":
         type=Path,
         default="verif.nc",
         help="Output file to save the verification results (default: verif.nc).",
+    )
+    parser.add_argument(
+        "--lapse_rate_correction",
+        action="store_true",
+        default=False,
+        help="Apply standard-atmosphere lapse-rate correction to T_2M and TD_2M.",
     )
     args = parser.parse_args()
 

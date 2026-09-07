@@ -35,9 +35,12 @@
         .controls-summary { font-size: 0.8rem; color: #555; display: none; }
         .controls { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
         .controls.collapsed { display: none; }
-        .control-group { flex: 1 1 220px; min-width: 180px; }
-        .choices__inner { min-height: 80px; }
-        label { font-weight: bold; display: block; }
+        .control-group { flex: 1 1 220px; min-width: 180px; display: flex; flex-direction: column; }
+        .choices { flex: 1; display: flex; flex-direction: column; }
+        .choices__inner { flex: 1; min-height: unset; height: 80px; overflow-y: auto; border-right: 1px solid #b0b0b0 !important; }
+        label { font-weight: bold; display: block; font-size: 0.75rem; }
+        .choices__item { font-size: 0.72rem !important; padding: 2px 6px !important; }
+        .choices__list--dropdown .choices__item { font-size: 0.72rem !important; }
 
         /* Legend sits above the table */
         #legend-chart { margin-bottom: 4px; }
@@ -113,6 +116,9 @@
 </div>
 
 <div id="tab_scores" class="tab-content active">
+    {% if header_text %}
+    <p style="margin: 0 0 1rem; color: #555; font-size: 0.9rem;">{{ header_text | e }}</p>
+    {% endif %}
     <div class="controls-header">
         <button class="controls-toggle" id="controls-toggle">▲ Hide filters</button>
         <span class="controls-summary" id="controls-summary"></span>

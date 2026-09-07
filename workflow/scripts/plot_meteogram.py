@@ -11,7 +11,7 @@ from data_input import (
     load_forecast_data,
     load_truth_data,
 )
-from data_input import jretrieve as jr
+from verification import apply_lapse_rate_correction_inplace
 from verification.spatial import map_forecast_to_truth
 
 LOG = logging.getLogger(__name__)
@@ -19,32 +19,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-
-
-def preprocess_ds(ds, param: str):
-    ds = ds.copy()
-    if param == "SP_10M":
-        ds[param] = (ds.U_10M**2 + ds.V_10M**2) ** 0.5
-        try:
-            units = ds["U_10M"].attrs["parameter"]["units"]
-        except KeyError:
-            units = None
-        ds[param].attrs["parameter"] = {
-            "shortName": "SP_10M",
-            "units": units,
-            "name": "10m wind speed",
-        }
-        ds = ds.drop_vars(["U_10M", "V_10M"])
-    if param == "SP":
-        ds[param] = (ds.U**2 + ds.V**2) ** 0.5
-        units = ds.U.attrs["parameter"]["units"]
-        ds[param].attrs["parameter"] = {
-            "shortName": "SP",
-            "units": units,
-            "name": "Wind speed",
-        }
-        ds = ds.drop_vars(["U", "V"])
-    return ds.squeeze()
 
 
 def main():
@@ -101,6 +75,12 @@ def main():
     parser.add_argument("--outdir", type=str, help="output directory")
     parser.add_argument("--param", type=str, help="parameter")
     parser.add_argument("--stations", nargs="+", type=str, help="station IDs")
+    parser.add_argument(
+        "--lapse_rate_correction",
+        action="store_true",
+        default=False,
+        help="Apply standard-atmosphere lapse-rate correction to T_2M.",
+    )
 
     args = parser.parse_args()
 
@@ -135,47 +115,35 @@ def main():
         init_time,
     )
 
-    if param == "SP_10M":
-        paramlist = ["U_10M", "V_10M"]
-    elif param == "SP":
-        paramlist = ["U", "V"]
-    else:
-        paramlist = [param]
+    LOG.info("Loading analysis data from %s", analysis_root)
+    analysis_ds = load_truth_data(
+        analysis_root, init_time, forecast_steps, [param]
+    ).squeeze()
 
-    # Load station metadata from DWH
-    LOG.info("Fetching station metadata from jretrieve (SwissMetNet catalog)")
-    _jr_stations, _jr_stage, _jr_seq_type, _, _, _ = jr.parse_selection("jretrievedwh:1,2")
-    _catalog = jr.StationCatalog.from_meta(
-        jr.fetch_meta(
-            stations=_jr_stations,
-            params=["rre150h0"],
-            seq_type=_jr_seq_type,
-            stage=_jr_stage,
-        )
-    )
+    # Build station coordinate lookup from the loaded analysis dataset so that
+    # any station with data for the plotted parameter is found (a fixed
+    # parameter like rre150h0 would exclude stations like JUN).
     catalog_lookup = {
-        abbr: (lat, lon)
-        for abbr, lat, lon in zip(
-            _catalog.nat_abbr, _catalog.latitude, _catalog.longitude
+        str(sta): (float(lat), float(lon), float(elev))
+        for sta, lat, lon, elev in zip(
+            analysis_ds["values"].values,
+            analysis_ds["latitude"].values,
+            analysis_ds["longitude"].values,
+            analysis_ds["elevation"].values,
         )
     }
-
-    LOG.info("Loading analysis data from %s", analysis_root)
-    analysis_ds = load_truth_data(analysis_root, init_time, forecast_steps, paramlist)
-    analysis_ds = preprocess_ds(analysis_ds, param)
 
     # Load gridded data once — shared across all station plots
     LOG.info("Loading forecast data from %s", forecast_grib_dir)
     forecast_ds = load_forecast_data(
-        forecast_grib_dir, init_time, forecast_steps, paramlist
-    )
-    forecast_ds = preprocess_ds(forecast_ds, param)
+        forecast_grib_dir, init_time, forecast_steps, [param]
+    ).squeeze()
 
     baseline_ds_list = []
     for root, step, label in zip(baseline_roots, baseline_steps, baseline_labels):
         LOG.info("Loading baseline '%s' from %s", label, root)
         baseline_ds_list.append(
-            preprocess_ds(load_forecast_data(root, init_time, step, paramlist), param)
+            load_forecast_data(root, init_time, step, [param]).squeeze()
         )
 
     param2plot = forecast_ds[param].attrs.get("parameter", {})
@@ -191,12 +159,34 @@ def main():
             stations.index(station) + 1,
             len(stations),
         )
-        lat, lon = catalog_lookup[station]
+        if station not in catalog_lookup:
+            LOG.warning(
+                "Station %r has no observations for parameter %s — writing placeholder.",
+                station,
+                param,
+            )
+            outfn = outdir / f"{init_time.strftime('%Y%m%d%H%M')}_{param}_{station}.png"
+            fig, ax = plt.subplots()
+            ax.text(
+                0.5,
+                0.5,
+                f"No observations for {param}\nat station {station}",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+            )
+            ax.set_axis_off()
+            plt.savefig(outfn)
+            plt.close(fig)
+            LOG.info("saved placeholder: %s", outfn)
+            continue
+        lat, lon, elev = catalog_lookup[station]
         station_ds = xr.Dataset(
             coords={
                 "values": [station],
                 "latitude": ("values", [lat]),
                 "longitude": ("values", [lon]),
+                "elevation": ("values", [elev]),
             }
         )
 
@@ -205,6 +195,11 @@ def main():
         baseline_station_ds_list = [
             map_forecast_to_truth(ds, station_ds) for ds in baseline_ds_list
         ]
+
+        if args.lapse_rate_correction:
+            apply_lapse_rate_correction_inplace(forecast_station_ds, station_ds, param)
+            for ds in baseline_station_ds_list:
+                apply_lapse_rate_correction_inplace(ds, station_ds, param)
 
         fig, ax = plt.subplots()
 

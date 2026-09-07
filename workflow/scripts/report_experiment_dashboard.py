@@ -85,10 +85,13 @@ def main(args):
     df["init_hour"] = df["init_hour"].astype(str).str.zfill(2) + ":00 UTC"
     df["init_hour"] = df["init_hour"].where(df["init_hour"] != "-999:00 UTC", "all")
 
+    if args.label_map:
+        df["source"] = df["source"].map(lambda s: args.label_map.get(s, s))
+
     # retain only rows relevant for the active stratifications
     stratification = args.stratification
     if "region" not in stratification:
-        df = df[df["region"] == "all"]
+        df = df[df["region"] == df["region"].unique()[0]]
     if "season" not in stratification:
         df = df[df["season"] == "all"]
     if "init_hour" not in stratification:
@@ -240,7 +243,18 @@ if __name__ == "__main__":
         default=Path("dashboard.html"),
         help="Path to save the generated HTML dashboard file.",
     )
+    parser.add_argument(
+        "--labels",
+        type=str,
+        default="",
+        help="Comma-separated source_id:display_label pairs for legend text.",
+    )
     args = parser.parse_args()
+    args.label_map = {}
+    for pair in args.labels.split(","):
+        if ":" in pair:
+            sid, _, lbl = pair.partition(":")
+            args.label_map[sid.strip()] = lbl.strip()
 
     main(args)
 

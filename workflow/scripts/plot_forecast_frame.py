@@ -88,6 +88,15 @@ def preprocess_field(param: str, state: dict):
         return ekm_wind.speed(fields["U"], fields["V"]), "m/s"
     if param == "TOT_PREC":
         return np.maximum(fields[param], 0), "mm"
+    if param in ("CLCT", "CLCL"):
+        # Avoid exact 0/1 plateaus breaking tricontourf on orthographic
+        # projections (tmp/reproduce_clct_bug.py). Pair with extend="neither".
+        # Any new bounded field with silent-blank or GeometryCollection-crash
+        # globe frames likely needs the same clip-away-from-boundary fix.
+        return np.clip(fields[param], 1e-6, 1 - 1e-6), None
+    if param == "SSRD":
+        # Same issue, bottom boundary only (night-side plateau).
+        return np.maximum(fields[param], 1e-6), None
     return fields[param], None
 
 
@@ -178,10 +187,21 @@ def main():
 
     for region_name, region_cfg in regions.items():
         LOG.info("Plotting region %s", region_name)
+        outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
         plotter = StatePlotter(state["longitudes"], state["latitudes"], outdir)
         if region_cfg.get("extent") is not None:
             projection = get_projection(region_cfg.get("projection") or "orthographic")
             extent = region_cfg["extent"]
+        elif region_cfg.get("rotate"):
+            base = DOMAINS[region_name]["projection"].proj4_params
+            central_longitude = (
+                base["lon_0"] + 360.0 * lead_time / region_cfg["hours_per_revolution"]
+            ) % 360
+            #  central_longitude=central_longitude, central_latitude=0.0 for zero-centered
+            projection = ccrs.Orthographic(
+                central_longitude=central_longitude, central_latitude=base["lat_0"]
+            )
+            extent = DOMAINS[region_name]["extent"]
         else:
             projection = DOMAINS[region_name]["projection"]
             extent = DOMAINS[region_name]["extent"]
@@ -196,7 +216,11 @@ def main():
         subplot = fig.add_map(row=0, column=0)
 
         plotter.plot_field(
-            subplot, field, **get_style(param, units_override, accu=accu)
+            subplot,
+            field,
+            title=f"{param}, time: {validtime}",
+            gridline_labels=not region_cfg.get("rotate", False),
+            **get_style(param, units_override, accu=accu),
         )
         if len(state["lam_envelope"]) > 0:
             subplot.ax.add_geometries(
@@ -205,10 +229,13 @@ def main():
                 facecolor="none",
                 crs=ccrs.PlateCarree(),
             )
-        fig.title(f"{param}, time: {validtime}")
 
-        outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
-        fig.save(outfn, bbox_inches="tight", dpi=200)
+        # earthkit.plots' Figure.save() defaults bbox_inches to "tight", which
+        # crops to each frame's own content extent — that extent varies with the
+        # rotating globe's gridline labels, making frames jump around when
+        # stitched into a GIF. Pass bbox_inches=None explicitly to override that
+        # default and always save the fixed full canvas.
+        fig.save(outfn, dpi=200, bbox_inches=None)
         LOG.info("saved: %s", outfn)
 
 

@@ -137,8 +137,8 @@ showcase:
     enabled: false
     stations: [JUN, KLO, LUG, GVE] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
   animations:
-    fps: 0.5
     enabled: true
+    frames_per_second: 0.5
     domains:
       # - globe
       # - europe
