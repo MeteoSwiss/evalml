@@ -5,16 +5,15 @@ description: |
 config_label: varda-single-1.0
 
 dates:
-  # start: 2025-03-01T00:00
-  # end: 2025-03-03T00:00
-  # frequency: 24h
-  - 2025-03-01T00:00
+  start: 2025-03-01T00:00
+  end: 2025-03-03T00:00
+  frequency: 24h
 
 runs:
   - temporal_downscaler:
       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
       label: Varda-single-1.0
-      steps: 0/24/1
+      steps: 0/120/1
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
@@ -25,23 +24,19 @@ runs:
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
-        steps: 0/24/6
-        extra_requirements:
-          - anemoi-datasets==0.5.35
-          # - git+https://github.com/ecmwf/anemoi-inference.git@eaeb36fae30c754a03b8dc0442fc56373b6bedef
-          - -e /scratch/mch/llanzila/sruc/anemoi-inference
-  # - baseline:
-  #     label: INCA
-  #     root: /store_new/mch/msclim/INCA
-  #     steps: 0/6/1
-  # - baseline:
-  #     label: ICON-CH2-CTRL
-  #     root: /store_new/mch/msopr/osm/ICON-CH2-EPS
-  #     steps: 0/120/1
+        steps: 0/120/6
+  - baseline:
+      label: INCA
+      root: /store_new/mch/msclim/INCA
+      steps: 0/6/1
+  - baseline:
+      label: ICON-CH2-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/1
   - baseline:
       label: ICON-CH1-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
-      steps: 0/24/1
+      steps: 0/33/1
 
 truth:
   label: SwissMetNet
@@ -85,7 +80,7 @@ experiment:
       # - init_hour
       - season
   scorecards:
-    enabled: false
+    enabled: true
     sections:
       nowcasting:
         baseline: INCA
@@ -98,7 +93,7 @@ experiment:
           - "TOT_PREC1:RMSE,R2,ETS"
       short_range:
         baseline: ICON-CH1-CTRL
-        lead_times: "6/24/6"
+        lead_times: "6/33/6"
         stratification: region
         variables:
           - "U_10M:RMSE,R2,ETS"
@@ -127,11 +122,11 @@ showcase:
     stations: [JUN] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
   animations:
     enabled: true
-    frames_per_second: 0.5
+    frames_per_second: 5
     domains:
       # - globe
-      # - europe
-      - alps
+      - europe
+      # - alps
       - icon-ch
       - switzerland
 
@@ -148,4 +143,5 @@ profile:
     mem_mb_per_cpu: 1800
     runtime: "1h"
     gpus: 0
+    slurm_account: s83
   jobs: 50
