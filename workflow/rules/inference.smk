@@ -242,6 +242,9 @@ rule inference_prepare_temporal_downscaler:
         "../scripts/inference_prepare.py"
 
 
+# TODO: consider an INFERENCE_MODEL_TYPES set (mirroring GRIB_MODEL_TYPES, computed
+# in config.py by introspecting *Item classes for CheckpointRunConfig subclasses)
+# so this dispatch stops hand-enumerating "forecaster"/"temporal_downscaler" by string.
 def _inference_routing_fn(wc):
 
     run_config = RUN_CONFIGS[wc.run_id]
@@ -258,6 +261,10 @@ def _inference_routing_fn(wc):
     return OUT_ROOT / input_path
 
 
+# _STAGE_GRIB_SYMLINK_SHELL is defined in grib_staging.smk (included before this
+# file) and shared by the FIXTURE_ROOT branch of inference_execute below.
+
+
 if FIXTURE_ROOT:
 
     from snakemake.exceptions import WorkflowError
@@ -266,7 +273,8 @@ if FIXTURE_ROOT:
 
     _verified_fixtures = set()
 
-    def _fixture_grib(wc):
+    def _staged_grib_source(wc):
+        """Frozen fixture GRIB to symlink into the run's workdir for FIXTURE_ROOT replay."""
         p = fixture_grib_dir(FIXTURE_ROOT, wc.run_id, wc.init_time)
         if not p.exists():
             raise WorkflowError(
@@ -286,34 +294,19 @@ if FIXTURE_ROOT:
 
     rule inference_execute:
         input:
-            grib=_fixture_grib,
+            grib=_staged_grib_source,
         output:
             okfile=OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok",
         log:
             OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
         localrule: True
         params:
+            source=lambda wc, input: input.grib,
             workdir=lambda wc: (
                 OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
             ).resolve(),
         shell:
-            """
-            (
-                set -euo pipefail
-                mkdir -p {params.workdir}
-                # Replace a stale fixture symlink, but never delete a real grib
-                # directory: that is Snakemake-owned inference output, and a
-                # bare `ln -sfn` would otherwise nest the link inside it.
-                if [ -L {params.workdir}/grib ]; then
-                    rm -f {params.workdir}/grib
-                elif [ -e {params.workdir}/grib ]; then
-                    echo "ERROR: {params.workdir}/grib is a real directory (Snakemake-owned inference output), not a fixture symlink. Refusing to delete it; move it aside and retry." >&2
-                    exit 1
-                fi
-                ln -sfn {input.grib} {params.workdir}/grib
-            ) >{log} 2>&1
-            touch {output.okfile}
-            """
+            _STAGE_GRIB_SYMLINK_SHELL
 
 else:
 
@@ -328,13 +321,11 @@ else:
             OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
         localrule: True
         resources:
-            slurm_partition=lambda wc: get_resource(
-                wc, "slurm_partition", "short-shared"
-            ),
+            slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
             cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
             mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
             runtime=lambda wc: get_resource(wc, "runtime", "40m"),
-            gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
+            gres=lambda wc: f"gpu:{get_resource(wc, 'gpu', 1)}",
             ntasks=lambda wc: get_resource(wc, "tasks", 1),
             gpus=lambda wc: get_resource(wc, "gpu", 1),
         params:
@@ -351,6 +342,7 @@ else:
             (
                 set -euo pipefail
 
+                mkdir -p {params.workdir}
                 cd {params.workdir}
 
                 _run_inference() {{
@@ -385,3 +377,7 @@ else:
             touch {output.okfile}
             """
         # fmt: on
+
+
+# GRIB-model staging (grib_model_stage) and the mechanism-agnostic okfile
+# routing helpers (grib_okfile etc.) live in grib_staging.smk.
