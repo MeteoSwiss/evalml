@@ -243,7 +243,7 @@ rule inference_prepare_temporal_downscaler:
 
 
 # TODO: consider an INFERENCE_MODEL_TYPES set (mirroring GRIB_MODEL_TYPES, computed
-# in config.py by introspecting *Item classes for InferenceModelRunConfig subclasses)
+# in config.py by introspecting *Item classes for CheckpointRunConfig subclasses)
 # so this dispatch stops hand-enumerating "forecaster"/"temporal_downscaler" by string.
 def _inference_routing_fn(wc):
 
@@ -259,6 +259,27 @@ def _inference_routing_fn(wc):
         raise ValueError(f"Unsupported model type: {run_config['model_type']}")
 
     return OUT_ROOT / input_path
+
+
+# Shared by any rule that stages a run's GRIB into the standard per-run workdir
+# layout via symlink (fixture replay, GRIB-model runs): mkdir the workdir,
+# replace a stale staged-GRIB symlink but refuse to touch a real grib
+# directory (that would be Snakemake-owned inference output, and a bare
+# `ln -sfn` would otherwise nest the link inside it), then symlink and mark done.
+_STAGE_GRIB_SYMLINK_SHELL = """
+(
+    set -euo pipefail
+    mkdir -p {params.workdir}
+    if [ -L {params.workdir}/grib ]; then
+        rm -f {params.workdir}/grib
+    elif [ -e {params.workdir}/grib ]; then
+        echo "ERROR: {params.workdir}/grib is a real directory (Snakemake-owned inference output), not a previously-staged GRIB symlink. Refusing to delete it; move it aside and retry." >&2
+        exit 1
+    fi
+    ln -sfn {params.source} {params.workdir}/grib
+) >{log} 2>&1
+touch {output.okfile}
+"""
 
 
 if FIXTURE_ROOT:
@@ -297,27 +318,12 @@ if FIXTURE_ROOT:
             OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
         localrule: True
         params:
+            source=lambda wc, input: input.grib,
             workdir=lambda wc: (
                 OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
             ).resolve(),
         shell:
-            """
-            (
-                set -euo pipefail
-                mkdir -p {params.workdir}
-                # Replace a stale fixture symlink, but never delete a real grib
-                # directory: that is Snakemake-owned inference output, and a
-                # bare `ln -sfn` would otherwise nest the link inside it.
-                if [ -L {params.workdir}/grib ]; then
-                    rm -f {params.workdir}/grib
-                elif [ -e {params.workdir}/grib ]; then
-                    echo "ERROR: {params.workdir}/grib is a real directory (Snakemake-owned inference output), not a fixture symlink. Refusing to delete it; move it aside and retry." >&2
-                    exit 1
-                fi
-                ln -sfn {input.grib} {params.workdir}/grib
-            ) >{log} 2>&1
-            touch {output.okfile}
-            """
+            _STAGE_GRIB_SYMLINK_SHELL
 
 else:
 
@@ -407,35 +413,24 @@ rule grib_model_stage:
         source=_grib_model_source,
         workdir=lambda wc: (OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}").resolve(),
     shell:
-        """
-        (
-            set -euo pipefail
-            mkdir -p {params.workdir}
-            if [ -L {params.workdir}/grib ]; then
-                rm -f {params.workdir}/grib
-            elif [ -e {params.workdir}/grib ]; then
-                echo "ERROR: {params.workdir}/grib is a real directory (Snakemake-owned inference output), not a GRIB-model-stage symlink. Refusing to delete it; move it aside and retry." >&2
-                exit 1
-            fi
-            ln -sfn {params.source} {params.workdir}/grib
-        ) >{log} 2>&1
-        touch {output.okfile}
-        """
+        _STAGE_GRIB_SYMLINK_SHELL
+
+
+def _rule_for_model_type(model_type: str):
+    """The rule that produces wc.run_id's okfile: grib_model_stage for GRIB-model
+    run types, inference_execute for everything else."""
+    return rules.grib_model_stage if model_type in GRIB_MODEL_TYPES else rules.inference_execute
 
 
 def _okfile_template(wc):
     """Unexpanded rule-output object for wc.run_id's okfile rule."""
     model_type = RUN_CONFIGS[wc.run_id]["model_type"]
-    return (
-        rules.grib_model_stage if model_type in GRIB_MODEL_TYPES else rules.inference_execute
-    ).output.okfile
+    return _rule_for_model_type(model_type).output.okfile
 
 
 def _okfile_for(run_id: str, init_time: str) -> str:
     model_type = RUN_CONFIGS[run_id]["model_type"]
-    template = (
-        rules.grib_model_stage if model_type in GRIB_MODEL_TYPES else rules.inference_execute
-    ).output.okfile
+    template = _rule_for_model_type(model_type).output.okfile
     return template.format(run_id=run_id, init_time=init_time)
 
 

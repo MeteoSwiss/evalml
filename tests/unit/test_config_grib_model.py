@@ -2,10 +2,10 @@ import pytest
 from pydantic import ValidationError
 
 from evalml.config import (
+    CheckpointRunConfig,
     ConfigModel,
     GRIB_MODEL_TYPES,
-    GRIBModelRunConfig,
-    InferenceModelRunConfig,
+    GRIBRunConfig,
     SpatialDownscalerConfig,
 )
 
@@ -70,11 +70,11 @@ def test_grib_model_types_is_spatial_downscaler_only():
 
 def test_grib_model_run_config_is_not_inference_model_run_config():
     grib_run = SpatialDownscalerConfig(root="/store_new/x", steps="0/12/1")
-    assert not isinstance(grib_run, InferenceModelRunConfig)
+    assert not isinstance(grib_run, CheckpointRunConfig)
 
 
 def test_inference_model_run_config_is_not_grib_model_run_config():
-    inference_run = InferenceModelRunConfig(
+    inference_run = CheckpointRunConfig(
         checkpoint="/some/checkpoint.ckpt", steps="0/12/1", config={}
     )
-    assert not isinstance(inference_run, GRIBModelRunConfig)
+    assert not isinstance(inference_run, GRIBRunConfig)

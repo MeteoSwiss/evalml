@@ -110,7 +110,7 @@ class RunConfig(BaseModel):
         return _validate_steps_range(v)
 
 
-class InferenceModelRunConfig(RunConfig):
+class CheckpointRunConfig(RunConfig):
     """A run for which evalml itself runs anemoi-inference."""
 
     # Identity contract: fields that determine the inference ENVIRONMENT (venv, squashfs).
@@ -139,7 +139,7 @@ class InferenceModelRunConfig(RunConfig):
     config: Dict[str, Any] | str
 
 
-class GRIBModelRunConfig(RunConfig):
+class GRIBRunConfig(RunConfig):
     """A run that supplies its own pre-generated GRIB from a workflow outside evalml.
 
     No checkpoint, venv, or anemoi-inference config: evalml never runs inference for
@@ -159,7 +159,7 @@ class GRIBModelRunConfig(RunConfig):
     )
 
 
-class ForecasterConfig(InferenceModelRunConfig):
+class ForecasterConfig(CheckpointRunConfig):
     """Single training run stored in MLflow."""
 
     config: Dict[str, Any] | str = Field(
@@ -168,7 +168,7 @@ class ForecasterConfig(InferenceModelRunConfig):
     )
 
 
-class TemporalDownscalerConfig(InferenceModelRunConfig):
+class TemporalDownscalerConfig(CheckpointRunConfig):
     """Single training run stored in MLflow."""
 
     config: Dict[str, Any] | str = Field(
@@ -182,7 +182,7 @@ class TemporalDownscalerConfig(InferenceModelRunConfig):
     )
 
 
-class SpatialDownscalerConfig(GRIBModelRunConfig):
+class SpatialDownscalerConfig(GRIBRunConfig):
     """Pre-generated spatial-downscaler GRIB, produced by a workflow outside evalml."""
 
 
@@ -248,7 +248,7 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
-# Model types backed by a GRIBModelRunConfig subclass: evalml never runs inference
+# Model types backed by a GRIBRunConfig subclass: evalml never runs inference
 # for these, only stages their pre-existing GRIB. Computed by introspection (rather
 # than hand-maintained) so a new GRIB-supplying run type is picked up automatically
 # as soon as its *Item class is added below.
@@ -257,7 +257,7 @@ GRIB_MODEL_TYPES: FrozenSet[str] = frozenset(
     for item_cls in (ForecasterItem, TemporalDownscalerItem, SpatialDownscalerItem, BaselineItem)
     for field_name, field_info in item_cls.model_fields.items()
     if isinstance(field_info.annotation, type)
-    and issubclass(field_info.annotation, GRIBModelRunConfig)
+    and issubclass(field_info.annotation, GRIBRunConfig)
 )
 
 
