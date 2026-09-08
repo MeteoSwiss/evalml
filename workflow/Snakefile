@@ -15,6 +15,7 @@ update_config(config, ConfigModel.model_validate(dict(config)).model_dump(mode="
 include: "rules/common.smk"
 include: "rules/summary.smk"
 include: "rules/data.smk"
+include: "rules/grib_staging.smk"
 include: "rules/inference.smk"
 include: "rules/verification.smk"
 include: "rules/report.smk"
@@ -249,7 +250,7 @@ rule inference_all:
     """Run inference for all reference times as defined in the configuration."""
     input:
         lambda wc: [
-            _okfile_for(run_id, t.strftime("%Y%m%d%H%M"))
+            _grib_okfile_for(run_id, t.strftime("%Y%m%d%H%M"))
             for run_id in CANDIDATES
             for t in REFTIMES
         ],

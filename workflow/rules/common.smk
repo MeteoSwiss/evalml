@@ -6,7 +6,7 @@ import hashlib
 import json
 from urllib.parse import urlparse
 
-from evalml.config import GRIB_MODEL_TYPES
+from evalml.config import GRIB_MODEL_TYPES, CheckpointRunConfig
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
@@ -19,12 +19,10 @@ FIXTURE_ROOT = config.get("fixture_root")
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
 HASH_LENGTH = 4
 
-# Fields that determine the inference ENVIRONMENT. Changing these requires a new venv/squashfs.
-ENV_HASH_FIELDS = {
-    "checkpoint",
-    "extra_requirements",
-    "disable_local_eccodes_definitions",
-}
+# Fields that determine the inference ENVIRONMENT. Changing these requires a new
+# venv/squashfs. Single-sourced from CheckpointRunConfig.ENV_FIELDS so this set
+# can't drift from the Pydantic-side identity contract it mirrors.
+ENV_HASH_FIELDS = CheckpointRunConfig.ENV_FIELDS
 # Fields excluded from ALL hashing (display/resource metadata only).
 RUN_HASH_EXCLUDE = {"label", "inference_resources", "_is_candidate", "model_type"}
 # Fields excluded from baseline hashing (display metadata only).
