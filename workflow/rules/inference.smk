@@ -284,6 +284,11 @@ rule inference_execute:
         disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
             "disable_local_eccodes_definitions", False
         ),
+        account_flag=lambda wc: (
+            f"--account={config['profile']['default_resources']['slurm_account']}"
+            if config["profile"]["default_resources"].get("slurm_account")
+            else ""
+        ),
     # fmt: off
     shell:
         """
@@ -309,6 +314,7 @@ rule inference_execute:
 
                 srun \
                     --unbuffered \
+                    {params.account_flag} \
                     --partition={resources.slurm_partition} \
                     --cpus-per-task={resources.cpus_per_task} \
                     --mem-per-cpu={resources.mem_mb_per_cpu} \
