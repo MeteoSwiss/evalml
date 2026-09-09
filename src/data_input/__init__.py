@@ -559,6 +559,21 @@ def _disaggregate_accum(cumul: xr.DataArray, steps: list[int], n: int) -> xr.Dat
     Raises ValueError if any valid window gives significantly negative values (data is
     not actually cumulative from start).
     """
+    valid_steps = [s for s in steps if s >= n]
+    required = {np.timedelta64(s, "h") for s in steps} | {
+        np.timedelta64(s - n, "h") for s in valid_steps
+    }
+    missing = sorted(
+        int(td / np.timedelta64(1, "h")) for td in required - set(cumul["step"].values)
+    )
+    if missing:
+        raise ValueError(
+            f"Cannot compute {n}h disaggregation for steps {steps}: forecast step(s) "
+            f"{missing} (hours) are missing from the source data. This typically means "
+            f"the forecast's output cadence is coarser than the requested {n}h "
+            "accumulation window."
+        )
+
     step_coords = [np.timedelta64(s, "h") for s in steps]
     result = xr.full_like(cumul.sel(step=step_coords), fill_value=np.nan)
 
