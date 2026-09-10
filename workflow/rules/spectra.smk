@@ -49,7 +49,6 @@ rule spectra_compute:
         "src/data_input/__init__.py",
         script="workflow/scripts/spectra_compute.py",
         inference_okfile=rules.inference_execute.output.okfile,
-        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT / "data/runs/{run_id}/{init_time}/spectra.nc",
     log:
@@ -84,7 +83,6 @@ rule spectra_compute_baseline:
         "src/data_input/__init__.py",
         script="workflow/scripts/spectra_compute.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
-        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/spectra.nc",
     log:
@@ -113,7 +111,6 @@ rule spectra_compute_truth:
         "src/data_input/__init__.py",
         script="workflow/scripts/spectra_compute.py",
         truth=config["truth"]["root"],
-        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         OUT_ROOT / "data/truth/{init_time}/spectra.nc",
     log:

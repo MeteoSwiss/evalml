@@ -12,6 +12,8 @@ import pandas as pd
 def _get_available_baselines(wc) -> list[dict[str, str]]:
     """Get all available baseline datasets for the given init time."""
     baselines = []
+    if not BASELINE_CONFIGS:
+        return baselines
     for baseline_id in BASELINE_CONFIGS:
         root = BASELINE_CONFIGS[baseline_id].get("root")
         steps = BASELINE_CONFIGS[baseline_id].get("steps")
@@ -27,9 +29,7 @@ rule plot_meteogram:
     input:
         script="workflow/scripts/plot_meteogram.py",
         inference_okfile=rules.inference_execute.output.okfile,
-        truth=config["truth"]["root"],
-        peakweather_dir=rules.data_download_obs_from_peakweather.output.root,
-        eckit_grids=rules.data_download_eckit_geo_grids.output,
+        truth_dep=truth_file_dep,
     output:
         expand(
             OUT_ROOT
@@ -44,6 +44,7 @@ rule plot_meteogram:
         runtime="60m",
     params:
         ana_label=lambda wc: config["truth"]["label"],
+        truth_root=config["truth"]["root"],
         fcst_grib=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
@@ -58,6 +59,11 @@ rule plot_meteogram:
             ).resolve()
         ),
         stations=config["showcase"]["meteograms"]["stations"],
+        lapse_rate_flag=(
+            "--lapse_rate_correction"
+            if config.get("lapse_rate_correction", True)
+            else ""
+        ),
     shell:
         """
         set -euo pipefail
@@ -71,13 +77,13 @@ rule plot_meteogram:
             --forecast {params.fcst_grib:q}
             --forecast_steps {params.fcst_steps:q}
             --forecast_label {params.fcst_label:q}
-            --analysis {input.truth:q}
+            --analysis {params.truth_root:q}
             --analysis_label {params.ana_label:q}
-            --peakweather {input.peakweather_dir:q}
             --date {wildcards.init_time:q}
             --outdir {params.outdir:q}
             --param {wildcards.param:q}
             --stations {params.stations:q}
+            {params.lapse_rate_flag}
         )
 
         for i in "${{!BASELINE_ROOTS[@]}}"; do
@@ -86,7 +92,7 @@ rule plot_meteogram:
             CMD_ARGS+=(--baseline_label "${{BASELINE_LABELS[$i]}}")
         done
 
-        python {input.script} "${{CMD_ARGS[@]}}" >{log} 2>&1
+        uv run python {input.script} "${{CMD_ARGS[@]}}" >{log} 2>&1
         """
 
 
@@ -94,12 +100,11 @@ rule plot_forecast_frame:
     input:
         script="workflow/scripts/plot_forecast_frame.py",
         inference_okfile=rules.inference_execute.output.okfile,
-        eckit_grids=rules.data_download_eckit_geo_grids.output,
     output:
         expand(
             OUT_ROOT
             / "data/runs/{{run_id}}/{{init_time}}/frames/frame_{{leadtime}}_{{param}}_{region}.png",
-            region=list(SHOWCASE_REGIONS.keys()),
+            region=list(SHOWCASE_CONFIG["regions"].keys()),
         ),
     log:
         OUT_ROOT
@@ -114,7 +119,7 @@ rule plot_forecast_frame:
         grib_out_dir=lambda wc: str(
             (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib").resolve()
         ),
-        regions_json=json.dumps(SHOWCASE_REGIONS),
+        regions_json=json.dumps(SHOWCASE_CONFIG["regions"]),
         outdir=lambda wc: str(
             (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/frames").resolve()
         ),
@@ -132,12 +137,9 @@ rule plot_forecast_frame:
 
 
 def get_leadtimes(wc):
-    """Get all lead times from the run config."""
-    start, end, step = map(int, RUN_CONFIGS[wc.run_id]["steps"].split("/"))
-    # skip lead time 0 for diagnostic variables
-    if wc.param in ["tp", "TOT_PREC"] and start == 0:
-        start += step
-    return [f"{i}" for i in range(start, end + 1, step)]
+    """Get all lead times the run produces (accumulated params skip lead 0)."""
+    leadtimes = resolve_leadtimes(RUN_CONFIGS[wc.run_id]["steps"], param=wc.param)
+    return [str(lt) for lt in leadtimes]
 
 
 rule make_forecast_animation:
@@ -155,12 +157,60 @@ rule make_forecast_animation:
         OUT_ROOT
         / "results/{showcase}/{run_id}/{init_time}/{init_time}_{param}_{region}.gif",
     wildcard_constraints:
-        param="|".join(map(re.escape, SHOWCASE_PARAMS)),
-        region="|".join(map(re.escape, SHOWCASE_REGIONS.keys())),
+        param="|".join(map(re.escape, SHOWCASE_CONFIG["params"])),
+        region="|".join(map(re.escape, SHOWCASE_CONFIG["regions"].keys())),
     localrule: True
     params:
-        delay=lambda wc: 10 * int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
+        delay=round(100 / SHOWCASE_CONFIG["fps"]),
     shell:
         """
-        convert -delay {params.delay} -loop 0 {input} {output}
+        FRAMES=$(for f in {input}; do [ -s "$f" ] && echo "$f"; done | tr '\\n' ' ')
+        convert -delay {params.delay} -loop 0 $FRAMES {output}
         """
+
+
+rule plot_scoremaps:
+    # localrule: True
+    input:
+        script="workflow/scripts/plot_scoremaps.mo.py",
+        verif_file=OUT_ROOT
+        / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
+    output:
+        OUT_ROOT
+        / "results/{experiment}/scoremaps/runs/{run_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",
+    log:
+        OUT_ROOT
+        / "logs/plot_scoremaps/{experiment}/{run_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",
+    wildcard_constraints:
+        leadtime=r"\d+",  # only digits
+        init_hour=r"all|\d{1,2}",
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=1,
+        runtime="10m",
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run python {input.script} \
+            --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
+            --param {wildcards.param} --leadtime {wildcards.leadtime} --score {wildcards.score} \
+            --season {wildcards.season} --init_hour {wildcards.init_hour} >{log} 2>&1
+        # interactive editing (needs to set localrule: True and use only one core)
+        # marimo edit {input.script} -- \
+        #     --input {input.verif_file} --outfn {output[0]} --region {wildcards.region} \
+        #     --param {wildcards.param} --leadtime {wildcards.leadtime} --score {wildcards.score} \
+        #     --season {wildcards.season} --init_hour {wildcards.init_hour}
+        """
+
+
+use rule plot_scoremaps as plot_scoremaps_baseline with:
+    input:
+        script="workflow/scripts/plot_scoremaps.mo.py",
+        verif_file=OUT_ROOT
+        / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
+    output:
+        OUT_ROOT
+        / "results/{experiment}/scoremaps/baselines/{baseline_id}/{param}_{score}_{region}_{season}_{init_hour}_{leadtime}.png",
+    log:
+        OUT_ROOT
+        / "logs/plot_scoremaps/{experiment}/{baseline_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",

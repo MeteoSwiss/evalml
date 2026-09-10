@@ -25,7 +25,7 @@ from verification import decode_metric
 
 # Sentinel values that select the "aggregate over all" slice for each
 # stratification dimension that is not the active stratification axis.
-_STRAT_ALL_VALUES = {"region": "all", "season": "all", "init_hour": -999}
+_STRAT_ALL_VALUES = {"season": "all", "init_hour": -999}
 
 DEFAULT_PLOT_CFG = {
     "rcparams": {
@@ -182,8 +182,18 @@ def _build_config(args) -> dict:
         }
 
     return {
-        "model": {"path": args.verif_run, "source": args.run_source},
-        "baseline": {"path": args.verif_baseline, "source": args.baseline_source},
+        "model": {
+            "path": args.verif_run,
+            "source": args.run_source,
+            "label": args.run_label if args.run_label is not None else args.run_source,
+        },
+        "baseline": {
+            "path": args.verif_baseline,
+            "source": args.baseline_source,
+            "label": args.baseline_label
+            if args.baseline_label is not None
+            else args.baseline_source,
+        },
         "stratification": args.stratification,
         "lead_times": args.lead_times,
         # All recognised metrics — every entry must also appear in metric_directions.
@@ -215,13 +225,35 @@ def _load_relative_diff(cfg: dict) -> xr.Dataset:
         if dim != strat_dim:
             sel_coords[dim] = all_value
 
-    model_ds = (
-        xr.open_dataset(cfg["model"]["path"]).sel(**sel_coords).squeeze(drop=True)
-    )
-    baseline_ds = (
-        xr.open_dataset(cfg["baseline"]["path"])
-        .sel(**{**sel_coords, "source": baseline_source})
-        .squeeze(drop=True)
+    model_ds = xr.open_dataset(cfg["model"]["path"])
+    baseline_ds = xr.open_dataset(cfg["baseline"]["path"])
+
+    if strat_dim != "region":
+        sel_coords["region"] = model_ds["region"].values[0]
+
+    for label, ds in [("model", model_ds), ("baseline", baseline_ds)]:
+        if "n_samples" not in ds.data_vars:
+            raise ValueError(
+                f"'n_samples' is missing from the {label} dataset '{cfg[label]['path']}'.\n"
+                f"This file was likely produced before n_samples tracking was introduced.\n"
+                f"Fix: delete '{cfg[label]['path']}' and rerun the pipeline."
+            )
+    model_n = int(model_ds["n_samples"].sel(season="all", init_hour=-999).item())
+    baseline_n = int(baseline_ds["n_samples"].sel(season="all", init_hour=-999).item())
+    if model_n != baseline_n:
+        fewer = (
+            cfg["model"]["path"] if model_n < baseline_n else cfg["baseline"]["path"]
+        )
+        raise ValueError(
+            f"n_samples mismatch: model has {model_n} and baseline has {baseline_n} "
+            f"forecast dates.\n"
+            f"Both runs must cover the same set of dates for a valid scorecard.\n"
+            f"Fix: delete '{fewer}' and rerun the pipeline."
+        )
+
+    model_ds = model_ds.sel(**sel_coords).squeeze(drop=True)
+    baseline_ds = baseline_ds.sel(**{**sel_coords, "source": baseline_source}).squeeze(
+        drop=True
     )
 
     common_vars = [v for v in model_ds.data_vars if v in baseline_ds.data_vars]
@@ -586,8 +618,8 @@ def _render_scorecard(diff: xr.Dataset, cfg: dict, outfn: Path):
     legend = plot["legend"]
     dots = plot["dots"]
     fonts = plot["fonts"]
-    model_source = cfg["model"]["source"]
-    baseline_source = cfg["baseline"]["source"]
+    model_source = cfg["model"]["label"]
+    baseline_source = cfg["baseline"]["label"]
     strat_dim = cfg.get("stratification", "region")
 
     plt.rcParams["font.family"] = plot["rcparams"]["font_family"]
@@ -782,6 +814,18 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Value of the 'source' dim to select inside --verif_baseline.",
+    )
+    parser.add_argument(
+        "--run_label",
+        type=str,
+        default=None,
+        help="Human-readable label for the model run (used in plot titles/legend). Defaults to --run_source.",
+    )
+    parser.add_argument(
+        "--baseline_label",
+        type=str,
+        default=None,
+        help="Human-readable label for the baseline (used in plot titles/legend). Defaults to --baseline_source.",
     )
     parser.add_argument(
         "--lead_times",
