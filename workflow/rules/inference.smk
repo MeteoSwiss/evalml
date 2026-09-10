@@ -312,6 +312,7 @@ rule inference_execute:
             export -f _run_inference
 
             srun \
+                --job-name=anemoi-inference \
                 --uenv={params.env_path}:/user-environment \
                 --unbuffered \
                 --partition={resources.slurm_partition} \
