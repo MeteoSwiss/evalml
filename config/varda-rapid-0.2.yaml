@@ -2,7 +2,7 @@
 description: |
   Evaluate skill of Varda-rapid against ground observations.
 
-config_label: varda-single-1.0-nudge
+config_label: varda-rapid-0.2
 
 dates:
   start: 2025-01-01T06:00
@@ -21,14 +21,15 @@ runs:
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi_with_nudging.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
-        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@6e6b2dd42e66d9c981bd8f5ccca657f0411e4ccc
-        - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
+        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@f62ae9f3eae7bb2d19837d220b10a7bddf35a57c
+        - git+https://github.com/ecmwf/anemoi-inference@88c1ec13632c570f246cc2580ce324e45f36a03b
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/12/6
         extra_requirements:
-          - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
+          - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@f62ae9f3eae7bb2d19837d220b10a7bddf35a57c
+          - git+https://github.com/ecmwf/anemoi-inference@88c1ec13632c570f246cc2580ce324e45f36a03b
 
   - temporal_downscaler:
       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
@@ -37,13 +38,15 @@ runs:
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
-        - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
+        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@f62ae9f3eae7bb2d19837d220b10a7bddf35a57c
+        - git+https://github.com/ecmwf/anemoi-inference@88c1ec13632c570f246cc2580ce324e45f36a03b
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/12/6
         extra_requirements:
-          - git+https://github.com/ecmwf/anemoi-inference@eaeb36fae30c754a03b8dc0442fc56373b6bedef
+          - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@f62ae9f3eae7bb2d19837d220b10a7bddf35a57c
+          - git+https://github.com/ecmwf/anemoi-inference@88c1ec13632c570f246cc2580ce324e45f36a03b
 
   - baseline:
       label: INCA
@@ -154,9 +157,10 @@ profile:
   global_resources:
     gpus: 16
   default_resources:
-    slurm_partition: "postproc"
+    slurm_partition: "normal"
     cpus_per_task: 1
     mem_mb_per_cpu: 1800
     runtime: "1h"
     gpus: 0
+    slurm_account: s83
   jobs: 50
