@@ -83,7 +83,10 @@ rule inference_extract_requirements:
 
 # Prepare the inference environment for a specific checkpoint. The venv is built
 # in /dev/shm (RAM) to avoid heavy IO on the parallel filesystem, then squashed
-# to a .squashfs image tracked directly as the rule output.
+# to a .squashfs image tracked directly as the rule output. FDB native libraries
+# are NOT bundled into this image: the FDB uenv's own squashfs is mounted
+# alongside the venv squashfs at run time instead (see inference_execute /
+# inference_check_fdb), since squashfs-mount can mount several images at once.
 # See https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
 rule inference_prepare_env:
     input:
@@ -96,7 +99,6 @@ rule inference_prepare_env:
     localrule: True
     params:
         fdb_uenv=lambda wc: _get_fdb_uenv_for_env(wc.env_id)[0],
-        fdb_view=lambda wc: _get_fdb_uenv_for_env(wc.env_id)[1],
     shell:
         """
         (
@@ -112,56 +114,19 @@ rule inference_prepare_env:
             echo "[$(date)] Installing requirements from {input.requirements}..."
             uv pip install -r {input.requirements}
 
-            # Bundle FDB native libraries into the venv if this env needs FDB output.
-            # The FDB squashfs is mounted at /user-environment (its designed path) so that
-            # the absolute symlinks inside env/._<view>/<hash>/ resolve correctly.
-            # The linux-zen3/<pkg>/lib64/ actual .so files are copied preserving their path
-            # structure, because libfdb5.so's RPATH is hardcoded to those absolute paths.
-            # The env/ symlink tree is copied as-is (preserved); after the venv squashfs
-            # is mounted at /user-environment at runtime, the full symlink chain resolves.
+            # Only the pure-Python / non-uenv pieces are prepared here. Native FDB
+            # libraries, its view symlinks and its config/schema files stay in the FDB
+            # uenv's own squashfs, mounted alongside this venv at run time.
             if [ -n "{params.fdb_uenv}" ]; then
-                echo "[$(date)] Bundling FDB native libraries from uenv '{params.fdb_uenv}' (view: {params.fdb_view})..."
-                FDB_SHA=$(uenv image inspect {params.fdb_uenv} | awk '/^sha:/ {{print $2}}')
-                FDB_REPO=$(uenv repo status | grep -oP '(?<=the repository at )\S+')
-                FDB_SQUASHFS="$FDB_REPO/images/$FDB_SHA/store.squashfs"
-                VENV_PATH=$VENV
-                FDB_VIEW={params.fdb_view}
-
-                squashfs-mount "$FDB_SQUASHFS:/user-environment" -- bash -c '
-                    set -euo pipefail
-                    VENV='"$VENV_PATH"'
-                    VIEW='"$FDB_VIEW"'
-
-                    echo "[$(date)] Copying env/ view structure (symlinks preserved)..."
-                    cp -rp /user-environment/env "$VENV/"
-
-                    echo "[$(date)] Copying linux-zen3 shared libraries (.so files, maintaining path structure)..."
-                    find /user-environment/linux-zen3 -name "*.so*" -not -type l | while IFS= read -r f; do
-                        rel="${{f#/user-environment/}}"
-                        dest_dir="$VENV/${{rel%/*}}"
-                        mkdir -p "$dest_dir"
-                        cp -p "$f" "$dest_dir/"
-                    done
-                    echo "[$(date)] Copied $(find "$VENV/linux-zen3" -name "*.so*" 2>/dev/null | wc -l) shared libraries"
-
-                    echo "[$(date)] Copying FDB config and schema files..."
-                    mkdir -p "$VENV/meta/recipe/meta/private/fdb_config"
-                    cp "/user-environment/meta/recipe/meta/private/fdb_config/${{VIEW}}.yaml" \
-                       "$VENV/meta/recipe/meta/private/fdb_config/"
-                    cp "/user-environment/meta/recipe/meta/private/fdb_config/${{VIEW}}.schema" \
-                       "$VENV/meta/recipe/meta/private/fdb_config/" 2>/dev/null || true
-                    echo "[$(date)] FDB config files copied for view: $VIEW"
-
-                    echo "[$(date)] Cloning eccodes-cosmo-mars (varda-ext branch) for MARS definitions..."
-                    mkdir -p "$VENV/data/share"
-                    git clone --branch varda-ext --depth 1 \
-                        git@github.com:meteoswiss/eccodes-cosmo-mars.git \
-                        "$VENV/data/share/eccodes-cosmo-mars"
-                    echo "[$(date)] Cloned eccodes-cosmo-mars definitions"
-                '
-
                 echo "[$(date)] Installing pyfdb (pure-Python FDB binding)..."
                 uv pip install pyfdb
+
+                echo "[$(date)] Cloning eccodes-cosmo-mars (varda-ext branch) for MARS definitions..."
+                mkdir -p "$VENV/data/share"
+                git clone --branch varda-ext --depth 1 \
+                    git@github.com:meteoswiss/eccodes-cosmo-mars.git \
+                    "$VENV/data/share/eccodes-cosmo-mars"
+                echo "[$(date)] Cloned eccodes-cosmo-mars definitions"
             fi
 
             echo "[$(date)] Compiling Python bytecode..."
@@ -292,6 +257,7 @@ checkpoint inference_check_fdb:
         fdb_configured=lambda wc: bool(
             _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
         ),
+        fdb_uenv=lambda wc: _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0],
         fdb_root_global=lambda wc: _get_fdb_roots(wc.run_id)[0],
         fdb_root_local=lambda wc: _get_fdb_roots(wc.run_id)[1],
         fdb_schema=str(Path("resources/fdb/realtime-varda.schema").resolve()),
@@ -312,8 +278,11 @@ checkpoint inference_check_fdb:
                 if [ -n "{params.fdb_root_global}" ]; then
                     GLOBAL_ARG="--fdb-root {params.fdb_root_global}"
                 fi
-                squashfs-mount {params.image_path}:/user-environment -- bash -c '
-                    source /user-environment/bin/activate
+                # Mount the venv (pyfdb, python) and the FDB uenv (native libs, config,
+                # at its required /user-environment path) side by side in one call.
+                FDB_SQUASHFS=$(uenv image inspect --format='{{sqfs}}' {params.fdb_uenv})
+                squashfs-mount {params.image_path}:/venv-environment "$FDB_SQUASHFS:/user-environment" -- bash -c '
+                    source /venv-environment/bin/activate
                     export LD_LIBRARY_PATH=/user-environment/env/{params.fdb_view}/lib64:/user-environment/env/{params.fdb_view}/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}
                     python {input.script} '"$GLOBAL_ARG"' \
                         --fdb-root {params.fdb_root_local} \
@@ -481,6 +450,7 @@ rule inference_execute:
         ),
         srun_prefix=lambda wc: get_resource(wc, "srun_prefix", "") or "",
         fdb_view=lambda wc: get_resource(wc, "srun_view", "realtime") or "realtime",
+        fdb_uenv=lambda wc: _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0],
         fdb_configured=lambda wc: bool(
             _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
         ),
@@ -522,23 +492,23 @@ FDBEOF
 
             _run_inference() {{
                 local VENV=$1
+                local FDB_MOUNT=${{2:-}}
                 source "$VENV/bin/activate"
 
                 if [ "{params.disable_local_definitions}" = "False" ]; then
                     export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
                 fi
 
-                # Set up FDB env vars if native libraries were bundled into this venv.
-                # The env/<view>/lib64 symlink chain resolves to linux-zen3/<pkg>/lib64/*.so
-                # because both the env/ symlink tree and the actual .so files are in the venv.
-                if [ -d "$VENV/linux-zen3" ]; then
-                    export LD_LIBRARY_PATH="$VENV/env/{params.fdb_view}/lib64:$VENV/env/{params.fdb_view}/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
+                # Set up FDB env vars when the FDB uenv is mounted alongside this venv
+                # (as a second image at $FDB_MOUNT -- see the squashfs-mount call below).
+                if [ -n "$FDB_MOUNT" ]; then
+                    export LD_LIBRARY_PATH="$FDB_MOUNT/env/{params.fdb_view}/lib64:$FDB_MOUNT/env/{params.fdb_view}/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
                     # FDB5_CONFIG_OVERRIDE is set whenever FDB is configured for this env
-                    # (see fdb_configured above); the bundled uenv config is only a fallback.
+                    # (see fdb_configured above); the uenv's own config is only a fallback.
                     if [ -n "$FDB5_CONFIG_OVERRIDE" ]; then
                         export FDB5_CONFIG_FILE="$FDB5_CONFIG_OVERRIDE"
                     else
-                        export FDB5_CONFIG_FILE="$VENV/meta/recipe/meta/private/fdb_config/{params.fdb_view}.yaml"
+                        export FDB5_CONFIG_FILE="$FDB_MOUNT/meta/recipe/meta/private/fdb_config/{params.fdb_view}.yaml"
                     fi
                     # Prepend eccodes-cosmo-mars definitions so MARS namespace concepts
                     # (marsModel, marsStream, marsClass, etc.) resolve correctly for MeteoSwiss GRIBs.
@@ -566,7 +536,15 @@ FDBEOF
             }}
             export -f _run_inference
 
-            squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
+            # Mount the venv and (if configured) the FDB uenv side by side in one
+            # call: the FDB uenv's absolute internal symlinks require it to be at
+            # /user-environment, so the venv takes a different mountpoint instead.
+            if [ "{params.fdb_configured}" = "True" ]; then
+                FDB_SQUASHFS=$(uenv image inspect --format='{{sqfs}}' {params.fdb_uenv})
+                squashfs-mount {params.env_path}:/venv-environment "$FDB_SQUASHFS:/user-environment" -- bash -c '_run_inference /venv-environment /user-environment'
+            else
+                squashfs-mount {params.env_path}:/venv-environment -- bash -c '_run_inference /venv-environment'
+            fi
         ) >{log} 2>&1
         touch {output.okfile}
         """
