@@ -1,16 +1,16 @@
 
-# ICON-CH1 templates
+# VARDA templates (PDT=0/8, typeOfGeneratingProcess=2 — deterministic forecast)
 - - {levtype: pl, param: [T, QV, U, V, OMEGA, FI]}
-  - resources/icon-ch1-typeOfLevel=isobaricInhPa.grib
+  - resources/varda-typeOfLevel=isobaricInhPa.grib
 
 - - {levtype: sfc, param: [T_2M, TD_2M, U_10M, V_10M]}
-  - resources/icon-ch1-typeOfLevel=heightAboveGround.grib
+  - resources/varda-typeOfLevel=heightAboveGround.grib
 
 - - {levtype: sfc, param: [FR_LAND, PS, FIS, T_G, SKT, SSO_SIGMA,SSO_STDH]}
-  - resources/icon-ch1-typeOfLevel=surface.grib
+  - resources/varda-typeOfLevel=surface.grib
 
 - - {levtype: sfc, param: [PMSL]}
-  - resources/icon-ch1-typeOfLevel=meanSea.grib
+  - resources/varda-typeOfLevel=meanSea.grib
 
 - - {levtype: sfc, param: [TOT_PREC]}
-  - resources/icon-ch1-shortName=TOT_PREC.grib
+  - resources/varda-shortName=TOT_PREC.grib

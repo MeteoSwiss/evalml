@@ -1,0 +1,181 @@
+runner: temporal_downscaler
+
+input:
+  cutout:
+    - lam_0:
+        grib:
+          path: forecaster/20*
+          pre_processors:
+            - forward_transform_filter:
+                # does not have an effect if the temporal downscaler does not use tp as prognostic variable
+                rescale:
+                  scale: 0.001 # convert from kg m-2 to m
+                  offset: 0
+                  param: tp
+          namer: &namer
+            rules:
+              # ICON short names (uppercase)
+              - - shortName: T
+                - t_{level}
+              - - shortName: U
+                - u_{level}
+              - - shortName: V
+                - v_{level}
+              - - shortName: W
+                - w_{level}
+              - - shortName: QV
+                - q_{level}
+              - - shortName: FI
+                - z_{level}
+              - - shortName: PMSL
+                - msl
+              - - shortName: FIS
+                - z
+              - - shortName: PS
+                - sp
+              - - shortName: T_2M
+                - 2t
+              - - shortName: TD_2M
+                - 2d
+              - - shortName: T_G
+                - skt
+              - - shortName: U_10M
+                - 10u
+              - - shortName: V_10M
+                - 10v
+              - - shortName: FR_LAND
+                - lsm
+              - - shortName: TOT_PREC
+                - tp
+              # IFS short names (lowercase) for the global grid output
+              - - shortName: t
+                  levtype: pl
+                - t_{level}
+              - - shortName: u
+                  levtype: pl
+                - u_{level}
+              - - shortName: v
+                  levtype: pl
+                - v_{level}
+              - - shortName: w
+                  levtype: pl
+                - w_{level}
+              - - shortName: q
+                  levtype: pl
+                - q_{level}
+              - - shortName: z
+                  levtype: pl
+                - z_{level}
+              - - shortName: z
+                  levtype: sfc
+                - z
+              - - shortName: 10u
+                - 10u
+              - - shortName: 10v
+                - 10v
+              - - shortName: 2t
+                - 2t
+              - - shortName: 2d
+                - 2d
+              - - shortName: msl
+                - msl
+              - - shortName: sp
+                - sp
+              - - shortName: lsm
+                - lsm
+              - - shortName: skt
+                - skt
+              - - shortName: tp
+                - tp
+    - global:
+        grib:
+          path: forecaster/ifs*
+          namer: *namer
+
+constant_forcings:
+  test:
+    use_original_paths: true
+
+patch_metadata: resources/sgm-temporal-downscaler-ich1-oper-patch.yaml
+
+post_processors:
+  - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
+      accumulations:
+        - tp
+  - forward_transform_filter:
+      rescale:
+        scale: 1000 # convert units from m to kg m-2
+        offset: 0
+        param: tp
+
+output:
+  tee:
+    - fdb:
+        encoding:
+          typeOfGeneratingProcess: 2
+          generatingProcessIdentifier: 180
+          # localNumberOfExperiment: 900  # not supported in current templates; marsClass=od fallback
+        templates:
+          samples: resources/templates_index_icon.yaml
+        post_processors:
+          - extract_mask: # removes global points
+              mask: "lam_0/cutout_mask"
+              as_slice: true
+
+    - fdb:
+        encoding:
+          typeOfGeneratingProcess: 2
+          generatingProcessIdentifier: 180
+          # localNumberOfExperiment is not available in IFS/ECMWF GRIB templates;
+          # omitting it means marsClass=od (GPI=180 fallback) for the global grid
+          # Set native marsStream/marsType codetable keys so g2_mars_labeling returns
+          # stream=enfo and type=fc.  Cannot use a concept override in local.98.def
+          # for marsStream because it conflicts with the codetable key that
+          # g2_mars_labeling expects as input.  Setting them natively is portable
+          # across eccodes builds.
+          marsStream: enfo
+          marsType: fc
+        templates:
+          samples: resources/templates_index_ifs.yaml
+        post_processors:
+          - extract_mask: # removes lam points
+              mask: "lam_0/cutout_mask"
+              as_slice: true
+              inverse: true
+          - assign_mask: # fill local/global overlapping points with nan
+              mask: "global/cutout_mask"
+        modifiers:
+          - patches:
+            - variable:
+                U_10M: {"param": 165, "shortName": "10u"}
+                10u: {"param": 165, "shortName": "10u"}
+                V_10M: {"param": 166, "shortName": "10v"}
+                10v: {"param": 166, "shortName": "10v"}
+                TD_2M: {"param": 168, "shortName": "2d"}
+                2d: {"param": 168, "shortName": "2d"}
+                T_2M: {"param": 167, "shortName": "2t"}
+                2t: {"param": 167, "shortName": "2t"}
+                FR_LAND: {"param": 172, "shortName": "lsm"}
+                lsm: {"param": 172, "shortName": "lsm"}
+                PMSL: {"param": 151, "shortName": "msl"}
+                msl: {"param": 151, "shortName": "msl"}
+                PS: {"param": 134, "shortName": "sp"}
+                sp: {"param": 134, "shortName": "sp"}
+                SSO_SIGMA: {"param": 163, "shortName": "slor"}
+                slor: {"param": 163, "shortName": "slor"}
+                SSO_STDH: {"param": 160, "shortName": "sdor"}
+                sdor: {"param": 160, "shortName": "sdor"}
+                TOT_PREC: {"param": 228, "shortName": "tp"}
+                tp: {"param": 228, "shortName": "tp"}
+                z: {"param": 129, "shortName": "z"}
+                "^q_(\\d+)$": {"param": 133, "shortName": "q"}
+                "^t_(\\d+)$": {"param": 130, "shortName": "t"}
+                "^u_(\\d+)$": {"param": 131, "shortName": "u"}
+                "^v_(\\d+)$": {"param": 132, "shortName": "v"}
+                "^w_(\\d+)$": {"param": 135, "shortName": "w"}
+                "^z_(\\d+)$": {"param": 129, "shortName": "z"}
+
+# silenced due to bug in anemoi-inference for multi-step temporal downscalers, can be removed when fixed
+verbosity: 0
+allow_nans: true
+output_frequency: "1h"

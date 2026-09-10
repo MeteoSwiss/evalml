@@ -46,7 +46,6 @@ def prepare_workdir(workdir: Path, resources_root: Path):
         Path to the root directory containing resource files.
     """
     workdir.mkdir(parents=True, exist_ok=True)
-    (workdir / "grib").mkdir(parents=True, exist_ok=True)
     (workdir / "resources").mkdir(parents=True, exist_ok=True)
     shutil.copytree(
         resources_root / "templates", workdir / "resources", dirs_exist_ok=True
@@ -116,6 +115,7 @@ def prepare_forecaster(smk):
 
     workdir = _get_workdir(smk)
     prepare_workdir(workdir, smk.params.resources_root)
+    (workdir / "grib").mkdir(parents=True, exist_ok=True)
     LOG.info("Prepared working directory at %s", workdir)
     res_list = "\n".join([str(fn) for fn in Path(workdir / "resources").rglob("*")])
     LOG.info("Resources: \n%s", res_list)

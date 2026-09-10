@@ -463,18 +463,6 @@
           "title": "Extra Requirements",
           "type": "array"
         },
-        "inference_resources": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/InferenceResources"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Resource requirements for inference jobs (optional; defaults handled externally)."
-        },
         "disable_local_eccodes_definitions": {
           "default": false,
           "description": "If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
@@ -609,6 +597,64 @@
           "default": null,
           "description": "Number of tasks per submission.",
           "title": "Tasks"
+        },
+        "srun_prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional command to prepend to the srun invocation, e.g. 'uenv run --view=realtime fdb/5.19:v2 --'.",
+          "title": "Srun Prefix"
+        },
+        "srun_uenv": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "FDB uenv image to bundle into the venv squashfs, e.g. 'fdb/5.19:v2'. When set, native FDB libraries are extracted from this uenv during venv creation.",
+          "title": "Srun Uenv"
+        },
+        "srun_view": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "FDB uenv view name to use when bundling FDB libraries, e.g. 'realtime'.",
+          "title": "Srun View"
+        },
+        "fdb_root_global": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Base directory for the shared/global FDB store. Each checkpoint gets its own dedicated root at '{fdb_root_global}/{env_id}', keyed by the env_id hash (derived from the checkpoint) so different checkpoints never mix data in the same FDB instance. When set, inference is skipped for a given (run_id, init_time) if this root already holds every requested lead time.",
+          "title": "Fdb Root Global"
+        },
+        "write_to_global_fdb": {
+          "default": false,
+          "description": "If true, inference writes directly into '{fdb_root_global}/{env_id}' instead of the local per-checkpoint root. Requires fdb_root_global to be set.",
+          "title": "Write To Global Fdb",
+          "type": "boolean"
         }
       },
       "title": "InferenceResources",
@@ -691,6 +737,18 @@
           "description": "Job executor, e.g. 'slurm'.",
           "title": "Executor",
           "type": "string"
+        },
+        "fdb": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InferenceResources"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "FDB and inference resource settings (optional; overrides defaults for all inference jobs)."
         },
         "global_resources": {
           "$ref": "#/$defs/GlobalResources"
@@ -941,18 +999,6 @@
           "title": "Extra Requirements",
           "type": "array"
         },
-        "inference_resources": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/InferenceResources"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Resource requirements for inference jobs (optional; defaults handled externally)."
-        },
         "disable_local_eccodes_definitions": {
           "default": false,
           "description": "If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
@@ -1086,7 +1132,8 @@
         {
           "type": "null"
         }
-      ]
+      ],
+      "default": null
     },
     "lapse_rate_correction": {
       "default": true,
@@ -1095,8 +1142,16 @@
       "type": "boolean"
     },
     "experiment": {
-      "$ref": "#/$defs/ExperimentConfig",
-      "description": "Settings for the experiment workflow outputs."
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExperimentConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Settings for the experiment workflow outputs. Required for full experiment runs; optional for inference-only runs."
     },
     "locations": {
       "$ref": "#/$defs/Locations"
@@ -1137,8 +1192,6 @@
     "description",
     "dates",
     "runs",
-    "truth",
-    "experiment",
     "locations",
     "profile"
   ],

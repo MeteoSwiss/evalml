@@ -159,6 +159,30 @@ def cli():
     pass
 
 
+@cli.command(help="Run inference only (no verification) as defined by a config YAML file.")
+@click.argument(
+    "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
+@workflow_options
+def inference(
+    configfile, cores, verbose, dry_run, unlock, report, dag, rulegraph, extra_smk_args
+):
+    raise SystemExit(
+        execute_workflow(
+            configfile,
+            "inference_all",
+            cores,
+            verbose,
+            dry_run,
+            unlock,
+            report,
+            dag,
+            rulegraph,
+            extra_smk_args,
+        )
+    )
+
+
 @cli.command(help="Launch an experiment defined by a config YAML file.")
 @click.argument(
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)

@@ -19,7 +19,7 @@ ENV_HASH_FIELDS = {
     "disable_local_eccodes_definitions",
 }
 # Fields excluded from ALL hashing (display/resource metadata only).
-RUN_HASH_EXCLUDE = {"label", "inference_resources", "_is_candidate", "model_type"}
+RUN_HASH_EXCLUDE = {"label", "_is_candidate", "model_type", "fdb_root"}
 # Fields excluded from baseline hashing (display metadata only).
 BASELINE_HASH_EXCLUDE = {"label"}
 TRUTH_HASH_EXCLUDE = {"label"}
@@ -88,6 +88,8 @@ def parse_regions():
     """
     from evalml.config import PREDEFINED_REGIONS
 
+    if config.get("experiment") is None:
+        return "[]"
     cfg = config["experiment"]["stratification"]
     root = cfg.get("root", "")
     result = []
@@ -388,8 +390,10 @@ def master_hash() -> str:
     return generate_json_hash(configs_to_hash)
 
 
-def truth_hash(truth_config: dict) -> str:
+def truth_hash(truth_config: dict | None) -> str:
     """Generate a short hash of the configs for the truth data."""
+    if truth_config is None:
+        return generate_json_hash({})
     cfg = {k: v for k, v in truth_config.items() if k not in TRUTH_HASH_EXCLUDE}
     return generate_json_hash(cfg)
 
@@ -401,9 +405,11 @@ def verif_hash(full_config: dict) -> str:
     changing either (e.g. switching lapse_rate_correction on/off) produces
     new output paths and unconditionally triggers a rerun.
     """
-    truth_cfg = {
-        k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE
-    }
+    truth_cfg = (
+        {k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE}
+        if full_config.get("truth") is not None
+        else {}
+    )
     experiment_verif_cfg = {
         "lapse_rate_correction": full_config.get("lapse_rate_correction", True),
     }
@@ -413,6 +419,8 @@ def verif_hash(full_config: dict) -> str:
 def truth_file_dep(_):
     """Truth file dependency: a real path for zarr, but a live-query
     marker (no input file) for jretrieve."""
+    if config.get("truth") is None:
+        return []
     root = config["truth"]["root"]
     return [] if "jretrieve" in str(root) else [root]
 
@@ -420,14 +428,14 @@ def truth_file_dep(_):
 # Fail fast: when the truth source is the live DWH (jretrievedwh), verify its
 # prerequisites at workflow-build time so a misconfigured environment is caught
 # at launch, before any (expensive) inference job runs.
-if "jretrieve" in str(config["truth"]["root"]):
+if config.get("truth") is not None and "jretrieve" in str(config["truth"]["root"]):
     from data_input.jretrieve import check_prerequisites, parse_selection
 
     _, _jretrieve_stage, _ = parse_selection(config["truth"]["root"])
     check_prerequisites(_jretrieve_stage)
 
 
-TRUTH_HASH = truth_hash(config["truth"])
+TRUTH_HASH = truth_hash(config.get("truth"))
 REGIONS = parse_regions()
 VERIF_HASH = verif_hash(config)
 _showcase = config.get("showcase", {})
@@ -436,7 +444,7 @@ SHOWCASE_CONFIG = {
     "params": _showcase.get("params", ["T_2M", "SP_10M"]),
     "fps": _showcase.get("animations", {}).get("frames_per_second", 2.0),
 }
-EXPERIMENT_PARAMS = config.get("experiment", {}).get(
+EXPERIMENT_PARAMS = (config.get("experiment") or {}).get(
     "params", ["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"]
 )
 REFTIMES = parse_reference_times()
@@ -444,7 +452,7 @@ RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
-_scorecard = config.get("experiment", {}).get("scorecards") or {}
+_scorecard = (config.get("experiment") or {}).get("scorecards") or {}
 SCORECARD_CONFIGS = (
     _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
 )

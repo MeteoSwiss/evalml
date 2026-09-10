@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Run inference only for Varda-single-1.0 (no evaluation against observations).
+
+config_label: varda-single-1.0-inference-only
+
+dates:
+  start: 2025-03-01T00:00
+  end: 2025-03-03T00:00
+  frequency: 24h
+
+runs:
+  - temporal_downscaler:
+      checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
+      label: Varda-single-1.0
+      steps: 0/120/1
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi-fdb.yaml
+      extra_requirements:
+        - anemoi-datasets==0.5.35
+        - /scratch/mch/cosuna/evalml_fdb/anemoi-inference
+      forecaster:
+        checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
+        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+        steps: 0/120/6
+
+locations:
+  output_root: output/
+
+profile:
+  fdb:
+    srun_uenv: "fdb/5.19:v2"
+    srun_view: "realtime"
+    # Base dir for the shared store; actual root per checkpoint is
+    # {fdb_root_global}/{env_id}. TODO: point at the real shared location.
+    fdb_root_global: "/scratch/mch/cosuna/evalml_fdb/global-fdb"
+    write_to_global_fdb: false
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+    slurm_account: s83
+  jobs: 50

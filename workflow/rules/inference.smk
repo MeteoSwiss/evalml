@@ -94,6 +94,9 @@ rule inference_prepare_env:
     log:
         OUT_ROOT / "logs/inference_prepare_env/{env_id}.log",
     localrule: True
+    params:
+        fdb_uenv=lambda wc: _get_fdb_uenv_for_env(wc.env_id)[0],
+        fdb_view=lambda wc: _get_fdb_uenv_for_env(wc.env_id)[1],
     shell:
         """
         (
@@ -108,6 +111,58 @@ rule inference_prepare_env:
 
             echo "[$(date)] Installing requirements from {input.requirements}..."
             uv pip install -r {input.requirements}
+
+            # Bundle FDB native libraries into the venv if this env needs FDB output.
+            # The FDB squashfs is mounted at /user-environment (its designed path) so that
+            # the absolute symlinks inside env/._<view>/<hash>/ resolve correctly.
+            # The linux-zen3/<pkg>/lib64/ actual .so files are copied preserving their path
+            # structure, because libfdb5.so's RPATH is hardcoded to those absolute paths.
+            # The env/ symlink tree is copied as-is (preserved); after the venv squashfs
+            # is mounted at /user-environment at runtime, the full symlink chain resolves.
+            if [ -n "{params.fdb_uenv}" ]; then
+                echo "[$(date)] Bundling FDB native libraries from uenv '{params.fdb_uenv}' (view: {params.fdb_view})..."
+                FDB_SHA=$(uenv image inspect {params.fdb_uenv} | awk '/^sha:/ {{print $2}}')
+                FDB_REPO=$(uenv repo status | grep -oP '(?<=the repository at )\S+')
+                FDB_SQUASHFS="$FDB_REPO/images/$FDB_SHA/store.squashfs"
+                VENV_PATH=$VENV
+                FDB_VIEW={params.fdb_view}
+
+                squashfs-mount "$FDB_SQUASHFS:/user-environment" -- bash -c '
+                    set -euo pipefail
+                    VENV='"$VENV_PATH"'
+                    VIEW='"$FDB_VIEW"'
+
+                    echo "[$(date)] Copying env/ view structure (symlinks preserved)..."
+                    cp -rp /user-environment/env "$VENV/"
+
+                    echo "[$(date)] Copying linux-zen3 shared libraries (.so files, maintaining path structure)..."
+                    find /user-environment/linux-zen3 -name "*.so*" -not -type l | while IFS= read -r f; do
+                        rel="${{f#/user-environment/}}"
+                        dest_dir="$VENV/${{rel%/*}}"
+                        mkdir -p "$dest_dir"
+                        cp -p "$f" "$dest_dir/"
+                    done
+                    echo "[$(date)] Copied $(find "$VENV/linux-zen3" -name "*.so*" 2>/dev/null | wc -l) shared libraries"
+
+                    echo "[$(date)] Copying FDB config and schema files..."
+                    mkdir -p "$VENV/meta/recipe/meta/private/fdb_config"
+                    cp "/user-environment/meta/recipe/meta/private/fdb_config/${{VIEW}}.yaml" \
+                       "$VENV/meta/recipe/meta/private/fdb_config/"
+                    cp "/user-environment/meta/recipe/meta/private/fdb_config/${{VIEW}}.schema" \
+                       "$VENV/meta/recipe/meta/private/fdb_config/" 2>/dev/null || true
+                    echo "[$(date)] FDB config files copied for view: $VIEW"
+
+                    echo "[$(date)] Cloning eccodes-cosmo-mars (varda-ext branch) for MARS definitions..."
+                    mkdir -p "$VENV/data/share"
+                    git clone --branch varda-ext --depth 1 \
+                        git@github.com:meteoswiss/eccodes-cosmo-mars.git \
+                        "$VENV/data/share/eccodes-cosmo-mars"
+                    echo "[$(date)] Cloned eccodes-cosmo-mars definitions"
+                '
+
+                echo "[$(date)] Installing pyfdb (pure-Python FDB binding)..."
+                uv pip install pyfdb
+            fi
 
             echo "[$(date)] Compiling Python bytecode..."
             python -m compileall -j 8 -o 0 -o 1 -o 2 $VENV/lib/python*/site-packages
@@ -155,14 +210,155 @@ rule inference_create_sandbox:
 
 
 def get_resource(wc, field: str, default):
-    """Fetch a resource field from the run config, or return the default."""
-    rc = RUN_CONFIGS[wc.run_id]
-    if rc["inference_resources"] is None:
-        return default
-    if isinstance(rc["inference_resources"], dict):
-        return rc["inference_resources"].get(field, default) or default
+    """Fetch a resource field from profile.fdb, or return the default."""
+    fdb = (config.get("profile") or {}).get("fdb") or {}
+    if isinstance(fdb, dict):
+        return fdb.get(field, default) or default
     else:
-        return getattr(rc["inference_resources"], field) or default
+        return getattr(fdb, field, default) or default
+
+
+def _get_fdb_uenv_for_env(env_id):
+    """Return (fdb_uenv, fdb_view) from profile.fdb."""
+    fdb = (config.get("profile") or {}).get("fdb") or {}
+    if isinstance(fdb, dict):
+        uenv = fdb.get("srun_uenv", "") or ""
+        view = fdb.get("srun_view", "") or "realtime"
+    else:
+        uenv = getattr(fdb, "srun_uenv", "") or ""
+        view = getattr(fdb, "srun_view", "") or "realtime"
+    return uenv, view
+
+
+def _get_fdb_roots(run_id):
+    """Return (global_root, local_root) for a run, both keyed by env_id.
+
+    Each checkpoint (env_id) gets its own dedicated FDB instance, so different
+    checkpoints never mix data in the same root. global_root is '' if
+    profile.fdb.fdb_root_global is not configured.
+    """
+    env_id = RUN_CONFIGS[run_id]["env_id"]
+    global_base = get_resource_by_env(env_id, "fdb_root_global", "")
+    global_root = f"{global_base}/{env_id}" if global_base else ""
+    local_root = str((OUT_ROOT / f"data/fdb/{env_id}").resolve())
+    return global_root, local_root
+
+
+def get_resource_by_env(env_id, field: str, default):
+    """Like get_resource, but usable outside a rule (no wildcards available)."""
+    fdb = (config.get("profile") or {}).get("fdb") or {}
+    if isinstance(fdb, dict):
+        return fdb.get(field, default) or default
+    else:
+        return getattr(fdb, field, default) or default
+
+
+def _count_fdb_blocks(run_id):
+    """Count distinct 'fdb:' targets in this run's own inference config output.tee.
+
+    A single init_time can write several output blocks (e.g. an ICON-grid target
+    and an IFS-grid target) into the same env_id-keyed root; the check needs to
+    know how many to expect so a run that silently dropped one entirely doesn't
+    read as complete just because the other is.
+    """
+    with open(RUN_CONFIGS[run_id]["config"]) as f:
+        run_cfg = yaml.safe_load(f)
+    tee = ((run_cfg.get("output") or {}).get("tee")) or []
+    return sum(1 for entry in tee if isinstance(entry, dict) and "fdb" in entry)
+
+
+checkpoint inference_check_fdb:
+    """Check whether (run_id, init_time) output already exists, complete, in FDB.
+
+    Checks the global root first (if profile.fdb.fdb_root_global is set), then the
+    local per-checkpoint root, in that order. A 'hit' requires every requested lead
+    time to be present in one root -- see inference_check_fdb.py for why no further
+    MARS-key disambiguation (class/expver/model) is needed. Writes 'hit\\t<root>' or
+    'miss\\t' to the status file. Runs inside the squashfs venv so that pyfdb and the
+    native FDB C library are available. Skipped entirely (writes 'miss') when this
+    run's environment has no FDB uenv bundled (profile.fdb.srun_uenv unset).
+    """
+    input:
+        image=lambda wc: OUT_ROOT
+        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
+        script="workflow/scripts/inference_check_fdb.py",
+    output:
+        status=OUT_ROOT / "logs/inference_check_fdb/{run_id}-{init_time}.status",
+    log:
+        OUT_ROOT / "logs/inference_check_fdb/{run_id}-{init_time}.log",
+    localrule: True
+    params:
+        image_path=lambda wc, input: str(Path(input.image).resolve()),
+        fdb_configured=lambda wc: bool(
+            _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
+        ),
+        fdb_root_global=lambda wc: _get_fdb_roots(wc.run_id)[0],
+        fdb_root_local=lambda wc: _get_fdb_roots(wc.run_id)[1],
+        fdb_schema=str(Path("resources/fdb/realtime-varda.schema").resolve()),
+        fdb_view=lambda wc: get_resource(wc, "srun_view", "realtime") or "realtime",
+        date=lambda wc: datetime.strptime(wc.init_time, "%Y%m%d%H%M").strftime("%Y%m%d"),
+        time=lambda wc: datetime.strptime(wc.init_time, "%Y%m%d%H%M").strftime("%H%M"),
+        steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
+        expected_blocks=lambda wc: _count_fdb_blocks(wc.run_id),
+    shell:
+        """
+        (
+            set -euo pipefail
+            if [ "{params.fdb_configured}" != "True" ]; then
+                printf 'miss\t' > {output.status}
+                echo "FDB check skipped: FDB not configured for this environment"
+            else
+                GLOBAL_ARG=""
+                if [ -n "{params.fdb_root_global}" ]; then
+                    GLOBAL_ARG="--fdb-root {params.fdb_root_global}"
+                fi
+                squashfs-mount {params.image_path}:/user-environment -- bash -c '
+                    source /user-environment/bin/activate
+                    export LD_LIBRARY_PATH=/user-environment/env/{params.fdb_view}/lib64:/user-environment/env/{params.fdb_view}/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}
+                    python {input.script} '"$GLOBAL_ARG"' \
+                        --fdb-root {params.fdb_root_local} \
+                        --fdb-schema {params.fdb_schema} \
+                        --date {params.date} \
+                        --time {params.time} \
+                        --steps {params.steps} \
+                        --expected-blocks {params.expected_blocks} \
+                        --output {output.status}
+                '
+            fi
+        ) >{log} 2>&1
+        """
+
+
+def _get_inference_status(wc):
+    """Return (okfile_path, fdb_root_or_None) for (run_id, init_time).
+
+    'hit'  -> data already complete in FDB; okfile is the check's status file
+              (inference_execute is never requested), fdb_root points at the
+              root holding it.
+    'miss' or FDB not configured -> falls through to inference_execute's okfile,
+              fdb_root is None (data will be local grib / freshly written FDB).
+    """
+    env_id = RUN_CONFIGS[wc.run_id]["env_id"]
+    if _get_fdb_uenv_for_env(env_id)[0]:
+        status_file = checkpoints.inference_check_fdb.get(
+            run_id=wc.run_id, init_time=wc.init_time
+        ).output.status
+        status, _, root = Path(status_file).read_text().strip().partition("\t")
+        if status == "hit":
+            return str(status_file), root
+    return str(OUT_ROOT / f"logs/inference_execute/{wc.run_id}-{wc.init_time}.ok"), None
+
+
+def _get_inference_okfile(wc):
+    """Dependency file marking (run_id, init_time) data as ready, whether freshly
+    executed or already complete in FDB."""
+    return _get_inference_status(wc)[0]
+
+
+def _get_inference_fdb_root(wc):
+    """FDB root already holding this (run_id, init_time)'s data (a check 'hit'),
+    or None if the data is local grib / about to be freshly executed."""
+    return _get_inference_status(wc)[1]
 
 
 def get_leadtime(wc):
@@ -217,7 +413,6 @@ rule inference_prepare_temporal_downscaler:
     output:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
-        grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
         forecaster=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/forecaster"),
         okfile=touch(
             OUT_ROOT
@@ -284,6 +479,18 @@ rule inference_execute:
         disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
             "disable_local_eccodes_definitions", False
         ),
+        srun_prefix=lambda wc: get_resource(wc, "srun_prefix", "") or "",
+        fdb_view=lambda wc: get_resource(wc, "srun_view", "realtime") or "realtime",
+        fdb_configured=lambda wc: bool(
+            _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
+        ),
+        fdb_root=lambda wc: (
+            _get_fdb_roots(wc.run_id)[0]
+            if get_resource(wc, "write_to_global_fdb", False)
+            and _get_fdb_roots(wc.run_id)[0]
+            else _get_fdb_roots(wc.run_id)[1]
+        ),
+        fdb_schema=str(Path("resources/fdb/realtime-varda.schema").resolve()),
     # fmt: off
     shell:
         """
@@ -291,6 +498,27 @@ rule inference_execute:
             set -euo pipefail
 
             cd {params.workdir}
+
+            # Write into this checkpoint's dedicated FDB root (env_id-keyed): the global
+            # one if write_to_global_fdb is set, otherwise the local per-checkpoint root.
+            # Exported so _run_inference (executed by squashfs-mount in a fresh bash) can see it.
+            export FDB5_CONFIG_OVERRIDE=""
+            if [ "{params.fdb_configured}" = "True" ]; then
+                mkdir -p "{params.fdb_root}"
+                # Use a patched schema that strips 'domain' (present in IFS GRIB MARS
+                # namespace via mars_labeling.def but absent from MeteoSwiss FDB schema).
+                cat > fdb5_config.yaml <<FDBEOF
+---
+type: local
+engine: toc
+schema: {params.fdb_schema}
+spaces:
+- handler: Default
+  roots:
+  - path: {params.fdb_root}
+FDBEOF
+                FDB5_CONFIG_OVERRIDE="$(pwd)/fdb5_config.yaml"
+            fi
 
             _run_inference() {{
                 local VENV=$1
@@ -300,6 +528,25 @@ rule inference_execute:
                     export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
                 fi
 
+                # Set up FDB env vars if native libraries were bundled into this venv.
+                # The env/<view>/lib64 symlink chain resolves to linux-zen3/<pkg>/lib64/*.so
+                # because both the env/ symlink tree and the actual .so files are in the venv.
+                if [ -d "$VENV/linux-zen3" ]; then
+                    export LD_LIBRARY_PATH="$VENV/env/{params.fdb_view}/lib64:$VENV/env/{params.fdb_view}/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
+                    # FDB5_CONFIG_OVERRIDE is set whenever FDB is configured for this env
+                    # (see fdb_configured above); the bundled uenv config is only a fallback.
+                    if [ -n "$FDB5_CONFIG_OVERRIDE" ]; then
+                        export FDB5_CONFIG_FILE="$FDB5_CONFIG_OVERRIDE"
+                    else
+                        export FDB5_CONFIG_FILE="$VENV/meta/recipe/meta/private/fdb_config/{params.fdb_view}.yaml"
+                    fi
+                    # Prepend eccodes-cosmo-mars definitions so MARS namespace concepts
+                    # (marsModel, marsStream, marsClass, etc.) resolve correctly for MeteoSwiss GRIBs.
+                    # Must be set in ECCODES_DEFINITION_PATH (not just GRIB_DEFINITION_PATH) because
+                    # the FDB C library uses eccodes internally to resolve MARS namespace keys.
+                    export ECCODES_DEFINITION_PATH="$VENV/data/share/eccodes-cosmo-mars/definitions${{ECCODES_DEFINITION_PATH:+:$ECCODES_DEFINITION_PATH}}"
+                fi
+
                 CMD_ARGS=()
 
                 # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
@@ -307,7 +554,7 @@ rule inference_execute:
                     CMD_ARGS+=(runner.parallel.cluster=slurm)
                 fi
 
-                srun \
+                {params.srun_prefix} srun \
                     --unbuffered \
                     --partition={resources.slurm_partition} \
                     --cpus-per-task={resources.cpus_per_task} \

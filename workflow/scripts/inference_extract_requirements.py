@@ -180,6 +180,29 @@ def extract_git_requirements(
     return requirements
 
 
+def _parse_local_package_name(path: str) -> str:
+    """Derive a package name from a local filesystem path.
+
+    Reads the ``[project] name`` field from ``pyproject.toml`` if present;
+    falls back to the last path component.
+    """
+    import os
+    import re
+
+    pyproject = os.path.join(path, "pyproject.toml")
+    if os.path.exists(pyproject):
+        try:
+            with open(pyproject) as f:
+                content = f.read()
+            m = re.search(r'^\s*name\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+            if m:
+                return m.group(1)
+        except Exception:
+            pass
+
+    return os.path.basename(os.path.normpath(path))
+
+
 def _parse_url_package_name(url: str) -> str:
     """Derive a package name from a VCS/HTTP URL.
 
@@ -215,8 +238,11 @@ def parse_overrides(overrides: list[str]) -> dict[str, str | None]:
 
     - ``name==version``  →  pinned PyPI package
     - a URL (``git+``, ``http://``, ``https://``)  →  VCS / direct install
+    - a local filesystem path (``/``, ``./``, ``../``)  →  local directory install
     - bare ``name``  →  unpinned PyPI package (value is ``None``)
     """
+    import os
+
     result: dict[str, str | None] = {}
 
     for item in [*BASE_DEPENDENCIES, *(overrides or [])]:
@@ -229,6 +255,9 @@ def parse_overrides(overrides: list[str]) -> dict[str, str | None]:
             result[name.strip()] = version.strip()
         elif any(item.startswith(prefix) for prefix in ("git+", "http://", "https://")):
             name = _parse_url_package_name(item)
+            result[name] = item
+        elif item.startswith(("/", "./", "../")) or (os.sep in item and os.path.exists(item)):
+            name = _parse_local_package_name(item)
             result[name] = item
         else:
             result[item] = None
@@ -285,7 +314,7 @@ def format_requirements(
         pypi_requirements.pop(name, None)
         git_requirements.pop(name, None)
 
-        if isinstance(value, str) and value.startswith(("http://", "https://", "git+")):
+        if isinstance(value, str) and value.startswith(("http://", "https://", "git+", "/", "./", "../")):
             git_requirements[name] = value
         else:
             pypi_requirements[name] = value  # type: ignore[assignment]  # may be None

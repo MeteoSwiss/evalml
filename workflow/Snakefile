@@ -3,6 +3,7 @@
 # https://snakemake.readthedocs.io/en/stable/snakefiles/best_practices.html,
 
 import time
+from types import SimpleNamespace
 
 from evalml.config import ConfigModel
 
@@ -36,7 +37,8 @@ CONFIG_LABEL = config["config_label"] or CONFIG_FILE.stem
 EXPERIMENT_NAME = f"{WHEN}_{CONFIG_LABEL}_{CONFIG_HASH}"
 CANDIDATE_LABELS = ", ".join(v.get("label", k) for k, v in CANDIDATES.items())
 BASELINE_LABELS = ", ".join(v.get("label", k) for k, v in BASELINES.items())
-GROUNDTRUTH_LABEL = config["truth"].get("label", config["truth"]["root"])
+_truth_cfg = config.get("truth")
+GROUNDTRUTH_LABEL = _truth_cfg.get("label", _truth_cfg["root"]) if _truth_cfg else None
 
 DATA_DIR = OUT_ROOT / "data"
 LOGS_DIR = OUT_ROOT / "logs"
@@ -134,7 +136,7 @@ onerror:
 # -----------------------------------------------------
 
 
-SCOREMAPS_CONFIGS = config.get("experiment", {}).get("scoremaps") or {}
+SCOREMAPS_CONFIGS = (config.get("experiment") or {}).get("scoremaps") or {}
 
 
 rule experiment_all:
@@ -160,7 +162,7 @@ rule experiment_all:
                     scorecard_name=list(SCORECARD_CONFIGS),
                 )
             ]
-            if (config.get("experiment", {}).get("scorecards") or {}).get(
+            if (config.get("experiment") or {}).get("scorecards", {}) and (config.get("experiment") or {}).get("scorecards", {}).get(
                 "enabled", True
             )
             else []
@@ -235,14 +237,20 @@ rule sandbox_all:
         ),
 
 
+def _inference_all_okfiles(wc):
+    return [
+        _get_inference_okfile(
+            SimpleNamespace(run_id=run_id, init_time=t.strftime("%Y%m%d%H%M"))
+        )
+        for run_id in CANDIDATES
+        for t in REFTIMES
+    ]
+
+
 rule inference_all:
     """Run inference for all reference times as defined in the configuration."""
     input:
-        expand(
-            rules.inference_execute.output.okfile,
-            init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
-            run_id=CANDIDATES,
-        ),
+        _inference_all_okfiles,
     output:
         run_all_ok=touch(OUT_ROOT / "logs/run_inference_all.ok"),
     shell:

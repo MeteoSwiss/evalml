@@ -66,6 +66,33 @@ class InferenceResources(BaseModel):
         None,
         description="Number of tasks per submission.",
     )
+    srun_prefix: str | None = Field(
+        None,
+        description="Optional command to prepend to the srun invocation, e.g. 'uenv run --view=realtime fdb/5.19:v2 --'.",
+    )
+    srun_uenv: str | None = Field(
+        None,
+        description="FDB uenv image to bundle into the venv squashfs, e.g. 'fdb/5.19:v2'. "
+        "When set, native FDB libraries are extracted from this uenv during venv creation.",
+    )
+    srun_view: str | None = Field(
+        None,
+        description="FDB uenv view name to use when bundling FDB libraries, e.g. 'realtime'.",
+    )
+    fdb_root_global: str | None = Field(
+        None,
+        description="Base directory for the shared/global FDB store. Each checkpoint gets "
+        "its own dedicated root at '{fdb_root_global}/{env_id}', keyed by the env_id hash "
+        "(derived from the checkpoint) so different checkpoints never mix data in the same "
+        "FDB instance. When set, inference is skipped for a given (run_id, init_time) if "
+        "this root already holds every requested lead time.",
+    )
+    write_to_global_fdb: bool = Field(
+        False,
+        description="If true, inference writes directly into "
+        "'{fdb_root_global}/{env_id}' instead of the local per-checkpoint root. "
+        "Requires fdb_root_global to be set.",
+    )
 
 
 class RunConfig(BaseModel):
@@ -96,10 +123,6 @@ class RunConfig(BaseModel):
         default_factory=list,
         description="List of extra dependencies to install for this model. "
         "These will be added to the requirements.txt file in the run directory.",
-    )
-    inference_resources: InferenceResources | None = Field(
-        None,
-        description="Resource requirements for inference jobs (optional; defaults handled externally).",
     )
 
     disable_local_eccodes_definitions: bool = Field(
@@ -550,6 +573,10 @@ class Profile(BaseModel):
     """Workflow execution profile."""
 
     executor: str = Field(..., description="Job executor, e.g. 'slurm'.")
+    fdb: InferenceResources | None = Field(
+        None,
+        description="FDB and inference resource settings (optional; overrides defaults for all inference jobs).",
+    )
     global_resources: GlobalResources
     default_resources: DefaultResources
     jobs: int = Field(..., ge=1, description="Maximum number of parallel jobs.")
@@ -671,14 +698,14 @@ class ConfigModel(BaseModel):
         ...,
         description="List of experiment participants, including forecaster/temporal downscaler ML runs and baselines.",
     )
-    truth: TruthConfig | None
+    truth: TruthConfig | None = None
     lapse_rate_correction: bool = Field(
         default=True,
         description="Apply standard-atmosphere lapse-rate correction to T_2M.",
     )
-    experiment: ExperimentConfig = Field(
-        ...,
-        description="Settings for the experiment workflow outputs.",
+    experiment: ExperimentConfig | None = Field(
+        None,
+        description="Settings for the experiment workflow outputs. Required for full experiment runs; optional for inference-only runs.",
     )
     locations: Locations
     profile: Profile
@@ -697,6 +724,8 @@ class ConfigModel(BaseModel):
 
     @model_validator(mode="after")
     def validate_scoremap_leadtimes(self) -> "ConfigModel":
+        if self.experiment is None:
+            return self
         sm = self.experiment.scoremaps
         if sm is None or not sm.enabled:
             return self

@@ -28,7 +28,7 @@ def _get_available_baselines(wc) -> list[dict[str, str]]:
 rule plot_meteogram:
     input:
         script="workflow/scripts/plot_meteogram.py",
-        inference_okfile=rules.inference_execute.output.okfile,
+        inference_okfile=_get_inference_okfile,
         truth_dep=truth_file_dep,
     output:
         expand(
@@ -44,7 +44,7 @@ rule plot_meteogram:
         runtime="60m",
     params:
         ana_label=lambda wc: config["truth"]["label"],
-        truth_root=config["truth"]["root"],
+        truth_root=(config.get("truth") or {}).get("root", ""),
         fcst_grib=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
@@ -99,7 +99,7 @@ rule plot_meteogram:
 rule plot_forecast_frame:
     input:
         script="workflow/scripts/plot_forecast_frame.py",
-        inference_okfile=rules.inference_execute.output.okfile,
+        inference_okfile=_get_inference_okfile,
     output:
         expand(
             OUT_ROOT

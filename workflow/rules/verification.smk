@@ -2,6 +2,7 @@
 # VERIFICATION WORKFLOW                                 #
 # ----------------------------------------------------- #
 from datetime import datetime
+from types import SimpleNamespace
 
 import pandas as pd
 
@@ -27,11 +28,11 @@ rule verification_metrics_baseline:
     params:
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
-        truth=config["truth"]["root"],
+        truth=(config.get("truth") or {}).get("root", ""),
         truth_source_id=f"truth-{TRUTH_HASH}",
         regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
-        threshold_dict=config["experiment"]["thresholds"],
+        threshold_dict=(config.get("experiment") or {}).get("thresholds", {}),
         lapse_rate_flag=(
             "--lapse_rate_correction"
             if config.get("lapse_rate_correction", True)
@@ -68,7 +69,7 @@ rule verification_metrics:
         "src/verification/__init__.py",
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_metrics.py",
-        inference_okfile=rules.inference_execute.output.okfile,
+        inference_okfile=_get_inference_okfile,
         truth_dep=truth_file_dep,
     output:
         OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/verif_{VERIF_HASH}.nc",
@@ -83,14 +84,14 @@ rule verification_metrics:
     # TODO: implement logic to use experiment name instead of run_id as wildcard
     params:
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
-        truth=config["truth"]["root"],
+        truth=(config.get("truth") or {}).get("root", ""),
         truth_source_id=f"truth-{TRUTH_HASH}",
         regions=REGIONS,
         grib_out_dir=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
         experiment_params=",".join(EXPERIMENT_PARAMS),
-        threshold_dict=config["experiment"]["thresholds"],
+        threshold_dict=(config.get("experiment") or {}).get("thresholds", {}),
         lapse_rate_flag=(
             "--lapse_rate_correction"
             if config.get("lapse_rate_correction", True)
@@ -185,7 +186,7 @@ rule verification_metrics_plot:
             )
             for sid in EXPERIMENT_PARTICIPANTS
         )
-        + ",truth-{}:{}".format(TRUTH_HASH, config["truth"]["label"]),
+        + ",truth-{}:{}".format(TRUTH_HASH, (config.get("truth") or {}).get("label", "")),
     shell:
         """
         uv run {input.script} {input.verif} --output_dir {output} --labels "{params.label_map}" >{log} 2>&1
@@ -197,12 +198,13 @@ rule verification_scoremaps:
         "src/verification/__init__.py",
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_scoremaps.py",
-        inference_okfiles=lambda wc: expand(
-            rules.inference_execute.output.okfile,
-            init_time=_restrict_reftimes_to_hours(REFTIMES),
-            allow_missing=True,
-        ),
-        truth=config["truth"]["root"],
+        inference_okfiles=lambda wc: [
+            _get_inference_okfile(
+                SimpleNamespace(run_id=wc.run_id, init_time=it)
+            )
+            for it in _restrict_reftimes_to_hours(REFTIMES)
+        ],
+        truth=(config.get("truth") or {}).get("root", ""),
     output:
         OUT_ROOT
         / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
@@ -219,7 +221,7 @@ rule verification_scoremaps:
     params:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
-        truth_label=config["truth"]["label"],
+        truth_label=(config.get("truth") or {}).get("label", ""),
         reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
         run_root=lambda wc: (Path(OUT_ROOT) / f"data/runs/{wc.run_id}").resolve(),
     shell:
@@ -242,7 +244,7 @@ rule verification_scoremaps_baseline:
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_scoremaps.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
-        truth=config["truth"]["root"],
+        truth=(config.get("truth") or {}).get("root", ""),
     output:
         OUT_ROOT
         / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
