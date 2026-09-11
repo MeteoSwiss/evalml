@@ -399,7 +399,7 @@ def verif_hash(full_config: dict) -> str:
 
     Combines the truth source with verification-method settings so that
     changing any of them (e.g. switching lapse_rate_correction on/off, or
-    changing the cross_validation holdout selection) produces new output
+    changing the station_holdout selection) produces new output
     paths and unconditionally triggers a rerun.
     """
     truth_cfg = {
@@ -407,7 +407,7 @@ def verif_hash(full_config: dict) -> str:
     }
     experiment_verif_cfg = {
         "lapse_rate_correction": full_config.get("lapse_rate_correction", True),
-        "cross_validation": full_config.get("experiment", {}).get("cross_validation"),
+        "station_holdout": full_config.get("experiment", {}).get("station_holdout"),
     }
     return generate_json_hash({"truth": truth_cfg, "verif": experiment_verif_cfg})
 
@@ -430,8 +430,8 @@ if "jretrieve" in str(config["truth"]["root"]):
 
 
 TRUTH_HASH = truth_hash(config["truth"])
-_cv_raw = config.get("experiment", {}).get("cross_validation") or {}
-CROSS_VALIDATION_CFG = _cv_raw if isinstance(_cv_raw, dict) else {}
+_station_holdout_raw = config.get("experiment", {}).get("station_holdout") or {}
+STATION_HOLDOUT_CFG = _station_holdout_raw if isinstance(_station_holdout_raw, dict) else {}
 REGIONS = parse_regions()
 VERIF_HASH = verif_hash(config)
 _showcase = config.get("showcase", {})

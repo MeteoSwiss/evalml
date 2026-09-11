@@ -455,8 +455,8 @@ class Dashboard(BaseModel):
     )
 
 
-class CrossValidationConfig(BaseModel):
-    """Cross-validation settings for station-group stratified verification."""
+class StationHoldoutConfig(BaseModel):
+    """Station holdout settings for station-group stratified verification."""
 
     holdout_fraction: Optional[float] = Field(
         default=None,
@@ -500,11 +500,13 @@ class ExperimentConfig(BaseModel):
         ...,
         description="Settings for the experiment dashboard.",
     )
-    cross_validation: Optional[CrossValidationConfig] = Field(
+    station_holdout: Optional[Union[List[str], StationHoldoutConfig]] = Field(
         default=None,
         description=(
             "When set, adds a 'station_group' dimension (all/holdout/holdin) to verification "
-            "metrics for all models and baselines. Specify either holdout_fraction or exclude_stations."
+            "metrics for all models and baselines. Either a bare list of station nat_abbr "
+            "(shorthand for exclude_stations), or a full object specifying holdout_fraction "
+            "(+ optional holdout_seed) instead."
         ),
     )
     scorecards: Optional[ExperimentScorecardConfig] = Field(
@@ -515,6 +517,14 @@ class ExperimentConfig(BaseModel):
         default=None,
         description="Score map plot configuration. Omit or set enabled: false to disable.",
     )
+
+    @field_validator("station_holdout", mode="before")
+    @classmethod
+    def normalize_station_holdout(cls, v):
+        """Accept a bare list of station nat_abbr as shorthand for exclude_stations."""
+        if isinstance(v, list):
+            return {"exclude_stations": v}
+        return v
 
     @field_validator("thresholds")
     @classmethod

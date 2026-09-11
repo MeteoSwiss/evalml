@@ -238,12 +238,12 @@ rule inference_prepare_temporal_downscaler:
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None
             else _get_forecaster_run_id(wc.run_id)
         ),
-        # Single source of truth for the holdout station set: experiment.cross_validation
+        # Single source of truth for the holdout station set: experiment.station_holdout
         # in the top-level experiment config. Injected into any nudge_toward_observation
         # filter found in the inference config (a no-op if the config has none, or if
-        # cross-validation isn't configured for this experiment) — see
-        # inference_prepare.py::_inject_nudging_cross_validation.
-        cross_validation_cfg=CROSS_VALIDATION_CFG,
+        # station_holdout isn't configured for this experiment) — see
+        # inference_prepare.py::_inject_nudging_station_holdout.
+        station_holdout_cfg=STATION_HOLDOUT_CFG,
     script:
         "../scripts/inference_prepare.py"
 
@@ -290,6 +290,11 @@ rule inference_execute:
         disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
             "disable_local_eccodes_definitions", False
         ),
+        account_flag=lambda wc: (
+            f"--account={config['profile']['default_resources']['slurm_account']}"
+            if config["profile"]["default_resources"].get("slurm_account")
+            else ""
+        ),
     # fmt: off
     shell:
         """
@@ -299,7 +304,7 @@ rule inference_execute:
             cd {params.workdir}
 
             _run_inference() {{
-                local VENV=$1
+                local VENV=/user-environment
                 source "$VENV/bin/activate"
 
                 if [ "{params.disable_local_definitions}" = "False" ]; then
@@ -313,19 +318,22 @@ rule inference_execute:
                     CMD_ARGS+=(runner.parallel.cluster=slurm)
                 fi
 
-                srun \
-                    --unbuffered \
-                    --partition={resources.slurm_partition} \
-                    --cpus-per-task={resources.cpus_per_task} \
-                    --mem-per-cpu={resources.mem_mb_per_cpu} \
-                    --time={resources.runtime} \
-                    --gres={resources.gres} \
-                    --ntasks={resources.ntasks} \
-                    anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+                anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
             }}
             export -f _run_inference
 
-            squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
+            srun \
+                --job-name=anemoi-inference \
+                --uenv={params.env_path}:/user-environment \
+                --unbuffered \
+                {params.account_flag} \
+                --partition={resources.slurm_partition} \
+                --cpus-per-task={resources.cpus_per_task} \
+                --mem-per-cpu={resources.mem_mb_per_cpu} \
+                --time={resources.runtime} \
+                --gres={resources.gres} \
+                --ntasks={resources.ntasks} \
+                bash -c '_run_inference'
         ) >{log} 2>&1
         touch {output.okfile}
         """

@@ -12,7 +12,7 @@ def prepare_config(
     default_config_path: str,
     output_config_path: str,
     params: dict,
-    cross_validation_cfg: dict | None = None,
+    station_holdout_cfg: dict | None = None,
 ):
     """Prepare the configuration file for the inference run.
 
@@ -27,12 +27,12 @@ def prepare_config(
         Path where the updated configuration file will be written.
     params : dict
         Dictionary of parameters to override in the default configuration.
-    cross_validation_cfg : dict, optional
-        The experiment's ``experiment.cross_validation`` settings (holdout
+    station_holdout_cfg : dict, optional
+        The experiment's ``experiment.station_holdout`` settings (holdout
         station selection for verification stratification). When given, its
         ``exclude_stations``/``holdout_fraction``/``holdout_seed`` are
         injected into every ``nudge_toward_observation`` filter found in the
-        config — see ``_inject_nudging_cross_validation``. This is the single
+        config — see ``_inject_nudging_station_holdout``. This is the single
         source of truth for the holdout station set: the inference config
         itself should not hand-maintain its own copy.
     """
@@ -41,7 +41,7 @@ def prepare_config(
         config = yaml.safe_load(f)
 
     config = _override_recursive(config, params)
-    _inject_nudging_cross_validation(config, cross_validation_cfg or {})
+    _inject_nudging_station_holdout(config, station_holdout_cfg or {})
 
     with open(output_config_path, "w") as f:
         yaml.safe_dump(config, f, sort_keys=False)
@@ -107,12 +107,12 @@ def prepare_temporal_downscaler(smk):
 
     # prepare config
     overrides = _overrides_from_params(smk)
-    cross_validation_cfg = getattr(smk.params, "cross_validation_cfg", None)
+    station_holdout_cfg = getattr(smk.params, "station_holdout_cfg", None)
     prepare_config(
         smk.input.config,
         smk.output.config,
         overrides,
-        cross_validation_cfg=cross_validation_cfg,
+        station_holdout_cfg=station_holdout_cfg,
     )
 
     LOG.info("Wrote config file at %s", smk.output.config)
@@ -191,33 +191,33 @@ def _override_recursive(original: dict, updates: dict) -> dict:
     return original
 
 
-def _inject_nudging_cross_validation(config: dict, cross_validation_cfg: dict) -> None:
+def _inject_nudging_station_holdout(config: dict, station_holdout_cfg: dict) -> None:
     """Set exclude_stations/holdout_fraction/holdout_seed on every
     nudge_toward_observation filter found anywhere in config, in place, from
-    the experiment's cross_validation settings — the single source of truth
+    the experiment's station_holdout settings — the single source of truth
     for the holdout station set (see varda-single-1.0-nudge.yaml's
-    experiment.cross_validation). The inference config itself should not
+    experiment.station_holdout). The inference config itself should not
     hand-maintain its own copy of the list.
 
-    A no-op if cross_validation_cfg has neither exclude_stations nor
-    holdout_fraction set (e.g. cross-validation isn't configured for this
+    A no-op if station_holdout_cfg has neither exclude_stations nor
+    holdout_fraction set (e.g. station holdout isn't configured for this
     experiment) — any hand-written value already in the config is then left
     untouched. Unlike _override_recursive (dict-into-dict only), this walks
     into lists too, since nudge_toward_observation typically sits inside a
     pre_processors list.
     """
-    exclude_stations = cross_validation_cfg.get("exclude_stations")
-    holdout_fraction = cross_validation_cfg.get("holdout_fraction")
+    exclude_stations = station_holdout_cfg.get("exclude_stations")
+    holdout_fraction = station_holdout_cfg.get("holdout_fraction")
     if exclude_stations is None and holdout_fraction is None:
         return
-    holdout_seed = cross_validation_cfg.get("holdout_seed", 42)
+    holdout_seed = station_holdout_cfg.get("holdout_seed", 42)
 
     def _walk(node):
         if isinstance(node, dict):
             block = node.get("nudge_toward_observation")
             if isinstance(block, dict):
                 # Mutually exclusive in NudgeTowardObservation itself — clear both
-                # before setting the one cross_validation_cfg actually specifies,
+                # before setting the one station_holdout_cfg actually specifies,
                 # so a stale hand-written value of the other can never linger.
                 block.pop("exclude_stations", None)
                 block.pop("holdout_fraction", None)

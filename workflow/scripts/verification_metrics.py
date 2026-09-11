@@ -32,15 +32,15 @@ class ScriptConfig(Namespace):
     steps: list[int] = parse_steps("0/120/6")
 
 
-def compute_holdout_stations(all_stations: list, cv_cfg: dict) -> list[str]:
+def compute_holdout_stations(all_stations: list, station_holdout_cfg: dict) -> list[str]:
     """Return nat_abbr list of holdout stations derived from the truth dataset's station list.
 
     Mirrors the selection logic in nudging.py so the evaluation partition matches
     what was actually withheld from nudging, using the experiment-level seed/fraction.
     """
-    exclude_stations = cv_cfg.get("exclude_stations")
-    holdout_fraction = cv_cfg.get("holdout_fraction")
-    holdout_seed = cv_cfg.get("holdout_seed", 42)
+    exclude_stations = station_holdout_cfg.get("exclude_stations")
+    holdout_fraction = station_holdout_cfg.get("holdout_fraction")
+    holdout_seed = station_holdout_cfg.get("holdout_seed", 42)
 
     if exclude_stations is not None:
         return [s for s in exclude_stations if s in all_stations]
@@ -108,27 +108,27 @@ def main(args: ScriptConfig):
     if args.lapse_rate_correction:
         apply_lapse_rate_correction_inplace(fcst, truth, args.params)
 
-    # determine holdout stations for cross-validation station stratification
+    # determine holdout stations for station-holdout stratification
     # holdout stations are derived from the truth dataset's station list so the
     # same partition is used consistently across all models and baselines.
     holdout_stations = None
-    cv_cfg = args.cross_validation_cfg
-    if cv_cfg and "values" in truth.dims:
+    station_holdout_cfg = args.station_holdout_cfg
+    if station_holdout_cfg and "values" in truth.dims:
         all_stations = list(truth["values"].values)
-        holdout_stations = compute_holdout_stations(all_stations, cv_cfg)
+        holdout_stations = compute_holdout_stations(all_stations, station_holdout_cfg)
         if holdout_stations:
             LOG.info(
-                "Cross-validation holdout: %d / %d stations withheld",
+                "Station holdout: %d / %d stations withheld",
                 len(holdout_stations),
                 len(all_stations),
             )
         else:
             LOG.warning(
-                "cross_validation_cfg set but no holdout stations selected (check holdout_fraction / exclude_stations)."
+                "station_holdout_cfg set but no holdout stations selected (check holdout_fraction / exclude_stations)."
             )
-    elif cv_cfg:
+    elif station_holdout_cfg:
         LOG.warning(
-            "cross_validation_cfg set but truth dataset has no 'values' dimension; station stratification skipped."
+            "station_holdout_cfg set but truth dataset has no 'values' dimension; station stratification skipped."
         )
 
     # compute metrics and statistics
@@ -232,11 +232,11 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
-        "--cross_validation_cfg",
+        "--station_holdout_cfg",
         type=lambda s: json.loads(s) if s else None,
         default=None,
         help=(
-            "Cross-validation config as a JSON dict with keys: holdout_fraction, holdout_seed, "
+            "Station holdout config as a JSON dict with keys: holdout_fraction, holdout_seed, "
             "exclude_stations. When set, adds station_group stratification (all/holdout/holdin) "
             "to all models and baselines using the truth dataset's station list."
         ),

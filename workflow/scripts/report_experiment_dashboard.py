@@ -64,7 +64,7 @@ def main(args):
     _check_n_samples_consistency(dfs, args.verif_files)
     dfs = [_ensure_unique_lead_time(d) for d in dfs]
     dfs = _select_best_sources(dfs)
-    # Normalize station_group dimension: datasets without it (cross_validation disabled for that run)
+    # Normalize station_group dimension: datasets without it (station_holdout disabled for that run)
     # are expanded to station_group=["all"] so xr.concat receives uniform-rank tensors.
     if any("station_group" in d.dims for d in dfs):
         dfs = [
@@ -110,9 +110,9 @@ def main(args):
     seasons = df["season"].unique() if "season" in stratification else []
     init_hours = df["init_hour"].unique() if "init_hour" in stratification else []
 
-    # station_group selector: auto-detect from data (shown when cross_validation is enabled)
+    # station_group selector: auto-detect from data (shown when station_holdout is enabled)
     station_groups = sorted(df["station_group"].unique())
-    cross_validation = args.cross_validation and station_groups != ["all"]
+    station_holdout = args.station_holdout and station_groups != ["all"]
 
     # Columnar JSON: store columns + data array (no repeated keys per row).
     # region_season_init is a derived column — computed in JS at parse time.
@@ -177,7 +177,7 @@ def main(args):
         seasons=seasons,
         init_hours=init_hours,
         stratification=stratification,
-        cross_validation=cross_validation,
+        station_holdout=station_holdout,
         station_groups=station_groups,
         header_text=args.header_text,
         configfile_content=open(args.configfile, "r").read()
@@ -227,7 +227,7 @@ if __name__ == "__main__":
         help="Stratification dimensions to include in the dashboard (any of region, season, init_hour).",
     )
     parser.add_argument(
-        "--cross_validation",
+        "--station_holdout",
         action="store_true",
         default=False,
         help="When set, shows a station-group selector (All / Holdout / Hold-in) in the dashboard.",

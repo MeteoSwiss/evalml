@@ -93,7 +93,7 @@ def main(args: Namespace) -> None:
 
     # remove duplicated but not identical values from analyses (rounding errors)
     dfs = [xr.open_dataset(f) for f in args.verif_files]
-    # When cross_validation is enabled, runs carry a station_group dim; select "all" for standard plots.
+    # When station_holdout is enabled, runs carry a station_group dim; select "all" for standard plots.
     dfs = [
         d.sel(station_group="all", drop=True) if "station_group" in d.dims else d
         for d in dfs

@@ -55,12 +55,7 @@ runs:
 
 truth:
   label: SwissMetNet
-  # Retrieve over the broad ICON domain (matching notebooks/d_eff_generator.ipynb's
-  # STATIONS_SEL), then trim to stations within the real Swiss national border
-  # (filter_mode=switzerland) or within a predefined bounding box (filter_mode=domain;domain_bbox=45.7,48.0,5.8,10.8).
-  root: jretrievedwh:bbox=40.5,53.0,0.0,17.5;use_limitation=40;filter_mode=switzerland
-  # root: jretrievedwh:bbox=40.5,53.0,0.0,17.5;use_limitation=40;filter_mode=domain;domain_bbox=45.7,48.0,5.8,10.8
-
+  root: jretrievedwh:bbox=45.7,48.0,5.8,10.8;use_limitation=40
 
 experiment:
   params:
@@ -73,6 +68,7 @@ experiment:
     - PS
   stratification:
     regions:
+      - switzerland
       - mittelland
       - berge
       - alpennordseite
@@ -92,41 +88,29 @@ experiment:
   dashboard:
     stratification:
       - season
-  cross_validation:
-    # Stations withheld from nudging in the nudge-partial inference run.
-    exclude_stations:
-      - CHM
-      - FRE
-      - RUE
-      - BAS
-      - PLF
-      - CGI
-      - HOE
-      - PUY
-      - RAG
-      - EIN
-      - ALT
-      - GOS
-      - COV
-      - ULR
-      - BIN
-      - GUE
-      - ROE
-      - BIA
-      - CEV
-      - OTL
-    enabled: true
-    sections:
-      nowcasting:
-        baseline: INCA
-        lead_times: "0/6/1"
-        stratification: region
-        variables:
-          - "U_10M:RMSE,R2,ETS"
-          - "V_10M:RMSE,R2,ETS"
-          - "T_2M:RMSE,R2,ETS"
-          - "TOT_PREC:RMSE,R2,ETS"
-          - "TD_2M:RMSE,R2,ETS"
+      - region
+  # Stations withheld from nudging in the nudge-partial inference run.
+  station_holdout:
+    - CHM
+    - FRE
+    - RUE
+    - BAS
+    - PLF
+    - CGI
+    - HOE
+    - PUY
+    - RAG
+    - EIN
+    - ALT
+    - GOS
+    - COV
+    - ULR
+    - BIN
+    - GUE
+    - ROE
+    - BIA
+    - CEV
+    - OTL
   scoremaps:
     enabled: false
 

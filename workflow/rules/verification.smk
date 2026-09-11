@@ -33,7 +33,7 @@ rule verification_metrics_baseline:
         regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
-        cross_validation_cfg=json.dumps(CROSS_VALIDATION_CFG),
+        station_holdout_cfg=json.dumps(STATION_HOLDOUT_CFG),
         lapse_rate_flag=(
             "--lapse_rate_correction"
             if config.get("lapse_rate_correction", True)
@@ -52,7 +52,7 @@ rule verification_metrics_baseline:
             --regions '{params.regions}' \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
-            --cross_validation_cfg '{params.cross_validation_cfg}' \
+            --station_holdout_cfg '{params.station_holdout_cfg}' \
             --member "{params.member}" \
             {params.lapse_rate_flag} \
             --output {output} >{log} 2>&1
@@ -94,7 +94,7 @@ rule verification_metrics:
         ).resolve(),
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
-        cross_validation_cfg=json.dumps(CROSS_VALIDATION_CFG),
+        station_holdout_cfg=json.dumps(STATION_HOLDOUT_CFG),
         lapse_rate_flag=(
             "--lapse_rate_correction"
             if config.get("lapse_rate_correction", True)
@@ -113,7 +113,7 @@ rule verification_metrics:
             --regions '{params.regions}' \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
-            --cross_validation_cfg '{params.cross_validation_cfg}' \
+            --station_holdout_cfg '{params.station_holdout_cfg}' \
             {params.lapse_rate_flag} \
             --output {output} >{log} 2>&1
         """

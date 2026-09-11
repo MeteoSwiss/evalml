@@ -39,7 +39,7 @@ rule report_experiment_dashboard:
         sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
         header_text=make_header_text(),
         stratification=" ".join(config["experiment"]["dashboard"]["stratification"]),
-        cross_validation_flag="--cross_validation" if CROSS_VALIDATION_CFG else "",
+        station_holdout_flag="--station_holdout" if STATION_HOLDOUT_CFG else "",
         label_map=",".join(
             "{}:{}".format(
                 sid,
@@ -61,7 +61,7 @@ rule report_experiment_dashboard:
             --header_text "{params.header_text}" \
             --configfile "{input.configfile}" \
             --stratification {params.stratification} \
-            {params.cross_validation_flag} \
+            {params.station_holdout_flag} \
             --labels "{params.label_map}" \
             --output {output} >{log} 2>&1
         """
