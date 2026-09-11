@@ -168,20 +168,35 @@ def _stations_to_argv(stations: dict[str, Any]) -> list[str]:
     raise AssertionError("unreachable")
 
 
-def parse_selection(root: Any) -> tuple[dict[str, Any], str, str]:
-    """Parse a truth-root marker into (stations, stage, seq_type).
+def parse_selection(
+    root: Any,
+) -> tuple[dict[str, Any], str, str, int | None, str | None, list | None]:
+    """Parse a truth-root marker into
+    (stations, stage, seq_type, use_limitation, filter_mode, domain_bbox).
 
     Examples (slash-free so they survive ``Path()`` normalisation):
       ``jretrievedwh:SwissMetNet``                       -> group
       ``jretrievedwh:group=SwissMetNet;stage=devt``
       ``jretrievedwh:locations=ARO,KLO``
       ``jretrievedwh:bbox=45.8,47.8,5.9,10.5``
+      ``jretrievedwh:bbox=40.5,53.0,0.0,17.5;use_limitation=40;filter_mode=switzerland``
+        -> retrieve over the given bbox, then trim to stations within the real
+           Swiss national border (see load_obs_data_from_jretrieve).
+      ``jretrievedwh:bbox=40.5,53.0,0.0,17.5;filter_mode=domain;domain_bbox=45.7,48.0,5.8,10.8``
+        -> retrieve over one bbox, then trim to a second, independent bbox —
+           mirrors RetrieveObservation's bbox/station_filter_mode+domain_bbox split.
+
+    use_limitation/filter_mode/domain_bbox default to None (no time-window
+    limit, no extra trim) when not given, unchanged from before they existed.
     """
     _, _, rest = str(root).partition(":")
     rest = rest.strip()
     stations: dict[str, Any] = {}
     stage = "prod"
     seq_type = "surface"
+    use_limitation: int | None = None
+    filter_mode: str | None = None
+    domain_bbox: list | None = None
     for i, part in enumerate([p for p in rest.split(";") if p]):
         if "=" not in part:
             if i == 0:
@@ -196,11 +211,25 @@ def parse_selection(root: Any) -> tuple[dict[str, Any], str, str]:
             stage = value
         elif key == "seq_type":
             seq_type = value
+        elif key == "use_limitation":
+            use_limitation = int(value)
+        elif key == "filter_mode":
+            if value not in ("domain", "switzerland"):
+                raise ValueError(
+                    f"filter_mode must be 'domain' or 'switzerland', got {value!r}"
+                )
+            filter_mode = value
+        elif key == "domain_bbox":
+            domain_bbox = [float(v) for v in value.split(",") if v]
+            if len(domain_bbox) != 4:
+                raise ValueError("domain_bbox must be lat_min,lat_max,lon_min,lon_max.")
         else:
             raise ValueError(f"Unknown jretrieve selector key: {key!r}")
     if not stations:
         stations = {"group": DEFAULT_GROUP}
-    return stations, stage, seq_type
+    if filter_mode == "domain" and domain_bbox is None:
+        raise ValueError("domain_bbox is required when filter_mode='domain'.")
+    return stations, stage, seq_type, use_limitation, filter_mode, domain_bbox
 
 
 def _run(argv: list[str], env: dict[str, str], timeout_s: int) -> str:
@@ -299,7 +328,7 @@ def fetch_data(
     increment_minutes=60,
     seq_type="surface",
     stage="prod",
-    use_limitation: int = 40,
+    use_limitation: int | None = None,
     timeout_s=600,
 ) -> pd.DataFrame:
     """Fetch observation data; columns: station (int), termin (YYYYMMDDhhmmss),
@@ -318,7 +347,8 @@ def fetch_data(
         "csv",
         *_stations_to_argv(stations),
     ]
-    argv += ["--use-limitation", str(use_limitation)]
+    if use_limitation is not None:
+        argv += ["--use-limitation", str(use_limitation)]
     LOG.info("jretrieve data: %s", " ".join(argv))
     return _parse_csv(_run_with_retry(argv, env=_build_env(stage), timeout_s=timeout_s))
 

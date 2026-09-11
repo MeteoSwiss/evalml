@@ -296,6 +296,25 @@
           "$ref": "#/$defs/Dashboard",
           "description": "Settings for the experiment dashboard."
         },
+        "station_holdout": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "$ref": "#/$defs/StationHoldoutConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When set, adds a 'station_group' dimension (all/holdout/holdin) to verification metrics for all models and baselines. Either a bare list of station nat_abbr (shorthand for exclude_stations), or a full object specifying holdout_fraction (+ optional holdout_seed) instead.",
+          "title": "Station Holdout"
+        },
         "scorecards": {
           "anyOf": [
             {
@@ -863,6 +882,48 @@
         }
       },
       "title": "ShowcaseConfig",
+      "type": "object"
+    },
+    "StationHoldoutConfig": {
+      "description": "Station holdout settings for station-group stratified verification.",
+      "properties": {
+        "holdout_fraction": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fraction of truth stations to hold out for evaluation (exclusive 0\u20131). Mutually exclusive with exclude_stations.",
+          "title": "Holdout Fraction"
+        },
+        "holdout_seed": {
+          "default": 42,
+          "description": "Random seed for reproducible holdout station selection.",
+          "title": "Holdout Seed",
+          "type": "integer"
+        },
+        "exclude_stations": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit list of station nat_abbr to hold out. Mutually exclusive with holdout_fraction.",
+          "title": "Exclude Stations"
+        }
+      },
+      "title": "StationHoldoutConfig",
       "type": "object"
     },
     "Stratification": {

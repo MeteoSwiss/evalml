@@ -64,6 +64,13 @@ def main(args):
     _check_n_samples_consistency(dfs, args.verif_files)
     dfs = [_ensure_unique_lead_time(d) for d in dfs]
     dfs = _select_best_sources(dfs)
+    # Normalize station_group dimension: datasets without it (station_holdout disabled for that run)
+    # are expanded to station_group=["all"] so xr.concat receives uniform-rank tensors.
+    if any("station_group" in d.dims for d in dfs):
+        dfs = [
+            d if "station_group" in d.dims else d.expand_dims(station_group=["all"])
+            for d in dfs
+        ]
     ds = xr.concat(dfs, dim="source", join="outer")
     LOG.info("Loaded verification netcdf: \n%s", ds)
 
@@ -89,8 +96,9 @@ def main(args):
         df = df[df["season"] == "all"]
     if "init_hour" not in stratification:
         df = df[df["init_hour"] == "all"]
+    if "station_group" not in df.columns:
+        df["station_group"] = "all"
 
-    # create a new column for line styles and shapes in dashboard
     df.dropna(inplace=True)
     LOG.info("Loaded verification data frame: \n%s", df)
 
@@ -101,6 +109,10 @@ def main(args):
     regions = df["region"].unique() if "region" in stratification else []
     seasons = df["season"].unique() if "season" in stratification else []
     init_hours = df["init_hour"].unique() if "init_hour" in stratification else []
+
+    # station_group selector: auto-detect from data (shown when station_holdout is enabled)
+    station_groups = sorted(df["station_group"].unique())
+    station_holdout = args.station_holdout and station_groups != ["all"]
 
     # Columnar JSON: store columns + data array (no repeated keys per row).
     # region_season_init is a derived column — computed in JS at parse time.
@@ -122,6 +134,7 @@ def main(args):
         "region",
         "season",
         "init_hour",
+        "station_group",
     ]
     df_export = df[export_cols].copy()
     df_export["value"] = df_export["value"].apply(
@@ -164,6 +177,8 @@ def main(args):
         seasons=seasons,
         init_hours=init_hours,
         stratification=stratification,
+        station_holdout=station_holdout,
+        station_groups=station_groups,
         header_text=args.header_text,
         configfile_content=open(args.configfile, "r").read()
         if args.configfile.is_file()
@@ -210,6 +225,12 @@ if __name__ == "__main__":
         nargs="*",
         default=["region", "season", "init_hour"],
         help="Stratification dimensions to include in the dashboard (any of region, season, init_hour).",
+    )
+    parser.add_argument(
+        "--station_holdout",
+        action="store_true",
+        default=False,
+        help="When set, shows a station-group selector (All / Holdout / Hold-in) in the dashboard.",
     )
     parser.add_argument(
         "--configfile",

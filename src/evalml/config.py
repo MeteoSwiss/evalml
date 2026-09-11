@@ -455,6 +455,29 @@ class Dashboard(BaseModel):
     )
 
 
+class StationHoldoutConfig(BaseModel):
+    """Station holdout settings for station-group stratified verification."""
+
+    holdout_fraction: Optional[float] = Field(
+        default=None,
+        description=(
+            "Fraction of truth stations to hold out for evaluation (exclusive 0–1). "
+            "Mutually exclusive with exclude_stations."
+        ),
+    )
+    holdout_seed: int = Field(
+        default=42,
+        description="Random seed for reproducible holdout station selection.",
+    )
+    exclude_stations: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Explicit list of station nat_abbr to hold out. "
+            "Mutually exclusive with holdout_fraction."
+        ),
+    )
+
+
 class ExperimentConfig(BaseModel):
     """Configuration for the experiment workflow outputs."""
 
@@ -477,6 +500,15 @@ class ExperimentConfig(BaseModel):
         ...,
         description="Settings for the experiment dashboard.",
     )
+    station_holdout: Optional[Union[List[str], StationHoldoutConfig]] = Field(
+        default=None,
+        description=(
+            "When set, adds a 'station_group' dimension (all/holdout/holdin) to verification "
+            "metrics for all models and baselines. Either a bare list of station nat_abbr "
+            "(shorthand for exclude_stations), or a full object specifying holdout_fraction "
+            "(+ optional holdout_seed) instead."
+        ),
+    )
     scorecards: Optional[ExperimentScorecardConfig] = Field(
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
@@ -485,6 +517,14 @@ class ExperimentConfig(BaseModel):
         default=None,
         description="Score map plot configuration. Omit or set enabled: false to disable.",
     )
+
+    @field_validator("station_holdout", mode="before")
+    @classmethod
+    def normalize_station_holdout(cls, v):
+        """Accept a bare list of station nat_abbr as shorthand for exclude_stations."""
+        if isinstance(v, list):
+            return {"exclude_stations": v}
+        return v
 
     @field_validator("thresholds")
     @classmethod

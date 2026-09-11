@@ -8,7 +8,12 @@ from pathlib import Path
 from evalml.helpers import setup_logger
 
 
-def prepare_config(default_config_path: str, output_config_path: str, params: dict):
+def prepare_config(
+    default_config_path: str,
+    output_config_path: str,
+    params: dict,
+    station_holdout_cfg: dict | None = None,
+):
     """Prepare the configuration file for the inference run.
 
     Overrides default configuration parameters with those provided in params
@@ -22,12 +27,21 @@ def prepare_config(default_config_path: str, output_config_path: str, params: di
         Path where the updated configuration file will be written.
     params : dict
         Dictionary of parameters to override in the default configuration.
+    station_holdout_cfg : dict, optional
+        The experiment's ``experiment.station_holdout`` settings (holdout
+        station selection for verification stratification). When given, its
+        ``exclude_stations``/``holdout_fraction``/``holdout_seed`` are
+        injected into every ``nudge_toward_observation`` filter found in the
+        config — see ``_inject_nudging_station_holdout``. This is the single
+        source of truth for the holdout station set: the inference config
+        itself should not hand-maintain its own copy.
     """
 
     with open(default_config_path, "r") as f:
         config = yaml.safe_load(f)
 
     config = _override_recursive(config, params)
+    _inject_nudging_station_holdout(config, station_holdout_cfg or {})
 
     with open(output_config_path, "w") as f:
         yaml.safe_dump(config, f, sort_keys=False)
@@ -93,7 +107,14 @@ def prepare_temporal_downscaler(smk):
 
     # prepare config
     overrides = _overrides_from_params(smk)
-    prepare_config(smk.input.config, smk.output.config, overrides)
+    station_holdout_cfg = getattr(smk.params, "station_holdout_cfg", None)
+    prepare_config(
+        smk.input.config,
+        smk.output.config,
+        overrides,
+        station_holdout_cfg=station_holdout_cfg,
+    )
+
     LOG.info("Wrote config file at %s", smk.output.config)
     with open(smk.output.config, "r") as f:
         config_content = f.read()
@@ -168,6 +189,50 @@ def _override_recursive(original: dict, updates: dict) -> dict:
         else:
             original[key] = value
     return original
+
+
+def _inject_nudging_station_holdout(config: dict, station_holdout_cfg: dict) -> None:
+    """Set exclude_stations/holdout_fraction/holdout_seed on every
+    nudge_toward_observation filter found anywhere in config, in place, from
+    the experiment's station_holdout settings — the single source of truth
+    for the holdout station set (see varda-single-1.0-nudge.yaml's
+    experiment.station_holdout). The inference config itself should not
+    hand-maintain its own copy of the list.
+
+    A no-op if station_holdout_cfg has neither exclude_stations nor
+    holdout_fraction set (e.g. station holdout isn't configured for this
+    experiment) — any hand-written value already in the config is then left
+    untouched. Unlike _override_recursive (dict-into-dict only), this walks
+    into lists too, since nudge_toward_observation typically sits inside a
+    pre_processors list.
+    """
+    exclude_stations = station_holdout_cfg.get("exclude_stations")
+    holdout_fraction = station_holdout_cfg.get("holdout_fraction")
+    if exclude_stations is None and holdout_fraction is None:
+        return
+    holdout_seed = station_holdout_cfg.get("holdout_seed", 42)
+
+    def _walk(node):
+        if isinstance(node, dict):
+            block = node.get("nudge_toward_observation")
+            if isinstance(block, dict):
+                # Mutually exclusive in NudgeTowardObservation itself — clear both
+                # before setting the one station_holdout_cfg actually specifies,
+                # so a stale hand-written value of the other can never linger.
+                block.pop("exclude_stations", None)
+                block.pop("holdout_fraction", None)
+                if exclude_stations is not None:
+                    block["exclude_stations"] = list(exclude_stations)
+                else:
+                    block["holdout_fraction"] = holdout_fraction
+                    block["holdout_seed"] = holdout_seed
+            for value in node.values():
+                _walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(config)
 
 
 def main(smk):

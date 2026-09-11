@@ -5,6 +5,7 @@ from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 
 from verification import verify, apply_lapse_rate_correction_inplace  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
@@ -29,6 +30,27 @@ class ScriptConfig(Namespace):
     reftime: datetime = None
     params: list[str] = ["T_2M", "TD_2M", "U_10M", "V_10M"]
     steps: list[int] = parse_steps("0/120/6")
+
+
+def compute_holdout_stations(
+    all_stations: list, station_holdout_cfg: dict
+) -> list[str]:
+    """Return nat_abbr list of holdout stations derived from the truth dataset's station list.
+
+    Mirrors the selection logic in nudging.py so the evaluation partition matches
+    what was actually withheld from nudging, using the experiment-level seed/fraction.
+    """
+    exclude_stations = station_holdout_cfg.get("exclude_stations")
+    holdout_fraction = station_holdout_cfg.get("holdout_fraction")
+    holdout_seed = station_holdout_cfg.get("holdout_seed", 42)
+
+    if exclude_stations is not None:
+        return [s for s in exclude_stations if s in all_stations]
+    if holdout_fraction is not None and 0.0 < float(holdout_fraction) < 1.0:
+        n_holdout = round(len(all_stations) * float(holdout_fraction))
+        rng = np.random.default_rng(holdout_seed)
+        return list(rng.choice(all_stations, size=n_holdout, replace=False))
+    return []
 
 
 def program_summary_log(args):
@@ -88,6 +110,29 @@ def main(args: ScriptConfig):
     if args.lapse_rate_correction:
         apply_lapse_rate_correction_inplace(fcst, truth, args.params)
 
+    # determine holdout stations for station-holdout stratification
+    # holdout stations are derived from the truth dataset's station list so the
+    # same partition is used consistently across all models and baselines.
+    holdout_stations = None
+    station_holdout_cfg = args.station_holdout_cfg
+    if station_holdout_cfg and "values" in truth.dims:
+        all_stations = list(truth["values"].values)
+        holdout_stations = compute_holdout_stations(all_stations, station_holdout_cfg)
+        if holdout_stations:
+            LOG.info(
+                "Station holdout: %d / %d stations withheld",
+                len(holdout_stations),
+                len(all_stations),
+            )
+        else:
+            LOG.warning(
+                "station_holdout_cfg set but no holdout stations selected (check holdout_fraction / exclude_stations)."
+            )
+    elif station_holdout_cfg:
+        LOG.warning(
+            "station_holdout_cfg set but truth dataset has no 'values' dimension; station stratification skipped."
+        )
+
     # compute metrics and statistics
     now = datetime.now()
     results = verify(
@@ -97,6 +142,7 @@ def main(args: ScriptConfig):
         args.truth_source_id,
         regions=args.regions,
         threshold_dict=args.threshold_dict,
+        holdout_stations=holdout_stations,
     )
     LOG.info(
         "Computed verification metrics in %s seconds",
@@ -186,6 +232,16 @@ if __name__ == "__main__":
         type=lambda x: eval(x),
         help="Dictionary of thresholds for each parameter in the format '{param: [threshold1, threshold2, ...]}' (default: None).",
         default=None,
+    )
+    parser.add_argument(
+        "--station_holdout_cfg",
+        type=lambda s: json.loads(s) if s else None,
+        default=None,
+        help=(
+            "Station holdout config as a JSON dict with keys: holdout_fraction, holdout_seed, "
+            "exclude_stations. When set, adds station_group stratification (all/holdout/holdin) "
+            "to all models and baselines using the truth dataset's station list."
+        ),
     )
     parser.add_argument(
         "--member",
