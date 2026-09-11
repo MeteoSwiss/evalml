@@ -88,6 +88,11 @@ def preprocess_field(param: str, state: dict):
         return ekm_wind.speed(fields["U"], fields["V"]), "m/s"
     if param == "TOT_PREC":
         return np.maximum(fields[param], 0), "mm"
+    if param in ("CLCT", "CLCL", "CLCM", "CLCH"):
+        # Clip away from the exact 0/100 boundary: tricontourf on orthographic
+        # projections mishandles values sitting exactly at a levels endpoint
+        # (paired with extend="neither" in colormap_defaults.py).
+        return np.clip(fields[param], 1e-3, 100 - 1e-3), None
     return fields[param], None
 
 

@@ -1,54 +1,49 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Evaluate skill of ICON-CH1 single.
+  Evaluate skill of ICON-CH1 single, stage E.
 
 dates:
   start: 2024-01-01T06:00
   end: 2025-01-01T00:00
-  frequency: 72h
+  frequency: 66h
   blacklist:
     - 2024-01-25T06:00 # missing ICON-CH2-EPS archive cycle (FCST24/24012506_790)
+    - 2024-04-24T06:00 # missing date in mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr input dataset
 
 runs:
   - forecaster:
-      checkpoint: /store_new/mch/msopr/ml/checkpoints/stage_C_icon_1km_cutoff_edges_subgrid_horography/inference-last.ckpt
-      label: stage_C_icon_1km
+      checkpoint: /scratch/mch/apennino/output/checkpoint/c30490b6ba064e4db03b430f3a2595ad/inference-last.ckpt
+      label: stage_E_icon_1km
       steps: 0/120/6
-      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      config: resources/inference/configs/sgm-forecaster-global-ich1-stageE.yaml
       extra_requirements:
         - earthkit-utils<0.2.0
         - earthkit-data<0.19.0
         - anemoi-inference==0.11.1
 
   - forecaster:
-      checkpoint: /scratch/mch/huppd/varda/checkpoints/stage_C_icon_1km_cutoff_edges_subgrid_horography_cloudcover/inference-last.ckpt
-      label: stage_C_icon_1km_w_cloudcover
+      checkpoint: /scratch/mch/huppd/varda/checkpoints/stage_E_icon_1km_cutoff_edges_subgrid_horography/inference-last.ckpt
+      label: stage_E_icon_1km_cloud_cover
       steps: 0/120/6
-      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
+      config: resources/inference/configs/sgm-forecaster-global-ich1-stageE.yaml
       extra_requirements:
         - earthkit-utils<0.2.0
         - earthkit-data<0.19.0
         - anemoi-inference==0.11.1
-
-  # - forecaster:
-  #     checkpoint: https://huggingface.co/met-no/bris_cloudy-skies/blob/main/2025-10/cloudy-skies-2025-10.ckpt
-  #     label: bris-cloudy-skies
-  #     steps: 0/120/6
-  #     config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
-  #     disable_local_eccodes_definitions: true
-  #     extra_requirements:
-  #       - earthkit-utils<0.2.0
-  #       - earthkit-data<0.19.0
-  #       - git+https://github.com/ecmwf/anemoi-inference.git@main
 
   - baseline:
       label: ICON-CH2-EPS
       root: /store_new/mch/msopr/osm/ICON-CH2-EPS
       steps: 0/120/6
 
+  - baseline:
+      label: ICON-CH1-EPS
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/30/6 # ICON-CH1-EPS archive only extends to ~33h lead time
+
 truth:
-  label: REALCH1
-  root: /store_new/mch/msopr/ml/datasets/mch-realch1-fdb-1km-2005-2025-1h-pl13-v1.0.zarr
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
 
 experiment:
   params:
@@ -57,6 +52,7 @@ experiment:
     - U_10M
     - V_10M
     - TOT_PREC
+    - SKT
     - CLCT
     - CLCH
     - CLCM
@@ -87,6 +83,23 @@ experiment:
       - season
   scoremaps:
     enabled: false
+  scorecards:
+    enabled: true
+    sections:
+      overview:
+        baseline: ICON-CH2-EPS
+        lead_times: "0/120/6"
+        stratification: region
+        variables:
+          - T_2M
+          - TD_2M
+          - U_10M
+          - V_10M
+          - TOT_PREC
+          - CLCT
+          - CLCH
+          - CLCM
+          - CLCL
 
 locations:
   output_root: output/

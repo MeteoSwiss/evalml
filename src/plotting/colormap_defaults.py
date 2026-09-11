@@ -53,6 +53,44 @@ _CMAP_DEFAULTS = {
         "extend": "both",
     },
     "QV_925": load_ncl_colormap("RH_6lev.ct") | {"extend": "both"},
+    # Aligned with the colleague's ECMWF-global convention: 0% = blue, 100% =
+    # white. extend="neither" relies on preprocess_field() clipping away from
+    # exact 0/100 (see plot_forecast_frame.py) to avoid a tricontourf bug on
+    # orthographic projections. Kept on our native percent scale (0-100)
+    # rather than the fraction (0-1) scale used there, since our CLCT field
+    # is already in percent.
+    "CLCT": {
+        "cmap": plt.get_cmap("Blues_r"),
+        "vmin": 0,
+        "vmax": 100,
+        "extend": "neither",
+        "units": "%",
+        "levels": list(np.linspace(0, 100, 21)),
+    },
+    "CLCL": {
+        "cmap": plt.get_cmap("Blues_r"),
+        "vmin": 0,
+        "vmax": 100,
+        "extend": "neither",
+        "units": "%",
+        "levels": list(np.linspace(0, 100, 21)),
+    },
+    "CLCM": {
+        "cmap": plt.get_cmap("Blues_r"),
+        "vmin": 0,
+        "vmax": 100,
+        "extend": "neither",
+        "units": "%",
+        "levels": list(np.linspace(0, 100, 21)),
+    },
+    "CLCH": {
+        "cmap": plt.get_cmap("Blues_r"),
+        "vmin": 0,
+        "vmax": 100,
+        "extend": "neither",
+        "units": "%",
+        "levels": list(np.linspace(0, 100, 21)),
+    },
     "TOT_PREC_1H": {
         "extend": "max",
         "colors": [

@@ -69,8 +69,8 @@ def load_state_from_grib(
                 ds["longitude"].values.size, np.nan, dtype=float
             )
     global_file = str(file.parent / f"ifs-{file.stem}.grib")
-    if Path(global_file).exists():
-        _paramlist_ecmwf = [PARAMS_MAP[p] for p in paramlist]
+    _paramlist_ecmwf = [PARAMS_MAP[p] for p in (paramlist or []) if p in PARAMS_MAP]
+    if Path(global_file).exists() and _paramlist_ecmwf:
         ds = load_from_grib_file(global_file, {"parameter.variable": _paramlist_ecmwf})
         mask = ~np.isnan(ds[_paramlist_ecmwf[0]].values.squeeze())
         global_lons = ds["longitude"].values.flatten()

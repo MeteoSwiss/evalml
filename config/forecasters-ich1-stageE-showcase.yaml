@@ -1,0 +1,67 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Cloud cover field showcase animation, stage E.
+
+dates:
+  - 2024-01-28T18:00
+
+runs:
+  - forecaster:
+      checkpoint: /scratch/mch/huppd/varda/checkpoints/stage_E_icon_1km_cutoff_edges_subgrid_horography/inference-last.ckpt
+      label: stage_E_icon_1km_cloud_cover
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1-stageE.yaml
+      extra_requirements:
+        - earthkit-utils<0.2.0
+        - earthkit-data<0.19.0
+        - anemoi-inference==0.11.1
+
+  - baseline:
+      label: ICON-CH2-EPS
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/6
+
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+
+experiment:
+  stratification:
+    regions:
+      - jura
+      - mittelland
+      - voralpen
+      - alpennordhang
+      - innerealpentaeler
+      - alpensuedseite
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
+  dashboard:
+    stratification:
+      - season
+
+showcase:
+  params:
+    - CLCT
+    - CLCL
+  animations:
+    enabled: true
+    frames_per_second: 3
+    domains:
+      - switzerland
+  meteograms:
+    enabled: false
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50
