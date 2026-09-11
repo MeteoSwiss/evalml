@@ -824,9 +824,7 @@ def load_obs_data_from_jretrieve(
     for icon in _logged_params:
         if icon in result.data_vars:
             n_valid = int(result[icon].notnull().any("time").sum())
-            LOG.info(
-                "Stations with valid %s: %d / %d stations", icon, n_valid, n_total
-            )
+            LOG.info("Stations with valid %s: %d / %d stations", icon, n_valid, n_total)
 
     return result
 

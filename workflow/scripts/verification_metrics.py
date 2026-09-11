@@ -32,7 +32,9 @@ class ScriptConfig(Namespace):
     steps: list[int] = parse_steps("0/120/6")
 
 
-def compute_holdout_stations(all_stations: list, station_holdout_cfg: dict) -> list[str]:
+def compute_holdout_stations(
+    all_stations: list, station_holdout_cfg: dict
+) -> list[str]:
     """Return nat_abbr list of holdout stations derived from the truth dataset's station list.
 
     Mirrors the selection logic in nudging.py so the evaluation partition matches

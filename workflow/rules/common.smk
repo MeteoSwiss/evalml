@@ -431,7 +431,9 @@ if "jretrieve" in str(config["truth"]["root"]):
 
 TRUTH_HASH = truth_hash(config["truth"])
 _station_holdout_raw = config.get("experiment", {}).get("station_holdout") or {}
-STATION_HOLDOUT_CFG = _station_holdout_raw if isinstance(_station_holdout_raw, dict) else {}
+STATION_HOLDOUT_CFG = (
+    _station_holdout_raw if isinstance(_station_holdout_raw, dict) else {}
+)
 REGIONS = parse_regions()
 VERIF_HASH = verif_hash(config)
 _showcase = config.get("showcase", {})
