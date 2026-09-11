@@ -816,23 +816,16 @@ def load_obs_data_from_jretrieve(
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
     result = _select_valid_times(out, times, strict=True)
 
-    # Same per-variable station-coverage log as RetrieveObservation, so ground-truth
-    # coverage can be compared directly against what was actually available to nudge.
-    _icon_to_short = {
-        "T_2M": "2t",
-        "TD_2M": "2d",
-        "U_10M": "10u",
-        "V_10M": "10v",
-        "PMSL": "msl",
-        "TOT_PREC": "tp",
-        "VMAX_10M": "vmax",
-    }
+    # Per-variable station-coverage log, so ground-truth coverage can be compared
+    # against what was actually available to nudge (see RetrieveObservation's
+    # equivalent log, under its own IFS shortnames).
+    _logged_params = ("T_2M", "TD_2M", "U_10M", "V_10M", "PMSL", "TOT_PREC", "VMAX_10M")
     n_total = result.sizes["values"]
-    for icon, short in _icon_to_short.items():
+    for icon in _logged_params:
         if icon in result.data_vars:
             n_valid = int(result[icon].notnull().any("time").sum())
             LOG.info(
-                "Stations with valid %s: %d / %d stations", short, n_valid, n_total
+                "Stations with valid %s: %d / %d stations", icon, n_valid, n_total
             )
 
     return result
@@ -1325,6 +1318,9 @@ def _load_icon_baseline_from_grib(
                 )
                 if "number" in ds.dims:
                     ds = ds.isel(number=0, drop=True)
+                for _p, _comps in DERIVED_PARAMS.items():
+                    if all(c in ds.data_vars for c in _comps):
+                        ds = ds.assign({_p: compute_derived(ds, _p)})
                 acc = ds if acc is None else acc + ds
                 n_loaded += 1
             except Exception as exc:
