@@ -458,19 +458,10 @@ def _collect_icon_archive_files(
             f"ICON-CH2-EPS): {root}"
         )
 
-    all_paths = [
+    return [
         reftime_dir / "grib" / f"{gribname}{lt // 24:02}{lt % 24:02}0000_{member_id}"
         for lt in steps
     ]
-    existing = [p for p in all_paths if p.exists()]
-    missing = [p for p in all_paths if not p.exists()]
-    if missing:
-        LOG.debug(
-            "Skipping %d archive file(s) not found (coarser source resolution?): %s",
-            len(missing),
-            missing,
-        )
-    return existing
 
 
 def _discover_icon_member_ids(
