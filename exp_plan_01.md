@@ -255,17 +255,44 @@ unvalidated estimator.
 
 #### Pilot result: Step 1 is viable
 
-T_2M, 15 windows of 48h at 200 grid points per season (`output/spectra_pilot/`):
+T_2M, 15 windows of 48h per season (`output/spectra_pilot/`). Station points are
+the 145 SwissMetNet locations mapped to REA-L grid points by
+`workflow/scripts/station_grid_map.py`; grid points are a uniform random sample
+of 200, kept as a contrast.
 
-| | winter | summer |
-|---|---|---|
-| 3-6h share of total variance | 1.24% | 0.80% |
-| REA-L / (6h + linear interp) in 3-6h | **5.7x** | **4.4x** |
-| 00 UTC artefact inflation of 3-6h | +6.5% | +1.7% |
-| PSD at 24h | 77.1 | 363.8 |
-| PSD at 6h | 0.538 | 1.156 |
-| PSD at 4h | 0.185 | 0.456 |
-| PSD at 3h | 0.095 | 0.246 |
+| | winter station | summer station | winter grid | summer grid |
+|---|---|---|---|---|
+| 3-6h share of total variance | **1.71%** | **0.89%** | 1.24% | 0.80% |
+| REA-L / (6h + linear interp) in 3-6h | **7.8x** | **5.0x** | 5.7x | 4.4x |
+| 00 UTC artefact inflation of 3-6h | +3.8% | +1.9% | +6.5% | +1.7% |
+| PSD at 6h | 0.690 | 1.058 | 0.538 | 1.156 |
+| PSD at 4h | 0.278 | 0.370 | 0.185 | 0.456 |
+| PSD at 3h | 0.167 | 0.218 | 0.095 | 0.246 |
+
+**Station points are the better sample for this experiment.** In winter they
+carry about 40% more power at 6h and 75% more at 3h than a uniform grid sample,
+because stations sit in valleys and settled terrain where local forcing is
+strong while a uniform sample includes much smooth high terrain. Two
+consequences both favour stations: the headroom over pure interpolation is
+larger (7.8x vs 5.7x in winter), so the diagnostic is more sensitive where we
+intend to use it, and the 00 UTC artefact is smaller (+3.8% vs +6.5%), so the
+contamination caveat shrinks. Use station points as the headline and grid points
+as a check that conclusions do not depend on where one looks.
+
+**These are model grid points, not station observations.** Every source (REA-L,
+Varda, the multistep model) is read at the same 145 grid points, chosen as the
+nearest to the SwissMetNet locations so that station data can be brought in
+later without changing the sample. No observations are involved yet.
+
+Because all sources share the same grid points, representativeness cancels out
+of the model-vs-model comparison. In particular the three summit stations whose
+model cell is far below the real peak (JUN +311m, SAE +319m, TIT +463m, where
+the 1km orography cannot resolve the summit) need no special treatment here.
+They matter only once real station data enters, where a model column is compared
+against an instrument.
+
+The mapping is clean: 145 stations to 145 distinct grid points, no collisions,
+median distance 360m, elevation differences median -2m (IQR -31 to +34m).
 
 - REA-L carries real power at 3-6h in both seasons and the spectrum falls off
   smoothly, with no numerical floor. **Step 1 is falsifiable.**

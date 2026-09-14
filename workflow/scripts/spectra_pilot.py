@@ -31,7 +31,6 @@ from pathlib import Path
 import numpy as np
 import zarr
 from scipy.signal import periodogram
-from scipy.spatial import cKDTree
 
 LOG = logging.getLogger("spectra_pilot")
 
@@ -97,35 +96,6 @@ def self_test() -> None:
           "cycle, and removed by 6-hourly sampling as expected")
 
 
-def station_coords(cache: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """SwissMetNet station abbreviations, latitudes, longitudes.
-
-    Fetched once from the DWH and then cached, so that every later run and every
-    downstream diagnostic uses exactly the same station set and coordinates. A
-    drifting station list would silently change the sample between the truth
-    spectra and the forecast spectra they are compared against.
-
-    The fetch needs DWH credentials (JRETRIEVE_CLIENT_ID and
-    JRETRIEVE_CLIENT_SECRET, in the environment or in .env). Once the cache
-    exists, no credentials are needed.
-    """
-    if cache.exists():
-        d = np.load(cache, allow_pickle=True)
-        LOG.info("using cached station list %s (%d stations)", cache, len(d["abbr"]))
-        return d["abbr"], d["lat"], d["lon"]
-
-    from data_input import jretrieve as jr
-
-    jr.check_prerequisites("prod")
-    meta = jr.fetch_meta(stations={"group": "SwissMetNet"}, params=["tre200s0"])
-    cat = jr.StationCatalog.from_meta(meta)
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    np.savez(cache, abbr=cat.nat_abbr, lat=cat.latitude, lon=cat.longitude,
-             elevation=cat.elevation, name=cat.name, station_id=cat.station_id)
-    LOG.info("fetched and cached %d stations to %s", cat.n, cache)
-    return cat.nat_abbr, cat.latitude, cat.longitude
-
-
 def grid_points(z, n: int, seed: int = 0) -> np.ndarray:
     """Random subsample of REA-L grid-point indices.
 
@@ -160,13 +130,12 @@ def main() -> None:
                     help="48 h windows per season. Each costs a full-field zarr "
                          "decompression per hour, so this is the main cost knob.")
     ap.add_argument("--points", choices=("station", "grid"), default="station",
-                    help="'station' needs DWH credentials; 'grid' is the fallback")
+                    help="'station' uses the 145 SMN grid points; 'grid' is a uniform random sample")
     ap.add_argument("--n-points", type=int, default=200,
                     help="number of grid points when --points grid")
-    ap.add_argument("--stations-cache", type=Path,
-                    default=Path("resources/smn_stations.npz"),
-                    help="cached SwissMetNet station list; fetched from the DWH "
-                         "on first use, then reused without credentials")
+    ap.add_argument("--stations", type=Path,
+                    default=Path("resources/smn_grid_points.csv"),
+                    help="station-to-grid mapping from station_grid_map.py")
     ap.add_argument("--out-dir", type=Path, default=Path("output/spectra_pilot"))
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
@@ -185,17 +154,18 @@ def main() -> None:
     var_idx = list(z.attrs["variables"]).index(args.param)
 
     if args.points == "station":
-        abbr, slat, slon = station_coords(args.stations_cache)
-        LOG.info("matching %d SwissMetNet stations to the REA-L grid", len(abbr))
-        glat, glon = z["latitudes"][:], z["longitudes"][:]
+        # Fixed station-to-grid mapping from workflow/scripts/station_grid_map.py,
+        # so the truth spectra, the forecast spectra and later the station
+        # observations are all evaluated at exactly the same points.
+        if not args.stations.exists():
+            raise SystemExit(f"{args.stations} missing; run "
+                             "workflow/scripts/station_grid_map.py first")
+        import pandas as pd
 
-        def xyz(lat, lon):
-            la, lo = np.radians(lat), np.radians(lon)
-            return np.stack(
-                [np.cos(la) * np.cos(lo), np.cos(la) * np.sin(lo), np.sin(la)], -1
-            )
-
-        _, pt = cKDTree(xyz(glat, glon)).query(xyz(slat, slon))
+        d = pd.read_csv(args.stations)
+        abbr, pt = d["nat_abbr"].to_numpy(), d["grid_index"].to_numpy()
+        LOG.info("%d SwissMetNet station points (median %.0f m from grid point)",
+                 len(abbr), d["distance_m"].median())
     else:
         pt = grid_points(z, args.n_points)
         abbr = np.array([f"grid{i}" for i in pt])
