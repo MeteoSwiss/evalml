@@ -17,6 +17,8 @@ _dev
 output
 _sandbox/
 experiment_report.html
+.local
+.claude
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/

@@ -268,6 +268,151 @@ def sandbox(
     )
 
 
+def _store_options(func):
+    """Options shared by every experiment-store command, so tests (and the wary) can run
+    against temp directories instead of the shared stores."""
+    from evalml import store as experiment_store
+
+    func = click.option(
+        "--store",
+        "store_dir",
+        type=click.Path(path_type=Path),
+        default=experiment_store.STORE,
+        show_default=True,
+        help="Experiment store directory.",
+    )(func)
+    func = click.option(
+        "--models-store",
+        type=click.Path(path_type=Path),
+        default=experiment_store.MODELS_STORE,
+        show_default=True,
+        help="Model store directory (devml's).",
+    )(func)
+    return func
+
+
+@cli.command(help="Register a finished experiment's results into the experiment store.")
+@click.argument(
+    "results_dir", type=click.Path(exists=True, file_okay=False, path_type=Path)
+)
+@click.argument("name", required=False, default=None)
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="The config YAML that produced the run, for results that do not contain config.yaml.",
+)
+@click.option(
+    "--dry-run",
+    "-n",
+    is_flag=True,
+    help="Run the checks and print the plan, copy nothing.",
+)
+@click.option(
+    "--no-publish", is_flag=True, help="Do not update the store's Confluence page."
+)
+@_store_options
+def register(
+    results_dir, name, config_path, dry_run, no_publish, store_dir, models_store
+):
+    from evalml import registration
+
+    print(
+        registration.register_results(
+            results_dir,
+            name=name,
+            config_path=config_path,
+            store_dir=store_dir,
+            models_store=models_store,
+            dry_run=dry_run,
+            no_publish=no_publish,
+        )
+    )
+
+
+@cli.command(help="Take a registered experiment back out of the experiment store.")
+@click.argument("name")
+@click.option(
+    "--reason", default="", help="Why, recorded in NOTE.txt and in the index."
+)
+@click.option("--dry-run", "-n", is_flag=True, help="Print the plan, then stop.")
+@click.option("--yes", "-y", is_flag=True, help="Skip the confirmation prompt.")
+@click.option(
+    "--keep-results",
+    is_flag=True,
+    help="Tombstone the directory but keep its contents.",
+)
+@click.option(
+    "--no-publish", is_flag=True, help="Do not update the store's Confluence page."
+)
+@_store_options
+def unregister(
+    name, reason, dry_run, yes, keep_results, no_publish, store_dir, models_store
+):
+    from evalml import store as experiment_store
+
+    experiment_store.cmd_unregister(
+        name,
+        store=store_dir,
+        models_store=models_store,
+        reason=reason,
+        dry_run=dry_run,
+        yes=yes,
+        keep_results=keep_results,
+        no_publish=no_publish,
+    )
+
+
+@cli.command("list", help="List the experiments registered in the experiment store.")
+@click.option("--json", "as_json", is_flag=True, help="Print the inventory as JSON.")
+@click.option(
+    "--rebuild",
+    is_flag=True,
+    help="Rewrite the index from the experiment directories and repair missing symlinks.",
+)
+@click.option("--columns", default=None, help="Comma-separated columns to show.")
+@_store_options
+def list_experiments(as_json, rebuild, columns, store_dir, models_store):
+    from evalml import store as experiment_store
+
+    experiment_store.cmd_list(
+        store=store_dir,
+        models_store=models_store,
+        as_json=as_json,
+        rebuild_index=rebuild,
+        columns=columns or experiment_store.DEFAULT_COLUMNS,
+    )
+
+
+@cli.command(help="Publish the experiment store's index to its Confluence page.")
+@click.option(
+    "--page", default=None, help="Page id or URL (default: the Experiments page)."
+)
+@click.option(
+    "--email", default="", help="The Atlassian account the API token belongs to."
+)
+@click.option(
+    "--dry-run", "-n", is_flag=True, help="Print what would be published, send nothing."
+)
+@click.option(
+    "--store",
+    "store_dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Experiment store directory (default: the shared store).",
+)
+def publish(page, email, dry_run, store_dir):
+    from evalml import store as experiment_store
+
+    experiment_store.cmd_publish(
+        store=store_dir if store_dir is not None else experiment_store.STORE,
+        page=page or experiment_store.EXPERIMENTS_PAGE,
+        email=email,
+        dry_run=dry_run,
+    )
+
+
 @cli.command(help="Make a specific file from a workflow defined in the YAML file.")
 @click.argument(
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)

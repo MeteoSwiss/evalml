@@ -77,4 +77,4 @@ output:
                 "^w_(\\d+)$": {"param": 135, "shortName": "w"}
                 "^z_(\\d+)$": {"param": 129, "shortName": "z"}
 
-patch_metadata: resources/sgm-ich1-patch_metadata.yaml
+patch_metadata: resources/sgm-multidataset-ich1-oper-patch.yaml
