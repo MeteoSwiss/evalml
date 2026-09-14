@@ -14,10 +14,12 @@ _dev
 .vscode
 .idea
 .snakemake
-output
+output/*
 
 !output/join_detect/
 !output/spectra_pilot/
+!output/station_selection/
+output/station_selection/*
 !output/station_selection/station_sample_abbr.txt
 !output/station_selection/station_sample.csv
 
