@@ -1,0 +1,26 @@
+Hey Lous, this is the evalml config to compare Varda's stage C (the model trained without rollout and on REA-L-CH1 only) against a multistep model trained in the same way (no rollout, REA-L-CH1 only)multistep-stage-C-analysis.yaml
+
+For the multistep you need the following inference config  and patch_metadata config:
+multistep inference config:sgm-multidataset-forecaster-global-ich1-1h(2).yaml
+
+patch_metadata config: sgm-multidataset-ich1-patch-1h(2).yaml
+
+For the Varda forecaster model (stage C!) you need the following inference config  and patch_metadata config:
+(the only difference to what you find in evalml is really just to use REA-L-CH1 instead of operational analyses as input data)
+
+For the Varda temporal downscaler, you can use the config you find in evalml (it does not specify an input dataset, it just reads the data produced by the forecaster)
+
+WIth this you can do a comparison at this highlighted point:
+
+I still need to ask where the rollout training. I am back in a week and I will let you know. I think in the meantime the non-rollout models are enough to start an analysis.
+
+To summarize:
+
+Varda  stage C:
+
+Forecaster: /scratch/mch/apennino/output/checkpoint/a69e95db4b494679ab20440f8540a835/inference-last.ckpt
+Temporal downscaler: `https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3` 
+Multistep model:
+
+ /scratch/mch/miccatta/anemoi-outputs/checkpoint_stage_C_multistep_in7_out6_BALFRIN/0eb1b8759c3c4ad188bc1e7cf8d0f1ab/inference-last.ckpt (standalone model)
+

@@ -1,0 +1,101 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Single-init smoke test for the multistep vs Varda stage C comparison.
+
+  Purpose is to falsify two assumptions before committing 82 inits x 2 models:
+
+  1. That the global initial-condition datasets ending 2024-12-31 do not block a
+     late-December init from completing all 120 h. The models' forcings should be
+     computed from the valid time rather than read from the dataset, so only the
+     init timestamp needs global coverage. 2024-12-30T12 is the latest init in
+     the winter sample and therefore the worst case.
+  2. That REA-L-CH1 has usable 2-6 h spectral power at all. If it does not, Step
+     1 of the experiment plan is unfalsifiable. This run supplies the data.
+
+  Baselines and showcases are dropped: neither is needed to answer the above.
+
+config_label: multistep-vs-varda-stage-c-testinit
+
+dates:
+  - 2024-12-30T12:00
+
+runs:
+  - temporal_downscaler:
+      checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
+      label: Varda-single-stage-C
+      steps: 0/120/1
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
+      extra_requirements:
+        - anemoi-datasets==0.5.35
+        - anemoi-inference==0.11.1
+        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@b4835d76346e1e5ec0181884520da00e317fbfbc
+      forecaster:
+        checkpoint: /scratch/mch/apennino/output/checkpoint/a69e95db4b494679ab20440f8540a835/inference-last.ckpt
+        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1.yaml
+        steps: 0/120/6
+        extra_requirements:
+          - earthkit-utils<0.2.0
+          - earthkit-data<0.19.0
+          - anemoi-inference==0.11.1
+
+  - forecaster:
+      checkpoint: /scratch/mch/miccatta/anemoi-outputs/checkpoint_stage_C_multistep_in7_out6_BALFRIN/0eb1b8759c3c4ad188bc1e7cf8d0f1ab/inference-last.ckpt
+      label: Multistep-stage-C
+      steps: 0/120/1
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-1h.yaml
+      extra_requirements:
+        - earthkit-utils<0.2.0
+        - earthkit-data<0.19.0
+        - anemoi-inference==0.11.1
+
+truth:
+  label: REA-L
+  root: /store_new/mch/msopr/ml/datasets/mch-realch1-fdb-1km-2005-2025-1h-pl13-v1.0.zarr
+
+experiment:
+  params:
+    - T_2M
+    - TD_2M
+    - U_10M
+    - V_10M
+    - TOT_PREC1
+  stratification:
+    regions:
+      - icon
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    T_2M:
+      lt: [273.15]
+  dashboard:
+    stratification: []
+  scorecards:
+    enabled: false
+  scoremaps:
+    enabled: false
+
+showcase:
+  params:
+    - T_2M
+  meteograms:
+    enabled: false
+    stations: [JUN]
+  animations:
+    enabled: false
+    domains:
+      - icon-ch
+
+locations:
+  output_root: output/testinit/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+    slurm_account: s83
+  jobs: 50

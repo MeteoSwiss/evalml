@@ -1,0 +1,179 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Multistep vs Varda-single stage C, summer 2024 (JJA).
+
+  JJA 2024 is contiguous and needs no special handling: it sits after Varda's
+  training cutoff and inside the global initial-condition datasets, so a plain
+  start/end/frequency range works. The winter config needs an explicit list
+  instead, because its sample is Jan + Feb + Dec 2024 rather than a contiguous
+  season. Both seasons sit on the same 54 h grid, so init hours stay balanced
+  (11/10/10/10 for 00/06/12/18 UTC here).
+
+  Caveat specific to summer: much of the sub-6 h variance here is convective,
+  which both MSE-trained models flatten regardless of temporal resolution. A
+  spectral deficit found in JJA is therefore harder to attribute to the 6-hourly
+  design than the same deficit in winter. Treat winter as the primary test and
+  this as the stress test, and use the convective stratification (CAPE_ML / LPI
+  from REA-L) rather than pooling all days.
+
+config_label: multistep-vs-varda-stage-c-summer2024
+
+dates:
+  # Equivalent to the explicit list this replaced: identical 41 inits.
+  # Start is 2024-06-02T00, the first JJA member of the 54 h grid anchored at
+  # 2024-01-01T00 that the winter config also uses, so the two seasons stay on
+  # the same grid and the init hours stay balanced (11/10/10/10).
+  start: 2024-06-02T00:00
+  end: 2024-08-31T00:00
+  frequency: 54h # must be a multiple of 6h (Varda's forecaster stride) but not of 24h, or the init hour never changes
+
+runs:
+  - temporal_downscaler:
+      checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3 # This is Varda's downscaler. It's trained on REA-L-CH1 but we also use it on analyses (stage E)
+      label: Varda-single-stage-C
+      steps: 0/120/1
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
+      extra_requirements:
+        - anemoi-datasets==0.5.35
+        # NOTE pinned: later versions raise KeyError in earthkit_state.wrap_state
+        # because the state carries GRIB names (U_10M) while the checkpoint's
+        # typed_variables are keyed by anemoi names (10u)
+        - anemoi-inference==0.11.1
+        # NOTE this pins the merge commit that introduced 'copy-prognostic-from-forecaster',
+        # which the inference config above uses at the forecaster's overlap steps
+        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@b4835d76346e1e5ec0181884520da00e317fbfbc
+      forecaster:
+        # Varda Stage C (trained on analyses, no rollout training). Training ends
+        # 2023, validation and test both start 2024, so the whole sample below is
+        # out of training but was seen for checkpoint selection. See exp_plan_01.md.
+        checkpoint: /scratch/mch/apennino/output/checkpoint/a69e95db4b494679ab20440f8540a835/inference-last.ckpt
+        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1.yaml
+        # The 6-hourly forecaster fields are written to {init}/forecaster/ and are
+        # kept: interpolating them to hourly gives the "plain interpolation"
+        # reference the spectral diagnostic compares the downscaler against.
+        steps: 0/120/6
+        # NOTE pinned: same class of bug as the downscaler pin above, on the
+        # forecaster side. Unpinned gives anemoi-inference 0.12.0 + earthkit
+        # 0.20/0.3, and writing the initial state dies with KeyError 'FI_100':
+        # the state carries mars-derived names (FI_100) while typed_variables
+        # are keyed by the checkpoint's names (z_100). These are the pins every
+        # tracked forecaster config in config/ uses.
+        extra_requirements:
+          - earthkit-utils<0.2.0
+          - earthkit-data<0.19.0
+          - anemoi-inference==0.11.1
+
+  # MULTISTEP model. Trained without rollout on REA-L-CH1 (stage C, comparable
+  # with Varda's stage C). Training 1985-2020, validation 2021, test 2022 onward,
+  # so this sample is pure test data for this model. 7 h history vs Varda's 12 h.
+  - forecaster:
+      checkpoint: /scratch/mch/miccatta/anemoi-outputs/checkpoint_stage_C_multistep_in7_out6_BALFRIN/0eb1b8759c3c4ad188bc1e7cf8d0f1ab/inference-last.ckpt
+      label: Multistep-stage-C
+      steps: 0/120/1
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-1h.yaml
+      # NOTE pinned: see the forecaster pin above (KeyError 'FI_100').
+      extra_requirements:
+        - earthkit-utils<0.2.0
+        - earthkit-data<0.19.0
+        - anemoi-inference==0.11.1
+
+  # Reference lines only, not the comparison of interest. Note both are scored
+  # against REA-L-CH1, which shares ICON-CH1's model climate, so ICON-CH1-CTRL
+  # is flattered here. Do not read a ranking into it.
+  - baseline:
+      label: ICON-CH2-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/1
+  - baseline:
+      label: ICON-CH1-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/33/1
+
+truth:
+  label: REA-L
+  root: /store_new/mch/msopr/ml/datasets/mch-realch1-fdb-1km-2005-2025-1h-pl13-v1.0.zarr
+
+experiment:
+  params:
+    - T_2M
+    - TD_2M
+    - U_10M
+    - V_10M
+    - TOT_PREC1
+  stratification:
+    regions:
+      - icon
+      # - berge
+      # - mittelland
+      # - alpennordseite
+      # - alpensuedseite
+      # - jura
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    TOT_PREC1:
+      gt: [0.0, 0.1, 1, 5, 10]
+    U_10M:
+      gt: [2.5, 5.0, 10.0]
+    V_10M:
+      gt: [2.5, 5.0, 10.0]
+    T_2M:
+      lt: [273.15]
+      gt: [288.15, 298.15]
+  dashboard:
+    stratification:
+      # 'season' is pointless here: this config is a single season. init_hour is
+      # what lets time-of-day effects be separated from lead-time effects.
+      - init_hour
+      # - region
+  scorecards:
+    enabled: false
+    sections:
+      short_range:
+        baseline: ICON-CH1-CTRL
+        lead_times: "6/33/6"
+        stratification: region
+        variables:
+          - "U_10M:RMSE,R2,ETS"
+          - "V_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2,ETS"
+          - "TOT_PREC:RMSE,R2,ETS"
+      medium_range:
+        baseline: ICON-CH2-CTRL
+        lead_times: "24/120/24"
+        stratification: region
+        variables:
+          - "U_10M:RMSE,R2,ETS"
+          - "V_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2,ETS"
+          - "TOT_PREC:RMSE,R2,ETS"
+  scoremaps:
+    enabled: false
+
+showcase:
+  params:
+    - T_2M
+    - SP_10M
+    - TOT_PREC # TOT_PREC1 is not supported for showcases yet
+  meteograms:
+    enabled: false
+    stations: [JUN]
+  animations:
+    enabled: false
+    domains:
+      - icon-ch
+
+locations:
+  output_root: output/summer2024/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+    slurm_account: s83
+  jobs: 50
