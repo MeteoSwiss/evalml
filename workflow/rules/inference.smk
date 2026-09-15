@@ -127,6 +127,15 @@ rule inference_prepare_env:
                     git@github.com:meteoswiss/eccodes-cosmo-mars.git \
                     "$VENV/data/share/eccodes-cosmo-mars"
                 echo "[$(date)] Cloned eccodes-cosmo-mars definitions"
+
+                # metkitlib (pulled in by pyfdb) ships its own language.yaml, used to
+                # validate fdb.retrieve() requests. Our custom `model` values (added
+                # purely for archival, via eccodes-cosmo-mars's marsModel concepts)
+                # were never registered there, so retrieve() rejects them even though
+                # they're valid archived keys -- fdb.list() has no such validation, so
+                # this only bites downstream reads, not archival or completeness checks.
+                echo "[$(date)] Patching metkitlib's language.yaml for custom FDB model names..."
+                python resources/fdb/patch_metkit_language.py "$VENV"
             fi
 
             echo "[$(date)] Compiling Python bytecode..."
@@ -280,9 +289,14 @@ checkpoint inference_check_fdb:
                 fi
                 # Mount the venv (pyfdb, python) and the FDB uenv (native libs, config,
                 # at its required /user-environment path) side by side in one call.
+                # squashfs-mount needs the mountpoint dir to already exist -- /user-environment
+                # is a pre-provisioned system directory, but there's no such slot for a second
+                # image, so the venv gets a job-local directory we create ourselves.
+                VENV_MOUNT=$(mktemp -d)
+                trap "rmdir '$VENV_MOUNT'" EXIT
                 FDB_SQUASHFS=$(uenv image inspect --format='{{sqfs}}' {params.fdb_uenv})
-                squashfs-mount {params.image_path}:/venv-environment "$FDB_SQUASHFS:/user-environment" -- bash -c '
-                    source /venv-environment/bin/activate
+                squashfs-mount {params.image_path}:$VENV_MOUNT "$FDB_SQUASHFS:/user-environment" -- bash -c '
+                    source '"$VENV_MOUNT"'/bin/activate
                     export LD_LIBRARY_PATH=/user-environment/env/{params.fdb_view}/lib64:/user-environment/env/{params.fdb_view}/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}
                     python {input.script} '"$GLOBAL_ARG"' \
                         --fdb-root {params.fdb_root_local} \
@@ -298,14 +312,28 @@ checkpoint inference_check_fdb:
         """
 
 
+def _resolve_fdb_root_for_run(run_id):
+    """Which FDB root this run's own inference_execute would write fresh output
+    into: the global one if write_to_global_fdb is set (and configured),
+    otherwise the local per-checkpoint root. Same logic as inference_execute's
+    own `fdb_root` param -- factored out so the read side can agree with it."""
+    global_root, local_root = _get_fdb_roots(run_id)
+    env_id = RUN_CONFIGS[run_id]["env_id"]
+    if get_resource_by_env(env_id, "write_to_global_fdb", False) and global_root:
+        return global_root
+    return local_root
+
+
 def _get_inference_status(wc):
     """Return (okfile_path, fdb_root_or_None) for (run_id, init_time).
 
-    'hit'  -> data already complete in FDB; okfile is the check's status file
-              (inference_execute is never requested), fdb_root points at the
-              root holding it.
-    'miss' or FDB not configured -> falls through to inference_execute's okfile,
-              fdb_root is None (data will be local grib / freshly written FDB).
+    fdb_root is non-None whenever this run's own config writes to FDB at all
+    (its output.tee has fdb: targets) -- whether the data was already there
+    (a check 'hit') or is about to be freshly written by inference_execute
+    (a 'miss', or FDB-check not configured but still an FDB-writing run).
+    It's None only when this run's config has no FDB targets at all (plain
+    local-grib output), in which case downstream code reads local grib as
+    before.
     """
     env_id = RUN_CONFIGS[wc.run_id]["env_id"]
     if _get_fdb_uenv_for_env(env_id)[0]:
@@ -315,7 +343,11 @@ def _get_inference_status(wc):
         status, _, root = Path(status_file).read_text().strip().partition("\t")
         if status == "hit":
             return str(status_file), root
-    return str(OUT_ROOT / f"logs/inference_execute/{wc.run_id}-{wc.init_time}.ok"), None
+    okfile = str(OUT_ROOT / f"logs/inference_execute/{wc.run_id}-{wc.init_time}.ok")
+    fdb_root = (
+        _resolve_fdb_root_for_run(wc.run_id) if _count_fdb_blocks(wc.run_id) > 0 else None
+    )
+    return okfile, fdb_root
 
 
 def _get_inference_okfile(wc):
@@ -454,12 +486,7 @@ rule inference_execute:
         fdb_configured=lambda wc: bool(
             _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
         ),
-        fdb_root=lambda wc: (
-            _get_fdb_roots(wc.run_id)[0]
-            if get_resource(wc, "write_to_global_fdb", False)
-            and _get_fdb_roots(wc.run_id)[0]
-            else _get_fdb_roots(wc.run_id)[1]
-        ),
+        fdb_root=lambda wc: _resolve_fdb_root_for_run(wc.run_id),
         fdb_schema=str(Path("resources/fdb/realtime-varda.schema").resolve()),
     # fmt: off
     shell:
@@ -524,28 +551,42 @@ FDBEOF
                     CMD_ARGS+=(runner.parallel.cluster=slurm)
                 fi
 
-                {params.srun_prefix} srun \
-                    --unbuffered \
-                    --partition={resources.slurm_partition} \
-                    --cpus-per-task={resources.cpus_per_task} \
-                    --mem-per-cpu={resources.mem_mb_per_cpu} \
-                    --time={resources.runtime} \
-                    --gres={resources.gres} \
-                    --ntasks={resources.ntasks} \
-                    anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+                anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
             }}
             export -f _run_inference
 
-            # Mount the venv and (if configured) the FDB uenv side by side in one
-            # call: the FDB uenv's absolute internal symlinks require it to be at
-            # /user-environment, so the venv takes a different mountpoint instead.
+            # squashfs-mount needs the mountpoint dir to already exist, and -- since srun
+            # may dispatch to a different physical node -- it must be on the shared
+            # filesystem, not /tmp (node-local). /user-environment is a pre-provisioned
+            # system directory present on every node for the FDB uenv's own absolute
+            # internal symlinks; the venv gets a job-local dir here instead.
+            #
+            # srun must be the OUTER call, dispatching a (dual) squashfs-mount as its
+            # task, not the other way around: wrapping srun inside a dual-image
+            # squashfs-mount breaks Slurm's plugin initialization on this system
+            # ("Plugin initialization failed") -- verified empirically. A single-image
+            # mount around srun is fine; two images at once are not.
+            VENV_MOUNT="{params.workdir}/.venv-mount"
+            mkdir -p "$VENV_MOUNT"
+            trap "rmdir '$VENV_MOUNT'" EXIT
+
+            MOUNT_ARGS=("{params.env_path}:$VENV_MOUNT")
+            INNER_CMD="_run_inference $VENV_MOUNT"
             if [ "{params.fdb_configured}" = "True" ]; then
                 FDB_SQUASHFS=$(uenv image inspect --format='{{sqfs}}' {params.fdb_uenv})
-                squashfs-mount {params.env_path}:/venv-environment "$FDB_SQUASHFS:/user-environment" -- bash -c '_run_inference /venv-environment /user-environment'
-            else
-                squashfs-mount {params.env_path}:/venv-environment -- bash -c '_run_inference /venv-environment'
+                MOUNT_ARGS+=("$FDB_SQUASHFS:/user-environment")
+                INNER_CMD="$INNER_CMD /user-environment"
             fi
-        ) >{log} 2>&1
-        touch {output.okfile}
+
+            {params.srun_prefix} srun \
+                --unbuffered \
+                --partition={resources.slurm_partition} \
+                --cpus-per-task={resources.cpus_per_task} \
+                --mem-per-cpu={resources.mem_mb_per_cpu} \
+                --time={resources.runtime} \
+                --gres={resources.gres} \
+                --ntasks={resources.ntasks} \
+                squashfs-mount "${{MOUNT_ARGS[@]}}" -- bash -c "$INNER_CMD"
+        ) >{log} 2>&1 && touch {output.okfile}
         """
 # fmt: on

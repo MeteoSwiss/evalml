@@ -1,6 +1,8 @@
+import io
 import json
 import logging
 import re
+import tempfile
 import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -39,9 +41,26 @@ _IFS_TO_ICON = {
 }
 _ICON_TO_IFS = {v: k for k, v in _IFS_TO_ICON.items()}
 
+# FDB schema shared by archival (workflow/rules/inference.smk) and reads (this module).
+# Root marker prefix: load_forecast_data(root=...) treats an "fdb:<path>" string the
+# same way it already treats "jretrievedwh:..." for truth data -- a marker selecting a
+# non-filesystem source, here an FDB root, rather than a real local directory.
+_FDB_SCHEMA = Path(__file__).resolve().parents[2] / "resources/fdb/realtime-varda.schema"
+_FDB_ROOT_MARKER = "fdb:"
+# VARDA-SINGLE archives two grids under distinct `model` values: "varda-single"
+# (ICON-origin, regional/LAM domain) and "varda-single-g" (IFS-origin, global
+# domain) -- they have different point counts and can't be merged into one
+# dataset via xarray. _collect_ml_grib_files' local-file equivalent only ever
+# reads the regional grid (its "20*.grib" glob excludes the "ifs-"-prefixed
+# global files), so load_forecast_data's FDB path filters to the same model for
+# parity. plotting.compat.load_state_from_fdb uses both (see _FDB_GLOBAL_MODEL),
+# mirroring load_state_from_grib's local ifs-*.grib companion-file merge, since
+# that one works with flat point lists rather than an aligned xarray grid.
+_FDB_MODEL = "varda-single"
+_FDB_GLOBAL_MODEL = "varda-single-g"
+
 XARRAY_ENGINE_PROFILE = {
     "ensure_dims": ["z", "number", "step", "forecast_reference_time"],
-    "add_valid_time_coord": True,
     "global_attrs": [{"institution": "MeteoSwiss"}, {"Conventions": "CF-1.8"}],
 }
 
@@ -488,25 +507,28 @@ def load_from_grib_file(file: str | list[str], sel_kwargs):
 
 def variable_name_profile(
     level_type: Literal[
-        "height_above_ground_level",
-        "mean_sea",
+        "heightAboveGround",
+        "meanSea",
         "surface",
-        "pressure",
-        "entire_atmosphere",
+        "isobaricInhPa",
+        "atmosphere",
     ],
 ) -> dict[str, Any]:
-    """Resolve variable name profile based on the level type."""
-    if level_type in [
-        "height_above_ground_level",
-        "mean_sea",
-        "surface",
-        "entire_atmosphere",
-    ]:
+    """Resolve variable name profile based on the raw GRIB `typeOfLevel` value.
+
+    Note: earlier versions of this profile used earthkit-data's composite
+    "vertical.level_type"/"parameter.variable" metadata keys (semantic names
+    like "pressure", template "{parameter.variable}_{vertical.level}"). Those
+    keys don't resolve at all with the currently pinned earthkit-data (they
+    raise KeyError / silently match nothing) -- this now uses the raw,
+    always-available `typeOfLevel`/`shortName`/`levelist` GRIB keys instead.
+    """
+    if level_type in ["heightAboveGround", "meanSea", "surface", "atmosphere"]:
         return {}
-    elif level_type == "pressure":
+    elif level_type == "isobaricInhPa":
         return {
             "variable_key": "p_l",
-            "remapping": {"p_l": "{parameter.variable}_{vertical.level}"},
+            "remapping": {"p_l": "{shortName}_{levelist}"},
         }
     else:
         raise ValueError(f"Unsupported level type: {level_type}")
@@ -516,13 +538,19 @@ def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
     ds = xr.Dataset()
     if len(fieldlist) == 0:
         return ds
-    for level_type_group in fieldlist.group_by("vertical.level_type"):
-        # earthkit-data should return the group key...TODO: open issue?
-        level_type = level_type_group.get("vertical.level_type")[0]
+    for level_type_group in fieldlist.group_by("typeOfLevel"):
+        level_type = level_type_group[0].metadata("typeOfLevel")
         profile = XARRAY_ENGINE_PROFILE | variable_name_profile(level_type)
         _ds = level_type_group.to_xarray(**profile, allow_holes=True)
+        # add_valid_time_coord=True (earthkit's own convenience for this) isn't
+        # supported together with allow_holes=True on the currently pinned
+        # earthkit-data (raises NotImplementedError) -- compute it by hand instead.
+        if "forecast_reference_time" in _ds.coords and "step" in _ds.coords:
+            _ds = _ds.assign_coords(
+                valid_time=_ds["forecast_reference_time"] + _ds["step"]
+            )
         ds = ds.merge(
-            _ds, compat="no_conflicts", combine_attrs="no_conflicts", join="outer"
+            _ds, compat="no_conflicts", combine_attrs="drop_conflicts", join="outer"
         )
     return ds
 
@@ -621,15 +649,146 @@ def _load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Da
         {p for p in params} | {_ICON_TO_IFS[p] for p in params if p in _ICON_TO_IFS}
     )
     ds = load_from_grib_file(files, {"parameter.variable": params_extended})
+    return _rename_ifs_to_icon(ds)
 
-    # Rename any IFS shortNames back to ICON names
+
+def _rename_ifs_to_icon(ds: xr.Dataset) -> xr.Dataset:
+    """Rename any IFS shortNames present in `ds` back to their ICON equivalents."""
     ifs_rename = {
         ifs: icon for ifs, icon in _IFS_TO_ICON.items() if ifs in ds.data_vars
     }
-    if ifs_rename:
-        ds = ds.rename(ifs_rename)
+    return ds.rename(ifs_rename) if ifs_rename else ds
 
-    return ds
+
+def fdb_has_data(fdb_root: str, reftime: datetime, model: str = _FDB_MODEL) -> bool:
+    """Lightweight existence check: does `fdb_root` have any entry for this
+    date/time under `model`?
+
+    Doesn't check completeness (see workflow/scripts/inference_check_fdb.py's
+    block/step/param accounting for that) -- for callers where completeness was
+    already established upstream (e.g. by a Snakemake dependency on this
+    reftime's inference_check_fdb/inference_execute okfile before this runs),
+    a bare presence check is enough to decide whether to route a reftime to
+    the FDB path at all.
+    """
+    import pyfdb
+
+    config = {
+        "type": "local",
+        "engine": "toc",
+        "schema": str(_FDB_SCHEMA.resolve()),
+        "spaces": [{"handler": "Default", "roots": [{"path": fdb_root}]}],
+    }
+    with pyfdb.FDB(config) as fdb:
+        entries = list(
+            fdb.list(
+                {
+                    "date": reftime.strftime("%Y%m%d"),
+                    "time": reftime.strftime("%H%M"),
+                    "model": model,
+                },
+                level=1,
+            )
+        )
+    return bool(entries)
+
+
+def _fetch_fdb_grib_bytes(
+    fdb_root: str, reftime: datetime, steps: list[int], model: str | None = None
+) -> bytes:
+    """Retrieve raw GRIB bytes from an FDB store for one date/time and lead times.
+
+    `fdb.retrieve()` requires a single value per request for whatever keys
+    identify a distinct *block* (class/stream/type/expver/model/levtype) --
+    unlike `fdb.list()`, which can wildcard across them -- so this lists first
+    to discover the blocks actually archived for this date/time/steps (e.g. one
+    per `output.tee` `fdb:` target), then issues one `retrieve()` per block and
+    concatenates their bytes (concatenated GRIB messages are themselves a valid
+    GRIB stream, readable as one file).
+
+    `model` restricts discovery to that exact value (VARDA-SINGLE archives
+    multiple grids under distinct model values, see `_FDB_MODEL`/
+    `_FDB_GLOBAL_MODEL`); pass `None` to include every archived model instead.
+    Returns `b""` if nothing matches -- callers decide whether that's an error.
+    """
+    import pyfdb
+
+    date = reftime.strftime("%Y%m%d")
+    time_ = reftime.strftime("%H%M")
+    config = {
+        "type": "local",
+        "engine": "toc",
+        "schema": str(_FDB_SCHEMA.resolve()),
+        "spaces": [{"handler": "Default", "roots": [{"path": fdb_root}]}],
+    }
+    # Keys identifying a distinct archived block; retrieve() needs a single value
+    # for each of these (list() can wildcard across them, retrieve() can't).
+    block_keys = ("class", "stream", "type", "expver", "model", "levtype")
+    list_request = {"date": date, "time": time_, "step": [str(s) for s in steps]}
+    if model is not None:
+        list_request["model"] = model
+
+    with pyfdb.FDB(config) as fdb:
+        entries = list(fdb.list(list_request, level=3))
+        if not entries:
+            return b""
+
+        blocks: dict[tuple, dict[str, set]] = {}
+        for entry in entries:
+            key = entry.combined_key()
+            block_key = tuple(key[bkey] for bkey in block_keys)
+            dims = blocks.setdefault(block_key, {})
+            for k, v in key.items():
+                if v not in (None, "") and k not in block_keys:
+                    dims.setdefault(k, set()).add(v)
+
+        buf = io.BytesIO()
+        for block_key, dims in blocks.items():
+            request = dict(zip(block_keys, block_key))
+            request.update({k: sorted(v) for k, v in dims.items()})
+            handle = fdb.retrieve(request)
+            handle.open()
+            buf.write(handle.read())
+            handle.close()
+        return buf.getvalue()
+
+
+def _load_forecast_data_from_fdb(
+    fdb_root: str, reftime: datetime, steps: list[int], params: list[str]
+) -> xr.Dataset:
+    """Load forecast data directly from an FDB store (no local GRIB files).
+
+    External callers should use :func:`load_forecast_data` (root prefixed with
+    ``"fdb:"``), which handles param expansion, step expansion, IC synthesis,
+    and disaggregation, same as the GRIB-file path. Restricted to `_FDB_MODEL`
+    (the regional grid) for parity with `_collect_ml_grib_files`'s local-file
+    equivalent -- see the comment on `_FDB_MODEL`.
+
+    The retrieved bytes are written to a temp GRIB file and reopened via the
+    existing local-file path (:func:`load_from_grib_file`) rather than decoded
+    in memory: earthkit-data's own `"fdb"` source has a bug (it never opens the
+    `pyfdb` `DataHandle` before reading -- raises `IOProblemError`), and
+    fieldlists built via `.sel()` / `FieldList.from_fields()` don't behave like
+    file-backed ones for metadata batch access. Writing to disk and reopening
+    as a genuine file sidesteps both and reuses the exact same, already-tested
+    GRIB-loading path used for local files.
+    """
+    data = _fetch_fdb_grib_bytes(fdb_root, reftime, steps, model=_FDB_MODEL)
+    if not data:
+        raise FileNotFoundError(
+            f"No FDB data found for date={reftime:%Y%m%d} time={reftime:%H%M} "
+            f"model={_FDB_MODEL} in {fdb_root}"
+        )
+
+    with tempfile.NamedTemporaryFile(suffix=".grib") as tmp:
+        tmp.write(data)
+        tmp.flush()
+        params_extended = list(
+            {p for p in params} | {_ICON_TO_IFS[p] for p in params if p in _ICON_TO_IFS}
+        )
+        ds = load_from_grib_file(tmp.name, {"parameter.variable": params_extended})
+
+    return _rename_ifs_to_icon(ds)
 
 
 def _jretrieve_df_to_xarray(df, short_names, catalog) -> xr.Dataset:
@@ -1339,14 +1498,35 @@ def load_forecast_data(
     - Plain ``TOT_PREC`` is returned as cumulative-from-start without disaggregation
 
     Routing (in order):
-    1. ``*.grib`` files present in *root* → :func:`_load_forecast_data_from_grib`
+    1. ``root`` starts with ``"fdb:"`` → :func:`_load_forecast_data_from_fdb`
+       (inference output archived directly to FDB, no local GRIB at all)
+    2. ``*.grib`` files present in *root* → :func:`_load_forecast_data_from_grib`
        (ML inference output)
-    2. ``INCA`` in path parts → :func:`_load_INCA_baseline_from_netcdf`
-    3. Otherwise → ICON operational archive (via :func:`_load_icon_baseline_from_grib`)
+    3. ``INCA`` in path parts → :func:`_load_INCA_baseline_from_netcdf`
+    4. Otherwise → ICON operational archive (via :func:`_load_icon_baseline_from_grib`)
     """
-    root = Path(root)
     load_params = get_base_params(params)
     load_steps = get_steps(steps, params)
+    if str(root).startswith(_FDB_ROOT_MARKER):
+        LOG.info("Loading forecasts from FDB...")
+        fdb_root = str(root)[len(_FDB_ROOT_MARKER) :]
+        ds = _load_forecast_data_from_fdb(fdb_root, reftime, load_steps, load_params)
+        # Try to derive elevation from surface geopotential (FIS/z at step 0)
+        # before falling back to ICON grid constants lookup.
+        try:
+            fis_ds = _load_forecast_data_from_fdb(fdb_root, reftime, [0], ["FIS"])
+        except FileNotFoundError:
+            fis_ds = None
+        if fis_ds is not None and "FIS" in fis_ds:
+            elevation = ekdv.geopotential_height_from_geopotential(
+                fis_ds["FIS"].isel(step=0, drop=True).squeeze(drop=True)
+            )
+            ds = ds.assign_coords(elevation=elevation)
+        if "elevation" not in ds.coords:
+            ds = _try_assign_elevation(ds)
+        return _disaggregated_and_derived_params(ds, steps, params)
+
+    root = Path(root)
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
         ds = _load_forecast_data_from_grib(

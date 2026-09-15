@@ -97,21 +97,51 @@ rule verification_metrics:
             if config.get("lapse_rate_correction", True)
             else ""
         ),
+        fdb_configured=lambda wc: bool(
+            _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
+        ),
+        fdb_forecast=lambda wc: (
+            "fdb:"
+            + (
+                _get_fdb_roots(wc.run_id)[0]
+                if get_resource(wc, "write_to_global_fdb", False)
+                and _get_fdb_roots(wc.run_id)[0]
+                else _get_fdb_roots(wc.run_id)[1]
+            )
+            if _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
+            else ""
+        ),
     shell:
         """
-        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
-        uv run {input.script} \
-            --forecast {params.grib_out_dir} \
-            --truth {params.truth} \
-            --reftime {wildcards.init_time} \
-            --steps "{params.fcst_steps}" \
-            --source_id "{wildcards.run_id}" \
-            --truth_source_id "{params.truth_source_id}" \
-            --regions '{params.regions}' \
-            --params "{params.experiment_params}" \
-            --threshold_dict "{params.threshold_dict}" \
-            {params.lapse_rate_flag} \
-            --output {output} >{log} 2>&1
+        set -euo pipefail
+
+        # See plot_meteogram (plot.smk) for why this always wins over the
+        # (nonexistent) local grib dir when the run's environment archives to
+        # FDB, and why no squashfs-mount is needed to read it (pyfdb bundles
+        # its own native libs).
+        FORECAST_SRC={params.grib_out_dir:q}
+        if [ "{params.fdb_configured}" = "True" ]; then
+            FORECAST_SRC={params.fdb_forecast:q}
+            export ECCODES_DEFINITION_PATH="$(realpath eccodes-cosmo-mars/definitions):$(realpath .venv/share/eccodes-cosmo-resources/definitions)"
+        else
+            export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        fi
+
+        CMD_ARGS=(
+            --forecast "$FORECAST_SRC"
+            --truth {params.truth:q}
+            --reftime {wildcards.init_time:q}
+            --steps {params.fcst_steps:q}
+            --source_id {wildcards.run_id:q}
+            --truth_source_id {params.truth_source_id:q}
+            --regions {params.regions:q}
+            --params {params.experiment_params:q}
+            --threshold_dict {params.threshold_dict:q}
+            {params.lapse_rate_flag}
+            --output {output:q}
+        )
+
+        uv run python {input.script} "${{CMD_ARGS[@]}}" >{log} 2>&1
         """
 
 
@@ -222,19 +252,54 @@ rule verification_scoremaps:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         truth_label=(config.get("truth") or {}).get("label", ""),
-        reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
+        reftimes=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
         run_root=lambda wc: (Path(OUT_ROOT) / f"data/runs/{wc.run_id}").resolve(),
+        fdb_configured=lambda wc: bool(
+            _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
+        ),
+        # Bare root (no "fdb:" marker prefix): --fdb_root is consumed by
+        # iter_init_dirs/fdb_has_data, which add the marker themselves when
+        # constructing load_forecast_data's root argument for a discovered
+        # FDB-resident reftime -- unlike plot.smk/verification_metrics' single
+        # --forecast argument, which IS load_forecast_data's root directly.
+        fdb_root=lambda wc: (
+            _get_fdb_roots(wc.run_id)[0]
+            if get_resource(wc, "write_to_global_fdb", False)
+            and _get_fdb_roots(wc.run_id)[0]
+            else _get_fdb_roots(wc.run_id)[1]
+        )
+        if _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
+        else "",
     shell:
         """
-        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
-        uv run {input.script} \
-            --run_root {params.run_root} \
-            --reftimes {params.reftimes} \
-            --truth {input.truth} \
-            --step {wildcards.leadtime} \
-            --steps "{params.fcst_steps}" \
-            --param {wildcards.param} \
-            --output {output} >{log} 2>&1
+        set -euo pipefail
+
+        # See plot_meteogram (plot.smk) for why no squashfs-mount is needed to
+        # read from FDB (pyfdb bundles its own native libs).
+        if [ "{params.fdb_configured}" = "True" ]; then
+            export ECCODES_DEFINITION_PATH="$(realpath eccodes-cosmo-mars/definitions):$(realpath .venv/share/eccodes-cosmo-resources/definitions)"
+        else
+            export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        fi
+
+        # --reftimes is nargs="+" in argparse: pass each timestamp as its own
+        # array element (not one space-joined string) so it fans out correctly.
+        REFTIMES_ARR=({params.reftimes:q})
+
+        CMD_ARGS=(
+            --run_root {params.run_root:q}
+            --reftimes "${{REFTIMES_ARR[@]}}"
+            --truth {input.truth:q}
+            --step {wildcards.leadtime:q}
+            --steps {params.fcst_steps:q}
+            --param {wildcards.param:q}
+            --output {output:q}
+        )
+        if [ -n "{params.fdb_root}" ]; then
+            CMD_ARGS+=(--fdb_root {params.fdb_root:q})
+        fi
+
+        uv run python {input.script} "${{CMD_ARGS[@]}}" >{log} 2>&1
         """
 
 

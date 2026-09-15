@@ -39,6 +39,7 @@ import numpy as np
 import xarray as xr
 
 from data_input import (
+    fdb_has_data,
     load_forecast_data,
     load_truth_data,
     open_truth_zarr,
@@ -75,12 +76,24 @@ def _season_of(dt: datetime) -> str:
 # ---------------------------------------------------------------------------
 
 
-def iter_init_dirs(run_root: Path) -> list[tuple[datetime, Path]]:
+def iter_init_dirs(
+    run_root: Path, fdb_root: str | None = None
+) -> list[tuple[datetime, Path | str]]:
     """Return ``(reftime, grib_dir)`` pairs for every complete init time.
 
     Expects subdirectories named ``YYYYMMDDHHMI`` directly under *run_root*.
     GRIB files may live either directly in the init-time directory or inside a
     ``grib/`` subdirectory.
+
+    If `fdb_root` is given, init-time directories with no local GRIB output
+    (e.g. runs that archive directly to FDB and never write local grib/ at
+    all) are additionally checked against it and returned as an ``"fdb:<root>"``
+    marker string in place of a real path -- see data_input.load_forecast_data's
+    routing on that prefix, which every caller of this function's output
+    already goes through. Presence is checked with fdb_has_data(), a bare
+    existence check: completeness was already established upstream, by the
+    Snakemake dependency on this reftime's inference_check_fdb/inference_execute
+    okfile, before this script ever runs.
     """
     result = []
     for d in sorted(run_root.iterdir()):
@@ -91,10 +104,12 @@ def iter_init_dirs(run_root: Path) -> list[tuple[datetime, Path]]:
         except ValueError:
             continue
         grib_dir = d / "grib" if (d / "grib").is_dir() else d
-        if not any(grib_dir.glob("*.grib")):
+        if any(grib_dir.glob("*.grib")):
+            result.append((reftime, grib_dir))
+        elif fdb_root is not None and fdb_has_data(fdb_root, reftime):
+            result.append((reftime, f"fdb:{fdb_root}"))
+        else:
             LOG.debug("No GRIB files in %s, skipping", grib_dir)
-            continue
-        result.append((reftime, grib_dir))
     return result
 
 
@@ -139,7 +154,7 @@ def main(args: Namespace) -> None:
         ]
         LOG.info("Using %d baseline init times from --reftimes", len(init_items))
     else:
-        init_items = iter_init_dirs(args.run_root)
+        init_items = iter_init_dirs(args.run_root, fdb_root=args.fdb_root)
         LOG.info("Found %d init time directories", len(init_items))
 
         # Restrict to the experiment's configured init times, and require that
@@ -452,6 +467,17 @@ if __name__ == "__main__":
             "Root directory of a baseline archive (e.g. the ICON-CH1/CH2-EPS "
             "operational GRIB archive, or an INCA NetCDF archive). Requires "
             "--reftimes."
+        ),
+    )
+    parser.add_argument(
+        "--fdb_root",
+        type=str,
+        default=None,
+        help=(
+            "FDB root holding this run's output, if any is configured for its "
+            "environment. Init times with no local GRIB output under --run_root "
+            "are additionally checked against it (see iter_init_dirs). Ignored "
+            "for --baseline_root."
         ),
     )
     parser.add_argument(

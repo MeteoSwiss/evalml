@@ -1,6 +1,7 @@
 import json
 import logging
 from argparse import ArgumentParser
+from datetime import datetime
 from pathlib import Path
 
 import cartopy.crs as ccrs
@@ -14,7 +15,7 @@ from plotting import DOMAINS
 from plotting import get_projection
 from plotting import StatePlotter
 from plotting.colormap_defaults import CMAP_DEFAULTS
-from plotting.compat import load_state_from_grib
+from plotting.compat import load_state_from_grib, load_state_from_fdb
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -119,7 +120,7 @@ def main():
     )
 
     args = parser.parse_args()
-    grib_dir = Path(args.input)
+    is_fdb = args.input.startswith("fdb:")
     init_time = args.date
     lead_time = args.leadtime
     param = args.param
@@ -143,43 +144,72 @@ def main():
     else:
         paramlist = [param]
 
-    # Load grib once — shared across all region plots
-    # TODO: fix file pattern & globbing
-    grib_file = list(grib_dir.glob(f"2*_{lead_time}.grib"))
-    if not grib_file:
-        grib_file = list(grib_dir.glob(f"2*_{lead_time:03}.grib"))
-    if not grib_file:
-        LOG.warning(
-            "No GRIB file found for lead_time=%s in %s (model may not write initial state)."
-            " Creating empty placeholder frames.",
-            lead_time,
-            grib_dir,
-        )
+    def _empty_frames():
         for region_name in regions:
             outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
             outfn.touch()
-        return
-    grib_file = Path(grib_file[0])
-    LOG.info("Loading grib file %s", grib_file)
-    state = load_state_from_grib(grib_file, paramlist=paramlist)
+
+    # Load state once — shared across all region plots
+    if is_fdb:
+        fdb_root = args.input[len("fdb:") :]
+        reftime = datetime.strptime(init_time, "%Y%m%d%H%M")
+        LOG.info("Loading forecast state from FDB %s", fdb_root)
+        try:
+            state = load_state_from_fdb(fdb_root, reftime, lead_time, paramlist=paramlist)
+        except FileNotFoundError:
+            LOG.warning(
+                "No FDB data for lead_time=%s in %s (model may not write initial state)."
+                " Creating empty placeholder frames.",
+                lead_time,
+                fdb_root,
+            )
+            _empty_frames()
+            return
+    else:
+        grib_dir = Path(args.input)
+        # TODO: fix file pattern & globbing
+        grib_file = list(grib_dir.glob(f"2*_{lead_time}.grib"))
+        if not grib_file:
+            grib_file = list(grib_dir.glob(f"2*_{lead_time:03}.grib"))
+        if not grib_file:
+            LOG.warning(
+                "No GRIB file found for lead_time=%s in %s (model may not write initial state)."
+                " Creating empty placeholder frames.",
+                lead_time,
+                grib_dir,
+            )
+            _empty_frames()
+            return
+        grib_file = Path(grib_file[0])
+        LOG.info("Loading grib file %s", grib_file)
+        state = load_state_from_grib(grib_file, paramlist=paramlist)
 
     # tp is accumulated from start of forecast; de-accumulate to get period [lt-accu, lt]
     if param == "TOT_PREC":
         prev_lt = lead_time - accu
         if prev_lt > 0:
-            prev_grib_files = list(grib_dir.glob(f"2*_{prev_lt}.grib"))
-            if not prev_grib_files:
-                prev_grib_files = list(grib_dir.glob(f"2*_{prev_lt:03d}.grib"))
-            prev_grib_file = Path(prev_grib_files[0])
-            LOG.info(
-                "De-accumulating TOT_PREC: loading previous grib file %s",
-                prev_grib_file,
-            )
-            prev_state = load_state_from_grib(prev_grib_file, paramlist=paramlist)
-            state["fields"]["TOT_PREC"] = (
-                state["fields"]["TOT_PREC"]
-                - prev_state["fields"]["TOT_PREC"][: len(state["fields"]["TOT_PREC"])]
-            )
+            if is_fdb:
+                try:
+                    prev_state = load_state_from_fdb(
+                        fdb_root, reftime, prev_lt, paramlist=paramlist
+                    )
+                except FileNotFoundError:
+                    prev_state = None
+            else:
+                prev_grib_files = list(grib_dir.glob(f"2*_{prev_lt}.grib"))
+                if not prev_grib_files:
+                    prev_grib_files = list(grib_dir.glob(f"2*_{prev_lt:03d}.grib"))
+                prev_state = (
+                    load_state_from_grib(Path(prev_grib_files[0]), paramlist=paramlist)
+                    if prev_grib_files
+                    else None
+                )
+            if prev_state is not None:
+                LOG.info("De-accumulating TOT_PREC using previous lead_time=%s", prev_lt)
+                state["fields"]["TOT_PREC"] = (
+                    state["fields"]["TOT_PREC"]
+                    - prev_state["fields"]["TOT_PREC"][: len(state["fields"]["TOT_PREC"])]
+                )
 
     # Preprocess field once — shared across all region plots
     field, units_override = preprocess_field(param, state)

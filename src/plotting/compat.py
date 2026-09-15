@@ -1,10 +1,12 @@
 from datetime import datetime
 from pathlib import Path
 
+import tempfile
+
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import MultiPoint
-from data_input import load_from_grib_file
+from data_input import load_from_grib_file, _fetch_fdb_grib_bytes, _FDB_MODEL, _FDB_GLOBAL_MODEL
 
 
 PARAMS_MAP = {
@@ -106,6 +108,36 @@ def load_state_from_grib(
                     ]
                 )
     return state
+
+
+def load_state_from_fdb(
+    fdb_root: str, reftime: datetime, step: int, paramlist: list[str] | None = None
+) -> dict[str, np.ndarray | dict[str, np.ndarray] | gpd.GeoSeries]:
+    """FDB equivalent of :func:`load_state_from_grib` for one lead time.
+
+    Fetches the regional (`_FDB_MODEL`) and global (`_FDB_GLOBAL_MODEL`) grids
+    from FDB and writes them to temp files using the same naming convention
+    `load_state_from_grib` already expects locally (a primary file plus an
+    `ifs-<stem>.grib` companion in the same directory), then delegates to it
+    unchanged -- reusing its state-dict construction and global-grid
+    concatenation (it works with flat point lists, not an aligned xarray grid,
+    so the regional/global point-count mismatch that :func:`data_input.
+    load_forecast_data` sidesteps by dropping the global grid entirely isn't a
+    problem here).
+    """
+    regional = _fetch_fdb_grib_bytes(fdb_root, reftime, [step], model=_FDB_MODEL)
+    if not regional:
+        raise FileNotFoundError(
+            f"No FDB data found for step={step} model={_FDB_MODEL} in {fdb_root}"
+        )
+    global_ = _fetch_fdb_grib_bytes(fdb_root, reftime, [step], model=_FDB_GLOBAL_MODEL)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        primary = Path(tmp_dir) / "frame.grib"
+        primary.write_bytes(regional)
+        if global_:
+            (Path(tmp_dir) / "ifs-frame.grib").write_bytes(global_)
+        return load_state_from_grib(primary, paramlist=paramlist)
 
 
 def load_state_from_raw(

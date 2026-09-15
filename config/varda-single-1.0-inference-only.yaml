@@ -22,6 +22,8 @@ runs:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/120/6
+        extra_requirements:
+          - anemoi-inference==0.11.1
 
 locations:
   output_root: output/
