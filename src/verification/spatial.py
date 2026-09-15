@@ -128,11 +128,11 @@ def _estimate_native_spacing_chord(lat: np.ndarray, lon: np.ndarray) -> float:
         ],
         axis=-1,
     )
-    if lat.ndim == 2:
+    if lat.ndim == 2:  # regular 2d grid
         dy = np.linalg.norm(xyz[1:] - xyz[:-1], axis=-1)
         dx = np.linalg.norm(xyz[:, 1:] - xyz[:, :-1], axis=-1)
         return float(np.median(np.concatenate([dy.ravel(), dx.ravel()])))
-    else:
+    else:  # flat spatial dimension (e.g. ICON triangular grid)
         pts = xyz.reshape(-1, 3)
         tree = cKDTree(pts)
         dists, _ = tree.query(pts, k=2)  # k=2 to skip the self-match (dist=0)
@@ -162,8 +162,9 @@ def map_forecast_to_truth(
         away than the estimated native grid spacing of the forecast are set to
         missing in the returned dataset. The native spacing is the median
         adjacent-cell chord distance for 2-D grids and the median
-        nearest-neighbour chord distance within the source for scattered points.
-        Set to True to reproduce the unconstrained nearest-neighbor behaviour.
+        nearest-neighbour chord distance within the source for flat layouts
+        (e.g. the triangular ICON grid). Set to True to reproduce the unconstrained
+        nearest-neighbor behaviour.
 
     Returns
     -------
