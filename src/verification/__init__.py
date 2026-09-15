@@ -359,7 +359,8 @@ def verify(
         before a metric is set to NaN. Computed per region and time step over the reduction
         dimensions. Default is 0.0 — no missing forecasts are tolerated where observations
         exist. Increase to a small positive value (e.g. 0.05) if spurious forecast gaps need
-        to be accommodated.
+        to be accommodated. Currently this is not configurable, as we want to guarantee that
+        competing forecasts are evaluated on exactly the same set of observations.
 
     Returns
     -------
