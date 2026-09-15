@@ -420,7 +420,7 @@ def verify(
         # Normalising by obs availability avoids penalising parameters with fewer stations.
         missing_fraction = (
             fcst_param.isnull()
-            .where(obs_param.notnull() & masks)
+            .where(obs_param.notnull())
             .mean(dim=dim, skipna=True)
         )
         too_many_missing = missing_fraction > max_missing_fraction
