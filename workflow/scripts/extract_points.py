@@ -35,9 +35,18 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+import data_input
 from data_input import load_forecast_data
 
 LOG = logging.getLogger("extract_points")
+
+# load_forecast_data() tries to attach an elevation coordinate. When the run's
+# step-0 GRIB carries no FIS (the temporal downscaler's output does not) it falls
+# back to an ICON topography lookup that raises KeyError('HSURF') rather than
+# giving up, so the whole load fails. We never use that coordinate: station and
+# model elevations come from resources/smn_grid_points.csv. Disable it here
+# instead of changing shared code.
+data_input._try_assign_elevation = lambda ds: ds
 
 PARAMS = ("T_2M", "TD_2M", "U_10M", "V_10M", "TOT_PREC1", "PS")
 
