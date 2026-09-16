@@ -80,6 +80,14 @@ output:
               mask: "lam_0/cutout_mask"
               as_slice: true
           # here, the trimedge mask can be specified when available
+          # at overlap steps (multiples of the forecaster stride) replace the
+          # re-predicted prognostics with the forecaster's boundary values
+          - forward_transform_filter:
+              copy-prognostic-from-forecaster:
+                forecaster_path: forecaster/20*
+                common_leadtime: 6h
+                params_to_keep: [tp] # NOTE, if more diagnostics are added, update accordingly.
+                namer: *namer
 
     - grib:
         path: grib/ifs-{dateTime}_{step:03}.grib
@@ -94,6 +102,12 @@ output:
               inverse: true
           - assign_mask: # fill local/global overlapping points with nan
               mask: "global/cutout_mask"
+          - forward_transform_filter:
+              copy-prognostic-from-forecaster:
+                forecaster_path: forecaster/ifs*
+                common_leadtime: 6h
+                params_to_keep: [tp] # NOTE, if more diagnostics are added, update accordingly.
+                namer: *namer
         modifiers:
           - patches:
             - variable:

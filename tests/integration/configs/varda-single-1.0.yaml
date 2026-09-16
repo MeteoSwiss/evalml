@@ -18,6 +18,7 @@ runs:
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
+        # - anemoi-inference==0.11.0
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
