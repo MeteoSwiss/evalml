@@ -1,4 +1,17 @@
-## Inference fixture for `test_showcase_meteogram`
+## Inference fixture for integration tests
+
+In order to reduce the time needed to run tests, and avoid unnecessary
+GPU usage, some integration tests use a test fixture for inference.
+The implementation of the fixture feature in the EvalML CLI can be found in
+[`src/evalml/fixtures.py`](../../src/evalml/fixtures.py)
+
+### Using test fixtures: `test_showcase_meteogram` example
+
+This section describes how test fixture is used in
+`test_meteogram_small.py:test_showcase_meteogram`. Most other integration
+tests use a similar process to bypass inference.
+
+#### How it works
 
 The showcase longtest replays a frozen copy of the forecaster inference GRIB
 instead of running inference, so it needs no GPU/MLflow/sandbox build (it still
@@ -8,14 +21,11 @@ longtest reads that path from the config and is skipped if the fixture is not
 populated (no `MANIFEST.yaml`). When `fixture_root` is active, the workflow's
 start banner prints `Inference: REPLAYED FROM FIXTURE <path>`.
 
-**Scope:** replay covers the showcase path only. The MEC verification path
-(`--mec`, `verif_obs.smk`) depends on GRIB at *derived* source init times
-(`init_time − lead`), which a showcase fixture does not contain, so with `--mec`
-enabled fixture mode would still trigger a real inference (checkpoint download).
-Replaying MEC/FFV2 runs is out of scope for this fixture.
-
-**Create/refresh the fixture** (needed once, or whenever the checkpoint/config
-changes — requires a GPU node):
+#### Fixture setup
+Creating or refreshing the fixture is needed on a one-time basis for new test fixtures,
+and needs to be re-run whenever the checkpoint or config changes. Because
+it runs inference, it requires a GPU node. Use the following steps
+(meteogram used as an example):
 
 1. Temporarily comment out `fixture_root` in `meteogram_small.yaml` (otherwise
    the config forces replay and won't run real inference), then run a real
@@ -30,8 +40,8 @@ changes — requires a GPU node):
    overwrite a real, Snakemake-owned `grib/` directory.
 
 Subsequent longtest runs replay from the fixture automatically (CI checks out a
-clean tree, so this only matters when capturing and replaying in the same
-`output/`).
+   clean tree, so the last step only matters when capturing and replaying in the same
+  `output/`).
 
 `capture-fixture` only snapshots GRIB dirs whose init time matches the config's
 `dates`, so an unrelated experiment sharing the same `output/` tree is not swept
@@ -41,7 +51,23 @@ re-checks each fixture GRIB against its recorded checksum and fails loudly if it
 has drifted (corrupted, partial, or hand-edited); fixtures captured before
 checksums existed simply skip the check.
 
-## Versioning and multiple fixtures
+**Important note:** The test fixtures must always be regenerated, even when you
+just wish to move the location of the test fixture files. The `MANIFEST.yaml` file 
+that is generated contains absolute paths to the files, so moving them without
+generating a new manifest will cause an error.
+
+### MEC and fixture tests
+
+Most fixture tests will only work for the non-MEC verification path.
+The MEC verification path (`--mec`, `verif_obs.smk`) depends on GRIB at
+*derived* source init times (`init_time − lead`), which most fixtures (for
+example, the showcase fixture) do not contain, so with `--mec` enabled, fixture
+mode would still trigger a real inference (checkpoint download). The MEC
+feedback file generation path is tested in `mec_small.py`/`mec_small.yaml`; its
+config is deliberately set up for the fixture capture to produce derived source
+init times.
+
+### Versioning and multiple fixtures
 
 A fixture is **per-config**, not global: each fixture-backed test reads
 `fixture_root` from its own config (there is no shared fixture constant). To add
