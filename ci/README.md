@@ -11,9 +11,24 @@ These users should be able to see `mch-evalml` in their [CSCS CI overview page](
 
 ## Tests run using CI/CD
 
-The configuration `cscs.yml` controls which tests are run. For example,
-`unit_test_job` calls the command `pytest tests/unit` (after setting up an environment).
-Adding another test suite is relatively simple; just make a new job.
+`cscs.yml` holds the shared pieces — the bare-metal Balfrin runner definition and
+the `.sh_preamble` / `.install_uv` / `.install_evalml` setup fragments. The actual
+test suites live in their own files, each `include`-ing `cscs.yml`:
+
+- `longtest.yml` — the `longtest` job: the integration suite marked `longtest`
+  (4h Slurm limit).
+- `heavytest.yml` — the `heavytest` job: the integration suite marked `heavytest`
+  (10h Slurm limit).
+
+Adding another test suite is relatively simple; just make a new job that extends
+`.baremetal-runner-balfrin` and runs the tests you want.
+
+### Coverage
+
+Both integration jobs run under `ci/run-integration-coverage.sh <marker>`, which
+measures coverage across the full snakemake subprocess chain (including SLURM
+jobs) using the subprocess-aware `ci/coverage-integration.cfg`. See the header of
+each file for details.
 
 ## Using CI/CD from Github
 Only a "trusted user" can trigger the CI/CD tests via Github. This is configured

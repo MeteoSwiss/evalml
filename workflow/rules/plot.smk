@@ -169,10 +169,26 @@ rule make_forecast_animation:
         """
 
 
+rule plot_prefetch_natural_earth:
+    """Warm the cartopy Natural Earth cache before the parallel plot jobs."""
+    input:
+        script="workflow/scripts/prefetch_natural_earth.py",
+    output:
+        touch(OUT_ROOT / "logs/plot_scoremaps/.natural_earth_cache.ok"),
+    log:
+        OUT_ROOT / "logs/plot_scoremaps/prefetch_natural_earth.log",
+    localrule: True
+    shell:
+        """
+        uv run python {input.script} >{log} 2>&1
+        """
+
+
 rule plot_scoremaps:
     # localrule: True
     input:
         script="workflow/scripts/plot_scoremaps.mo.py",
+        natural_earth_cache=rules.plot_prefetch_natural_earth.output,
         verif_file=OUT_ROOT
         / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
     output:
@@ -206,6 +222,7 @@ rule plot_scoremaps:
 use rule plot_scoremaps as plot_scoremaps_baseline with:
     input:
         script="workflow/scripts/plot_scoremaps.mo.py",
+        natural_earth_cache=rules.plot_prefetch_natural_earth.output,
         verif_file=OUT_ROOT
         / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
     output:

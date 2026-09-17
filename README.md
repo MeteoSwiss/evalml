@@ -321,3 +321,11 @@ All outputs are rooted at `OUT_ROOT` (from `locations.output_root` in the config
 | `{param}` | variable name | `T_2M`, `TOT_PREC` |
 | `{region}` | geographic region slug | `switzerland`, `globe` |
 | `{leadtime}` | zero-padded hours | `000`, `006`, `024` |
+
+
+## Testing documentation
+
+For details about the CI/CD setup, see the [the CI/CD README](ci/README.md)
+
+For details about integration testing, especially for the use of test fixtures,
+ see [the integration tests README](tests/integration/README.md)
