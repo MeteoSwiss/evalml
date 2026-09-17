@@ -174,10 +174,11 @@ def test_lapse_rate_correction_only_requested_params(make_lapse_rate_datasets):
 
 
 _FRT = np.datetime64("2024-01-01T00", "ns")
+_REGION = [{"type": "bbox", "name": "all", "bbox": [1.5, 16, 43, 49.5]}]
 
 
 def _station_coords(n):
-    """Coordinates for n stations inside the 'all' mask region (lon 1.5–16, lat 43–49.5)."""
+    """Coordinates for n stations inside the test region (lon 1.5–16, lat 43–49.5)."""
     return {
         "longitude": ("values", np.linspace(5.0, 10.0, n)),
         "latitude": ("values", np.linspace(46.0, 47.0, n)),
@@ -210,7 +211,7 @@ def test_verify_missing_fraction_varies_by_parameter():
         coords=coords,
     )
 
-    result = verify(fcst, obs, "fcst", "obs", num_workers=1)
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
 
     t2m_bias = result["T_2M.BIAS"].sel(region="all", source="fcst").values.item()
     prec_bias = result["TOT_PREC.BIAS"].sel(region="all", source="fcst").values.item()
@@ -243,7 +244,7 @@ def test_verify_missing_fraction_varies_by_lead_time():
         coords={"step": steps, **coords},
     )
 
-    result = verify(fcst, obs, "fcst", "obs", num_workers=1)
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
 
     bias = result["T_2M.BIAS"].sel(region="all", source="fcst")
     assert not np.any(np.isnan(bias.values)), (
@@ -270,7 +271,7 @@ def test_verify_obs_stats_not_masked_by_forecast_gaps():
     fcst = xr.Dataset({"T_2M": ("values", fcst_vals)}, coords=coords)
     obs = xr.Dataset({"T_2M": ("values", np.ones(n, dtype=np.float32))}, coords=coords)
 
-    result = verify(fcst, obs, "fcst", "obs", num_workers=1)
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
 
     # Score should be NaN (too many missing forecasts)
     bias = result["T_2M.BIAS"].sel(region="all", source="fcst").values.item()
