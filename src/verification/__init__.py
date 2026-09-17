@@ -420,9 +420,7 @@ def verify(
         # Missing fraction: among obs-valid in-region points, fraction where fcst is missing.
         # Normalising by obs availability avoids penalising parameters with fewer stations.
         missing_fraction = (
-            fcst_param.isnull()
-            .where(obs_param.notnull())
-            .mean(dim=dim, skipna=True)
+            fcst_param.isnull().where(obs_param.notnull()).mean(dim=dim, skipna=True)
         )
         too_many_missing = missing_fraction > max_missing_fraction
 
