@@ -317,7 +317,7 @@ def verify(
     obs: xr.Dataset,
     fcst_label: str,
     obs_label: str,
-    regions: list[dict] | None = None,
+    regions: list[dict],
     dim: list[str] | None = None,
     threshold_dict: dict[str, dict[str, list[float]]] | None = None,
     num_workers: int | None = None,
