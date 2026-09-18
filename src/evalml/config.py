@@ -517,14 +517,25 @@ class DefaultResources(BaseModel):
     gpus: int | None = Field(
         None, ge=0, description="Default GPU count per job (0 for non-GPU jobs)."
     )
+    slurm_extra: str | None = Field(
+        None,
+        description=(
+            "Extra raw sbatch flags appended verbatim to every job submission, "
+            "e.g. '--exclude=nid001229' to avoid a known-problematic node."
+        ),
+    )
 
     def parsable(self) -> list[str]:
         """Convert the default resources to a string of key=value pairs."""
-        return [
-            f"{key}={value}"
-            for key, value in self.model_dump().items()
-            if value is not None
-        ]
+        out = []
+        for key, value in self.model_dump().items():
+            if value is None:
+                continue
+            if key == "slurm_extra":
+                out.append(f'{key}="{value}"')
+            else:
+                out.append(f"{key}={value}")
+        return out
 
 
 class GlobalResources(BaseModel):

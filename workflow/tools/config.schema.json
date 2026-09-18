@@ -193,6 +193,19 @@
           "default": null,
           "description": "Default GPU count per job (0 for non-GPU jobs).",
           "title": "Gpus"
+        },
+        "slurm_extra": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Extra raw sbatch flags appended verbatim to every job submission, e.g. '--exclude=nid001229' to avoid a known-problematic node.",
+          "title": "Slurm Extra"
         }
       },
       "required": [
