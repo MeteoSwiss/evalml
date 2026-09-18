@@ -54,7 +54,7 @@ _ACCUMULATABLE_PARAMS: frozenset[str] = frozenset({"TOT_PREC"})
 # Spatial/multi-field derivations: output param → required input params.
 DERIVED_PARAMS: dict[str, tuple[str, ...]] = {
     "SP_10M": ("U_10M", "V_10M"),
-    "SP": ("U", "V"),
+    "DD_10M": ("U_10M", "V_10M"),
 }
 
 
@@ -88,12 +88,15 @@ def compute_derived(ds: xr.Dataset, param: str) -> xr.DataArray:
             "name": "10m wind speed",
         }
         return da
-    if param == "SP":
-        da = (ds["U"] ** 2 + ds["V"] ** 2) ** 0.5
+    if param == "DD_10M":
+        # Meteorological convention: direction the wind is blowing FROM,
+        # clockwise from North. Matches the U/V <-> DD/FF convention used in
+        # load_obs_data_from_jretrieve (U = -FF*sin(DD), V = -FF*cos(DD)).
+        da = np.mod(np.degrees(np.arctan2(-ds["U_10M"], -ds["V_10M"])), 360.0)
         da.attrs["parameter"] = {
-            "shortName": "SP",
-            "units": "m/s",
-            "name": "Wind speed",
+            "shortName": "DD_10M",
+            "units": "degrees",
+            "name": "10m wind direction",
         }
         return da
     raise ValueError(f"No recipe for derived variable '{param}'")
@@ -713,6 +716,7 @@ def load_obs_data_from_jretrieve(
         "SP_10M": "fkl010z0",
         "DD_10M": "dkl010z0",
         "VMAX_10M": "fkl010z1",
+        "RELHUM_2M": "ure200h0",
     }
     DWH_WIND_SPEED = "fkl010z0"
     DWH_WIND_DIR = "dkl010z0"
@@ -786,7 +790,7 @@ def load_truth_data(
     """Load truth data from an analysis Zarr dataset or DWH observations via jretrieve.
 
     Handles derived and aggregated params transparently (same contract as
-    load_forecast_data): SP_10M is computed from U_10M/V_10M; TOT_PREC6 is
+    load_forecast_data): SP_10M/DD_10M are computed from U_10M/V_10M; TOT_PREC6 is
     disaggregated from cumulative TOT_PREC; plain TOT_PREC is returned as-is.
     Returns a dataset with 'time' dimension (valid datetimes).
 
@@ -1355,7 +1359,13 @@ def load_forecast_data(
     """Load forecast data from GRIB files or an ICON archive.
 
     Handles derived and aggregated params transparently:
-    - ``SP_10M`` is computed from ``U_10M`` / ``V_10M``
+    - For the ML inference GRIB output: ``SP_10M``/``DD_10M``/``RELHUM_2M`` are
+      expected to be produced directly by the anemoi-inference
+      surface-diagnostics post-processor filter and are
+      loaded as native fields, not recomputed here.
+    - For baselines (ICON archive, INCA): these archives have no such
+      filters, so ``SP_10M``/``DD_10M`` are computed from ``U_10M``/``V_10M``
+      (or, for INCA, read from its native FF/DD product) as before.
     - ``TOT_PREC6`` is disaggregated from the cumulative ``TOT_PREC`` field
     - Plain ``TOT_PREC`` is returned as cumulative-from-start without disaggregation
 
@@ -1366,13 +1376,22 @@ def load_forecast_data(
     3. Otherwise → ICON operational archive (via :func:`_load_icon_baseline_from_grib`)
     """
     root = Path(root)
-    load_params = get_base_params(params)
     load_steps = get_steps(steps, params)
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
+        # ML inference output: request params as-is (only stripping
+        # aggregation suffixes, e.g. TOT_PREC6 -> TOT_PREC) so fields the
+        # anemoi-inference filters already produced (SP_10M, DD_10M,
+        # RELHUM_2M) are read natively instead of being recomputed from
+        # their components. _disaggregated_and_derived_params below only
+        # falls back to compute_derived for a DERIVED_PARAMS entry that
+        # isn't already present in the loaded dataset.
+        ml_load_params = list(
+            dict.fromkeys(parse_aggregated_param(p)[0] for p in params)
+        )
         ds = _load_forecast_data_from_grib(
             files=_collect_ml_grib_files(root, load_steps),
-            params=load_params,
+            params=ml_load_params,
         )
         # Try to derive elevation from surface geopotential (FIS/z at step 0)
         # before falling back to ICON grid constants lookup.
@@ -1388,7 +1407,8 @@ def load_forecast_data(
             ds = _try_assign_elevation(ds)
     elif "INCA" in root.parts:
         LOG.info("Loading INCA baseline from NetCDF files...")
-        # INCA provides wind speed natively (FF), so don't expand SP_10M → U_10M/V_10M.
+        # INCA provides wind speed/direction natively (FF/DD), so don't expand
+        # SP_10M/DD_10M → U_10M/V_10M.
         # Only expand aggregated params (e.g. TOT_PREC6 → TOT_PREC).
         inca_load_params = list(
             dict.fromkeys(parse_aggregated_param(p)[0] for p in params)
@@ -1398,7 +1418,10 @@ def load_forecast_data(
         )
     else:
         LOG.info("Loading baseline forecasts from ICON GRIB archive...")
+        # ICON's own archive has no post-processor filters, so SP_10M/DD_10M
+        # are expanded to U_10M/V_10M here and computed by
+        # _disaggregated_and_derived_params below, same as before.
         ds = _load_icon_baseline_from_grib(
-            root, reftime, load_steps, load_params, member=member
+            root, reftime, load_steps, get_base_params(params), member=member
         )
     return _disaggregated_and_derived_params(ds, steps, params)

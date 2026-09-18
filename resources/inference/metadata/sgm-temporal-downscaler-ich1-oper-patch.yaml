@@ -49,6 +49,35 @@ dataset:
           param: T_2M
           step: 12
           time: 0
+      DD_10M:
+        # See the SP_10M comment below
+          date: 20050101
+          levtype: sfc
+          param: DD_10M
+          step: 12
+          time: 0
+      RELHUM_2M:
+        # See the SP_10M comment below
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: RELHUM_2M
+          step: 12
+          time: 0
+      SP_10M:
+        # Not predicted by the checkpoint -- created mid-pipeline by the
+        # surface-diagnostics post-processor filter. Every
+        # field a forward_transform_filter chain touches (including ones a
+        # prior filter just created) must be a known variable here: anemoi-inference's
+        # TransformFilter.process() calls wrap_state(state, metadata.typed_variables)
+        # before EVERY filter in the chain, and that lookup is a hard KeyError
+        # for any field name not in this variables_metadata map
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: SP_10M
+          step: 12
+          time: 0
       cos_julian_day:
         computed_forcing: true
         constant_in_time: false

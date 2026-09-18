@@ -22,6 +22,28 @@ LOG = logging.getLogger(__name__)
 _T_LAPSE_RATE = 0.0065  # K/m — ICAO standard atmosphere
 _LAPSE_RATE_PARAMS: dict[str, float] = {"T_2M": _T_LAPSE_RATE}
 
+# Directional/circular params (degrees, period 360): a plain fcst - obs
+# difference can be off by up to a full period even though the true angular
+# error never exceeds period / 2 (e.g. fcst=355°, obs=5° is a 10° error, not
+# -350°). Listed params get their `obs` aliased onto the branch nearest
+# `fcst` before BIAS/MSE/MAE/CORR are computed — see _circular_align.
+_CIRCULAR_PARAMS: frozenset[str] = frozenset({"DD_10M"})
+_CIRCULAR_PERIOD = 360.0
+
+
+def _circular_align(
+    fcst: xr.DataArray, obs: xr.DataArray, period: float = _CIRCULAR_PERIOD
+) -> xr.DataArray:
+    """Shift `obs` by a multiple of `period` so that `fcst - obs` is the
+    minimal signed circular difference in (-period/2, period/2].
+
+    This makes a plain (non-circular) difference/score computed on
+    (fcst, aligned_obs) circular-correct, without needing a dedicated
+    circular-statistics implementation for BIAS/MSE/MAE/CORR.
+    """
+    diff = fcst - obs
+    return obs + period * np.round(diff / period)
+
 
 def apply_lapse_rate_correction_inplace(
     fcst: xr.Dataset,
@@ -228,6 +250,7 @@ def _compute_scores(
     suffix="",
     source="",
     thresholds: dict[str, list[float]] | None = None,
+    circular: bool = False,
 ) -> xr.Dataset:
     """
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
@@ -235,7 +258,13 @@ def _compute_scores(
     Computation of scores for continuous and categorical forecasts are supported.
     Categorical forecasts are specified via a dict mapping operator keys (gt, ge, lt, le, eq, ne)
     to lists of threshold values (e.g. {"gt": [10.0], "lt": [0.0]}).
+
+    If `circular` is True, `obs` is aliased onto the branch nearest `fcst`
+    (see _circular_align) before BIAS/MSE/MAE/CORR are computed, so a
+    directional quantity's 0/360° wraparound doesn't inflate its error.
     """
+    if circular:
+        obs = _circular_align(fcst, obs)
     LOG.info(f"Compute scores for {prefix} {suffix}")
     result = xr.Dataset(
         {
@@ -431,6 +460,7 @@ def verify(
             source=fcst_label,
             dim=dim,
             thresholds=thresholds,
+            circular=param in _CIRCULAR_PARAMS,
         ).where(~too_many_missing)
         fcst_stats = _compute_statistics(
             fcst_param,

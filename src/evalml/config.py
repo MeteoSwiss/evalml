@@ -234,8 +234,12 @@ class ScoreMapsConfig(BaseModel):
         default=["T_2M"],
         description=(
             "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
-            "PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 "
-            "(period-accumulated precipitation, period encoded in the name)."
+            "PS, PMSL, SP_10M, DD_10M (read natively from ML-inference GRIB output, "
+            "or derived from U_10M/V_10M for other sources), RELHUM_2M (read natively "
+            "from ML-inference GRIB output, or derived from T_2M/TD_2M for the "
+            "SwissMetNet/DWH truth; not currently available for ICON/INCA baselines), "
+            "TOT_PREC1, TOT_PREC6, TOT_PREC24 (period-accumulated precipitation, "
+            "period encoded in the name)."
         ),
     )
     leadtimes: List[int] = Field(
@@ -513,14 +517,25 @@ class DefaultResources(BaseModel):
     gpus: int | None = Field(
         None, ge=0, description="Default GPU count per job (0 for non-GPU jobs)."
     )
+    slurm_extra: str | None = Field(
+        None,
+        description=(
+            "Extra raw sbatch flags appended verbatim to every job submission, "
+            "e.g. '--exclude=nid001229' to avoid a known-problematic node."
+        ),
+    )
 
     def parsable(self) -> list[str]:
         """Convert the default resources to a string of key=value pairs."""
-        return [
-            f"{key}={value}"
-            for key, value in self.model_dump().items()
-            if value is not None
-        ]
+        out = []
+        for key, value in self.model_dump().items():
+            if value is None:
+                continue
+            if key == "slurm_extra":
+                out.append(f'{key}="{value}"')
+            else:
+                out.append(f"{key}={value}")
+        return out
 
 
 class GlobalResources(BaseModel):
