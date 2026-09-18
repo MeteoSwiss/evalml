@@ -13,6 +13,7 @@ from verification import (
     apply_lapse_rate_correction_inplace,
     _circular_align,
     _compute_scores,
+    verify,
 )
 
 
@@ -219,3 +220,118 @@ def test_compute_scores_noncircular_bias_across_north_is_wrong():
         fcst, obs, dim=["values"], prefix="DD_10M.", circular=False
     )
     np.testing.assert_allclose(result["DD_10M.BIAS"].values, 350.0)
+
+
+# verify — missing-fraction masking
+# ---------------------------------------------------------------------------
+
+
+_FRT = np.datetime64("2024-01-01T00", "ns")
+_REGION = [{"type": "bbox", "name": "all", "bbox": [1.5, 16, 43, 49.5]}]
+
+
+def _station_coords(n):
+    """Coordinates for n stations inside the test region (lon 1.5–16, lat 43–49.5)."""
+    return {
+        "longitude": ("values", np.linspace(5.0, 10.0, n)),
+        "latitude": ("values", np.linspace(46.0, 47.0, n)),
+        "forecast_reference_time": _FRT,
+    }
+
+
+def test_verify_missing_fraction_varies_by_parameter():
+    """Parameters with fewer valid obs stations must still yield non-NaN metrics.
+
+    T_2M has obs at only 5 of 10 stations; TOT_PREC has obs at all 10.
+    The forecast is complete for both parameters.  Because missing fraction is
+    normalised by the number of obs-valid points (not total stations), the
+    fraction of missing forecast values is 0 for both parameters and metrics
+    must not be masked.
+    """
+    n = 10
+    coords = _station_coords(n)
+    fcst_vals = np.ones(n, dtype=np.float32)
+
+    obs_t2m = np.ones(n, dtype=np.float32)
+    obs_t2m[:5] = np.nan  # only half of T_2M stations are reporting
+
+    fcst = xr.Dataset(
+        {"T_2M": ("values", fcst_vals), "TOT_PREC": ("values", fcst_vals)},
+        coords=coords,
+    )
+    obs = xr.Dataset(
+        {"T_2M": ("values", obs_t2m), "TOT_PREC": ("values", fcst_vals)},
+        coords=coords,
+    )
+
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+
+    t2m_bias = result["T_2M.BIAS"].sel(region="all", source="fcst").values.item()
+    prec_bias = result["TOT_PREC.BIAS"].sel(region="all", source="fcst").values.item()
+    assert not np.isnan(t2m_bias), "T_2M BIAS should not be NaN"
+    assert not np.isnan(prec_bias), "TOT_PREC BIAS should not be NaN"
+
+
+def test_verify_missing_fraction_varies_by_lead_time():
+    """Steps with fewer valid obs stations must still yield non-NaN metrics.
+
+    At step 0 all 10 stations have obs; at step 1 only 5 do.  The forecast is
+    complete at every step.  Missing fraction normalised by obs-valid count is
+    0 at both steps, so metrics must not be masked at either lead time.
+    """
+    n = 10
+    coords = _station_coords(n)
+    steps = np.array([0, 1])
+
+    fcst_vals = np.ones((2, n), dtype=np.float32)
+
+    obs_vals = np.ones((2, n), dtype=np.float32)
+    obs_vals[1, :5] = np.nan  # step 1: only half the stations are reporting
+
+    fcst = xr.Dataset(
+        {"T_2M": (["step", "values"], fcst_vals)},
+        coords={"step": steps, **coords},
+    )
+    obs = xr.Dataset(
+        {"T_2M": (["step", "values"], obs_vals)},
+        coords={"step": steps, **coords},
+    )
+
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+
+    bias = result["T_2M.BIAS"].sel(region="all", source="fcst")
+    assert not np.any(np.isnan(bias.values)), (
+        f"T_2M BIAS should be non-NaN at every step, got {bias.values}"
+    )
+
+
+def test_verify_obs_stats_not_masked_by_forecast_gaps():
+    """Obs statistics must remain non-NaN in regions where the forecast has gaps.
+
+    Half of the forecast values are NaN (simulating extrapolation masking), so
+    the missing fraction exceeds the default threshold and scores are masked.
+    Obs statistics should still be valid because they do not depend on forecast
+    coverage.
+    """
+    n = 10
+    coords = _station_coords(n)
+
+    fcst_vals = np.ones(n, dtype=np.float32)
+    fcst_vals[:5] = (
+        np.nan
+    )  # forecast missing at half the obs-valid stations → masked region
+
+    fcst = xr.Dataset({"T_2M": ("values", fcst_vals)}, coords=coords)
+    obs = xr.Dataset({"T_2M": ("values", np.ones(n, dtype=np.float32))}, coords=coords)
+
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+
+    # Score should be NaN (too many missing forecasts)
+    bias = result["T_2M.BIAS"].sel(region="all", source="fcst").values.item()
+    assert np.isnan(bias), "BIAS should be NaN when forecast has too many gaps"
+
+    # Obs statistics must survive regardless
+    obs_mean = result["T_2M.mean"].sel(region="all", source="obs").values.item()
+    assert not np.isnan(obs_mean), (
+        "Obs mean should not be NaN when obs data is complete"
+    )

@@ -79,12 +79,14 @@ def apply_lapse_rate_correction_inplace(
     dz_vals = np.asarray(dz).ravel()
     n_missing = int(np.sum(~np.isfinite(dz_vals)))
     if n_missing > 0:
-        raise ValueError(
-            f"Lapse-rate correction: {n_missing} missing elevation value(s) in dz; "
-            "both forecast and observation elevation coordinates must be fully defined."
+        LOG.warning(
+            "Lapse-rate correction: %d missing elevation value(s) in dz; "
+            "statistics and corrections are computed over the remaining %d point(s).",
+            n_missing,
+            dz_vals.size - n_missing,
         )
 
-    max_abs_dz = float(np.abs(dz_vals).max())
+    max_abs_dz = float(np.nanmax(np.abs(dz_vals)))
     if max_abs_dz < 1.0:
         LOG.info(
             "Lapse-rate correction: forecast and truth altitudes agree within rounding "
@@ -94,9 +96,9 @@ def apply_lapse_rate_correction_inplace(
     else:
         LOG.info(
             "Lapse-rate correction: Δz range [%.1f, %.1f] m, mean %.1f m.",
-            float(dz_vals.min()),
-            float(dz_vals.max()),
-            float(dz_vals.mean()),
+            float(np.nanmin(dz_vals)),
+            float(np.nanmax(dz_vals)),
+            float(np.nanmean(dz_vals)),
         )
 
     for param, rate in _LAPSE_RATE_PARAMS.items():
@@ -109,9 +111,9 @@ def apply_lapse_rate_correction_inplace(
                     "correction range [%.3f, %.3f] K, mean %.3f K.",
                     param,
                     rate,
-                    float(c_vals.min()),
-                    float(c_vals.max()),
-                    float(c_vals.mean()),
+                    float(np.nanmin(c_vals)),
+                    float(np.nanmax(c_vals)),
+                    float(np.nanmean(c_vals)),
                 )
             fcst[param] = fcst[param] - correction
 
@@ -344,10 +346,11 @@ def verify(
     obs: xr.Dataset,
     fcst_label: str,
     obs_label: str,
-    regions: list[dict] | None = None,
+    regions: list[dict],
     dim: list[str] | None = None,
     threshold_dict: dict[str, dict[str, list[float]]] | None = None,
     num_workers: int | None = None,
+    max_missing_fraction: float = 0.0,
 ) -> xr.Dataset:
     """
     Compute verification metrics and statistics comparing forecast and observation datasets.
@@ -380,6 +383,13 @@ def verify(
         If None, no thresholds used.
     num_workers : int or None, optional
         Number of parallel workers for computation. If None, uses available CPU cores minus 2.
+    max_missing_fraction : float, optional
+        Maximum allowed fraction of missing forecast values among obs-valid in-region points
+        before a metric is set to NaN. Computed per region and time step over the reduction
+        dimensions. Default is 0.0 — no missing forecasts are tolerated where observations
+        exist. Increase to a small positive value (e.g. 0.05) if spurious forecast gaps need
+        to be accommodated. Currently this is not configurable, as we want to guarantee that
+        competing forecasts are evaluated on exactly the same set of observations.
 
     Returns
     -------
@@ -416,7 +426,6 @@ def verify(
     )
 
     scores = []
-    statistics = []
     for param in fcst_aligned.data_vars:
         if param not in obs_aligned.data_vars:
             LOG.warning("Parameter %s not in obs, skipping", param)
@@ -437,6 +446,13 @@ def verify(
         fcst_param = fcst_aligned[param].where(masks)
         obs_param = obs_aligned[param].where(masks)
 
+        # Missing fraction: among obs-valid in-region points, fraction where fcst is missing.
+        # Normalising by obs availability avoids penalising parameters with fewer stations.
+        missing_fraction = (
+            fcst_param.isnull().where(obs_param.notnull()).mean(dim=dim, skipna=True)
+        )
+        too_many_missing = missing_fraction > max_missing_fraction
+
         score = _compute_scores(
             fcst_param,
             obs_param,
@@ -445,13 +461,13 @@ def verify(
             dim=dim,
             thresholds=thresholds,
             circular=param in _CIRCULAR_PARAMS,
-        )
+        ).where(~too_many_missing)
         fcst_stats = _compute_statistics(
             fcst_param,
             prefix=param + ".",
             source=fcst_label,
             dim=dim,
-        )
+        ).where(~too_many_missing)
         obs_stats = _compute_statistics(
             obs_param,
             prefix=param + ".",
@@ -459,11 +475,13 @@ def verify(
             dim=dim,
         )
         param_statistics = xr.concat([fcst_stats, obs_stats], dim="source")
-        # Compute eagerly per parameter to prevent dask graph bloat
-        scores.append(_merge_metrics([score], num_workers=num_workers))
-        statistics.append(_merge_metrics([param_statistics], num_workers=num_workers))
+        # Single compute per parameter: score + statistics share fcst_param/obs_param
+        # subgraphs so dask evaluates the data in one pass, preventing graph bloat.
+        scores.append(
+            _merge_metrics([score, param_statistics], num_workers=num_workers)
+        )
 
-    out = xr.merge(scores + statistics, join="outer", compat="no_conflicts")
+    out = xr.merge(scores, join="outer", compat="no_conflicts")
     LOG.info("Computed metrics in %.2f seconds", time.time() - start)
     LOG.info("Metrics dataset: \n%s", out)
     return out
