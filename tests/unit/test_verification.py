@@ -8,7 +8,12 @@ import xarray as xr
 sys.path.insert(0, str(Path(__file__).parents[2] / "workflow" / "scripts"))
 from verification_aggregation import aggregate_results
 
-from verification import decode_metric, apply_lapse_rate_correction_inplace
+from verification import (
+    decode_metric,
+    apply_lapse_rate_correction_inplace,
+    _circular_align,
+    _compute_scores,
+)
 
 
 @pytest.mark.parametrize(
@@ -166,3 +171,51 @@ def test_lapse_rate_correction_only_requested_params(make_lapse_rate_datasets):
     apply_lapse_rate_correction_inplace(fcst, obs, ["T_2M"])
     np.testing.assert_allclose(fcst["T_2M"].values, 280.0 - 0.0065 * 500.0, atol=1e-4)
     np.testing.assert_array_equal(fcst["TD_2M"].values, 270.0)
+
+
+# ---------------------------------------------------------------------------
+# circular (directional) parameter handling, e.g. DD_10M
+# ---------------------------------------------------------------------------
+
+
+def test_circular_align_wraps_across_north():
+    # fcst=355°, obs=5°: true angular error is 10°, not 350°.
+    fcst = xr.DataArray([355.0])
+    obs = xr.DataArray([5.0])
+    aligned = _circular_align(fcst, obs)
+    np.testing.assert_allclose((fcst - aligned).values, [-10.0])
+
+
+def test_circular_align_symmetric_case():
+    # fcst=5°, obs=355°: same 10° error, opposite sign.
+    fcst = xr.DataArray([5.0])
+    obs = xr.DataArray([355.0])
+    aligned = _circular_align(fcst, obs)
+    np.testing.assert_allclose((fcst - aligned).values, [10.0])
+
+
+def test_circular_align_no_wraparound_unaffected():
+    # Well away from the 0/360° boundary, alignment is a no-op.
+    fcst = xr.DataArray([100.0])
+    obs = xr.DataArray([90.0])
+    aligned = _circular_align(fcst, obs)
+    np.testing.assert_allclose(aligned.values, obs.values)
+
+
+def test_compute_scores_circular_bias_across_north():
+    fcst = xr.DataArray([355.0], dims="values")
+    obs = xr.DataArray([5.0], dims="values")
+    result = _compute_scores(fcst, obs, dim=["values"], prefix="DD_10M.", circular=True)
+    np.testing.assert_allclose(result["DD_10M.BIAS"].values, -10.0)
+    np.testing.assert_allclose(result["DD_10M.MAE"].values, 10.0)
+
+
+def test_compute_scores_noncircular_bias_across_north_is_wrong():
+    # Without the circular fix, the same inputs measure a 350° error instead
+    # of the true 10° — this is the behaviour being corrected.
+    fcst = xr.DataArray([355.0], dims="values")
+    obs = xr.DataArray([5.0], dims="values")
+    result = _compute_scores(
+        fcst, obs, dim=["values"], prefix="DD_10M.", circular=False
+    )
+    np.testing.assert_allclose(result["DD_10M.BIAS"].values, 350.0)

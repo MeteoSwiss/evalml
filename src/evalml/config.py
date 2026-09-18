@@ -234,8 +234,12 @@ class ScoreMapsConfig(BaseModel):
         default=["T_2M"],
         description=(
             "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
-            "PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 "
-            "(period-accumulated precipitation, period encoded in the name)."
+            "PS, PMSL, SP_10M, DD_10M (read natively from ML-inference GRIB output, "
+            "or derived from U_10M/V_10M for other sources), RELHUM_2M (read natively "
+            "from ML-inference GRIB output, or derived from T_2M/TD_2M for the "
+            "SwissMetNet/DWH truth; not currently available for ICON/INCA baselines), "
+            "TOT_PREC1, TOT_PREC6, TOT_PREC24 (period-accumulated precipitation, "
+            "period encoded in the name)."
         ),
     )
     leadtimes: List[int] = Field(

@@ -57,6 +57,10 @@ def test_expand_derived():
     assert set(get_base_params(["SP_10M"])) == {"U_10M", "V_10M"}
 
 
+def test_expand_derived_dd10m():
+    assert set(get_base_params(["DD_10M"])) == {"U_10M", "V_10M"}
+
+
 def test_expand_mixed():
     assert set(get_base_params(["T_2M", "SP_10M", "TOT_PREC6"])) == {
         "T_2M",
@@ -104,9 +108,21 @@ def test_compute_derived_sp10m():
     np.testing.assert_allclose(compute_derived(ds, "SP_10M").values, [5.0])
 
 
+def test_compute_derived_dd10m():
+    # Northerly wind (blowing from N): velocity points south, U=0, V<0 -> DD=0
+    # Easterly wind (blowing from E): velocity points west, U<0, V=0 -> DD=90
+    ds = xr.Dataset(
+        {
+            "U_10M": xr.DataArray([0.0, -5.0]),
+            "V_10M": xr.DataArray([-5.0, 0.0]),
+        }
+    )
+    np.testing.assert_allclose(compute_derived(ds, "DD_10M").values, [0.0, 90.0])
+
+
 def test_compute_derived_unknown_raises():
     with pytest.raises(ValueError, match="No recipe"):
-        compute_derived(xr.Dataset(), "DD_10M")
+        compute_derived(xr.Dataset(), "UNKNOWN_PARAM")
 
 
 # ---------------------------------------------------------------------------

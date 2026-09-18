@@ -5,26 +5,32 @@ description: |
 config_label: varda-single-1.0
 
 dates:
-  start: 2025-03-01T00:00
-  end: 2025-03-03T00:00
-  frequency: 24h
+  # start: 2025-01-01T06:00
+  # end: 2025-12-31T06:00
+  # frequency: 294h
+  - 2025-01-01T06:00
+  - 2025-01-02T12:00
+  - 2025-01-03T18:00
 
 runs:
   - temporal_downscaler:
       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
       label: Varda-single-1.0
-      steps: 0/120/1
+      steps: 0/12/1
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
-        # NOTE this pins the merge commit that introduced 'copy-prognostic-from-forecaster'
-        # TODO pin a release tag once the plugins are versioned. Do not pin the main branch to avoid stale code (changes do to main to not change the evalml hash)
-        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@b4835d76346e1e5ec0181884520da00e317fbfbc
-        # - anemoi-inference==0.11.0
+        - -e /scratch/mch/llanzila/postprocessor/anemoi-plugins-meteoswiss
+        - git+https://github.com/ecmwf/anemoi-inference@88c1ec13632c570f246cc2580ce324e45f36a03b
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
-        steps: 0/120/6
+        steps: 0/12/6
+        extra_requirements:
+          - anemoi-datasets==0.5.35
+          - -e /scratch/mch/llanzila/postprocessor/anemoi-plugins-meteoswiss
+          - git+https://github.com/ecmwf/anemoi-inference@88c1ec13632c570f246cc2580ce324e45f36a03b
+  
   - baseline:
       label: INCA
       root: /store_new/mch/msclim/INCA
@@ -41,20 +47,19 @@ runs:
 truth:
   label: SwissMetNet
   root: jretrievedwh:1,2
-  # To verify against SwissMetNet observations from the DWH via jretrievedwh,
-  # set instead (requires jretrievedwh.py on $PATH and $OPR_HOME set):
-  # Other selectors: root: jretrievedwh:locations=ARO,KLO,LUG
-  #                  root: jretrievedwh:bbox=45.8,47.8,5.9,10.5
-  #                  append ;stage=devt to target a non-prod DWH stage
 
 experiment:
   params:
     - T_2M
     - TD_2M
+    - U_10M
+    - V_10M
     - SP_10M
+    - DD_10M
+    - RELHUM_2M
     - TOT_PREC1
-    - TOT_PREC6
     - PMSL
+    - PS
   stratification:
     regions:
       - icon
@@ -66,11 +71,7 @@ experiment:
     root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
   thresholds:
     TOT_PREC1:
-      gt: [0.0, 0.1, 1, 5, 10]
-    TOT_PREC6:
-      gt: [0.0, 0.1, 5, 10, 20, 50]
-    SP_10M:
-      gt: [2.5, 5.0, 10.0]
+      gt: [0.0, 1, 5]
     T_2M:
       lt: [273.15]
       gt: [288.15, 298.15]
@@ -80,7 +81,7 @@ experiment:
       # - init_hour
       - season
   scorecards:
-    enabled: true
+    enabled: false
     sections:
       nowcasting:
         baseline: INCA
@@ -90,7 +91,7 @@ experiment:
           - "U_10M:RMSE,R2,ETS"
           - "V_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2,ETS"
-          - "TOT_PREC1:RMSE,R2,ETS"
+          - "TOT_PREC:RMSE,R2,ETS"
       short_range:
         baseline: ICON-CH1-CTRL
         lead_times: "6/33/6"
@@ -116,6 +117,7 @@ showcase:
   params:
     - T_2M
     - SP_10M
+    - DD_10M
     - TOT_PREC1
   meteograms:
     enabled: false
@@ -143,5 +145,5 @@ profile:
     mem_mb_per_cpu: 1800
     runtime: "1h"
     gpus: 0
-    slurm_account: s83
+    slurm_account: go41
   jobs: 50

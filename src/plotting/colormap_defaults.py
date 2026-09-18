@@ -23,6 +23,18 @@ _SCORE_REDS_PA = {
     "levels": [0, 50, 100, 150, 200, 250, 300, 350],
 }
 _SCORE_REDS_PRECIP = {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 1, 1.5, 2, 3, 4]}
+# Wind direction errors are circular (0-360°); a plain difference can be off
+# by up to 360° even though the true angular error never exceeds 180°. Scores
+# computed upstream aren't wraparound-aware, so treat DD_10M error magnitudes
+# with that caveat in mind. Levels scaled to a plausible degrees-of-error range.
+_SCORE_REDS_DEG = {
+    "cmap": plt.get_cmap("Reds", 6),
+    "levels": [0, 15, 30, 45, 60, 90, 180],
+}
+_SCORE_REDS_RH = {
+    "cmap": plt.get_cmap("Reds", 6),
+    "levels": [0, 5, 10, 15, 20, 30, 50],
+}
 
 
 def _precip_score_map(accum_h: int) -> dict:
@@ -46,12 +58,6 @@ def _precip_bias_map(accum_h: int) -> dict:
 
 
 _CMAP_DEFAULTS = {
-    "SP": {
-        "cmap": plt.get_cmap("coolwarm", 11),
-        "vmin": 800 * 100,
-        "vmax": 1100 * 100,
-        "extend": "both",
-    },
     "TD_2M": load_ncl_colormap("t2m_29lev.ct") | {"extend": "both"},
     "T_2M": load_ncl_colormap("t2m_29lev.ct") | {"units": "degC", "extend": "both"},
     "V_10M": load_ncl_colormap("modified_uv_17lev.ct")
@@ -60,6 +66,22 @@ _CMAP_DEFAULTS = {
     | {"units": "m/s", "extend": "both"},
     "SP_10M": load_ncl_colormap("modified_uv_17lev.ct")
     | {"units": "m/s", "extend": "max"},
+    # Cyclic quantity (0-360°, wraps N=0=360): use a cyclic colormap so the
+    # boundary color matches on both ends, unlike a sequential map.
+    "DD_10M": {
+        "cmap": plt.get_cmap("twilight", 16),
+        "vmin": 0,
+        "vmax": 360,
+        "units": "degrees",
+        "extend": "neither",
+    },
+    "RELHUM_2M": {
+        "cmap": plt.get_cmap("viridis", 10),
+        "vmin": 0,
+        "vmax": 100,
+        "units": "%",
+        "extend": "neither",
+    },
     "T_850": {
         "cmap": plt.get_cmap("inferno", 11),
         "vmin": 220,
@@ -204,6 +226,8 @@ _CMAP_DEFAULTS = {
     "U_10M.score.map": _SCORE_REDS | {"units": "m/s"},
     "V_10M.score.map": _SCORE_REDS | {"units": "m/s"},
     "SP_10M.score.map": _SCORE_REDS | {"units": "m/s"},
+    "DD_10M.score.map": _SCORE_REDS_DEG | {"units": "degrees"},
+    "RELHUM_2M.score.map": _SCORE_REDS_RH | {"units": "%"},
     "TD_2M.score.map": _SCORE_REDS | {"units": "°C"},
     "T_2M.score.map": _SCORE_REDS | {"units": "°C"},
     "PMSL.score.map": _SCORE_REDS_PA | {"units": "Pa"},
@@ -230,6 +254,19 @@ _CMAP_DEFAULTS = {
         "levels": np.arange(start=-2.25, stop=2.26, step=0.5),
     }
     | {"units": "m/s"},
+    # Caveat: a plain signed difference wraps at the 0/360° boundary (e.g. 5°
+    # vs 355° is a 10° error, not 350°), so BIAS near due-north can look
+    # spuriously large. Same limitation as DD_10M.score.map above.
+    "DD_10M.BIAS.map": {
+        "cmap": plt.get_cmap("RdBu_r", 9),
+        "levels": np.arange(start=-90, stop=91, step=20),
+    }
+    | {"units": "degrees"},
+    "RELHUM_2M.BIAS.map": {
+        "cmap": plt.get_cmap("RdBu_r", 9),
+        "levels": np.arange(start=-45, stop=46, step=10),
+    }
+    | {"units": "%"},
     "TD_2M.BIAS.map": {
         "cmap": plt.get_cmap("RdBu_r", 11),
         "levels": np.arange(start=-2.75, stop=2.76, step=0.5),
