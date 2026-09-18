@@ -22,7 +22,7 @@ runs:
         - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@b4835d76346e1e5ec0181884520da00e317fbfbc
         # - anemoi-inference==0.11.0
       forecaster:
-        checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
+        checkpoint: https://service.meteoswiss.ch/mlstore#/models/varda-forecaster-det-sgm/versions/1
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/120/6
   - baseline:
