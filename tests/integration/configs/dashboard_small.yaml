@@ -16,17 +16,16 @@ dates:
   - 2024-08-01T00:00
 
 runs:
-  - temporal_downscaler:
-      checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
-      label: Varda-single-1.0
-      steps: 0/12/1
-      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
+  - forecaster:
+      checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/409/runs/b30acf68520a4bbd8324c44666561696
+      label: stage_C_icon_1km
+      steps: 0/12/6
+      config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
       extra_requirements:
-        - anemoi-datasets==0.5.35
-      forecaster:
-        checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
-        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
-        steps: 0/12/6
+        - earthkit-utils<0.2.0
+        - earthkit-data<0.19.0
+        - anemoi-inference==0.11.1
+
   - baseline:
       label: INCA
       root: /store_new/mch/msclim/INCA
