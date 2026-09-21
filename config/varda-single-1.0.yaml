@@ -17,14 +17,16 @@ runs:
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
-        # NOTE this pins the merge commit that introduced 'copy-prognostic-from-forecaster'
-        # TODO pin a release tag once the plugins are versioned. Do not pin the main branch to avoid stale code (changes do to main to not change the evalml hash)
-        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@b4835d76346e1e5ec0181884520da00e317fbfbc
-        # - anemoi-inference==0.11.0
+        - git+https://github.com/ecmwf/anemoi-inference.git@88c1ec13632c570f246cc2580ce324e45f36a03b
+        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@e5f95f3eb7b8907407faa7ac2e2771c1d7fe5aa4
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/varda-forecaster-det-sgm/versions/1
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/120/6
+        extra_requirements:
+          - anemoi-datasets==0.5.35
+          - git+https://github.com/ecmwf/anemoi-inference.git@88c1ec13632c570f246cc2580ce324e45f36a03b
+          - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@e5f95f3eb7b8907407faa7ac2e2771c1d7fe5aa4
   - baseline:
       label: INCA
       root: /store_new/mch/msclim/INCA
@@ -143,5 +145,5 @@ profile:
     mem_mb_per_cpu: 1800
     runtime: "1h"
     gpus: 0
-    slurm_account: s83
+    slurm_account: go41
   jobs: 50
