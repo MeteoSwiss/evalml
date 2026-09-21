@@ -639,6 +639,11 @@ def _load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Da
     if ifs_rename:
         ds = ds.rename(ifs_rename)
 
+    # IFS/ECMWF convention: "tp" is accumulated precip in meters.
+    # Convert to kg m-2 (mm) to match the ICON-native TOT_PREC convention.
+    if "tp" in ifs_rename and "TOT_PREC" in ds:
+        ds["TOT_PREC"] = ds["TOT_PREC"] * 1000
+
     return ds
 
 
