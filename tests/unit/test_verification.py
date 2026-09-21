@@ -12,7 +12,9 @@ from verification import (
     decode_metric,
     apply_lapse_rate_correction_inplace,
     _circular_align,
+    _circular_mean_var,
     _compute_scores,
+    _compute_statistics,
     verify,
 )
 
@@ -220,6 +222,54 @@ def test_compute_scores_noncircular_bias_across_north_is_wrong():
         fcst, obs, dim=["values"], prefix="DD_10M.", circular=False
     )
     np.testing.assert_allclose(result["DD_10M.BIAS"].values, 350.0)
+
+
+def test_circular_mean_var_wraps_across_north():
+    # A plain mean of 359 and 1 gives 180 (exactly backwards) instead of ~0.
+    data = xr.DataArray([359.0, 1.0], dims="values")
+    mean, var = _circular_mean_var(data, dim=["values"])
+    np.testing.assert_allclose(float(mean) % 360.0, 0.0, atol=1e-6)
+    assert float(var) < 1e-3  # tightly clustered around 0
+
+
+def test_circular_mean_var_identical_values():
+    data = xr.DataArray([45.0, 45.0, 45.0], dims="values")
+    mean, var = _circular_mean_var(data, dim=["values"])
+    np.testing.assert_allclose(float(mean), 45.0)
+    np.testing.assert_allclose(float(var), 0.0, atol=1e-9)
+
+
+def test_circular_mean_var_uniform_spread_has_max_variance():
+    # No dominant direction -> resultant length ~0 -> variance ~1.
+    data = xr.DataArray([0.0, 90.0, 180.0, 270.0], dims="values")
+    _, var = _circular_mean_var(data, dim=["values"])
+    np.testing.assert_allclose(float(var), 1.0, atol=1e-9)
+
+
+def test_compute_statistics_circular_mean_across_north():
+    data = xr.DataArray([359.0, 1.0], dims="values")
+    stats = _compute_statistics(
+        data, dim=["values"], prefix="DD_10M.", source="fcst", circular=True
+    )
+    assert set(stats.data_vars) == {"DD_10M.mean", "DD_10M.var"}  # no min/max
+    np.testing.assert_allclose(
+        stats["DD_10M.mean"].values.item() % 360.0, 0.0, atol=1e-6
+    )
+
+
+def test_compute_statistics_noncircular_mean_across_north_is_wrong():
+    # Without the circular fix, the same inputs average to 180 — backwards.
+    data = xr.DataArray([359.0, 1.0], dims="values")
+    stats = _compute_statistics(
+        data, dim=["values"], prefix="DD_10M.", source="fcst", circular=False
+    )
+    assert set(stats.data_vars) == {
+        "DD_10M.mean",
+        "DD_10M.var",
+        "DD_10M.min",
+        "DD_10M.max",
+    }
+    np.testing.assert_allclose(stats["DD_10M.mean"].values.item(), 180.0)
 
 
 # verify — missing-fraction masking

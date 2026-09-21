@@ -296,25 +296,60 @@ def _compute_scores(
     return result
 
 
+def _circular_mean_var(
+    data: xr.DataArray, dim: list[str], period: float = _CIRCULAR_PERIOD
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """Circular mean and variance of a directional quantity (degrees by default).
+
+    A plain arithmetic mean/var is wrong for angles: mean(359, 1) = 180 (exactly
+    backwards) instead of ~0. Uses the standard directional-statistics definition:
+    average the unit vectors (sin, cos) of each angle, then take the angle of the
+    resultant vector as the mean, and 1 - (resultant length) as the variance
+    (0 = all values identical, 1 = uniformly spread around the circle).
+    """
+    rad = np.deg2rad(data) * (360.0 / period)
+    sin_mean = np.sin(rad).mean(dim=dim, skipna=True)
+    cos_mean = np.cos(rad).mean(dim=dim, skipna=True)
+    resultant_length = np.hypot(sin_mean, cos_mean)
+    mean = np.mod(np.degrees(np.arctan2(sin_mean, cos_mean)) * (period / 360.0), period)
+    variance = 1 - resultant_length
+    return mean, variance
+
+
 def _compute_statistics(
     data: xr.DataArray,
     dim: list[str],
     prefix="",
     suffix="",
     source="",
+    circular: bool = False,
 ) -> xr.Dataset:
     """
     Compute basic statistics of a xarray DataArray (data).
     Returns a xarray Dataset with the computed statistics.
+
+    If `circular` is True, `mean`/`var` use circular statistics (see
+    _circular_mean_var) instead of a plain arithmetic mean/variance, and
+    `min`/`max` are omitted since neither has a well-defined meaning for a
+    directional quantity (there is no smallest/largest point on a circle).
     """
-    stats = xr.Dataset(
-        {
-            f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),
-            f"{prefix}var{suffix}": data.var(dim=dim, skipna=True),
-            f"{prefix}min{suffix}": data.min(dim=dim, skipna=True),
-            f"{prefix}max{suffix}": data.max(dim=dim, skipna=True),
-        }
-    )
+    if circular:
+        mean, var = _circular_mean_var(data, dim=dim)
+        stats = xr.Dataset(
+            {
+                f"{prefix}mean{suffix}": mean,
+                f"{prefix}var{suffix}": var,
+            }
+        )
+    else:
+        stats = xr.Dataset(
+            {
+                f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),
+                f"{prefix}var{suffix}": data.var(dim=dim, skipna=True),
+                f"{prefix}min{suffix}": data.min(dim=dim, skipna=True),
+                f"{prefix}max{suffix}": data.max(dim=dim, skipna=True),
+            }
+        )
     stats = stats.expand_dims({"source": [source]})
     return stats
 
@@ -467,12 +502,14 @@ def verify(
             prefix=param + ".",
             source=fcst_label,
             dim=dim,
+            circular=param in _CIRCULAR_PARAMS,
         ).where(~too_many_missing)
         obs_stats = _compute_statistics(
             obs_param,
             prefix=param + ".",
             source=obs_label,
             dim=dim,
+            circular=param in _CIRCULAR_PARAMS,
         )
         param_statistics = xr.concat([fcst_stats, obs_stats], dim="source")
         # Single compute per parameter: score + statistics share fcst_param/obs_param
