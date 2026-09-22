@@ -3,8 +3,6 @@ import os
 import re
 import time
 
-from pathlib import Path
-
 import cartopy.crs as ccrs
 from cartopy.io.shapereader import Reader
 
@@ -20,6 +18,82 @@ import abc
 from shapely.geometry import Polygon
 
 LOG = logging.getLogger(__name__)
+
+_T_LAPSE_RATE = 0.0065  # K/m — ICAO standard atmosphere
+_LAPSE_RATE_PARAMS: dict[str, float] = {"T_2M": _T_LAPSE_RATE}
+
+
+def apply_lapse_rate_correction_inplace(
+    fcst: xr.Dataset,
+    obs: xr.Dataset,
+    params: list[str],
+) -> xr.Dataset:
+    """Correct T_2M and TD_2M in *fcst* to the elevation of *obs*.
+
+    Requires both *fcst* and *obs* to carry an ``elevation`` coordinate (metres).
+    For forecasts this is the model orography from the ICON external parameter
+    file; for observations it comes from station metadata or FIS geopotential.
+    The function silently returns *fcst* unchanged when either coordinate is
+    absent so that pipelines without elevation data are not broken.
+
+    Formula applied per parameter:
+        T_corrected = T_forecast − Γ × (elevation_obs − elevation_fcst)
+
+    A positive height difference (obs higher than forecast grid cell) lowers the
+    corrected value, consistent with the standard atmospheric lapse rate.
+    """
+    missing = [
+        name
+        for name, ds in (("forecast", fcst), ("observations", obs))
+        if "elevation" not in ds.coords
+    ]
+    if missing:
+        raise ValueError(
+            f"Lapse-rate correction requested but elevation coordinate is missing "
+            f"from: {', '.join(missing)}."
+        )
+    dz = obs["elevation"] - fcst["elevation"]
+
+    dz_vals = np.asarray(dz).ravel()
+    n_missing = int(np.sum(~np.isfinite(dz_vals)))
+    if n_missing > 0:
+        LOG.warning(
+            "Lapse-rate correction: %d missing elevation value(s) in dz; "
+            "statistics and corrections are computed over the remaining %d point(s).",
+            n_missing,
+            dz_vals.size - n_missing,
+        )
+
+    max_abs_dz = float(np.nanmax(np.abs(dz_vals)))
+    if max_abs_dz < 1.0:
+        LOG.info(
+            "Lapse-rate correction: forecast and truth altitudes agree within rounding "
+            "(max |Δz| = %.2f m); correction is negligible.",
+            max_abs_dz,
+        )
+    else:
+        LOG.info(
+            "Lapse-rate correction: Δz range [%.1f, %.1f] m, mean %.1f m.",
+            float(np.nanmin(dz_vals)),
+            float(np.nanmax(dz_vals)),
+            float(np.nanmean(dz_vals)),
+        )
+
+    for param, rate in _LAPSE_RATE_PARAMS.items():
+        if param in params and param in fcst.data_vars:
+            correction = rate * dz
+            if max_abs_dz >= 1.0:
+                c_vals = np.asarray(correction).ravel()
+                LOG.info(
+                    "Lapse-rate correction for %s (Γ=%.4f K/m): "
+                    "correction range [%.3f, %.3f] K, mean %.3f K.",
+                    param,
+                    rate,
+                    float(np.nanmin(c_vals)),
+                    float(np.nanmax(c_vals)),
+                    float(np.nanmean(c_vals)),
+                )
+            fcst[param] = fcst[param] - correction
 
 
 class AggregationMasks(abc.ABC):
@@ -38,26 +112,26 @@ class ShapefileSpatialAggregationMasks(SpatialAggregationMasks):
     regions: dict[str, list[Polygon]]
 
     def __init__(
-        self, shp: str | list[str], src_crs=ccrs.epsg(2056), dst_crs=ccrs.PlateCarree()
+        self,
+        regions: list[dict],
+        src_crs=ccrs.epsg(2056),
+        dst_crs=ccrs.PlateCarree(),
     ):
         proj = pyproj.Transformer.from_crs(
             src_crs.proj4_init, dst_crs.proj4_init, always_xy=True
         ).transform
 
-        regions = {}
-        # add inner region for ML evaluation
-        regions["all"] = [
-            Polygon(list(zip([1.5, 16, 16, 1.5, 1.5], [43, 43, 49.5, 49.5, 43])))
-        ]
-        if shp and shp != [""]:
-            shp = [shp] if isinstance(shp, str) else shp
-            for shapefile in shp:
-                region_name = Path(shapefile).stem
-                reader = Reader(shapefile)
-                regions[region_name] = [
+        self.regions = {}
+        for spec in regions:
+            name = spec["name"]
+            if spec["type"] == "bbox":
+                lon_min, lon_max, lat_min, lat_max = spec["bbox"]
+                self.regions[name] = [_bbox_polygon(lon_min, lon_max, lat_min, lat_max)]
+            elif spec["type"] == "shp":
+                reader = Reader(spec["path"])
+                self.regions[name] = [
                     transform(proj, record.geometry) for record in reader.records()
                 ]
-        self.regions = regions
 
     def get_masks(self, lat: xr.DataArray, lon: xr.DataArray) -> xr.DataArray:
         masks = []
@@ -98,30 +172,52 @@ def _binary_confusion_matrix(
     dim: list[str],
 ) -> xr.DataArray:
     """
-    Compute counts of the confusion matrix (contingency table, e.g. hits, misses, ...)
+    Compute confusion matrix counts (tp, fp, fn, tn, total) for all thresholds at once.
 
-    Return an xarray.DataArray with the definition of the events in the dimension as given by
-    `labels` and the elements of the confusion matrix in the dimension `contingency`.
+    Thresholds sharing the same operator are broadcast as a single extra dimension so
+    the spatial reduction happens in one dask pass instead of one pass per threshold.
     """
-    threshold_dim = xr.DataArray(
-        data=[f"{key}_{str(val).replace('.', 'p')}" for key, val in thresholds],
-        dims="threshold",
+    from collections import defaultdict
+
+    op_groups: dict[str, list[float]] = defaultdict(list)
+    for op_txt, val in thresholds:
+        op_groups[op_txt].append(val)
+
+    # Points where both fcst and obs carry valid (non-masked) data
+    valid = fcst.notnull() & obs.notnull()
+    # Fill NaN so comparisons return False rather than NaN for masked points
+    fcst_filled = fcst.where(valid, 0)
+    obs_filled = obs.where(valid, 0)
+
+    contingency_dim = xr.DataArray(
+        ["tp_count", "fp_count", "fn_count", "tn_count", "total_count"],
+        dims="contingency",
     )
-    contingency_table = []
-    for op_txt, value in thresholds:
+
+    tables = []
+    for op_txt, values in op_groups.items():
         try:
             op_fn = getattr(op, op_txt)
         except AttributeError:
             raise AttributeError(f"operator {op_txt} is not available")
-        event_operator = scores.categorical.ThresholdEventOperator(
-            default_event_threshold=value,
-            default_op_fn=op_fn,
+
+        threshold_labels = [f"{op_txt}_{str(v).replace('.', 'p')}" for v in values]
+        # Broadcast comparison across all threshold values simultaneously
+        vals_da = xr.DataArray(
+            values, dims="threshold", coords={"threshold": threshold_labels}
         )
-        contingency_manager = event_operator.make_contingency_manager(fcst, obs)
-        contingency_table.append(
-            contingency_manager.transform(reduce_dims=dim).get_table()
-        )
-    return xr.concat(contingency_table, dim=threshold_dim)
+        fcst_ev = op_fn(fcst_filled, vals_da)  # (...spatial/time..., threshold) bool
+        obs_ev = op_fn(obs_filled, vals_da)
+
+        tp = (fcst_ev & obs_ev & valid).sum(dim)
+        fp = (fcst_ev & ~obs_ev & valid).sum(dim)
+        fn = (~fcst_ev & obs_ev & valid).sum(dim)
+        tn = (~fcst_ev & ~obs_ev & valid).sum(dim)
+        total = valid.sum(dim).broadcast_like(tp)
+
+        tables.append(xr.concat([tp, fp, fn, tn, total], dim=contingency_dim))
+
+    return xr.concat(tables, dim="threshold")
 
 
 def _compute_scores(
@@ -204,14 +300,16 @@ def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
     return out
 
 
-def _compute_masks(ds: xr.Dataset) -> xr.Dataset:
-    # extract first data_var from ds and only retain x and y dimensions
-    darr = ds[list(ds.data_vars)[0]].isel(
-        **{dim: 0 for dim in ds[list(ds.data_vars)[0]].dims if dim not in ["x", "y"]}
+def _bbox_polygon(lon_min, lon_max, lat_min, lat_max) -> Polygon:
+    return Polygon(
+        [
+            (lon_min, lat_min),
+            (lon_max, lat_min),
+            (lon_max, lat_max),
+            (lon_min, lat_max),
+            (lon_min, lat_min),
+        ]
     )
-    # compile list of masks to use with data arrays in ds
-    mask = xr.ones_like(darr, dtype=bool).expand_dims(region=["all"])
-    return mask
 
 
 def verify(
@@ -219,10 +317,11 @@ def verify(
     obs: xr.Dataset,
     fcst_label: str,
     obs_label: str,
-    regions: list[str] | None = None,
+    regions: list[dict],
     dim: list[str] | None = None,
     threshold_dict: dict[str, dict[str, list[float]]] | None = None,
     num_workers: int | None = None,
+    max_missing_fraction: float = 0.0,
 ) -> xr.Dataset:
     """
     Compute verification metrics and statistics comparing forecast and observation datasets.
@@ -241,8 +340,12 @@ def verify(
         Label for the forecast source (used in output dataset).
     obs_label : str
         Label for the observation source (used in output dataset).
-    regions : list[str] or None, optional
-        List of shapefile paths or region names to use for spatial aggregation. If None, uses default region ('all').
+    regions : list[dict]
+        Ordered list of region specs. Each entry is either
+        ``{"type": "bbox", "name": ..., "bbox": [lon_min, lon_max, lat_min, lat_max]}`` or
+        ``{"type": "shp", "name": ..., "path": ...}``. The list order is preserved in the
+        output NetCDF region coordinate; the first entry is the domain region used by
+        dashboards and scorecards when region stratification is not active.
     dim : list[str] or None, optional
         List of dimension names to reduce over when computing metrics/statistics. If None, tries to infer from fcst.
     threshold_dict : dict[str, dict[str, list[float]]] or None, optional
@@ -251,6 +354,13 @@ def verify(
         If None, no thresholds used.
     num_workers : int or None, optional
         Number of parallel workers for computation. If None, uses available CPU cores minus 2.
+    max_missing_fraction : float, optional
+        Maximum allowed fraction of missing forecast values among obs-valid in-region points
+        before a metric is set to NaN. Computed per region and time step over the reduction
+        dimensions. Default is 0.0 — no missing forecasts are tolerated where observations
+        exist. Increase to a small positive value (e.g. 0.05) if spurious forecast gaps need
+        to be accommodated. Currently this is not configurable, as we want to guarantee that
+        competing forecasts are evaluated on exactly the same set of observations.
 
     Returns
     -------
@@ -274,75 +384,74 @@ def verify(
         else:
             dim = ["values"]
 
-    # rewrite the verification to use dask and xarray
-    # chunk the data to avoid memory issues
-    # compute the metrics in parallel
-    # return the results as a xarray Dataset
+    if not regions:
+        raise ValueError(
+            "At least one region must be specified. "
+            "Provide an ordered list of region specs via the 'regions' argument."
+        )
+
     fcst_aligned, obs_aligned = xr.align(fcst, obs, join="inner", copy=False)
-    region_polygons = ShapefileSpatialAggregationMasks(shp=regions)
+    region_polygons = ShapefileSpatialAggregationMasks(regions=regions)
     masks = region_polygons.get_masks(
         lon=obs_aligned["longitude"], lat=obs_aligned["latitude"]
     )
 
     scores = []
-    statistics = []
     for param in fcst_aligned.data_vars:
         if param not in obs_aligned.data_vars:
             LOG.warning("Parameter %s not in obs, skipping", param)
             continue
-        score = []
-        fcst_statistics = []
-        obs_statistics = []
         thresholds = (
             threshold_dict.get(param, None)
             if isinstance(threshold_dict, dict)
             else None
         )
-        LOG.info(f"Thresholds for {param}: {thresholds}")
-        for region in masks.region.values:
-            LOG.info("Verifying parameter %s for region %s", param, region)
-            fcst_param = fcst_aligned[param].where(masks.sel(region=region))
-            obs_param = obs_aligned[param].where(masks.sel(region=region))
+        LOG.info(
+            "Verifying parameter %s for %d regions, thresholds: %s",
+            param,
+            len(masks.region),
+            thresholds,
+        )
 
-            # scores vs time (reduce spatially)
-            score.append(
-                _compute_scores(
-                    fcst_param,
-                    obs_param,
-                    prefix=param + ".",
-                    source=fcst_label,
-                    dim=dim,
-                    thresholds=thresholds,
-                ).expand_dims(region=[region])
-            )
+        # Apply all region masks at once via broadcast — adds "region" as leading dim
+        fcst_param = fcst_aligned[param].where(masks)
+        obs_param = obs_aligned[param].where(masks)
 
-            # statistics vs time (reduce spatially)
-            fcst_statistics.append(
-                _compute_statistics(
-                    fcst_param,
-                    prefix=param + ".",
-                    source=fcst_label,
-                    dim=dim,
-                ).expand_dims(region=[region])
-            )
-            obs_statistics.append(
-                _compute_statistics(
-                    obs_param,
-                    prefix=param + ".",
-                    source=obs_label,
-                    dim=dim,
-                ).expand_dims(region=[region])
-            )
+        # Missing fraction: among obs-valid in-region points, fraction where fcst is missing.
+        # Normalising by obs availability avoids penalising parameters with fewer stations.
+        missing_fraction = (
+            fcst_param.isnull().where(obs_param.notnull()).mean(dim=dim, skipna=True)
+        )
+        too_many_missing = missing_fraction > max_missing_fraction
 
-        score = xr.concat(score, dim="region")
-        fcst_statistics = xr.concat(fcst_statistics, dim="region")
-        obs_statistics = xr.concat(obs_statistics, dim="region")
-        param_statistics = xr.concat([fcst_statistics, obs_statistics], dim="source")
-        # Compute eagerly per parameter to prevent dask graph bloat
-        scores.append(_merge_metrics([score], num_workers=num_workers))
-        statistics.append(_merge_metrics([param_statistics], num_workers=num_workers))
+        score = _compute_scores(
+            fcst_param,
+            obs_param,
+            prefix=param + ".",
+            source=fcst_label,
+            dim=dim,
+            thresholds=thresholds,
+        ).where(~too_many_missing)
+        fcst_stats = _compute_statistics(
+            fcst_param,
+            prefix=param + ".",
+            source=fcst_label,
+            dim=dim,
+        ).where(~too_many_missing)
+        obs_stats = _compute_statistics(
+            obs_param,
+            prefix=param + ".",
+            source=obs_label,
+            dim=dim,
+        )
+        param_statistics = xr.concat([fcst_stats, obs_stats], dim="source")
+        # Single compute per parameter: score + statistics share fcst_param/obs_param
+        # subgraphs so dask evaluates the data in one pass, preventing graph bloat.
+        scores.append(
+            _merge_metrics([score, param_statistics], num_workers=num_workers)
+        )
 
-    out = xr.merge(scores + statistics, join="outer", compat="no_conflicts")
+    out = xr.merge(scores, join="outer", compat="no_conflicts")
     LOG.info("Computed metrics in %.2f seconds", time.time() - start)
     LOG.info("Metrics dataset: \n%s", out)
     return out

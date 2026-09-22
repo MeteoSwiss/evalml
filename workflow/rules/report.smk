@@ -39,6 +39,18 @@ rule report_experiment_dashboard:
         sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
         header_text=make_header_text(),
         stratification=" ".join(config["experiment"]["dashboard"]["stratification"]),
+        label_map=",".join(
+            "{}:{}".format(
+                sid,
+                (
+                    BASELINE_CONFIGS[sid].get("label", sid)
+                    if sid in BASELINE_CONFIGS
+                    else RUN_CONFIGS[sid].get("label", sid)
+                ),
+            )
+            for sid in EXPERIMENT_PARTICIPANTS
+        )
+        + ",truth-{}:{}".format(TRUTH_HASH, config["truth"]["label"]),
     shell:
         """
         python {input.script} \
@@ -48,6 +60,7 @@ rule report_experiment_dashboard:
             --header_text "{params.header_text}" \
             --configfile "{input.configfile}" \
             --stratification {params.stratification} \
+            --labels "{params.label_map}" \
             --output {output} >{log} 2>&1
         """
 
@@ -76,10 +89,14 @@ rule report_scorecard:
         lead_times=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["lead_times"],
         stratification=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["stratification"],
         variables=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["variables"],
-        run_source=lambda wc: RUN_CONFIGS[f"{wc.env_id}/{wc.config_hash}"].get(
+        run_source=lambda wc: f"{wc.env_id}/{wc.config_hash}",
+        run_label=lambda wc: RUN_CONFIGS[f"{wc.env_id}/{wc.config_hash}"].get(
             "label", f"{wc.env_id}/{wc.config_hash}"
         ),
-        baseline_source=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["baseline"],
+        baseline_source=lambda wc: resolve_baseline_id(
+            SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]
+        ),
+        baseline_label=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["baseline"],
     shell:
         """
         VAR_ARGS=()
@@ -91,7 +108,9 @@ rule report_scorecard:
             --verif_run {input.verif_run:q} \
             --verif_baseline {input.verif_baseline:q} \
             --run_source {params.run_source:q} \
+            --run_label {params.run_label:q} \
             --baseline_source {params.baseline_source:q} \
+            --baseline_label {params.baseline_label:q} \
             --lead_times {params.lead_times:q} \
             --stratification {params.stratification:q} \
             "${{VAR_ARGS[@]}}" \
