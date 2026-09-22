@@ -411,16 +411,26 @@ def _load_analysis_data_from_zarr(
     return xr.Dataset(vars_out)
 
 
-def _collect_ml_grib_files(root: Path, steps: list[int] | None = None) -> list[Path]:
+# Diagnostic params emitted by the multi-output "realv2" stream. They are written to a
+# sibling ``realv2-*.grib`` file (same LAM grid as the main output) rather than the main
+# ``{date}{time}_{step}.grib``, so loaders must source them from there.
+REALV2_PARAMS = frozenset({"VMAX_10M"})
+
+
+def _collect_ml_grib_files(
+    root: Path, steps: list[int] | None = None, prefix: str = ""
+) -> list[Path]:
     """Return GRIB files for an ML inference run (flat directory layout).
 
     When `steps` is provided, the discovered files are filtered to those whose
-    name ends with ``_{step:03d}.grib``.
+    name ends with ``_{step:03d}.grib``. `prefix` selects an output stream: the
+    default ``""`` matches the main ``20*.grib`` outputs, while ``"realv2-"``
+    matches the diagnostic ``realv2-20*.grib`` sibling files.
     """
     # TODO: this glob pattern is a dirty fix for anemoi-inference writing outputs
     # with wrong formatting. Eventually we will either have to have a fix upstream
     # or write a single output file.
-    files = sorted(root.glob("20*.grib"))
+    files = sorted(root.glob(f"{prefix}20*.grib"))
     if steps is None:
         return files
 
@@ -1370,10 +1380,27 @@ def load_forecast_data(
     load_steps = get_steps(steps, params)
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
-        ds = _load_forecast_data_from_grib(
-            files=_collect_ml_grib_files(root, load_steps),
-            params=load_params,
-        )
+        # Diagnostic "realv2" params (e.g. VMAX_10M) live in sibling realv2-*.grib
+        # files; load them separately and merge with the main output stream.
+        main_params = [p for p in load_params if p not in REALV2_PARAMS]
+        realv2_params = [p for p in load_params if p in REALV2_PARAMS]
+        datasets = []
+        if main_params:
+            datasets.append(
+                _load_forecast_data_from_grib(
+                    # NOTE: root is already for a specific reftime
+                    files=_collect_ml_grib_files(root, load_steps),
+                    params=main_params,
+                )
+            )
+        if realv2_params:
+            datasets.append(
+                _load_forecast_data_from_grib(
+                    files=_collect_ml_grib_files(root, load_steps, prefix="realv2-"),
+                    params=realv2_params,
+                )
+            )
+        ds = datasets[0] if len(datasets) == 1 else xr.merge(datasets)
         # Try to derive elevation from surface geopotential (FIS/z at step 0)
         # before falling back to ICON grid constants lookup.
         fis_files = _collect_ml_grib_files(root, [0])

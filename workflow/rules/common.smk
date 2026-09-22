@@ -466,6 +466,8 @@ PARAMS_WITHOUT_STEP_ZERO_VALUE = {
     "lcc",
     "SSRD",
     "ssrd",
+    # period maximum: undefined at step 0
+    "VMAX_10M",
 }
 
 

@@ -4,7 +4,7 @@ from pathlib import Path
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import MultiPoint
-from data_input import load_from_grib_file
+from data_input import load_from_grib_file, REALV2_PARAMS
 
 
 PARAMS_MAP = {
@@ -26,6 +26,11 @@ PARAMS_MAP_INV = {v: k for k, v in PARAMS_MAP.items()}
 def load_state_from_grib(
     file: Path, paramlist: list[str] | None = None
 ) -> dict[str, np.ndarray | dict[str, np.ndarray] | gpd.GeoSeries]:
+    # Diagnostic "realv2" params (e.g. VMAX_10M) live in sibling realv2-*.grib files
+    if paramlist and set(paramlist) <= REALV2_PARAMS:
+        realv2_file = file.with_name(f"realv2-{file.name}")
+        if realv2_file.exists():
+            file = realv2_file
     # Also request IFS shortname aliases
     paramlist_extended = list(
         {p for p in (paramlist or [])}
