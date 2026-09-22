@@ -890,6 +890,8 @@
         "holdout_fraction": {
           "anyOf": [
             {
+              "exclusiveMaximum": 1,
+              "exclusiveMinimum": 0,
               "type": "number"
             },
             {

@@ -430,9 +430,7 @@ def verify(
         lon=obs_aligned["longitude"], lat=obs_aligned["latitude"]
     )
 
-    station_masks = _create_station_group_masks(
-        obs_aligned["values"], holdout_stations
-    )
+    station_masks = _create_station_group_masks(obs_aligned["values"], holdout_stations)
     if holdout_stations:
         LOG.info(
             "Station group masks created: %d holdout, %d holdin stations",
