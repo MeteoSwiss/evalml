@@ -332,7 +332,7 @@ function resizeChartScroll() {
       getSelected("source-select"),
       getSelected("metric-select"),
       getSelected("param-select"),
-      stationGroupSelect ? [stationGroupSelect.value] : [],
+      getSelected("station-group-select"),
     ].flatMap(v => v);
     summary.textContent = parts.join(", ");
   }

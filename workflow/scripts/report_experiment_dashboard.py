@@ -64,13 +64,6 @@ def main(args):
     _check_n_samples_consistency(dfs, args.verif_files)
     dfs = [_ensure_unique_lead_time(d) for d in dfs]
     dfs = _select_best_sources(dfs)
-    # Normalize station_group dimension: datasets without it (station_holdout disabled for that run)
-    # are expanded to station_group=["all"] so xr.concat receives uniform-rank tensors.
-    if any("station_group" in d.dims for d in dfs):
-        dfs = [
-            d if "station_group" in d.dims else d.expand_dims(station_group=["all"])
-            for d in dfs
-        ]
     ds = xr.concat(dfs, dim="source", join="outer")
     LOG.info("Loaded verification netcdf: \n%s", ds)
 
@@ -96,8 +89,6 @@ def main(args):
         df = df[df["season"] == "all"]
     if "init_hour" not in stratification:
         df = df[df["init_hour"] == "all"]
-    if "station_group" not in df.columns:
-        df["station_group"] = "all"
 
     df.dropna(inplace=True)
     LOG.info("Loaded verification data frame: \n%s", df)

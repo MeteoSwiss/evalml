@@ -37,7 +37,7 @@ def test_parse_selection_default_group():
         {"group": "SwissMetNet"},
         "prod",
         "surface",
-        None,
+        40,
         None,
         None,
     )
@@ -45,7 +45,7 @@ def test_parse_selection_default_group():
         {"group": "SwissMetNet"},
         "prod",
         "surface",
-        None,
+        40,
         None,
         None,
     )
@@ -56,7 +56,7 @@ def test_parse_selection_keyvalue_and_stage():
         {"locations": "ARO,KLO"},
         "devt",
         "surface",
-        None,
+        40,
         None,
         None,
     )
@@ -87,7 +87,7 @@ def test_parse_selection_filter_mode_domain_with_bbox():
         {"bbox": "40.5,53.0,0.0,17.5"},
         "prod",
         "surface",
-        None,
+        40,
         "domain",
         [45.7, 48.0, 5.8, 10.8],
     )

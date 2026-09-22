@@ -39,6 +39,9 @@ def compute_holdout_stations(
 
     Mirrors the selection logic in nudging.py so the evaluation partition matches
     what was actually withheld from nudging, using the experiment-level seed/fraction.
+
+    holdout_fraction's (0, 1) range is validated once, at config-load time, by
+    StationHoldoutConfig (evalml.config) — not re-checked here.
     """
     exclude_stations = station_holdout_cfg.get("exclude_stations")
     holdout_fraction = station_holdout_cfg.get("holdout_fraction")
@@ -46,7 +49,7 @@ def compute_holdout_stations(
 
     if exclude_stations is not None:
         return [s for s in exclude_stations if s in all_stations]
-    if holdout_fraction is not None and 0.0 < float(holdout_fraction) < 1.0:
+    if holdout_fraction is not None:
         n_holdout = round(len(all_stations) * float(holdout_fraction))
         rng = np.random.default_rng(holdout_seed)
         return list(rng.choice(all_stations, size=n_holdout, replace=False))

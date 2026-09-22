@@ -460,6 +460,8 @@ class StationHoldoutConfig(BaseModel):
 
     holdout_fraction: Optional[float] = Field(
         default=None,
+        gt=0,
+        lt=1,
         description=(
             "Fraction of truth stations to hold out for evaluation (exclusive 0–1). "
             "Mutually exclusive with exclude_stations."
@@ -476,6 +478,15 @@ class StationHoldoutConfig(BaseModel):
             "Mutually exclusive with holdout_fraction."
         ),
     )
+
+    @model_validator(mode="after")
+    def _holdout_fraction_and_exclude_stations_are_exclusive(self):
+        if self.holdout_fraction is not None and self.exclude_stations is not None:
+            raise ValueError(
+                "station_holdout: holdout_fraction and exclude_stations are "
+                "mutually exclusive; set at most one of them."
+            )
+        return self
 
 
 class ExperimentConfig(BaseModel):

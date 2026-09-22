@@ -186,15 +186,20 @@ def parse_selection(
         -> retrieve over one bbox, then trim to a second, independent bbox —
            mirrors RetrieveObservation's bbox/station_filter_mode+domain_bbox split.
 
-    use_limitation/filter_mode/domain_bbox default to None (no time-window
-    limit, no extra trim) when not given, unchanged from before they existed.
+    use_limitation defaults to 40 when not given, matching fetch_data()'s own
+    pre-existing default (see there) so a root string without an explicit
+    use_limitation behaves the same as before this parameter was parseable
+    from the root string at all (e.g. ``jretrievedwh:1,2``, as used by
+    config/varda-single-1.0.yaml). filter_mode/domain_bbox default to None
+    (no extra trim) when not given — unlike use_limitation, these are new
+    concepts with no prior behaviour to preserve.
     """
     _, _, rest = str(root).partition(":")
     rest = rest.strip()
     stations: dict[str, Any] = {}
     stage = "prod"
     seq_type = "surface"
-    use_limitation: int | None = None
+    use_limitation: int | None = 40
     filter_mode: str | None = None
     domain_bbox: list | None = None
     for i, part in enumerate([p for p in rest.split(";") if p]):
@@ -328,7 +333,7 @@ def fetch_data(
     increment_minutes=60,
     seq_type="surface",
     stage="prod",
-    use_limitation: int | None = None,
+    use_limitation: int | None = 40,
     timeout_s=600,
 ) -> pd.DataFrame:
     """Fetch observation data; columns: station (int), termin (YYYYMMDDhhmmss),

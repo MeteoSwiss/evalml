@@ -299,16 +299,28 @@ def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
 
 
 def _create_station_group_masks(
-    values_coord: xr.DataArray, holdout_stations: list[str]
+    values_coord: xr.DataArray, holdout_stations: list[str] | None
 ) -> xr.DataArray:
-    """Boolean masks for all/holdout/holdin station groups over the values dimension."""
+    """Boolean masks over the values dimension for station groups.
+
+    Always includes "all" (every verify() output carries a station_group dimension,
+    so downstream consumers never need to check whether it's present). When
+    holdout_stations is empty/None, "all" is the only group — the holdout/holdin
+    split is only meaningful, and only added, when stations are actually held out.
+    """
     all_nat_abbr = values_coord.values
+    if not holdout_stations:
+        return xr.DataArray(
+            np.ones((1, len(all_nat_abbr)), dtype=bool),
+            coords={"station_group": ["all"], "values": all_nat_abbr},
+            dims=["station_group", "values"],
+        )
     is_holdout = np.isin(all_nat_abbr, holdout_stations)
     return xr.DataArray(
         np.stack([np.ones_like(is_holdout), is_holdout, ~is_holdout]),
         coords={
             "station_group": ["all", "holdout", "holdin"],
-            "values": values_coord.values,
+            "values": all_nat_abbr,
         },
         dims=["station_group", "values"],
     )
@@ -368,6 +380,11 @@ def verify(
         If None, no thresholds used.
     num_workers : int or None, optional
         Number of parallel workers for computation. If None, uses available CPU cores minus 2.
+    holdout_stations : list[str] or None, optional
+        Station nat_abbr held out (e.g. from nudging) for cross-validation. The output always
+        carries a station_group dimension — ["all"] when this is None/empty, or
+        ["all", "holdout", "holdin"] when stations are given — so callers never need to check
+        for its presence.
 
     Returns
     -------
@@ -403,11 +420,10 @@ def verify(
         lon=obs_aligned["longitude"], lat=obs_aligned["latitude"]
     )
 
-    station_masks = None
-    if holdout_stations is not None:
-        station_masks = _create_station_group_masks(
-            obs_aligned["values"], holdout_stations
-        )
+    station_masks = _create_station_group_masks(
+        obs_aligned["values"], holdout_stations
+    )
+    if holdout_stations:
         LOG.info(
             "Station group masks created: %d holdout, %d holdin stations",
             int(station_masks.sel(station_group="holdout").sum()),
@@ -436,10 +452,10 @@ def verify(
         fcst_param = fcst_aligned[param].where(masks)
         obs_param = obs_aligned[param].where(masks)
 
-        # Apply station group masks — adds "station_group" dim (all/holdout/holdin)
-        if station_masks is not None:
-            fcst_param = fcst_param.where(station_masks)
-            obs_param = obs_param.where(station_masks)
+        # Apply station group masks — adds "station_group" dim, always present
+        # (["all"], or ["all", "holdout", "holdin"] when holdout_stations is set)
+        fcst_param = fcst_param.where(station_masks)
+        obs_param = obs_param.where(station_masks)
 
         score = _compute_scores(
             fcst_param,
