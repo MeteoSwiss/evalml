@@ -57,6 +57,16 @@ constant_forcings:
 
 patch_metadata: resources/sgm-temporal-downscaler-ich1-oper-patch.yaml
 
+# The checkpoint never predicts 10-metre wind speed/direction or 2-metre
+# relative humidity, so anemoi-inference has no metadata of its own for them.
+typed_variables:
+  SP_10M:
+    mars: {param: SP_10M, levtype: sfc}
+  DD_10M:
+    mars: {param: DD_10M, levtype: sfc}
+  RELHUM_2M:
+    mars: {param: RELHUM_2M, levtype: sfc}
+
 post_processors:
   - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
       accumulations:
@@ -79,15 +89,19 @@ output:
           - extract_mask: # removes global points
               mask: "lam_0/cutout_mask"
               as_slice: true
-          # here, the trimedge mask can be specified when available
-          # at overlap steps (multiples of the forecaster stride) replace the
-          # re-predicted prognostics with the forecaster's boundary values
           - forward_transform_filter:
               copy-prognostic-from-forecaster:
                 forecaster_path: forecaster/20*
                 common_leadtime: 6h
                 params_to_keep: [tp] # NOTE, if more diagnostics are added, update accordingly.
                 namer: *namer
+          - forward_transform_filter:
+              surface-diagnostics:
+                u_component: U_10M
+                v_component: V_10M
+                temperature: T_2M
+                dewpoint: TD_2M
+                variables: [SP_10M, DD_10M, RELHUM_2M]
 
     - grib:
         path: grib/ifs-{dateTime}_{step:03}.grib
@@ -108,6 +122,13 @@ output:
                 common_leadtime: 6h
                 params_to_keep: [tp] # NOTE, if more diagnostics are added, update accordingly.
                 namer: *namer
+          - forward_transform_filter:
+              surface-diagnostics:
+                u_component: U_10M
+                v_component: V_10M
+                temperature: T_2M
+                dewpoint: TD_2M
+                variables: [SP_10M, DD_10M, RELHUM_2M]
         modifiers:
           - patches:
             - variable:
@@ -132,6 +153,9 @@ output:
                 TOT_PREC: {"param": 228, "shortName": "tp"}
                 tp: {"param": 228, "shortName": "tp"}
                 z: {"param": 129, "shortName": "z"}
+                SP_10M: {"param": 207, "shortName": "10si"}
+                DD_10M: {"param": 260260, "shortName": "10wdir"}
+                RELHUM_2M: {"param": 260242, "shortName": "2r"}
                 "^q_(\\d+)$": {"param": 133, "shortName": "q"}
                 "^t_(\\d+)$": {"param": 130, "shortName": "t"}
                 "^u_(\\d+)$": {"param": 131, "shortName": "u"}

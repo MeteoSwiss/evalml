@@ -22,6 +22,28 @@ LOG = logging.getLogger(__name__)
 _T_LAPSE_RATE = 0.0065  # K/m — ICAO standard atmosphere
 _LAPSE_RATE_PARAMS: dict[str, float] = {"T_2M": _T_LAPSE_RATE}
 
+# Directional/circular params (degrees, period 360): a plain fcst - obs
+# difference can be off by up to a full period even though the true angular
+# error never exceeds period / 2 (e.g. fcst=355°, obs=5° is a 10° error, not
+# -350°). Listed params get their `obs` aliased onto the branch nearest
+# `fcst` before BIAS/MSE/MAE/CORR are computed — see _circular_align.
+_CIRCULAR_PARAMS: frozenset[str] = frozenset({"DD_10M"})
+_CIRCULAR_PERIOD = 360.0
+
+
+def _circular_align(
+    fcst: xr.DataArray, obs: xr.DataArray, period: float = _CIRCULAR_PERIOD
+) -> xr.DataArray:
+    """Shift `obs` by a multiple of `period` so that `fcst - obs` is the
+    minimal signed circular difference in (-period/2, period/2].
+
+    This makes a plain (non-circular) difference/score computed on
+    (fcst, aligned_obs) circular-correct, without needing a dedicated
+    circular-statistics implementation for BIAS/MSE/MAE/CORR.
+    """
+    diff = fcst - obs
+    return obs + period * np.round(diff / period)
+
 
 def apply_lapse_rate_correction_inplace(
     fcst: xr.Dataset,
@@ -228,6 +250,7 @@ def _compute_scores(
     suffix="",
     source="",
     thresholds: dict[str, list[float]] | None = None,
+    circular: bool = False,
 ) -> xr.Dataset:
     """
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
@@ -235,7 +258,13 @@ def _compute_scores(
     Computation of scores for continuous and categorical forecasts are supported.
     Categorical forecasts are specified via a dict mapping operator keys (gt, ge, lt, le, eq, ne)
     to lists of threshold values (e.g. {"gt": [10.0], "lt": [0.0]}).
+
+    If `circular` is True, `obs` is aliased onto the branch nearest `fcst`
+    (see _circular_align) before BIAS/MSE/MAE/CORR are computed, so a
+    directional quantity's 0/360° wraparound doesn't inflate its error.
     """
+    if circular:
+        obs = _circular_align(fcst, obs)
     LOG.info(f"Compute scores for {prefix} {suffix}")
     result = xr.Dataset(
         {
@@ -267,25 +296,60 @@ def _compute_scores(
     return result
 
 
+def _circular_mean_var(
+    data: xr.DataArray, dim: list[str], period: float = _CIRCULAR_PERIOD
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """Circular mean and variance of a directional quantity (degrees by default).
+
+    A plain arithmetic mean/var is wrong for angles: mean(359, 1) = 180 (exactly
+    backwards) instead of ~0. Uses the standard directional-statistics definition:
+    average the unit vectors (sin, cos) of each angle, then take the angle of the
+    resultant vector as the mean, and 1 - (resultant length) as the variance
+    (0 = all values identical, 1 = uniformly spread around the circle).
+    """
+    rad = np.deg2rad(data) * (360.0 / period)
+    sin_mean = np.sin(rad).mean(dim=dim, skipna=True)
+    cos_mean = np.cos(rad).mean(dim=dim, skipna=True)
+    resultant_length = np.hypot(sin_mean, cos_mean)
+    mean = np.mod(np.degrees(np.arctan2(sin_mean, cos_mean)) * (period / 360.0), period)
+    variance = 1 - resultant_length
+    return mean, variance
+
+
 def _compute_statistics(
     data: xr.DataArray,
     dim: list[str],
     prefix="",
     suffix="",
     source="",
+    circular: bool = False,
 ) -> xr.Dataset:
     """
     Compute basic statistics of a xarray DataArray (data).
     Returns a xarray Dataset with the computed statistics.
+
+    If `circular` is True, `mean`/`var` use circular statistics (see
+    _circular_mean_var) instead of a plain arithmetic mean/variance, and
+    `min`/`max` are omitted since neither has a well-defined meaning for a
+    directional quantity (there is no smallest/largest point on a circle).
     """
-    stats = xr.Dataset(
-        {
-            f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),
-            f"{prefix}var{suffix}": data.var(dim=dim, skipna=True),
-            f"{prefix}min{suffix}": data.min(dim=dim, skipna=True),
-            f"{prefix}max{suffix}": data.max(dim=dim, skipna=True),
-        }
-    )
+    if circular:
+        mean, var = _circular_mean_var(data, dim=dim)
+        stats = xr.Dataset(
+            {
+                f"{prefix}mean{suffix}": mean,
+                f"{prefix}var{suffix}": var,
+            }
+        )
+    else:
+        stats = xr.Dataset(
+            {
+                f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),
+                f"{prefix}var{suffix}": data.var(dim=dim, skipna=True),
+                f"{prefix}min{suffix}": data.min(dim=dim, skipna=True),
+                f"{prefix}max{suffix}": data.max(dim=dim, skipna=True),
+            }
+        )
     stats = stats.expand_dims({"source": [source]})
     return stats
 
@@ -431,18 +495,21 @@ def verify(
             source=fcst_label,
             dim=dim,
             thresholds=thresholds,
+            circular=param in _CIRCULAR_PARAMS,
         ).where(~too_many_missing)
         fcst_stats = _compute_statistics(
             fcst_param,
             prefix=param + ".",
             source=fcst_label,
             dim=dim,
+            circular=param in _CIRCULAR_PARAMS,
         ).where(~too_many_missing)
         obs_stats = _compute_statistics(
             obs_param,
             prefix=param + ".",
             source=obs_label,
             dim=dim,
+            circular=param in _CIRCULAR_PARAMS,
         )
         param_statistics = xr.concat([fcst_stats, obs_stats], dim="source")
         # Single compute per parameter: score + statistics share fcst_param/obs_param
