@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Callable, Literal, Any
 
 import earthkit.data as ekd
+import earthkit.meteo.thermo as ekdt
 import earthkit.meteo.vertical as ekdv
 import numpy as np
 import pandas as pd
@@ -55,6 +56,7 @@ _ACCUMULATABLE_PARAMS: frozenset[str] = frozenset({"TOT_PREC"})
 DERIVED_PARAMS: dict[str, tuple[str, ...]] = {
     "SP_10M": ("U_10M", "V_10M"),
     "DD_10M": ("U_10M", "V_10M"),
+    "RELHUM_2M": ("T_2M", "TD_2M"),
 }
 
 
@@ -97,6 +99,17 @@ def compute_derived(ds: xr.Dataset, param: str) -> xr.DataArray:
             "shortName": "DD_10M",
             "units": "degrees",
             "name": "10m wind direction",
+        }
+        return da
+    if param == "RELHUM_2M":
+        # Same formula as the anemoi-inference surface-diagnostics post-processor
+        # (anemoi_plugins_meteoswiss.transform.filters.surface_diagnostics), so
+        # baselines are verified against the ML forecaster on a like-for-like basis.
+        da = ekdt.relative_humidity_from_dewpoint(ds["T_2M"], ds["TD_2M"])
+        da.attrs["parameter"] = {
+            "shortName": "RELHUM_2M",
+            "units": "%",
+            "name": "2m relative humidity",
         }
         return da
     raise ValueError(f"No recipe for derived variable '{param}'")
@@ -871,6 +884,7 @@ def _load_INCA_baseline_from_netcdf(
                    CLCT      total cloud cover         %        1h/10min   CT        10min    %         2022
                    U_10M     10 m zonal wind           m/s      1h/10min   derived from DD_10M, FF_10M
                    V_10M     10 m meridional wind      m/s      1h/10min   derived from DD_10M, FF_10M
+                   RELHUM_2M 2 m relative humidity     %        1h/10min   derived from T_2M, TD_2M
 
                  U_10M and V_10M use the meteorological convention: DD is
                  the direction the wind blows FROM, clockwise from North.
@@ -1046,7 +1060,11 @@ def _load_INCA_baseline_from_netcdf(
             "TOT_PREC": "RP",
         },
     }
-    DERIVED_DEPS = {"U_10M": ["DD_10M", "FF_10M"], "V_10M": ["DD_10M", "FF_10M"]}
+    DERIVED_DEPS = {
+        "U_10M": ["DD_10M", "FF_10M"],
+        "V_10M": ["DD_10M", "FF_10M"],
+        "RELHUM_2M": ["T_2M", "TD_2M"],
+    }
     PARAM_UNITS = {
         "T_2M": "K",
         "TD_2M": "K",
@@ -1058,6 +1076,7 @@ def _load_INCA_baseline_from_netcdf(
         "VMAX_10M": "m/s",
         "U_10M": "m/s",
         "V_10M": "m/s",
+        "RELHUM_2M": "%",
     }
     FREQ_TO_TD = {
         "1h": np.timedelta64(1, "h"),
@@ -1214,6 +1233,14 @@ def _load_INCA_baseline_from_netcdf(
             merged["U_10M"] = (-ff * np.sin(dd_rad)).assign_attrs(units="m/s")
         if "V_10M" in params:
             merged["V_10M"] = (-ff * np.cos(dd_rad)).assign_attrs(units="m/s")
+
+    if "RELHUM_2M" in params:
+        # Same formula as the anemoi-inference surface-diagnostics post-processor
+        # (anemoi_plugins_meteoswiss.transform.filters.surface_diagnostics), so
+        # INCA is verified against the ML forecaster on a like-for-like basis.
+        merged["RELHUM_2M"] = ekdt.relative_humidity_from_dewpoint(
+            merged["T_2M"], merged["TD_2M"]
+        ).assign_attrs(units="%")
 
     # Restructure to match the earthkit GRIB engine profile: `step` is the
     # lead-time dimension, `valid_time` and `forecast_reference_time` are coords.
