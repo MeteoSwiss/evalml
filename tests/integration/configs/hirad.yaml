@@ -6,7 +6,7 @@ config_label: hirad-forecast-1.0
 
 dates:
   start: 2025-03-01T00:00
-  end: 2025-03-31T00:00
+  end: 2025-05-31T00:00
   frequency: 12h
 
 
@@ -15,15 +15,15 @@ runs:
   - grib_forecaster:
       root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs_ft_new/grib'
       label: HiRAD-downscaling-IFS-fine-tuned
-      steps: 0/12/1
-  - grib_forecaster:
-      root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs/grib'
-      label: HiRAD-downscaling-IFS
-      steps: 0/12/1
+      steps: 0/33/1
+  #- grib_forecaster:
+  #    root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs/grib'
+  #    label: HiRAD-downscaling-IFS
+  #    steps: 0/12/1
   - baseline:
       label: ICON-CH1-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
-      steps: 0/12/1
+      steps: 0/33/1
 
 # HiRAD GRIB data has no elevation coordinate yet.
 # TODO: set to true when we fix the GRIB generation.
@@ -80,11 +80,11 @@ experiment:
     sections:
       short_range:
         baseline: ICON-CH1-CTRL
-        lead_times: "6/12/6"
+        lead_times: "6/30/6"
         stratification: region
         variables:
           - "T_2M:RMSE,R2,ETS"
-          #- "SP_10M:RMSE,R2,ETS"
+          - "SP_10M:RMSE,R2,ETS"
           - "U_10M:RMSE,R2,ETS"
           - "V_10M:RMSE,R2,ETS"
           - "TOT_PREC1:RMSE,R2,ETS"
