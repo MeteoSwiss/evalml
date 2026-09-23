@@ -37,7 +37,7 @@ input:
                   dem_barrier_file: /store_new/mch/msclim/appclim/data/grids/topodem/v2/topo/radar_100/topo_DEM_1000M.nc
                   d_eff_file: /scratch/mch/llanzila/sruc/aux_files/d_eff_cache_domain_maxdist50km_nbar50x3_bw1500m_elev50_elevdiff100_nsta1939.nc
                   weight_power: 2.0
-                  max_dist: 50000.0   
+                  max_dist: 50000.0
                   use_topo_descriptors: false
                   use_reliability_check: true
                   number_of_std: 5.0
