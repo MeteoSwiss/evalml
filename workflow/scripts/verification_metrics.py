@@ -37,8 +37,8 @@ def compute_holdout_stations(
 ) -> list[str]:
     """Return nat_abbr list of holdout stations derived from the truth dataset's station list.
 
-    Mirrors the selection logic in nudging.py so the evaluation partition matches
-    what was actually withheld from nudging, using the experiment-level seed/fraction.
+    Either the explicit exclude_stations present in the truth dataset, or a random
+    holdout_fraction of the truth stations drawn with holdout_seed.
 
     holdout_fraction's (0, 1) range is validated once, at config-load time, by
     StationHoldoutConfig (evalml.config) — not re-checked here.
@@ -123,7 +123,7 @@ def main(args: ScriptConfig):
         holdout_stations = compute_holdout_stations(all_stations, station_holdout_cfg)
         if holdout_stations:
             LOG.info(
-                "Station holdout: %d / %d stations withheld",
+                "Station holdout: %d / %d stations in holdout group",
                 len(holdout_stations),
                 len(all_stations),
             )

@@ -21,14 +21,14 @@ runs:
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi_with_nudging.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
-        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@f62ae9f3eae7bb2d19837d220b10a7bddf35a57c
+        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@cc116a80c86346cb8de4449c1091bb2c6299a302
         - git+https://github.com/ecmwf/anemoi-inference@88c1ec13632c570f246cc2580ce324e45f36a03b
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/12/6
         extra_requirements:
-          - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@f62ae9f3eae7bb2d19837d220b10a7bddf35a57c
+          - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@cc116a80c86346cb8de4449c1091bb2c6299a302
           - git+https://github.com/ecmwf/anemoi-inference@88c1ec13632c570f246cc2580ce324e45f36a03b
 
   - temporal_downscaler:
@@ -38,14 +38,14 @@ runs:
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
-        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@f62ae9f3eae7bb2d19837d220b10a7bddf35a57c
+        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@cc116a80c86346cb8de4449c1091bb2c6299a302
         - git+https://github.com/ecmwf/anemoi-inference@88c1ec13632c570f246cc2580ce324e45f36a03b
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/12/6
         extra_requirements:
-          - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@f62ae9f3eae7bb2d19837d220b10a7bddf35a57c
+          - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@cc116a80c86346cb8de4449c1091bb2c6299a302
           - git+https://github.com/ecmwf/anemoi-inference@88c1ec13632c570f246cc2580ce324e45f36a03b
 
   - baseline:

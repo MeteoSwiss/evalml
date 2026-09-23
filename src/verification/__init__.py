@@ -384,7 +384,7 @@ def verify(
     num_workers : int or None, optional
         Number of parallel workers for computation. If None, uses available CPU cores minus 2.
     holdout_stations : list[str] or None, optional
-        Station nat_abbr held out (e.g. from nudging) for cross-validation. The output always
+        Station nat_abbr forming the "holdout" station group. The output always
         carries a station_group dimension — ["all"] when this is None/empty, or
         ["all", "holdout", "holdin"] when stations are given — so callers never need to check
         for its presence.
