@@ -16,7 +16,7 @@ input:
             - forward_transform_filter:
                 retrieve_observation:
                   obs_path: observation/nudging_station_obs_raw.parquet
-                  jretrieve_src_path: /scratch/mch/llanzila/sruc/evalml/src/data_input/
+                  jretrieve_src_path: /scratch/mch/llanzila/sruc/evalml/src
                   retrieval_bbox: [40.5, 53.0, 0.0, 17.5]
                   # station_group: "1,2"
                   variables: [T_2M, TD_2M, U_10M, V_10M, TOT_PREC, PMSL, PS]
