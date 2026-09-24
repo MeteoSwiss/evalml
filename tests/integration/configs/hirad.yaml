@@ -2,7 +2,7 @@
 description: |
   HiRAD downscaling experiments.
 
-config_label: hirad-forecast-1.0
+config_label: hirad-forecast-comparisons-1.0
 
 dates:
   start: 2025-03-01T00:00
@@ -13,8 +13,16 @@ dates:
 
 runs:
   - grib_forecaster:
-      root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs_ft_new/grib'
-      label: HiRAD-downscaling-IFS-fine-tuned
+      root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs_ft_with_baseline/grib-pred'
+      label: HiRAD-downscaling-IFS-ft-pred
+      steps: 0/33/1
+  - grib_forecaster:
+      root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs_ft_with_baseline/grib-ensemble-mean'
+      label: HiRAD-downscaling-IFS-ft-ensemble-mean
+      steps: 0/33/1
+  - grib_forecaster:
+      root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs_ft_with_baseline/grib-baseline'
+      label: IFS-interpolated-baseline
       steps: 0/33/1
   #- grib_forecaster:
   #    root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs/grib'
