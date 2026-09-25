@@ -398,14 +398,16 @@ def verif_hash(full_config: dict) -> str:
     """Hash of all settings that affect verification outputs.
 
     Combines the truth source with verification-method settings so that
-    changing either (e.g. switching lapse_rate_correction on/off) produces
-    new output paths and unconditionally triggers a rerun.
+    changing any of them (e.g. switching lapse_rate_correction on/off, or
+    changing the station_holdout selection) produces new output
+    paths and unconditionally triggers a rerun.
     """
     truth_cfg = {
         k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE
     }
     experiment_verif_cfg = {
         "lapse_rate_correction": full_config.get("lapse_rate_correction", True),
+        "station_holdout": full_config.get("experiment", {}).get("station_holdout"),
     }
     return generate_json_hash({"truth": truth_cfg, "verif": experiment_verif_cfg})
 
@@ -423,11 +425,15 @@ def truth_file_dep(_):
 if "jretrieve" in str(config["truth"]["root"]):
     from data_input.jretrieve import check_prerequisites, parse_selection
 
-    _, _jretrieve_stage, _ = parse_selection(config["truth"]["root"])
+    _, _jretrieve_stage, _, _, _, _ = parse_selection(config["truth"]["root"])
     check_prerequisites(_jretrieve_stage)
 
 
 TRUTH_HASH = truth_hash(config["truth"])
+_station_holdout_raw = config.get("experiment", {}).get("station_holdout") or {}
+STATION_HOLDOUT_CFG = (
+    _station_holdout_raw if isinstance(_station_holdout_raw, dict) else {}
+)
 REGIONS = parse_regions()
 VERIF_HASH = verif_hash(config)
 _showcase = config.get("showcase", {})

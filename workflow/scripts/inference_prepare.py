@@ -8,7 +8,12 @@ from pathlib import Path
 from evalml.helpers import setup_logger
 
 
-def prepare_config(default_config_path: str, output_config_path: str, params: dict):
+def prepare_config(
+    default_config_path: str,
+    output_config_path: str,
+    params: dict,
+    station_holdout_cfg: dict | None = None,
+):
     """Prepare the configuration file for the inference run.
 
     Overrides default configuration parameters with those provided in params
@@ -22,12 +27,22 @@ def prepare_config(default_config_path: str, output_config_path: str, params: di
         Path where the updated configuration file will be written.
     params : dict
         Dictionary of parameters to override in the default configuration.
+    station_holdout_cfg : dict, optional
+        The experiment's ``experiment.station_holdout`` settings. Only used if
+        the config contains a ``forward_transform_filter:
+        nudge_toward_observation`` block, in which case its
+        ``exclude_stations``/``holdout_fraction``/``holdout_seed`` are
+        injected into that block — see ``_inject_nudging_station_holdout``.
+        Configs without a nudging filter are left untouched.
     """
 
     with open(default_config_path, "r") as f:
         config = yaml.safe_load(f)
 
     config = _override_recursive(config, params)
+    nudging_filter = _find_nudging_filter(config)
+    if nudging_filter is not None:
+        _inject_nudging_station_holdout(nudging_filter, station_holdout_cfg or {})
 
     with open(output_config_path, "w") as f:
         yaml.safe_dump(config, f, sort_keys=False)
@@ -93,7 +108,14 @@ def prepare_temporal_downscaler(smk):
 
     # prepare config
     overrides = _overrides_from_params(smk)
-    prepare_config(smk.input.config, smk.output.config, overrides)
+    station_holdout_cfg = getattr(smk.params, "station_holdout_cfg", None)
+    prepare_config(
+        smk.input.config,
+        smk.output.config,
+        overrides,
+        station_holdout_cfg=station_holdout_cfg,
+    )
+
     LOG.info("Wrote config file at %s", smk.output.config)
     with open(smk.output.config, "r") as f:
         config_content = f.read()
@@ -168,6 +190,68 @@ def _override_recursive(original: dict, updates: dict) -> dict:
         else:
             original[key] = value
     return original
+
+
+def _find_nudging_filter(config: dict) -> dict | None:
+    """Return the ``forward_transform_filter: nudge_toward_observation`` block
+    of config, or None if there is none. By design an inference config
+    declares at most one nudging filter; more than one raises ValueError.
+    Unlike _override_recursive (dict-into-dict only), this walks into lists
+    too, since the filter typically sits inside a pre_processors list.
+    """
+    found = []
+
+    def _walk(node):
+        if isinstance(node, dict):
+            transform_filter = node.get("forward_transform_filter")
+            if isinstance(transform_filter, dict) and isinstance(
+                transform_filter.get("nudge_toward_observation"), dict
+            ):
+                found.append(transform_filter["nudge_toward_observation"])
+            for value in node.values():
+                _walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(config)
+    if len(found) > 1:
+        raise ValueError(
+            f"Found {len(found)} nudge_toward_observation filters in the "
+            "inference config; at most one is supported."
+        )
+    return found[0] if found else None
+
+
+def _inject_nudging_station_holdout(
+    nudging_filter: dict, station_holdout_cfg: dict
+) -> None:
+    """Set exclude_stations/holdout_fraction/holdout_seed on the
+    nudge_toward_observation block nudging_filter, in place, from the
+    experiment's station_holdout settings, so the holdout station set is
+    defined once, in the experiment config.
+
+    A no-op if station_holdout_cfg has neither exclude_stations nor
+    holdout_fraction set (e.g. station holdout isn't configured for this
+    experiment) — any hand-written value already in the config is then left
+    untouched.
+    """
+    exclude_stations = station_holdout_cfg.get("exclude_stations")
+    holdout_fraction = station_holdout_cfg.get("holdout_fraction")
+    if exclude_stations is None and holdout_fraction is None:
+        return
+    holdout_seed = station_holdout_cfg.get("holdout_seed", 42)
+
+    # Mutually exclusive in NudgeTowardObservation itself — clear both
+    # before setting the one station_holdout_cfg actually specifies,
+    # so a stale hand-written value of the other can never linger.
+    nudging_filter.pop("exclude_stations", None)
+    nudging_filter.pop("holdout_fraction", None)
+    if exclude_stations is not None:
+        nudging_filter["exclude_stations"] = list(exclude_stations)
+    else:
+        nudging_filter["holdout_fraction"] = holdout_fraction
+        nudging_filter["holdout_seed"] = holdout_seed
 
 
 def main(smk):
