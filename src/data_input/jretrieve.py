@@ -183,16 +183,10 @@ def parse_selection(
         -> retrieve over the given bbox, then trim to stations within the real
            Swiss national border (see load_obs_data_from_jretrieve).
       ``jretrievedwh:bbox=40.5,53.0,0.0,17.5;filter_mode=domain;domain_bbox=45.7,48.0,5.8,10.8``
-        -> retrieve over one bbox, then trim to a second, independent bbox —
-           mirrors RetrieveObservation's bbox/station_filter_mode+domain_bbox split.
+        -> retrieve over one bbox, then trim to a second, independent bbox.
 
-    use_limitation defaults to 40 when not given, matching fetch_data()'s own
-    pre-existing default (see there) so a root string without an explicit
-    use_limitation behaves the same as before this parameter was parseable
-    from the root string at all (e.g. ``jretrievedwh:1,2``, as used by
-    config/varda-single-1.0.yaml). filter_mode/domain_bbox default to None
-    (no extra trim) when not given — unlike use_limitation, these are new
-    concepts with no prior behaviour to preserve.
+    Defaults when not given: use_limitation=40, filter_mode=None and
+    domain_bbox=None (no extra trim).
     """
     _, _, rest = str(root).partition(":")
     rest = rest.strip()

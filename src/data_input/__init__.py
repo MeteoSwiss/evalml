@@ -832,8 +832,7 @@ def load_obs_data_from_jretrieve(
     result = _select_valid_times(out, times, strict=True)
 
     # Per-variable station-coverage log, so ground-truth coverage can be compared
-    # against what was actually available to nudge (see RetrieveObservation's
-    # equivalent log, under its own IFS shortnames).
+    # against what was actually available to nudge.
     _logged_params = ("T_2M", "TD_2M", "U_10M", "V_10M", "PMSL", "TOT_PREC", "VMAX_10M")
     n_total = result.sizes["values"]
     for icon in _logged_params:

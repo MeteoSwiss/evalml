@@ -228,9 +228,8 @@ def _inject_nudging_station_holdout(
 ) -> None:
     """Set exclude_stations/holdout_fraction/holdout_seed on the
     nudge_toward_observation block nudging_filter, in place, from the
-    experiment's station_holdout settings — so the holdout station set is
-    defined once, in the experiment config, rather than hand-maintained in
-    the inference config as well.
+    experiment's station_holdout settings, so the holdout station set is
+    defined once, in the experiment config.
 
     A no-op if station_holdout_cfg has neither exclude_stations nor
     holdout_fraction set (e.g. station holdout isn't configured for this

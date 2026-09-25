@@ -90,7 +90,6 @@ experiment:
     stratification:
       - season
       # - region
-  # Stations withheld from nudging in the nudge-partial inference run.
   station_holdout:
     - CHM
     - FRE
