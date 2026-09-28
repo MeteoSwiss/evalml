@@ -1,5 +1,5 @@
-# Metadata patch for the VMAX_10M multi-output forecaster.
-# The `data:` block below is shared with sgm-cape-ich1-patch.yaml —
+# Metadata patch for the CAPE_MU multi-output forecaster.
+# The `data:` block below is shared with sgm-windgust-ich1-patch.yaml —
 # keep them in sync when changing primary-stream variable metadata.
 config:
   dataloader:
@@ -752,19 +752,14 @@ dataset:
           param: FI
           step: 12
           time: 0
-  # Diagnostic VMAX_10M emitted by the multi-output "realv2" stream. Gives the
-  # diagnostic a whole-hour max period so its GRIB time-processing is encoded
-  # correctly.
-  realv2:
+  # Diagnostic CAPE_MU emitted by the multi-output "secondary_decoder" stream.
+  # CAPE_MU is instantaneous — no period/process keys needed.
+  secondary_decoder:
     variables_metadata:
-      VMAX_10M:
+      CAPE_MU:
         mars:
           date: 20050101
           levtype: sfc
-          param: VMAX_10M
+          param: CAPE_MU
           step: 12
           time: 0
-        period:
-          - 6h
-          - 12h
-        process: maximum
