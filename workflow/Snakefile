@@ -20,6 +20,7 @@ include: "rules/verification.smk"
 include: "rules/report.smk"
 include: "rules/plot.smk"
 include: "rules/verif_obs.smk"
+include: "rules/spectra.smk"
 
 
 # about workflow
@@ -193,6 +194,11 @@ rule experiment_all:
                 experiment=EXPERIMENT_NAME,
             )
             if SCOREMAPS_CONFIGS.get("enabled", False)
+            else []
+        ),
+        (
+            expand(rules.spectra_plot.output, experiment=EXPERIMENT_NAME)
+            if config.get("experiment", {}).get("spectra", {}).get("enabled", False)
             else []
         ),
 
