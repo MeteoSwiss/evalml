@@ -315,20 +315,20 @@ rule inference_execute:
                     CMD_ARGS+=(runner.parallel.cluster=slurm)
                 fi
 
-                srun \
-                    --unbuffered \
-                    {params.account_flag} \
-                    --partition={resources.slurm_partition} \
-                    --cpus-per-task={resources.cpus_per_task} \
-                    --mem-per-cpu={resources.mem_mb_per_cpu} \
-                    --time={resources.runtime} \
-                    --gres={resources.gres} \
-                    --ntasks={resources.ntasks} \
-                    anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+                anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
             }}
             export -f _run_inference
 
-            squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment' \
+            srun \
+                --unbuffered \
+                {params.account_flag} \
+                --partition={resources.slurm_partition} \
+                --cpus-per-task={resources.cpus_per_task} \
+                --mem-per-cpu={resources.mem_mb_per_cpu} \
+                --time={resources.runtime} \
+                --gres={resources.gres} \
+                --ntasks={resources.ntasks} \
+                squashfs-mount -s {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment' \
                 || echo "[$(date)] WARNING: anemoi-inference exited with non-zero status $?, checking if output was produced..."
         ) >{log} 2>&1
 
