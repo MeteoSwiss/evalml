@@ -1,0 +1,84 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  As windgust.yaml (realv2 VMAX_10M showcase), but verifies against PeakWeather
+  station observations instead of the REAL-CH1 gridded analysis.
+
+# One week of daily initialisations for verification.
+dates:
+  start: 2024-02-01T00:00
+  end: 2024-02-07T00:00
+  frequency: 24h
+
+runs:
+  - forecaster:
+      checkpoint: /scratch/mch/rradev/output/checkpoint/9efa01f8c7464328897edb2c03a407c2/inference-last.ckpt
+      label: realv2_vmax10m
+      steps: 0/120/6
+      config: resources/inference/configs/sgm-multidataset-forecaster-windgust-ich1.yaml
+      extra_requirements:
+        # checkpoint needs: (1) EmptyInput.create_input_state propagates the date
+        # (else KeyError 'date' in add_initial_forcings_to_input_state for the
+        - git+https://github.com/radiradev/anemoi-inference.git@fix/empty-input-propagate-date
+
+        - eccodes==2.39.1
+        - eccodes-cosmo-resources-python==2.38.3.1
+
+  - baseline:
+      label: ICON-CH1-ctrl
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/33/6
+
+truth:
+  label: PeakWeather
+  root: output/data/observations/peakweather
+
+experiment:
+  params:
+    - VMAX_10M
+  stratification:
+    regions:
+      - jura
+      - mittelland
+      - voralpen
+      - alpennordhang
+      - innerealpentaeler
+      - alpensuedseite
+    root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    VMAX_10M:
+      gt: [10.0, 20.0, 30.0]
+  dashboard:
+    stratification:
+      - season
+
+showcase:
+  params:
+    - T_2M
+    - SP_10M
+    - VMAX_10M
+  meteograms:
+    enabled: false
+    stations: [JUN]
+  animations:
+    enabled: true
+    domains:
+      - icon-ch
+      - switzerland
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+    slurm_extra: "--exclusive"  # whole nodes; avoid oversubscription
+  jobs: 50
+  batch_rules:
+    plot_forecast_frame: 32

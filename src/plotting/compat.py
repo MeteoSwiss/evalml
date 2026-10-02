@@ -4,7 +4,7 @@ from pathlib import Path
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import MultiPoint
-from data_input import load_from_grib_file
+from data_input import load_from_grib_file, _discover_diagnostic_prefixes
 
 
 PARAMS_MAP = {
@@ -32,6 +32,16 @@ def load_state_from_grib(
         | {PARAMS_MAP[p] for p in (paramlist or []) if p in PARAMS_MAP}
     )
     ds = load_from_grib_file(file, {"parameter.variable": paramlist_extended})
+    # Diagnostic params (e.g. VMAX_10M, CAPE_MU) may live in prefixed sibling
+    # GRIB files (realv2-*, secondary_decoder-*, …). If the main file doesn't
+    # contain the requested params, try each discovered diagnostic stream.
+    if paramlist and not any(p in ds for p in paramlist):
+        for prefix in _discover_diagnostic_prefixes(file.parent):
+            diag_file = file.with_name(f"{prefix}{file.name}")
+            if diag_file.exists():
+                ds = load_from_grib_file(diag_file, {"parameter.variable": paramlist_extended})
+                if any(p in ds for p in paramlist):
+                    break
     # Rename any IFS shortnames back to COSMO names
     ifs_rename = {
         ifs: cosmo for ifs, cosmo in PARAMS_MAP_INV.items() if ifs in ds.data_vars
@@ -79,8 +89,8 @@ def load_state_from_grib(
                 ds["longitude"].values.size, np.nan, dtype=float
             )
     global_file = str(file.parent / f"ifs-{file.stem}.grib")
-    if Path(global_file).exists():
-        _paramlist_ecmwf = [PARAMS_MAP[p] for p in paramlist]
+    _paramlist_ecmwf = [PARAMS_MAP[p] for p in (paramlist or []) if p in PARAMS_MAP]
+    if Path(global_file).exists() and _paramlist_ecmwf:
         ds = load_from_grib_file(global_file, {"parameter.variable": _paramlist_ecmwf})
         mask = ~np.isnan(ds[_paramlist_ecmwf[0]].values.squeeze())
         global_lons = ds["longitude"].values.flatten()

@@ -55,3 +55,6 @@ uv.lock
 
 # evalml
 .evalml_snakemake_cmd.txt
+
+# Paper plotting scripts + their figure outputs (not part of the realv2 showcase)
+paper_plots/

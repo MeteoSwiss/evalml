@@ -9,6 +9,7 @@ Usage
 
 import argparse
 import json
+import re
 import sys
 import warnings
 from packaging.version import Version, InvalidVersion
@@ -35,11 +36,17 @@ PIN_PACKAGES = [
     "torch-geometric",
 ]
 
+def _requirement_name(token: str) -> str:
+    """Return the canonical package name from a requirement token.
+
+    Strips any version specifier (``==``, ``>=``, ``<``, ``~=``, ``!=``, …) so that
+    e.g. ``eccodes>=2.44.0,<2.48.0`` and ``eccodes==2.39.1`` both key as ``eccodes``.
+    """
+    return re.split(r"[<>=!~]", token, maxsplit=1)[0].strip()
+
+
 # Canonical names of BASE_DEPENDENCIES for membership tests (strips version pins).
-_BASE_DEPENDENCY_NAMES: set[str] = set()
-for _dep in BASE_DEPENDENCIES:
-    _base_name = _dep.split("==")[0].strip() if "==" in _dep else _dep.strip()
-    _BASE_DEPENDENCY_NAMES.add(_base_name)
+_BASE_DEPENDENCY_NAMES: set[str] = {_requirement_name(_dep) for _dep in BASE_DEPENDENCIES}
 
 
 def load_provenance(metadata_path: str) -> dict:
@@ -230,6 +237,12 @@ def parse_overrides(overrides: list[str]) -> dict[str, str | None]:
         elif any(item.startswith(prefix) for prefix in ("git+", "http://", "https://")):
             name = _parse_url_package_name(item)
             result[name] = item
+        elif re.search(r"[<>!~]", item):
+            # Non-`==` version specifier (e.g. ``eccodes>=2.44.0,<2.48.0``). Key by the
+            # canonical name so a later ``name==version`` override replaces it; keep the
+            # full specifier (incl. operator) as the value.
+            name = _requirement_name(item)
+            result[name] = item[len(name):].strip()
         else:
             result[item] = None
 
@@ -318,7 +331,12 @@ def format_requirements(
         for name, version in sorted(pypi_requirements.items()):
             if name not in allowed:
                 continue
-            line = f"{name}=={version}" if version else f"{name}"
+            if not version:
+                line = f"{name}"
+            elif version[0] in "<>=!~":  # a PEP 508 specifier like ">=2.44.0,<2.48.0"
+                line = f"{name}{version}"
+            else:
+                line = f"{name}=={version}"
             line += "  # Extra (not from checkpoint)" if name in overrides else ""
             lines.append(line)
 

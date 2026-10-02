@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Test run for the multi-output "secondary_decoder" anemoi architecture (ICON-CH1
+  cutout forecaster with a diagnostic CAPE_MU stream on the ICON-CH1 1km grid).
+
+dates:
+  start: 2025-08-15T00:00
+  end: 2025-08-16T00:00
+  frequency: 24h
+
+runs:
+  - forecaster:
+      checkpoint: /scratch/mch/mbosch/devml/varda-forecaster-single-extra_decoders/data/output/checkpoint/a7e9ca1add4e4da8b1034f277e8d0681/inference-last.ckpt
+      label: cape_mu_bounded
+      steps: 0/24/6
+      config: resources/inference/configs/sgm-multidataset-forecaster-cape-ich1.yaml
+      extra_requirements:
+        - "anemoi-inference @ git+https://github.com/martibosch/anemoi-inference@8c870ae7"
+        - anemoi-transform>=0.4.1
+
+  - baseline:
+      label: ICON-CH1-ctrl
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/24/6
+
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-ifsnames-v1.0.zarr
+
+experiment:
+  params:
+    - CAPE_MU
+  stratification:
+    regions:
+      - jura
+    root: /scratch/mch/bhendj/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    CAPE_MU:
+      gt: [100.0, 500.0, 1000.0]
+  dashboard:
+    stratification:
+      - season
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50

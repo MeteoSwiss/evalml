@@ -1,0 +1,6 @@
+# REAL-CH1 templates (ICON-CH1 1km grid)
+# Used by diagnostic output streams of the multi-output anemoi architecture.
+- - {levtype: sfc, param: [VMAX_10M]}
+  - resources/icon-ch1-shortName=VMAX_10M.grib
+- - {levtype: sfc, param: [CAPE_MU]}
+  - resources/icon-ch1-shortName=CAPE_MU.grib

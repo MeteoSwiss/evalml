@@ -411,16 +411,46 @@ def _load_analysis_data_from_zarr(
     return xr.Dataset(vars_out)
 
 
-def _collect_ml_grib_files(root: Path, steps: list[int] | None = None) -> list[Path]:
+# Known GRIB file prefixes that are NOT diagnostic decoder streams.
+# The ``ifs-`` prefix is the global IFS output stream on the N320 grid —
+# it must be excluded from auto-discovery of diagnostic streams.
+_NON_DIAGNOSTIC_PREFIXES = frozenset({"ifs-"})
+
+
+def _discover_diagnostic_prefixes(root: Path) -> list[str]:
+    """Auto-discover diagnostic decoder GRIB stream prefixes in *root*.
+
+    Diagnostic streams use a ``{prefix}20*.grib`` naming convention (e.g.
+    ``realv2-20250801…``, ``secondary_decoder-20250801…``).  The main output
+    has no prefix (``20*.grib``) and the IFS stream uses ``ifs-``.  This
+    function returns all prefixes that are neither main nor in
+    ``_NON_DIAGNOSTIC_PREFIXES``.
+    """
+    prefixes: set[str] = set()
+    for f in root.glob("*-20*.grib"):
+        name = f.name
+        idx = name.index("20")
+        prefix = name[:idx]
+        if prefix not in _NON_DIAGNOSTIC_PREFIXES:
+            prefixes.add(prefix)
+    return sorted(prefixes)
+
+
+def _collect_ml_grib_files(
+    root: Path, steps: list[int] | None = None, prefix: str = ""
+) -> list[Path]:
     """Return GRIB files for an ML inference run (flat directory layout).
 
     When `steps` is provided, the discovered files are filtered to those whose
-    name ends with ``_{step:03d}.grib``.
+    name ends with ``_{step:03d}.grib``. `prefix` selects an output stream: the
+    default ``""`` matches the main ``20*.grib`` outputs, while a diagnostic
+    prefix like ``"realv2-"`` or ``"secondary_decoder-"`` matches the
+    corresponding sibling files.
     """
     # TODO: this glob pattern is a dirty fix for anemoi-inference writing outputs
     # with wrong formatting. Eventually we will either have to have a fix upstream
     # or write a single output file.
-    files = sorted(root.glob("20*.grib"))
+    files = sorted(root.glob(f"{prefix}20*.grib"))
     if steps is None:
         return files
 
@@ -493,6 +523,7 @@ def variable_name_profile(
         "surface",
         "pressure",
         "entire_atmosphere",
+        "atmMU",
     ],
 ) -> dict[str, Any]:
     """Resolve variable name profile based on the level type."""
@@ -501,6 +532,7 @@ def variable_name_profile(
         "mean_sea",
         "surface",
         "entire_atmosphere",
+        "atmMU",
     ]:
         return {}
     elif level_type == "pressure":
@@ -1370,10 +1402,32 @@ def load_forecast_data(
     load_steps = get_steps(steps, params)
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
-        ds = _load_forecast_data_from_grib(
+        # First load from the main (un-prefixed) GRIB files, then auto-discover
+        # diagnostic decoder streams (prefixed GRIB files like realv2-*, secondary_decoder-*)
+        # and load any remaining params from there.
+        datasets = []
+        main_ds = _load_forecast_data_from_grib(
             files=_collect_ml_grib_files(root, load_steps),
             params=load_params,
         )
+        found_params = set(main_ds.data_vars)
+        if found_params:
+            datasets.append(main_ds)
+
+        remaining_params = [p for p in load_params if p not in found_params]
+        if remaining_params:
+            for prefix in _discover_diagnostic_prefixes(root):
+                diag_files = _collect_ml_grib_files(root, load_steps, prefix=prefix)
+                if diag_files:
+                    diag_ds = _load_forecast_data_from_grib(diag_files, remaining_params)
+                    newly_found = set(diag_ds.data_vars)
+                    if newly_found:
+                        LOG.info("Found %s in diagnostic stream '%s'", newly_found, prefix)
+                        datasets.append(diag_ds)
+                        remaining_params = [p for p in remaining_params if p not in newly_found]
+                if not remaining_params:
+                    break
+        ds = datasets[0] if len(datasets) == 1 else xr.merge(datasets)
         # Try to derive elevation from surface geopotential (FIS/z at step 0)
         # before falling back to ICON grid constants lookup.
         fis_files = _collect_ml_grib_files(root, [0])

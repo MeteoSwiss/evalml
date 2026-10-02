@@ -60,6 +60,8 @@ _CMAP_DEFAULTS = {
     | {"units": "m/s", "extend": "both"},
     "SP_10M": load_ncl_colormap("modified_uv_17lev.ct")
     | {"units": "m/s", "extend": "max"},
+    "VMAX_10M": load_ncl_colormap("modified_uv_17lev.ct")
+    | {"units": "m/s", "extend": "max"},
     "T_850": {
         "cmap": plt.get_cmap("inferno", 11),
         "vmin": 220,
@@ -73,6 +75,12 @@ _CMAP_DEFAULTS = {
         "extend": "both",
     },
     "QV_925": load_ncl_colormap("RH_6lev.ct") | {"extend": "both"},
+    "CAPE_MU": {
+        "cmap": plt.get_cmap("YlOrRd", 10),
+        "levels": [0, 100, 250, 500, 750, 1000, 1500, 2000, 3000, 4000, 5000],
+        "extend": "max",
+        "units": "J kg⁻¹",
+    },
     "CLCT": {
         # extend="neither" relies on preprocess_field() clipping away from
         # exact 0/1 (see plot_forecast_frame.py) to avoid a tricontourf bug

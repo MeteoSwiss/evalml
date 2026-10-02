@@ -101,7 +101,7 @@ rule inference_prepare_env:
             trap "rm -rf $VENV_DIR" EXIT
             VENV=$VENV_DIR/.venv
 
-            PYTHON_VERSION=$(cat {input.metadata} | jq -r ".provenance_training.python")
+            PYTHON_VERSION=$(cat {input.metadata} | jq -r ".provenance_training.python" | cut -d. -f1,2)
             echo "[$(date)] Creating virtual environment with Python $PYTHON_VERSION in RAM (/dev/shm)..."
             uv venv --managed-python --python $PYTHON_VERSION --relocatable --link-mode=copy $VENV
             source $VENV/bin/activate
@@ -289,6 +289,9 @@ rule inference_execute:
             if config["profile"]["default_resources"].get("slurm_account")
             else ""
         ),
+        expected_steps=lambda wc: (
+            lambda s: len(range(int(s[0]), int(s[1]) + 1, int(s[2])))
+        )(RUN_CONFIGS[wc.run_id]["steps"].split("/")),
     # fmt: off
     shell:
         """
@@ -312,21 +315,30 @@ rule inference_execute:
                     CMD_ARGS+=(runner.parallel.cluster=slurm)
                 fi
 
-                srun \
-                    --unbuffered \
-                    {params.account_flag} \
-                    --partition={resources.slurm_partition} \
-                    --cpus-per-task={resources.cpus_per_task} \
-                    --mem-per-cpu={resources.mem_mb_per_cpu} \
-                    --time={resources.runtime} \
-                    --gres={resources.gres} \
-                    --ntasks={resources.ntasks} \
-                    anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+                anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
             }}
             export -f _run_inference
 
-            squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
+            srun \
+                --unbuffered \
+                {params.account_flag} \
+                --partition={resources.slurm_partition} \
+                --cpus-per-task={resources.cpus_per_task} \
+                --mem-per-cpu={resources.mem_mb_per_cpu} \
+                --time={resources.runtime} \
+                --gres={resources.gres} \
+                --ntasks={resources.ntasks} \
+                squashfs-mount -s {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment' \
+                || echo "[$(date)] WARNING: anemoi-inference exited with non-zero status $?, checking if output was produced..."
         ) >{log} 2>&1
-        touch {output.okfile}
+
+        # Verify the expected number of main GRIB files was produced
+        ACTUAL=$(ls {params.workdir}/grib/20*.grib 2>/dev/null | wc -l)
+        if [ "$ACTUAL" -ge {params.expected_steps} ]; then
+            touch {output.okfile}
+        else
+            echo "ERROR: Expected at least {params.expected_steps} main GRIB files, found $ACTUAL in {params.workdir}/grib/" >> {log}
+            exit 1
+        fi
         """
 # fmt: on
