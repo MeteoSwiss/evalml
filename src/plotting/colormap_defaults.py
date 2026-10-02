@@ -75,6 +75,12 @@ _CMAP_DEFAULTS = {
         "extend": "both",
     },
     "QV_925": load_ncl_colormap("RH_6lev.ct") | {"extend": "both"},
+    "CAPE_MU": {
+        "cmap": plt.get_cmap("YlOrRd", 10),
+        "levels": [0, 100, 250, 500, 750, 1000, 1500, 2000, 3000, 4000, 5000],
+        "extend": "max",
+        "units": "J kg⁻¹",
+    },
     "CLCT": {
         # extend="neither" relies on preprocess_field() clipping away from
         # exact 0/1 (see plot_forecast_frame.py) to avoid a tricontourf bug

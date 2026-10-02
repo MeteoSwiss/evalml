@@ -187,7 +187,7 @@ rule plot_scoremaps:
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
-        runtime="10m",
+        runtime="30m",
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)

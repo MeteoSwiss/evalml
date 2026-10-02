@@ -468,6 +468,8 @@ PARAMS_WITHOUT_STEP_ZERO_VALUE = {
     "ssrd",
     # period maximum: undefined at step 0
     "VMAX_10M",
+    # secondary decoder diagnostics: not output at step 0
+    "CAPE_MU",
 }
 
 
@@ -512,6 +514,8 @@ def resolve_leadtimes(steps_spec, requested="all", param=None):
         )
 
     valid = wanted & supported
-    if param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
+    # Strip trailing digits to match aggregated variants like TOT_PREC1 → TOT_PREC
+    base_param = re.sub(r"\d+$", "", param) if param else param
+    if param in PARAMS_WITHOUT_STEP_ZERO_VALUE or base_param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
         valid = {lt for lt in valid if lt >= step}
     return sorted(valid)
