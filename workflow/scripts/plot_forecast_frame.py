@@ -10,6 +10,7 @@ import earthkit.plots as ekp
 from matplotlib.colors import Colormap
 import numpy as np
 
+from data_input import parse_aggregated_param
 from plotting import DOMAINS
 from plotting import get_projection
 from plotting import StatePlotter
@@ -87,7 +88,8 @@ def preprocess_field(param: str, state: dict):
     if param == "SP":
         return ekm_wind.speed(fields["U"], fields["V"]), "m/s"
     if param == "TOT_PREC":
-        return np.maximum(fields[param], 0), "mm"
+        # ML model outputs tp in meters (IFS convention); convert to mm.
+        return np.maximum(fields[param] * 1000, 0), "mm"
     if param in ("CLCT", "CLCL"):
         # Avoid exact 0/1 plateaus breaking tricontourf on orthographic
         # projections (tmp/reproduce_clct_bug.py). Pair with extend="neither".
@@ -136,12 +138,18 @@ def main():
         list(regions.keys()),
     )
 
-    if param == "SP_10M":
+    # Decompose aggregated params (e.g. TOT_PREC6 → TOT_PREC, accu=6).
+    # Keep original param for output filenames; use load_param for GRIB loading.
+    load_param, agg_hours = parse_aggregated_param(param)
+    if agg_hours is not None:
+        accu = agg_hours
+
+    if load_param == "SP_10M":
         paramlist = ["U_10M", "V_10M"]
-    elif param == "SP":
+    elif load_param == "SP":
         paramlist = ["U", "V"]
     else:
-        paramlist = [param]
+        paramlist = [load_param]
 
     # Load grib once — shared across all region plots
     # TODO: fix file pattern & globbing
@@ -163,8 +171,11 @@ def main():
     LOG.info("Loading grib file %s", grib_file)
     state = load_state_from_grib(grib_file, paramlist=paramlist)
 
-    # tp is accumulated from start of forecast; de-accumulate to get period [lt-accu, lt]
-    if param == "TOT_PREC":
+    # De-accumulate cumulative-from-start tp to get period [lt-accu, lt].
+    # NOTE: anemoi-inference currently writes period accumulations (stepRange=0-6,
+    # 6-12, …), so this is a no-op for ML forecaster output but still needed for
+    # models that write cumulative tp.
+    if load_param == "TOT_PREC":
         prev_lt = lead_time - accu
         if prev_lt > 0:
             prev_grib_files = list(grib_dir.glob(f"2*_{prev_lt}.grib"))
@@ -182,7 +193,7 @@ def main():
             )
 
     # Preprocess field once — shared across all region plots
-    field, units_override = preprocess_field(param, state)
+    field, units_override = preprocess_field(load_param, state)
     validtime = state["valid_time"].strftime("%Y%m%d%H%M")
 
     for region_name, region_cfg in regions.items():
@@ -220,7 +231,7 @@ def main():
             field,
             title=f"{param}, time: {validtime}",
             gridline_labels=not region_cfg.get("rotate", False),
-            **get_style(param, units_override, accu=accu),
+            **get_style(load_param, units_override, accu=accu),
         )
         if len(state["lam_envelope"]) > 0:
             subplot.ax.add_geometries(
