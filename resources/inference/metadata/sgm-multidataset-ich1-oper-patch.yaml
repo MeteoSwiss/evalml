@@ -7,6 +7,11 @@ config:
             dataset:
               cutout:
                 - dataset: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-ifsnames-v1.0.zarr
+                  rescale: # cloud cover percent -> fraction, as in training
+                    tcc: [0.01, 0.0]
+                    lcc: [0.01, 0.0]
+                    mcc: [0.01, 0.0]
+                    hcc: [0.01, 0.0]
                 - dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2026-6h-v1-combined-land.zarr
           start: null
           end: null
@@ -54,6 +59,41 @@ dataset:
           date: 20050101
           levtype: sfc
           param: T_2M
+          step: 12
+          time: 0
+      tcc:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: CLCT
+          step: 12
+          time: 0
+      lcc:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: CLCL
+          step: 12
+          time: 0
+      mcc:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: CLCM
+          step: 12
+          time: 0
+      hcc:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: CLCH
+          step: 12
+          time: 0
+      skt:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: T_G
           step: 12
           time: 0
       cos_julian_day:

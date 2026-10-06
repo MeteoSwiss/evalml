@@ -4,7 +4,7 @@ from pathlib import Path
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import MultiPoint
-from data_input import load_from_grib_file
+from data_input import load_from_grib_file, rename_ifs_to_icon
 
 
 PARAMS_MAP = {
@@ -17,6 +17,9 @@ PARAMS_MAP = {
     "TOT_PREC": "tp",
     "CLCT": "tcc",
     "CLCL": "lcc",
+    "CLCM": "mcc",
+    "CLCH": "hcc",
+    "T_G": "skt",
     "SSRD": "ssrd",
 }
 
@@ -33,12 +36,8 @@ def load_state_from_grib(
     )
     ds = load_from_grib_file(file, {"parameter.variable": paramlist_extended})
     # Rename any IFS shortnames back to COSMO names
-    ifs_rename = {
-        ifs: cosmo for ifs, cosmo in PARAMS_MAP_INV.items() if ifs in ds.data_vars
-    }
-    if ifs_rename:
-        ds = ds.rename(ifs_rename)
-        # TODO check if needed
+    ds = rename_ifs_to_icon(ds, PARAMS_MAP_INV)
+    # TODO check if needed
     # if "tp" in ifs_rename and "TOT_PREC" in ds:
     #     # IFS/ECMWF convention: "tp" is accumulated precip in meters.
     #     # Convert to kg m-2 (mm) to match the ICON-native convention.
