@@ -84,7 +84,7 @@ def main(args):
     # retain only rows relevant for the active stratifications
     stratification = args.stratification
     if "region" not in stratification:
-        df = df[df["region"] == df["region"].unique()[0]]
+        df = df[df["region"] == args.default_region]
     if "season" not in stratification:
         df = df[df["season"] == "all"]
     if "init_hour" not in stratification:
@@ -210,6 +210,12 @@ if __name__ == "__main__":
         nargs="*",
         default=["region", "season", "init_hour"],
         help="Stratification dimensions to include in the dashboard (any of region, season, init_hour).",
+    )
+    parser.add_argument(
+        "--default_region",
+        type=str,
+        required=True,
+        help="Region to use when results are not stratified by region.",
     )
     parser.add_argument(
         "--configfile",

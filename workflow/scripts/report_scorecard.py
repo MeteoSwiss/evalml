@@ -195,6 +195,7 @@ def _build_config(args) -> dict:
             else args.baseline_source,
         },
         "stratification": args.stratification,
+        "default_region": args.default_region,
         "lead_times": args.lead_times,
         # All recognised metrics — every entry must also appear in metric_directions.
         "all_metrics": ["RMSE", "MAE", "STDE", "R2", "ETS", "POD", "FAR"],
@@ -229,7 +230,7 @@ def _load_relative_diff(cfg: dict) -> xr.Dataset:
     baseline_ds = xr.open_dataset(cfg["baseline"]["path"])
 
     if strat_dim != "region":
-        sel_coords["region"] = model_ds["region"].values[0]
+        sel_coords["region"] = cfg["default_region"]
 
     for label, ds in [("model", model_ds), ("baseline", baseline_ds)]:
         if "n_samples" not in ds.data_vars:
@@ -838,6 +839,12 @@ if __name__ == "__main__":
         type=str,
         default="region",
         help="Dimension name to use as scorecard columns (default: region).",
+    )
+    parser.add_argument(
+        "--default_region",
+        type=str,
+        required=True,
+        help="Region to use when results are not stratified by region.",
     )
     parser.add_argument(
         "--variable",

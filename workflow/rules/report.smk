@@ -39,6 +39,7 @@ rule report_experiment_dashboard:
         sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
         header_text=make_header_text(),
         stratification=" ".join(config["experiment"]["dashboard"]["stratification"]),
+        default_region=config["experiment"]["stratification"]["default_region"],
         label_map=",".join(
             "{}:{}".format(
                 sid,
@@ -60,6 +61,7 @@ rule report_experiment_dashboard:
             --header_text "{params.header_text}" \
             --configfile "{input.configfile}" \
             --stratification {params.stratification} \
+            --default_region {params.default_region:q} \
             --labels "{params.label_map}" \
             --output {output} >{log} 2>&1
         """
@@ -97,6 +99,7 @@ rule report_scorecard:
             SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]
         ),
         baseline_label=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["baseline"],
+        default_region=config["experiment"]["stratification"]["default_region"],
     shell:
         """
         VAR_ARGS=()
@@ -113,6 +116,7 @@ rule report_scorecard:
             --baseline_label {params.baseline_label:q} \
             --lead_times {params.lead_times:q} \
             --stratification {params.stratification:q} \
+            --default_region {params.default_region:q} \
             "${{VAR_ARGS[@]}}" \
             --output {output:q} >{log} 2>&1
         """

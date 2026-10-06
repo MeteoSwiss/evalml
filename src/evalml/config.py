@@ -416,6 +416,10 @@ class Stratification(BaseModel):
             "The first entry is the domain region used by the dashboard when region stratification is not active."
         ),
     )
+    default_region: Optional[str] = Field(
+        None,
+        description="Region used when region stratification is not active. Must be one of 'regions'; defaults to the first entry.",
+    )
     root: Optional[str] = Field(
         None,
         description="Root directory where the region shapefiles are stored. Required when regions contains string entries.",
@@ -444,6 +448,17 @@ class Stratification(BaseModel):
                         f"Bbox for region '{name}' must have exactly 4 values [lon_min, lon_max, lat_min, lat_max], got {len(bbox)}."
                     )
         return v
+
+    @model_validator(mode="after")
+    def validate_default_region(self) -> "Stratification":
+        names = [e if isinstance(e, str) else next(iter(e)) for e in self.regions]
+        if self.default_region is None:
+            self.default_region = names[0]
+        elif self.default_region not in names:
+            raise ValueError(
+                f"default_region '{self.default_region}' is not among the regions {names}."
+            )
+        return self
 
 
 class Dashboard(BaseModel):
