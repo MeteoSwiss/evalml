@@ -1,9 +1,8 @@
 # yaml-language-server: $schema=../workflow/tools/config.schema.json
 description: |
-  Smoke test of the Varda-single release candidate forecaster (stage E with rollout,
-  run 675fcbb6). Deliberately restricted to the pre-RC parameters so that no cloud /
-  SKT code changes are needed yet - this only checks that the checkpoint loads, runs
-  and verifies end to end. See EVALML_CLOUD_SKT_PLAN.md for the real evaluation.
+  Smoke test of the Varda-single release candidate (clouds + skin temperature):
+  RC forecaster (run 675fcbb6) alone and with the RC temporal downscaler (run d642c4ba),
+  next to the operational Varda-single 1.0 chain. Needs the cloud-skt-support branch.
 
 dates:
   - 2025-09-01T00:00
@@ -13,11 +12,30 @@ runs:
       checkpoint: /scratch/mch/huppd/checkpoint/675fcbb6ec9d46ba9affffb37f7e0862/inference-last.ckpt
       label: rc_stage_E_with_rollout
       steps: 0/12/6
-      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-rc-smoke.yaml
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
       extra_requirements:
         - earthkit-utils<0.2.0
         - earthkit-data<0.19.0
         - anemoi-inference==0.11.1
+
+  # RC chain: RC temporal downscaler on top of the RC forecaster
+  - temporal_downscaler:
+      checkpoint: /scratch/mch/huppd/checkpoint/d642c4ba99e54ad9a38fcbcaeab21cf8/inference-last.ckpt
+      label: rc_downscaled
+      steps: 0/12/1
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
+      extra_requirements:
+        - anemoi-datasets==0.5.35
+        - git+https://github.com/ecmwf/anemoi-inference.git@88c1ec13632c570f246cc2580ce324e45f36a03b
+        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@e5f95f3eb7b8907407faa7ac2e2771c1d7fe5aa4
+      forecaster:
+        checkpoint: /scratch/mch/huppd/checkpoint/675fcbb6ec9d46ba9affffb37f7e0862/inference-last.ckpt
+        config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
+        steps: 0/12/6
+        extra_requirements:
+          - earthkit-utils<0.2.0
+          - earthkit-data<0.19.0
+          - anemoi-inference==0.11.1
 
   # Operational Varda-single 1.0 chain. Copied from config/varda-single-1.0.yaml
   - temporal_downscaler:
@@ -54,6 +72,11 @@ experiment:
     - U_10M
     - V_10M
     - TOT_PREC
+    - T_G
+    - CLCT
+    - CLCL
+    - CLCM
+    - CLCH
   stratification:
     regions:
       - mittelland
