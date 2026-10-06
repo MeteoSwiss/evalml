@@ -16,19 +16,19 @@ dates:
 runs:
   - temporal_downscaler:
       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
-      label: Varda-rapid-0.1
+      label: Varda-rapid-0.2
       steps: 0/12/1
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi_with_nudging.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
-        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@cc116a80c86346cb8de4449c1091bb2c6299a302
+        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@0e69b5916166a7feb104f892cdf2a091bd45bd56
         - git+https://github.com/ecmwf/anemoi-inference@88c1ec13632c570f246cc2580ce324e45f36a03b
       forecaster:
         checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/12/6
         extra_requirements:
-          - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@cc116a80c86346cb8de4449c1091bb2c6299a302
+          - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss@0e69b5916166a7feb104f892cdf2a091bd45bd56
           - git+https://github.com/ecmwf/anemoi-inference@88c1ec13632c570f246cc2580ce324e45f36a03b
 
   - temporal_downscaler:
@@ -52,6 +52,14 @@ runs:
       label: INCA
       root: /store_new/mch/msclim/INCA
       steps: 0/6/1
+  - baseline:
+      label: ICON-CH2-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/12/1
+  - baseline:
+      label: ICON-CH1-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/12/1
 
 truth:
   label: SwissMetNet
