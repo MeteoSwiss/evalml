@@ -41,6 +41,8 @@ _IFS_TO_ICON = {
     "z": "FIS",
 }
 _ICON_TO_IFS = {v: k for k, v in _IFS_TO_ICON.items()}
+# ICON-named analysis zarrs (e.g. KENDA-CH1) store skin temperature as SKT
+_ICON_TO_ZARR = {"T_G": "SKT"}
 
 XARRAY_ENGINE_PROFILE = {
     "ensure_dims": ["z", "number", "step", "forecast_reference_time"],
@@ -289,7 +291,7 @@ def _open_analysis_zarr(root: Path, params: list[str]) -> xr.Dataset:
         zarr_names = {p: _ICON_TO_IFS.get(p, p) for p in params_with_altitude}
     else:
         zarr_names = {
-            p: f"{p}_1H" if p in _ACCUMULATABLE_PARAMS else p
+            p: f"{p}_1H" if p in _ACCUMULATABLE_PARAMS else _ICON_TO_ZARR.get(p, p)
             for p in params_with_altitude
         }
 
