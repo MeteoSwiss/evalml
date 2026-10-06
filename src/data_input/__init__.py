@@ -493,6 +493,7 @@ def variable_name_profile(
         "surface",
         "pressure",
         "entire_atmosphere",
+        "pressure_layer",
     ],
 ) -> dict[str, Any]:
     """Resolve variable name profile based on the level type."""
@@ -501,6 +502,7 @@ def variable_name_profile(
         "mean_sea",
         "surface",
         "entire_atmosphere",
+        "pressure_layer",
     ]:
         return {}
     elif level_type == "pressure":
