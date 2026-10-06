@@ -28,6 +28,9 @@ _IFS_TO_ICON = {
     "lsm": "FR_LAND",
     "tcc": "CLCT",
     "lcc": "CLCL",
+    "mcc": "CLCM",
+    "hcc": "CLCH",
+    "skt": "T_G",
     # TODO: ssrd is treated as a plain per-step field (no de-accumulation),
     # which only holds because it's not currently listed in any
     # accumulate_from_start_of_forecast.accumulations in the inference
