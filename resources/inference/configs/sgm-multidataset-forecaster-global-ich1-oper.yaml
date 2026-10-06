@@ -33,6 +33,26 @@ output:
           - extract_mask: # removes global points
               mask: "lam_0/cutout_mask"
               as_slice: true
+          - forward_transform_filter: # cloud cover fraction -> percent, as in ICON
+              rescale:
+                scale: 100
+                offset: 0
+                param: tcc
+          - forward_transform_filter: # cloud cover fraction -> percent, as in ICON
+              rescale:
+                scale: 100
+                offset: 0
+                param: lcc
+          - forward_transform_filter: # cloud cover fraction -> percent, as in ICON
+              rescale:
+                scale: 100
+                offset: 0
+                param: mcc
+          - forward_transform_filter: # cloud cover fraction -> percent, as in ICON
+              rescale:
+                scale: 100
+                offset: 0
+                param: hcc
     - grib:
         path: grib/ifs-{date}{time:04}_{step:03}.grib
         encoding:
@@ -68,6 +88,16 @@ output:
                 slor: {"param": 163, "shortName": "slor"}
                 SSO_STDH: {"param": 160, "shortName": "sdor"}
                 sdor: {"param": 160, "shortName": "sdor"}
+                CLCT: {"param": 164, "shortName": "tcc"}
+                tcc: {"param": 164, "shortName": "tcc"}
+                CLCL: {"param": 186, "shortName": "lcc"}
+                lcc: {"param": 186, "shortName": "lcc"}
+                CLCM: {"param": 187, "shortName": "mcc"}
+                mcc: {"param": 187, "shortName": "mcc"}
+                CLCH: {"param": 188, "shortName": "hcc"}
+                hcc: {"param": 188, "shortName": "hcc"}
+                T_G: {"param": 235, "shortName": "skt"}
+                skt: {"param": 235, "shortName": "skt"}
                 TOT_PREC: {"param": 228, "shortName": "tp"}
                 tp: {"param": 228, "shortName": "tp"}
                 z: {"param": 129, "shortName": "z"}

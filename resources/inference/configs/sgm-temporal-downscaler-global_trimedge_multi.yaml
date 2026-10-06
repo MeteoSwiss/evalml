@@ -12,6 +12,26 @@ input:
                   scale: 0.001 # convert from kg m-2 to m
                   offset: 0
                   param: tp
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: tcc
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: lcc
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: mcc
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: hcc
           namer: &namer
             rules:
               - - shortName: T
@@ -38,6 +58,14 @@ input:
                 - 2d
               - - shortName: T_G
                 - skt
+              - - shortName: CLCT
+                - tcc
+              - - shortName: CLCL
+                - lcc
+              - - shortName: CLCM
+                - mcc
+              - - shortName: CLCH
+                - hcc
               - - shortName: U_10M
                 - 10u
               - - shortName: V_10M
@@ -79,6 +107,26 @@ output:
           - extract_mask: # removes global points
               mask: "lam_0/cutout_mask"
               as_slice: true
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: tcc
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: lcc
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: mcc
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: hcc
           # here, the trimedge mask can be specified when available
           # at overlap steps (multiples of the forecaster stride) replace the
           # re-predicted prognostics with the forecaster's boundary values
@@ -129,6 +177,16 @@ output:
                 slor: {"param": 163, "shortName": "slor"}
                 SSO_STDH: {"param": 160, "shortName": "sdor"}
                 sdor: {"param": 160, "shortName": "sdor"}
+                CLCT: {"param": 164, "shortName": "tcc"}
+                tcc: {"param": 164, "shortName": "tcc"}
+                CLCL: {"param": 186, "shortName": "lcc"}
+                lcc: {"param": 186, "shortName": "lcc"}
+                CLCM: {"param": 187, "shortName": "mcc"}
+                mcc: {"param": 187, "shortName": "mcc"}
+                CLCH: {"param": 188, "shortName": "hcc"}
+                hcc: {"param": 188, "shortName": "hcc"}
+                T_G: {"param": 235, "shortName": "skt"}
+                skt: {"param": 235, "shortName": "skt"}
                 TOT_PREC: {"param": 228, "shortName": "tp"}
                 tp: {"param": 228, "shortName": "tp"}
                 z: {"param": 129, "shortName": "z"}
