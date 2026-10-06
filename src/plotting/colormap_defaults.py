@@ -22,6 +22,27 @@ _SCORE_REDS_PA = {
     "cmap": plt.get_cmap("Reds", 7),
     "levels": [0, 50, 100, 150, 200, 250, 300, 350],
 }
+# Cloud cover in percent. extend="neither" relies on preprocess_field() clipping
+# away from exact 0/100 (see plot_forecast_frame.py) to avoid a tricontourf bug
+# on orthographic projections.
+_CLOUD_COVER = {
+    "cmap": plt.get_cmap("Blues_r"),
+    "vmin": 0,
+    "vmax": 100,
+    "extend": "neither",
+    "units": "%",
+    "levels": list(np.linspace(0, 100, 21)),
+}
+_CLOUD_SCORE = {
+    "cmap": plt.get_cmap("Reds", 6),
+    "levels": [0, 10, 20, 30, 40, 50, 60],
+    "units": "%",
+}
+_CLOUD_BIAS = {
+    "cmap": plt.get_cmap("RdBu_r", 11),
+    "levels": np.arange(start=-27.5, stop=27.6, step=5),
+    "units": "%",
+}
 _SCORE_REDS_PRECIP = {"cmap": plt.get_cmap("Reds", 6), "levels": [0, 1, 1.5, 2, 3, 4]}
 
 
@@ -54,6 +75,7 @@ _CMAP_DEFAULTS = {
     },
     "TD_2M": load_ncl_colormap("t2m_29lev.ct") | {"extend": "both"},
     "T_2M": load_ncl_colormap("t2m_29lev.ct") | {"units": "degC", "extend": "both"},
+    "T_G": load_ncl_colormap("t2m_29lev.ct") | {"units": "degC", "extend": "both"},
     "V_10M": load_ncl_colormap("modified_uv_17lev.ct")
     | {"units": "m/s", "extend": "both"},
     "U_10M": load_ncl_colormap("modified_uv_17lev.ct")
@@ -73,25 +95,10 @@ _CMAP_DEFAULTS = {
         "extend": "both",
     },
     "QV_925": load_ncl_colormap("RH_6lev.ct") | {"extend": "both"},
-    "CLCT": {
-        # extend="neither" relies on preprocess_field() clipping away from
-        # exact 0/1 (see plot_forecast_frame.py) to avoid a tricontourf bug
-        # on orthographic projections.
-        "cmap": plt.get_cmap("Blues_r"),
-        "vmin": 0,
-        "vmax": 1,
-        "extend": "neither",
-        "units": "",
-        "levels": list(np.linspace(0, 1, 21)),
-    },
-    "CLCL": {
-        "cmap": plt.get_cmap("Blues_r"),
-        "vmin": 0,
-        "vmax": 1,
-        "extend": "neither",
-        "units": "",
-        "levels": list(np.linspace(0, 1, 21)),
-    },
+    "CLCT": _CLOUD_COVER,
+    "CLCL": _CLOUD_COVER,
+    "CLCM": _CLOUD_COVER,
+    "CLCH": _CLOUD_COVER,
     "SSRD": {
         # tricontourf always bands regardless of "levels" being set (it falls
         # back to an auto locator with ~7 bands otherwise) — use a fine level
@@ -206,6 +213,8 @@ _CMAP_DEFAULTS = {
     "SP_10M.score.map": _SCORE_REDS | {"units": "m/s"},
     "TD_2M.score.map": _SCORE_REDS | {"units": "°C"},
     "T_2M.score.map": _SCORE_REDS | {"units": "°C"},
+    "T_G.score.map": _SCORE_REDS | {"units": "°C"},
+    **{f"{p}.score.map": _CLOUD_SCORE for p in ("CLCT", "CLCL", "CLCM", "CLCH")},
     "PMSL.score.map": _SCORE_REDS_PA | {"units": "Pa"},
     "PS.score.map": _SCORE_REDS_PA | {"units": "Pa"},
     "TOT_PREC.score.map": _SCORE_REDS_PRECIP | {"units": "mm"},
@@ -240,6 +249,12 @@ _CMAP_DEFAULTS = {
         "levels": np.arange(start=-2.75, stop=2.76, step=0.5),
     }
     | {"units": "°C"},
+    "T_G.BIAS.map": {
+        "cmap": plt.get_cmap("RdBu_r", 11),
+        "levels": np.arange(start=-2.75, stop=2.76, step=0.5),
+    }
+    | {"units": "°C"},
+    **{f"{p}.BIAS.map": _CLOUD_BIAS for p in ("CLCT", "CLCL", "CLCM", "CLCH")},
     "PMSL.BIAS.map": {
         "cmap": plt.get_cmap("RdBu_r", 11),
         "levels": np.arange(start=-110, stop=111, step=20),

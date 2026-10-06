@@ -17,6 +17,9 @@ PARAMS_MAP = {
     "TOT_PREC": "tp",
     "CLCT": "tcc",
     "CLCL": "lcc",
+    "CLCM": "mcc",
+    "CLCH": "hcc",
+    "T_G": "skt",
     "SSRD": "ssrd",
 }
 
