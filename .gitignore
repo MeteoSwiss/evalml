@@ -63,3 +63,24 @@ uv.lock
 
 # evalml
 .evalml_snakemake_cmd.txt
+
+# Sandbox (husk) mounts and local agent files
+/.bash_profile
+/.bashrc
+/.profile
+/.zprofile
+/.zshrc
+/.gitconfig
+/.gitmodules
+/.ripgreprc
+/.mcp.json
+/.husk-*
+/.claude/
+slurm-*.err
+
+# Large or third-party material kept local
+resources/icon-constants/
+resources/spaziurat*.tar.gz
+material_Michele/Multistep Discussion.*
+Varda-single_Paper/
+for_Adrien/
