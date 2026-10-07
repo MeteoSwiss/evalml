@@ -350,7 +350,7 @@ def verify(
     threshold_dict: dict[str, dict[str, list[float]]] | None = None,
     num_workers: int | None = None,
     holdout_stations: list[str] | None = None,
-    max_missing_fraction: float = 1.0,
+    max_missing_fraction: float = 0.0,
 ) -> xr.Dataset:
     """
     Compute verification metrics and statistics comparing forecast and observation datasets.
