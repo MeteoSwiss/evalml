@@ -28,8 +28,8 @@ runs:
         steps: 0/120/6
         extra_requirements:
           - anemoi-datasets==0.5.35
-        - git+https://github.com/ecmwf/anemoi-inference.git@88c1ec13632c570f246cc2580ce324e45f36a03b
-        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@cfaea1550f9a863216cd43f0a98b95883bbba512
+          - git+https://github.com/ecmwf/anemoi-inference.git@88c1ec13632c570f246cc2580ce324e45f36a03b
+          - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@cfaea1550f9a863216cd43f0a98b95883bbba512
   - baseline:
       label: INCA
       root: /store_new/mch/msclim/INCA
