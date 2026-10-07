@@ -1,4 +1,7 @@
 import logging
+from pathlib import Path
+
+import yaml
 
 
 def setup_logger(logger_name, log_file, level=logging.INFO):
@@ -37,3 +40,18 @@ def setup_logger(logger_name, log_file, level=logging.INFO):
         logger.addHandler(file_handler)
 
     return logger
+
+
+def load_station_holdout_list(path: str | Path) -> list[str]:
+    """Read a station holdout file: a YAML list of station nat_abbr.
+
+    Raises ValueError if the file is not a list of strings.
+    """
+    with open(path) as f:
+        stations = yaml.safe_load(f)
+    if not isinstance(stations, list) or not all(isinstance(s, str) for s in stations):
+        raise ValueError(
+            f"Station holdout file {path} must contain a YAML list of station "
+            f"nat_abbr, got {stations!r}."
+        )
+    return stations

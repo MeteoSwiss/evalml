@@ -3,6 +3,8 @@ from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
+from evalml.helpers import load_station_holdout_list
+
 PROJECT_ROOT = Path(__file__).parents[2]
 
 PREDEFINED_REGIONS: Dict[str, List[float]] = {
@@ -455,40 +457,6 @@ class Dashboard(BaseModel):
     )
 
 
-class StationHoldoutConfig(BaseModel):
-    """Station holdout settings for station-group stratified verification."""
-
-    holdout_fraction: Optional[float] = Field(
-        default=None,
-        gt=0,
-        lt=1,
-        description=(
-            "Fraction of truth stations to hold out for evaluation (exclusive 0–1). "
-            "Mutually exclusive with exclude_stations."
-        ),
-    )
-    holdout_seed: int = Field(
-        default=42,
-        description="Random seed for reproducible holdout station selection.",
-    )
-    exclude_stations: Optional[List[str]] = Field(
-        default=None,
-        description=(
-            "Explicit list of station nat_abbr to hold out. "
-            "Mutually exclusive with holdout_fraction."
-        ),
-    )
-
-    @model_validator(mode="after")
-    def _holdout_fraction_and_exclude_stations_are_exclusive(self):
-        if self.holdout_fraction is not None and self.exclude_stations is not None:
-            raise ValueError(
-                "station_holdout: holdout_fraction and exclude_stations are "
-                "mutually exclusive; set at most one of them."
-            )
-        return self
-
-
 class ExperimentConfig(BaseModel):
     """Configuration for the experiment workflow outputs."""
 
@@ -511,13 +479,13 @@ class ExperimentConfig(BaseModel):
         ...,
         description="Settings for the experiment dashboard.",
     )
-    station_holdout: Optional[Union[List[str], StationHoldoutConfig]] = Field(
+    station_holdout_list: Optional[str] = Field(
         default=None,
         description=(
-            "When set, adds a 'station_group' dimension (all/holdout/holdin) to verification "
-            "metrics for all models and baselines. Either a bare list of station nat_abbr "
-            "(shorthand for exclude_stations), or a full object specifying holdout_fraction "
-            "(+ optional holdout_seed) instead."
+            "Absolute path to a YAML file listing the holdout station nat_abbr. "
+            "When set, adds a 'station_group' dimension (all/holdout/holdin) to "
+            "verification metrics for all models and baselines. Point the "
+            "nudge_toward_observation filter's holdout_station_file at the same file."
         ),
     )
     scorecards: Optional[ExperimentScorecardConfig] = Field(
@@ -529,12 +497,14 @@ class ExperimentConfig(BaseModel):
         description="Score map plot configuration. Omit or set enabled: false to disable.",
     )
 
-    @field_validator("station_holdout", mode="before")
+    @field_validator("station_holdout_list")
     @classmethod
-    def normalize_station_holdout(cls, v):
-        """Accept a bare list of station nat_abbr as shorthand for exclude_stations."""
-        if isinstance(v, list):
-            return {"exclude_stations": v}
+    def validate_station_holdout_list(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if not Path(v).is_file():
+            raise ValueError(f"station_holdout_list file not found: {v}")
+        load_station_holdout_list(v)
         return v
 
     @field_validator("thresholds")

@@ -39,7 +39,7 @@ rule report_experiment_dashboard:
         sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
         header_text=make_header_text(),
         stratification=" ".join(config["experiment"]["dashboard"]["stratification"]),
-        station_holdout_flag="--station_holdout" if STATION_HOLDOUT_CFG else "",
+        station_holdout_flag="--station_holdout" if HOLDOUT_STATIONS else "",
         label_map=",".join(
             "{}:{}".format(
                 sid,

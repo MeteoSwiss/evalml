@@ -238,12 +238,6 @@ rule inference_prepare_temporal_downscaler:
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None
             else _get_forecaster_run_id(wc.run_id)
         ),
-        # Single source of truth for the holdout station set: experiment.station_holdout
-        # in the top-level experiment config. Injected into any nudge_toward_observation
-        # filter found in the inference config (a no-op if the config has none, or if
-        # station_holdout isn't configured for this experiment) — see
-        # inference_prepare.py::_inject_nudging_station_holdout.
-        station_holdout_cfg=STATION_HOLDOUT_CFG,
     script:
         "../scripts/inference_prepare.py"
 

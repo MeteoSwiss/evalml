@@ -5,6 +5,7 @@ import yaml
 import hashlib
 import json
 from urllib.parse import urlparse
+from evalml.helpers import load_station_holdout_list
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
@@ -407,7 +408,8 @@ def verif_hash(full_config: dict) -> str:
     }
     experiment_verif_cfg = {
         "lapse_rate_correction": full_config.get("lapse_rate_correction", True),
-        "station_holdout": full_config.get("experiment", {}).get("station_holdout"),
+        # Hash the stations, not the path, so editing the file triggers a rerun.
+        "station_holdout": HOLDOUT_STATIONS,
     }
     return generate_json_hash({"truth": truth_cfg, "verif": experiment_verif_cfg})
 
@@ -430,9 +432,9 @@ if "jretrieve" in str(config["truth"]["root"]):
 
 
 TRUTH_HASH = truth_hash(config["truth"])
-_station_holdout_raw = config.get("experiment", {}).get("station_holdout") or {}
-STATION_HOLDOUT_CFG = (
-    _station_holdout_raw if isinstance(_station_holdout_raw, dict) else {}
+_station_holdout_list = config.get("experiment", {}).get("station_holdout_list")
+HOLDOUT_STATIONS = (
+    load_station_holdout_list(_station_holdout_list) if _station_holdout_list else []
 )
 REGIONS = parse_regions()
 VERIF_HASH = verif_hash(config)

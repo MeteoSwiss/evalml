@@ -5,8 +5,6 @@ from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
 
-import numpy as np
-
 from verification import verify, apply_lapse_rate_correction_inplace  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
 from data_input import (
@@ -30,30 +28,6 @@ class ScriptConfig(Namespace):
     reftime: datetime = None
     params: list[str] = ["T_2M", "TD_2M", "U_10M", "V_10M"]
     steps: list[int] = parse_steps("0/120/6")
-
-
-def compute_holdout_stations(
-    all_stations: list, station_holdout_cfg: dict
-) -> list[str]:
-    """Return nat_abbr list of holdout stations derived from the truth dataset's station list.
-
-    Either the explicit exclude_stations present in the truth dataset, or a random
-    holdout_fraction of the truth stations drawn with holdout_seed.
-
-    holdout_fraction's (0, 1) range is validated once, at config-load time, by
-    StationHoldoutConfig (evalml.config) — not re-checked here.
-    """
-    exclude_stations = station_holdout_cfg.get("exclude_stations")
-    holdout_fraction = station_holdout_cfg.get("holdout_fraction")
-    holdout_seed = station_holdout_cfg.get("holdout_seed", 42)
-
-    if exclude_stations is not None:
-        return [s for s in exclude_stations if s in all_stations]
-    if holdout_fraction is not None:
-        n_holdout = round(len(all_stations) * float(holdout_fraction))
-        rng = np.random.default_rng(holdout_seed)
-        return list(rng.choice(all_stations, size=n_holdout, replace=False))
-    return []
 
 
 def program_summary_log(args):
@@ -113,14 +87,12 @@ def main(args: ScriptConfig):
     if args.lapse_rate_correction:
         apply_lapse_rate_correction_inplace(fcst, truth, args.params)
 
-    # determine holdout stations for station-holdout stratification
-    # holdout stations are derived from the truth dataset's station list so the
-    # same partition is used consistently across all models and baselines.
+    # holdout stations for station-holdout stratification, restricted to those
+    # present in the truth dataset.
     holdout_stations = None
-    station_holdout_cfg = args.station_holdout_cfg
-    if station_holdout_cfg and "values" in truth.dims:
+    if args.holdout_stations and "values" in truth.dims:
         all_stations = list(truth["values"].values)
-        holdout_stations = compute_holdout_stations(all_stations, station_holdout_cfg)
+        holdout_stations = [s for s in args.holdout_stations if s in all_stations]
         if holdout_stations:
             LOG.info(
                 "Station holdout: %d / %d stations in holdout group",
@@ -129,11 +101,11 @@ def main(args: ScriptConfig):
             )
         else:
             LOG.warning(
-                "station_holdout_cfg set but no holdout stations selected (check holdout_fraction / exclude_stations)."
+                "holdout_stations set but none of them are in the truth dataset."
             )
-    elif station_holdout_cfg:
+    elif args.holdout_stations:
         LOG.warning(
-            "station_holdout_cfg set but truth dataset has no 'values' dimension; station stratification skipped."
+            "holdout_stations set but truth dataset has no 'values' dimension; station stratification skipped."
         )
 
     # compute metrics and statistics
@@ -237,13 +209,13 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
-        "--station_holdout_cfg",
+        "--holdout_stations",
         type=lambda s: json.loads(s) if s else None,
         default=None,
         help=(
-            "Station holdout config as a JSON dict with keys: holdout_fraction, holdout_seed, "
-            "exclude_stations. When set, adds station_group stratification (all/holdout/holdin) "
-            "to all models and baselines using the truth dataset's station list."
+            "JSON list of holdout station nat_abbr. When non-empty, adds "
+            "station_group stratification (all/holdout/holdin) to all models and "
+            "baselines using the truth dataset's station list."
         ),
     )
     parser.add_argument(
