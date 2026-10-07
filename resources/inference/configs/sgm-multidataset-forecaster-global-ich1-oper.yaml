@@ -39,6 +39,7 @@ output:
           - extract_mask: # removes global points
               mask: "lam_0/cutout_mask"
               as_slice: true
+          # filters see the model name (tcc) with anemoi-inference <= 0.11.1 and the GRIB name (CLCT) from 0.11.2
           - forward_transform_filter: # cloud cover fraction -> percent, as in ICON
               rescale:
                 scale: 100
@@ -48,7 +49,17 @@ output:
               rescale:
                 scale: 100
                 offset: 0
+                param: CLCT
+          - forward_transform_filter: # cloud cover fraction -> percent, as in ICON
+              rescale:
+                scale: 100
+                offset: 0
                 param: lcc
+          - forward_transform_filter: # cloud cover fraction -> percent, as in ICON
+              rescale:
+                scale: 100
+                offset: 0
+                param: CLCL
           - forward_transform_filter: # cloud cover fraction -> percent, as in ICON
               rescale:
                 scale: 100
@@ -58,7 +69,17 @@ output:
               rescale:
                 scale: 100
                 offset: 0
+                param: CLCM
+          - forward_transform_filter: # cloud cover fraction -> percent, as in ICON
+              rescale:
+                scale: 100
+                offset: 0
                 param: hcc
+          - forward_transform_filter: # cloud cover fraction -> percent, as in ICON
+              rescale:
+                scale: 100
+                offset: 0
+                param: CLCH
     - grib:
         path: grib/ifs-{date}{time:04}_{step:03}.grib
         encoding:

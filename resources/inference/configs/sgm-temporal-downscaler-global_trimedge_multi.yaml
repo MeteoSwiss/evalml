@@ -18,6 +18,7 @@ input:
                   scale: 0.001 # convert from kg m-2 to m
                   offset: 0
                   param: TOT_PREC
+            # filters see the model name (tcc) with anemoi-inference <= 0.11.1 and the GRIB name (CLCT) from 0.11.2
             - forward_transform_filter: # cloud cover percent -> fraction, as in training
                 rescale:
                   scale: 0.01
@@ -27,7 +28,17 @@ input:
                 rescale:
                   scale: 0.01
                   offset: 0
+                  param: CLCT
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
                   param: lcc
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: CLCL
             - forward_transform_filter: # cloud cover percent -> fraction, as in training
                 rescale:
                   scale: 0.01
@@ -37,7 +48,17 @@ input:
                 rescale:
                   scale: 0.01
                   offset: 0
+                  param: CLCM
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
                   param: hcc
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: CLCH
           namer: &namer
             rules:
               - - shortName: T
@@ -119,6 +140,7 @@ output:
           - extract_mask: # removes global points
               mask: "lam_0/cutout_mask"
               as_slice: true
+          # filters see the model name (tcc) with anemoi-inference <= 0.11.1 and the GRIB name (CLCT) from 0.11.2
           - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
               rescale:
                 scale: 100
@@ -128,7 +150,17 @@ output:
               rescale:
                 scale: 100
                 offset: 0
+                param: CLCT
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
                 param: lcc
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: CLCL
           - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
               rescale:
                 scale: 100
@@ -138,7 +170,17 @@ output:
               rescale:
                 scale: 100
                 offset: 0
+                param: CLCM
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
                 param: hcc
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: CLCH
           # here, the trimedge mask can be specified when available
           # at overlap steps (multiples of the forecaster stride) replace the
           # re-predicted prognostics with the forecaster's boundary values
