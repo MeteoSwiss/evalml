@@ -564,7 +564,7 @@ def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
         profile = XARRAY_ENGINE_PROFILE | variable_name_profile(level_type)
         _ds = level_type_group.to_xarray(**profile, allow_holes=True)
         ds = ds.merge(
-            _ds, compat="no_conflicts", combine_attrs="no_conflicts", join="outer"
+            _ds, compat="no_conflicts", combine_attrs="drop_conflicts", join="outer"
         )
     return ds
 
