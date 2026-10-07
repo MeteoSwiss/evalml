@@ -38,16 +38,12 @@ def test_parse_selection_default_group():
         "prod",
         "surface",
         40,
-        None,
-        None,
     )
     assert jr.parse_selection("jretrievedwh:SwissMetNet") == (
         {"group": "SwissMetNet"},
         "prod",
         "surface",
         40,
-        None,
-        None,
     )
 
 
@@ -57,39 +53,17 @@ def test_parse_selection_keyvalue_and_stage():
         "devt",
         "surface",
         40,
-        None,
-        None,
     )
 
 
-def test_parse_selection_use_limitation_and_filter_mode_switzerland():
+def test_parse_selection_bbox_and_use_limitation():
     assert jr.parse_selection(
-        "jretrievedwh:bbox=40.5,53.0,0.0,17.5;use_limitation=40;filter_mode=switzerland"
+        "jretrievedwh:bbox=45.7,48.0,5.8,10.8;use_limitation=20"
     ) == (
-        {"bbox": "40.5,53.0,0.0,17.5"},
+        {"bbox": "45.7,48.0,5.8,10.8"},
         "prod",
         "surface",
-        40,
-        "switzerland",
-        None,
-    )
-
-
-def test_parse_selection_filter_mode_domain_requires_domain_bbox():
-    with pytest.raises(ValueError, match="domain_bbox"):
-        jr.parse_selection("jretrievedwh:bbox=40.5,53.0,0.0,17.5;filter_mode=domain")
-
-
-def test_parse_selection_filter_mode_domain_with_bbox():
-    assert jr.parse_selection(
-        "jretrievedwh:bbox=40.5,53.0,0.0,17.5;filter_mode=domain;domain_bbox=45.7,48.0,5.8,10.8"
-    ) == (
-        {"bbox": "40.5,53.0,0.0,17.5"},
-        "prod",
-        "surface",
-        40,
-        "domain",
-        [45.7, 48.0, 5.8, 10.8],
+        20,
     )
 
 

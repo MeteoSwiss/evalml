@@ -26,7 +26,6 @@ def _base_snakemake_command(
     command += config.profile.parsable()
     command += ["--configfile", str(configfile)]
     command += ["--cores", str(cores)]
-    command += ["--rerun-incomplete"]
     return command
 
 
