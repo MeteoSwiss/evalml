@@ -19,3 +19,8 @@ grib_copy -w shortName=T,level=500 $PL_SAMPLE /dev/stdout | grib_set -d 0 - icon
 
 # template for typeOfLevel=meanSea
 grib_copy -w shortName=PMSL $SFC_SAMPLE /dev/stdout | grib_set -d 0 - icon-ch1-typeOfLevel=meanSea.grib
+
+# templates for cloud cover layers (pressure-bounded, so they need their own templates)
+for v in CLCH CLCM CLCL; do
+  grib_copy -w shortName=$v $SFC_SAMPLE /dev/stdout | grib_set -d 0 - icon-ch1-shortName=$v.grib
+done

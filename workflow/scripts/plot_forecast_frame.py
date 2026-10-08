@@ -80,7 +80,7 @@ def preprocess_field(param: str, state: dict):
     Returns: (field_array, units_override or None)
     """
     fields = state["fields"]
-    if param in ("T_2M", "TD_2M", "T", "TD"):
+    if param in ("T_2M", "TD_2M", "T_G", "T", "TD"):
         return kelvin_to_celsius(fields[param]), "°C"
     if param == "SP_10M":
         return ekm_wind.speed(fields["U_10M"], fields["V_10M"]), "m/s"
@@ -88,12 +88,12 @@ def preprocess_field(param: str, state: dict):
         return ekm_wind.speed(fields["U"], fields["V"]), "m/s"
     if param == "TOT_PREC":
         return np.maximum(fields[param], 0), "mm"
-    if param in ("CLCT", "CLCL"):
-        # Avoid exact 0/1 plateaus breaking tricontourf on orthographic
+    if param in ("CLCT", "CLCL", "CLCM", "CLCH"):
+        # Avoid exact 0/100 plateaus breaking tricontourf on orthographic
         # projections (tmp/reproduce_clct_bug.py). Pair with extend="neither".
         # Any new bounded field with silent-blank or GeometryCollection-crash
         # globe frames likely needs the same clip-away-from-boundary fix.
-        return np.clip(fields[param], 1e-6, 1 - 1e-6), None
+        return np.clip(fields[param], 1e-4, 100 - 1e-4), None
     if param == "SSRD":
         # Same issue, bottom boundary only (night-side plateau).
         return np.maximum(fields[param], 1e-6), None

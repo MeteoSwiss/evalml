@@ -6,12 +6,59 @@ input:
         grib:
           path: forecaster/20*
           pre_processors:
+            # inputs read from GRIB carry the GRIB name (TOT_PREC), other sources may use the model name (tp)
             - forward_transform_filter:
                 # does not have an effect if the temporal downscaler does not use tp as prognostic variable
                 rescale:
                   scale: 0.001 # convert from kg m-2 to m
                   offset: 0
                   param: tp
+            - forward_transform_filter:
+                rescale:
+                  scale: 0.001 # convert from kg m-2 to m
+                  offset: 0
+                  param: TOT_PREC
+            # filters see the model name (tcc) with anemoi-inference <= 0.11.1 and the GRIB name (CLCT) from 0.11.2
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: tcc
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: CLCT
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: lcc
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: CLCL
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: mcc
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: CLCM
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: hcc
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: CLCH
           namer: &namer
             rules:
               - - shortName: T
@@ -38,6 +85,14 @@ input:
                 - 2d
               - - shortName: T_G
                 - skt
+              - - shortName: CLCT
+                - tcc
+              - - shortName: CLCL
+                - lcc
+              - - shortName: CLCM
+                - mcc
+              - - shortName: CLCH
+                - hcc
               - - shortName: U_10M
                 - 10u
               - - shortName: V_10M
@@ -61,11 +116,17 @@ post_processors:
   - accumulate_from_start_of_forecast: # accumulate tp from start of forecast
       accumulations:
         - tp
+  # filters see the model name (tp) with anemoi-inference <= 0.11.1 and the GRIB name (TOT_PREC) from 0.11.2
   - forward_transform_filter:
       rescale:
         scale: 1000 # convert units from m to kg m-2
         offset: 0
         param: tp
+  - forward_transform_filter:
+      rescale:
+        scale: 1000 # convert units from m to kg m-2
+        offset: 0
+        param: TOT_PREC
 
 output:
   tee:
@@ -79,6 +140,47 @@ output:
           - extract_mask: # removes global points
               mask: "lam_0/cutout_mask"
               as_slice: true
+          # filters see the model name (tcc) with anemoi-inference <= 0.11.1 and the GRIB name (CLCT) from 0.11.2
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: tcc
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: CLCT
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: lcc
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: CLCL
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: mcc
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: CLCM
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: hcc
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: CLCH
           # here, the trimedge mask can be specified when available
           # at overlap steps (multiples of the forecaster stride) replace the
           # re-predicted prognostics with the forecaster's boundary values
@@ -129,6 +231,16 @@ output:
                 slor: {"param": 163, "shortName": "slor"}
                 SSO_STDH: {"param": 160, "shortName": "sdor"}
                 sdor: {"param": 160, "shortName": "sdor"}
+                CLCT: {"param": 164, "shortName": "tcc"}
+                tcc: {"param": 164, "shortName": "tcc"}
+                CLCL: {"param": 186, "shortName": "lcc"}
+                lcc: {"param": 186, "shortName": "lcc"}
+                CLCM: {"param": 187, "shortName": "mcc"}
+                mcc: {"param": 187, "shortName": "mcc"}
+                CLCH: {"param": 188, "shortName": "hcc"}
+                hcc: {"param": 188, "shortName": "hcc"}
+                T_G: {"param": 235, "shortName": "skt"}
+                skt: {"param": 235, "shortName": "skt"}
                 TOT_PREC: {"param": 228, "shortName": "tp"}
                 tp: {"param": 228, "shortName": "tp"}
                 z: {"param": 129, "shortName": "z"}

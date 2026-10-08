@@ -49,6 +49,34 @@ dataset:
           param: T_2M
           step: 12
           time: 0
+      tcc:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: CLCT
+          step: 12
+          time: 0
+      lcc:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: CLCL
+          step: 12
+          time: 0
+      mcc:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: CLCM
+          step: 12
+          time: 0
+      hcc:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: CLCH
+          step: 12
+          time: 0
       cos_julian_day:
         computed_forcing: true
         constant_in_time: false
