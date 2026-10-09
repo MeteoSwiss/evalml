@@ -454,8 +454,10 @@ SCORECARD_CONFIGS = (
 # - period-accumulated params (TOT_PREC/tp) verify a [lead - period, lead]
 #   window, so they have no value at lead times shorter than one step spacing
 #   (e.g. no 0h precip map).
-# - diagnostic params (e.g. CLCT/tcc) aren't part of the model's input state,
+# - diagnostic params (e.g. CLCT/tcc in AIFS) aren't part of the model's input state,
 #   so they're simply absent from the initial-state GRIB file written at step 0.
+#   Cloud cover is prognostic in some models (Varda-single RC); listing it here
+#   only drops their 0h animation frame.
 # Short and canonical names both appear across the workflow (showcases vs maps).
 PARAMS_WITHOUT_STEP_ZERO_VALUE = {
     "TOT_PREC",
@@ -464,6 +466,10 @@ PARAMS_WITHOUT_STEP_ZERO_VALUE = {
     "tcc",
     "CLCL",
     "lcc",
+    "CLCM",
+    "mcc",
+    "CLCH",
+    "hcc",
     "SSRD",
     "ssrd",
 }
