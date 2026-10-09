@@ -3,8 +3,6 @@ from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
-from evalml.helpers import load_station_holdout_list
-
 PROJECT_ROOT = Path(__file__).parents[2]
 
 PREDEFINED_REGIONS: Dict[str, List[float]] = {
@@ -479,13 +477,14 @@ class ExperimentConfig(BaseModel):
         ...,
         description="Settings for the experiment dashboard.",
     )
-    station_holdout_list: Optional[str] = Field(
+    station_holdout: Optional[List[str]] = Field(
         default=None,
         description=(
-            "Absolute path to a YAML file listing the holdout station nat_abbr. "
-            "When set, adds a 'station_group' dimension (all/holdout/holdin) to "
-            "verification metrics for all models and baselines. Point the "
-            "nudge_toward_observation filter's holdout_station_file at the same file."
+            "List of holdout station nat_abbr. When set, adds a 'station_group' "
+            "dimension (all/holdout/holdin) to verification metrics for all models "
+            "and baselines. The workflow writes the list to a CSV file and stages it "
+            "as holdout_stations.csv in the working directory of every inference run "
+            "whose config references that file."
         ),
     )
     scorecards: Optional[ExperimentScorecardConfig] = Field(
@@ -497,14 +496,16 @@ class ExperimentConfig(BaseModel):
         description="Score map plot configuration. Omit or set enabled: false to disable.",
     )
 
-    @field_validator("station_holdout_list")
+    @field_validator("station_holdout")
     @classmethod
-    def validate_station_holdout_list(cls, v: Optional[str]) -> Optional[str]:
+    def validate_station_holdout(cls, v: Optional[List[str]]) -> Optional[List[str]]:
         if v is None:
             return v
-        if not Path(v).is_file():
-            raise ValueError(f"station_holdout_list file not found: {v}")
-        load_station_holdout_list(v)
+        if not v:
+            raise ValueError("station_holdout must not be empty; omit it instead.")
+        duplicates = sorted({s for s in v if v.count(s) > 1})
+        if duplicates:
+            raise ValueError(f"station_holdout has duplicate stations: {duplicates}")
         return v
 
     @field_validator("thresholds")

@@ -296,18 +296,21 @@
           "$ref": "#/$defs/Dashboard",
           "description": "Settings for the experiment dashboard."
         },
-        "station_holdout_list": {
+        "station_holdout": {
           "anyOf": [
             {
-              "type": "string"
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "Absolute path to a YAML file listing the holdout station nat_abbr. When set, adds a 'station_group' dimension (all/holdout/holdin) to verification metrics for all models and baselines. Point the nudge_toward_observation filter's holdout_station_file at the same file.",
-          "title": "Station Holdout List"
+          "description": "List of holdout station nat_abbr. When set, adds a 'station_group' dimension (all/holdout/holdin) to verification metrics for all models and baselines. The workflow writes the list to a CSV file and stages it as holdout_stations.csv in the working directory of every inference run whose config references that file.",
+          "title": "Station Holdout"
         },
         "scorecards": {
           "anyOf": [
