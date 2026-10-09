@@ -120,7 +120,7 @@ showcase:
     - SP_10M
     - TOT_PREC1
   meteograms:
-    enabled: false
+    enabled: true
     stations: [JUN] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
   animations:
     enabled: true
@@ -131,6 +131,14 @@ showcase:
       # - alps
       - icon-ch
       - switzerland
+  comparisons:
+    enabled: true
+    baselines: [ICON-CH1-ctrl]
+    domains:
+      - alps
+    params:
+      - SP_10M
+    lead_times: [24]
 
 locations:
   output_root: output/

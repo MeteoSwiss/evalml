@@ -88,6 +88,76 @@
       "title": "BaselineItem",
       "type": "object"
     },
+    "ComparisonsConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for side-by-side map comparisons of runs and baselines.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate side-by-side maps of each run and the selected baselines.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "baselines": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Labels of the baselines to show next to each run. None (default) means all baselines in the config.",
+          "title": "Baselines"
+        },
+        "domains": {
+          "default": [
+            "alps"
+          ],
+          "description": "Domains to plot. Same format as `animations.domains`: a named domain defined in plotting.DOMAINS or a custom domain dict.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/DomainConfig"
+              }
+            ]
+          },
+          "title": "Domains",
+          "type": "array"
+        },
+        "params": {
+          "default": [
+            "SP_10M"
+          ],
+          "description": "Parameters to plot.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "lead_times": {
+          "default": [
+            24
+          ],
+          "description": "Lead times (hours) to plot. Lead times not produced by the run or by a selected baseline are skipped.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Lead Times",
+          "type": "array"
+        }
+      },
+      "title": "ComparisonsConfig",
+      "type": "object"
+    },
     "Dashboard": {
       "description": "Settings for the dashboard",
       "properties": {
@@ -860,6 +930,10 @@
         },
         "animations": {
           "$ref": "#/$defs/AnimationsConfig"
+        },
+        "comparisons": {
+          "$ref": "#/$defs/ComparisonsConfig",
+          "description": "Configuration for side-by-side map comparisons."
         }
       },
       "title": "ShowcaseConfig",
