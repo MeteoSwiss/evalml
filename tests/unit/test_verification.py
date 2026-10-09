@@ -291,3 +291,34 @@ def test_load_holdout_stations(tmp_path):
     path = tmp_path / "holdout.csv"
     path.write_text("nat_abbr\nCHM\nNA\nFRE\n")
     assert load_holdout_stations(path) == ["CHM", "NA", "FRE"]
+
+
+def test_verify_station_groups_split_holdout_and_holdin():
+    """With holdout stations, scores are computed separately for all, holdout and
+    holdin stations; without, only the "all" group is present."""
+    stations = ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"]
+    coords = _station_coords(len(stations)) | {"values": ("values", stations)}
+    # Forecast error 1 at the holdout stations (BBB, EEE), 3 at the others.
+    err = np.array([3, 1, 3, 3, 1, 3], dtype=np.float32)
+    fcst = xr.Dataset({"T_2M": ("values", err)}, coords=coords)
+    obs = xr.Dataset(
+        {"T_2M": ("values", np.zeros(len(stations), np.float32))}, coords=coords
+    )
+
+    result = verify(
+        fcst,
+        obs,
+        "fcst",
+        "obs",
+        regions=_REGION,
+        num_workers=1,
+        holdout_stations=["BBB", "EEE"],
+    )
+    bias = result["T_2M.BIAS"].sel(region="all", source="fcst")
+    assert list(result["station_group"].values) == ["all", "holdout", "holdin"]
+    assert bias.sel(station_group="holdout").item() == pytest.approx(1.0)
+    assert bias.sel(station_group="holdin").item() == pytest.approx(3.0)
+    assert bias.sel(station_group="all").item() == pytest.approx(err.mean())
+
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+    assert list(result["station_group"].values) == ["all"]
