@@ -362,11 +362,11 @@ class ComparisonsConfig(BaseModel):
         default=["SP_10M"],
         description="Parameters to plot.",
     )
-    lead_times: str | None = Field(
-        default=None,
+    lead_times: List[int] = Field(
+        default=[24],
         description=(
-            "Lead times as start/stop/step (hours). None (default) means all lead "
-            "times produced by both the run and every selected baseline."
+            "Lead times (hours) to plot. Lead times not produced by the run or by "
+            "a selected baseline are skipped."
         ),
     )
 

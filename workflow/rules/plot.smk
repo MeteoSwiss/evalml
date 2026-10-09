@@ -226,11 +226,8 @@ def _get_compare_baselines(wc) -> list[dict[str, str]]:
 
 
 def get_compare_leadtimes(run_id, param):
-    """Lead times produced by the run and by every selected baseline."""
+    """Requested lead times produced by the run and by every selected baseline."""
     requested = COMPARISONS_CONFIG["lead_times"]
-    requested = (
-        "all" if requested is None else resolve_leadtimes(requested, param=param)
-    )
     leadtimes = set(resolve_leadtimes(RUN_CONFIGS[run_id]["steps"], requested, param))
     selected = COMPARISONS_CONFIG["baselines"]
     for cfg in BASELINE_CONFIGS.values():

@@ -144,17 +144,15 @@
           "type": "array"
         },
         "lead_times": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
+          "default": [
+            24
           ],
-          "default": null,
-          "description": "Lead times as start/stop/step (hours). None (default) means all lead times produced by both the run and every selected baseline.",
-          "title": "Lead Times"
+          "description": "Lead times (hours) to plot. Lead times not produced by the run or by a selected baseline are skipped.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Lead Times",
+          "type": "array"
         }
       },
       "title": "ComparisonsConfig",

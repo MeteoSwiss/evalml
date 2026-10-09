@@ -446,7 +446,7 @@ COMPARISONS_CONFIG = {
     "regions": parse_showcase_regions(_comparisons.get("domains", ["alps"])),
     "params": _comparisons.get("params", ["SP_10M"]),
     "baselines": _comparisons.get("baselines"),
-    "lead_times": _comparisons.get("lead_times"),
+    "lead_times": _comparisons.get("lead_times", [24]),
 }
 EXPERIMENT_PARAMS = config.get("experiment", {}).get(
     "params", ["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"]
