@@ -5,7 +5,8 @@ description: |
   next to the operational Varda-single 1.0 chain. Needs the cloud-skt-support branch.
 
 dates:
-  - 2025-09-01T00:00
+  - 2025-09-01T00:00 # output must equal the earlier v1.0 smoke test
+  - 2026-03-31T00:00 # last init of the full run, only available in KENDA-CH1 v2.0
 
 runs:
   - forecaster:
@@ -68,7 +69,7 @@ runs:
 
 truth:
   label: KENDA-CH1
-  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2026-1h-pl13-v2.0.zarr
 
 experiment:
   params:
