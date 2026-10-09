@@ -398,16 +398,35 @@ def verif_hash(full_config: dict) -> str:
     """Hash of all settings that affect verification outputs.
 
     Combines the truth source with verification-method settings so that
-    changing either (e.g. switching lapse_rate_correction on/off) produces
-    new output paths and unconditionally triggers a rerun.
+    changing any of them (e.g. switching lapse_rate_correction on/off, or
+    changing the station_holdout selection) produces new output
+    paths and unconditionally triggers a rerun.
     """
     truth_cfg = {
         k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE
     }
     experiment_verif_cfg = {
         "lapse_rate_correction": full_config.get("lapse_rate_correction", True),
+        "station_holdout": HOLDOUT_STATIONS,
     }
     return generate_json_hash({"truth": truth_cfg, "verif": experiment_verif_cfg})
+
+
+def holdout_dep(_):
+    """Holdout station file dependency: the CSV written by rule
+    station_holdout, or no input when experiment.station_holdout is unset."""
+    return [HOLDOUT_FILE] if HOLDOUT_STATIONS else []
+
+
+def run_uses_holdout(run_id: str) -> bool:
+    """Whether the run's inference config consumes the holdout station file.
+
+    The contract is the file name: an inference config that references
+    HOLDOUT_WORKDIR_NAME (e.g. as the nudge_toward_observation filter's
+    holdout_station_file) gets the file staged in its working directory.
+    """
+    with open(RUN_CONFIGS[run_id]["config"], "r") as f:
+        return HOLDOUT_WORKDIR_NAME in f.read()
 
 
 def truth_file_dep(_):
@@ -423,11 +442,16 @@ def truth_file_dep(_):
 if "jretrieve" in str(config["truth"]["root"]):
     from data_input.jretrieve import check_prerequisites, parse_selection
 
-    _, _jretrieve_stage, _ = parse_selection(config["truth"]["root"])
+    _, _jretrieve_stage, _, _ = parse_selection(config["truth"]["root"])
     check_prerequisites(_jretrieve_stage)
 
 
 TRUTH_HASH = truth_hash(config["truth"])
+HOLDOUT_STATIONS = sorted(config.get("experiment", {}).get("station_holdout") or [])
+HOLDOUT_FILE = (
+    OUT_ROOT / f"data/station_holdout/{generate_json_hash(HOLDOUT_STATIONS)}.csv"
+)
+HOLDOUT_WORKDIR_NAME = "holdout_stations.csv"
 REGIONS = parse_regions()
 VERIF_HASH = verif_hash(config)
 _showcase = config.get("showcase", {})
@@ -444,6 +468,16 @@ RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
+# Fail fast: an inference config that consumes the holdout station file needs
+# experiment.station_holdout to be set.
+if not HOLDOUT_STATIONS:
+    for _run_id in RUN_CONFIGS:
+        if run_uses_holdout(_run_id):
+            raise ValueError(
+                f"Inference config {RUN_CONFIGS[_run_id]['config']} of run {_run_id} "
+                f"references {HOLDOUT_WORKDIR_NAME}, but experiment.station_holdout "
+                "is not set."
+            )
 _scorecard = config.get("experiment", {}).get("scorecards") or {}
 SCORECARD_CONFIGS = (
     _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}

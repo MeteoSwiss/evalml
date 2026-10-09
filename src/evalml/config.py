@@ -477,6 +477,16 @@ class ExperimentConfig(BaseModel):
         ...,
         description="Settings for the experiment dashboard.",
     )
+    station_holdout: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "List of holdout station nat_abbr. When set, adds a 'station_group' "
+            "dimension (all/holdout/holdin) to verification metrics for all models "
+            "and baselines. The workflow writes the list to a CSV file and stages it "
+            "as holdout_stations.csv in the working directory of every inference run "
+            "whose config references that file."
+        ),
+    )
     scorecards: Optional[ExperimentScorecardConfig] = Field(
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
@@ -485,6 +495,18 @@ class ExperimentConfig(BaseModel):
         default=None,
         description="Score map plot configuration. Omit or set enabled: false to disable.",
     )
+
+    @field_validator("station_holdout")
+    @classmethod
+    def validate_station_holdout(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return v
+        if not v:
+            raise ValueError("station_holdout must not be empty; omit it instead.")
+        duplicates = sorted({s for s in v if v.count(s) > 1})
+        if duplicates:
+            raise ValueError(f"station_holdout has duplicate stations: {duplicates}")
+        return v
 
     @field_validator("thresholds")
     @classmethod

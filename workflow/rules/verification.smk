@@ -16,6 +16,7 @@ rule verification_metrics_baseline:
         script="workflow/scripts/verification_metrics.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth_dep=truth_file_dep,
+        holdout=holdout_dep,
     output:
         OUT_ROOT / f"data/baselines/{{baseline_id}}/{{init_time}}/verif_{VERIF_HASH}.nc",
     log:
@@ -32,6 +33,9 @@ rule verification_metrics_baseline:
         regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
+        holdout_flag=lambda wc, input: (
+            f"--holdout_stations_file {input.holdout}" if input.holdout else ""
+        ),
         lapse_rate_flag=(
             "--lapse_rate_correction"
             if config.get("lapse_rate_correction", True)
@@ -42,7 +46,7 @@ rule verification_metrics_baseline:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {input.forecast} \
-            --truth {params.truth} \
+            --truth "{params.truth}" \
             --reftime {wildcards.init_time} \
             --steps "{params.baseline_steps}" \
             --source_id "{wildcards.baseline_id}" \
@@ -50,6 +54,7 @@ rule verification_metrics_baseline:
             --regions '{params.regions}' \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
+            {params.holdout_flag} \
             --member "{params.member}" \
             {params.lapse_rate_flag} \
             --output {output} >{log} 2>&1
@@ -70,6 +75,7 @@ rule verification_metrics:
         script="workflow/scripts/verification_metrics.py",
         inference_okfile=rules.inference_execute.output.okfile,
         truth_dep=truth_file_dep,
+        holdout=holdout_dep,
     output:
         OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/verif_{VERIF_HASH}.nc",
     log:
@@ -91,6 +97,9 @@ rule verification_metrics:
         ).resolve(),
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
+        holdout_flag=lambda wc, input: (
+            f"--holdout_stations_file {input.holdout}" if input.holdout else ""
+        ),
         lapse_rate_flag=(
             "--lapse_rate_correction"
             if config.get("lapse_rate_correction", True)
@@ -101,7 +110,7 @@ rule verification_metrics:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {params.grib_out_dir} \
-            --truth {params.truth} \
+            --truth "{params.truth}" \
             --reftime {wildcards.init_time} \
             --steps "{params.fcst_steps}" \
             --source_id "{wildcards.run_id}" \
@@ -109,6 +118,7 @@ rule verification_metrics:
             --regions '{params.regions}' \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
+            {params.holdout_flag} \
             {params.lapse_rate_flag} \
             --output {output} >{log} 2>&1
         """
@@ -128,6 +138,18 @@ rule verification_metrics_aggregation:
             rules.verification_metrics.output,
             init_time=_restrict_reftimes_to_hours(REFTIMES),
             allow_missing=True,
+        ),
+        inference_okfiles=lambda wc: expand(
+            rules.inference_execute.output.okfile,
+            run_id=(
+                [wc.run_id]
+                + (
+                    [RUN_CONFIGS[wc.run_id]["forecaster"]["run_id"]]
+                    if RUN_CONFIGS[wc.run_id].get("forecaster") is not None
+                    else []
+                )
+            ),
+            init_time=_restrict_reftimes_to_hours(REFTIMES),
         ),
     output:
         OUT_ROOT / f"data/runs/{{run_id}}/verif_aggregated_{VERIF_HASH}.nc",
@@ -228,7 +250,7 @@ rule verification_scoremaps:
         uv run {input.script} \
             --run_root {params.run_root} \
             --reftimes {params.reftimes} \
-            --truth {input.truth} \
+            --truth "{input.truth}" \
             --step {wildcards.leadtime} \
             --steps "{params.fcst_steps}" \
             --param {wildcards.param} \
@@ -263,7 +285,7 @@ rule verification_scoremaps_baseline:
         uv run {input.script} \
             --baseline_root {input.forecast} \
             --reftimes {params.reftimes} \
-            --truth {input.truth} \
+            --truth "{input.truth}" \
             --step {wildcards.leadtime} \
             --steps "{params.baseline_steps}" \
             --param {wildcards.param} \

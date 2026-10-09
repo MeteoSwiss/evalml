@@ -176,6 +176,7 @@ rule inference_prepare_forecaster:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
+        holdout=lambda wc: holdout_dep(wc) if run_uses_holdout(wc.run_id) else [],
     output:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
@@ -188,6 +189,7 @@ rule inference_prepare_forecaster:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
+        holdout_workdir_name=HOLDOUT_WORKDIR_NAME,
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
@@ -206,6 +208,7 @@ rule inference_prepare_temporal_downscaler:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
+        holdout=lambda wc: holdout_dep(wc) if run_uses_holdout(wc.run_id) else [],
         forecasts=lambda wc: (
             [
                 OUT_ROOT
@@ -230,6 +233,7 @@ rule inference_prepare_temporal_downscaler:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
+        holdout_workdir_name=HOLDOUT_WORKDIR_NAME,
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),

@@ -8,7 +8,11 @@ from pathlib import Path
 from evalml.helpers import setup_logger
 
 
-def prepare_config(default_config_path: str, output_config_path: str, params: dict):
+def prepare_config(
+    default_config_path: str,
+    output_config_path: str,
+    params: dict,
+):
     """Prepare the configuration file for the inference run.
 
     Overrides default configuration parameters with those provided in params
@@ -56,6 +60,20 @@ def prepare_workdir(workdir: Path, resources_root: Path):
     )
 
 
+def stage_holdout_stations(smk, workdir: Path, LOG: logging.Logger):
+    """Copy the holdout station file, if the rule has one as input, into the
+    working directory under the fixed name the inference config refers to
+    (e.g. the nudge_toward_observation filter's holdout_station_file)."""
+    holdout = smk.input.get("holdout")
+    if not holdout:
+        return
+    target = workdir / smk.params.holdout_workdir_name
+    shutil.copyfile(str(holdout), target)
+    with open(target) as f:
+        n_stations = sum(1 for _ in f) - 1  # minus header
+    LOG.info("Staged %d holdout stations at %s", n_stations, target)
+
+
 def prepare_temporal_downscaler(smk):
     """Prepare the temporal downscaler for the inference run.
 
@@ -72,6 +90,7 @@ def prepare_temporal_downscaler(smk):
     LOG.info("Prepared working directory at %s", workdir)
     res_list = "\n".join([str(fn) for fn in Path(workdir / "resources").rglob("*")])
     LOG.info("Resources: \n%s", res_list)
+    stage_holdout_stations(smk, workdir, LOG)
 
     # prepare forecaster directory
     fct_run_id = smk.params.forecaster_run_id
@@ -94,6 +113,7 @@ def prepare_temporal_downscaler(smk):
     # prepare config
     overrides = _overrides_from_params(smk)
     prepare_config(smk.input.config, smk.output.config, overrides)
+
     LOG.info("Wrote config file at %s", smk.output.config)
     with open(smk.output.config, "r") as f:
         config_content = f.read()
@@ -119,6 +139,7 @@ def prepare_forecaster(smk):
     LOG.info("Prepared working directory at %s", workdir)
     res_list = "\n".join([str(fn) for fn in Path(workdir / "resources").rglob("*")])
     LOG.info("Resources: \n%s", res_list)
+    stage_holdout_stations(smk, workdir, LOG)
 
     overrides = _overrides_from_params(smk)
     prepare_config(smk.input.config, smk.output.config, overrides)

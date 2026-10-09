@@ -154,6 +154,16 @@
             </select>
         </div>
         {% endif %}
+        {% if station_holdout %}
+        <div class="control-group">
+            <label>Station group</label>
+            <select id="station-group-select" multiple>
+                {% for sg in station_groups %}
+                <option value="{{ sg | e }}"{% if sg == 'all' %} selected{% endif %}>{{ sg | e }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
         <div class="control-group">
             <label>Source(s)</label>
             <select id="source-select" multiple>
