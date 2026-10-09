@@ -337,6 +337,42 @@ class AnimationsConfig(BaseModel):
     )
 
 
+class ComparisonsConfig(BaseModel):
+    """Configuration for side-by-side map comparisons of runs and baselines."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to generate side-by-side maps of each run and the selected baselines.",
+    )
+    baselines: List[str] | None = Field(
+        default=None,
+        description=(
+            "Labels of the baselines to show next to each run. "
+            "None (default) means all baselines in the config."
+        ),
+    )
+    domains: List[str | DomainConfig] = Field(
+        default=["alps"],
+        description=(
+            "Domains to plot. Same format as `animations.domains`: a named domain "
+            "defined in plotting.DOMAINS or a custom domain dict."
+        ),
+    )
+    params: List[str] = Field(
+        default=["SP_10M"],
+        description="Parameters to plot.",
+    )
+    lead_times: str | None = Field(
+        default=None,
+        description=(
+            "Lead times as start/stop/step (hours). None (default) means all lead "
+            "times produced by both the run and every selected baseline."
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class ScorecardConfig(BaseModel):
     """Configuration for a single named scorecard."""
 
@@ -394,6 +430,10 @@ class ShowcaseConfig(BaseModel):
     animations: AnimationsConfig = Field(
         default_factory=AnimationsConfig,
         description="Configuration for animation generation.",
+    )
+    comparisons: ComparisonsConfig = Field(
+        default_factory=ComparisonsConfig,
+        description="Configuration for side-by-side map comparisons.",
     )
 
 

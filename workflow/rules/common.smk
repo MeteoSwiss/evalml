@@ -116,8 +116,10 @@ def parse_regions():
     return json.dumps(result)
 
 
-def parse_showcase_regions():
+def parse_showcase_regions(domains=None):
     """Parse showcase domains from config.
+
+    ``domains`` defaults to ``showcase.animations.domains``.
 
     Returns a dict mapping domain name -> {extent, projection, rotate, hours_per_revolution}.
     Named domains (strings) have extent=None and projection=None,
@@ -126,12 +128,14 @@ def parse_showcase_regions():
     rotate/hours_per_revolution only take effect when extent is None
     (full-globe domains).
     """
+    if domains is None:
+        domains = (
+            config.get("showcase", {})
+            .get("animations", {})
+            .get("domains", ["globe", "europe", "switzerland"])
+        )
     result = {}
-    for r in (
-        config.get("showcase", {})
-        .get("animations", {})
-        .get("domains", ["globe", "europe", "switzerland"])
-    ):
+    for r in domains:
         if isinstance(r, str):
             result[r] = {
                 "extent": None,
@@ -435,6 +439,14 @@ SHOWCASE_CONFIG = {
     "regions": parse_showcase_regions(),
     "params": _showcase.get("params", ["T_2M", "SP_10M"]),
     "fps": _showcase.get("animations", {}).get("frames_per_second", 2.0),
+}
+_comparisons = _showcase.get("comparisons", {})
+COMPARISONS_CONFIG = {
+    "enabled": _comparisons.get("enabled", False),
+    "regions": parse_showcase_regions(_comparisons.get("domains", ["alps"])),
+    "params": _comparisons.get("params", ["SP_10M"]),
+    "baselines": _comparisons.get("baselines"),
+    "lead_times": _comparisons.get("lead_times"),
 }
 EXPERIMENT_PARAMS = config.get("experiment", {}).get(
     "params", ["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"]
