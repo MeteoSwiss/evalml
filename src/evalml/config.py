@@ -505,6 +505,8 @@ class ExperimentConfig(BaseModel):
 class DefaultResources(BaseModel):
     """Default resource settings for job execution."""
 
+    model_config = {"extra": "forbid"}
+
     slurm_partition: str = Field(..., description="SLURM partition to use.")
     cpus_per_task: int = Field(..., ge=1, description="Number of CPUs per task.")
     mem_mb_per_cpu: int = Field(..., ge=1, description="Memory per CPU in MB.")
@@ -512,6 +514,10 @@ class DefaultResources(BaseModel):
     slurm_account: str | None = Field(None, description="SLURM account to charge.")
     gpus: int | None = Field(
         None, ge=0, description="Default GPU count per job (0 for non-GPU jobs)."
+    )
+    slurm_extra: str | None = Field(
+        None,
+        description="Extra sbatch arguments, e.g. \"'--exclude=nid[001-002]'\" (inner quotes needed).",
     )
 
     def parsable(self) -> list[str]:

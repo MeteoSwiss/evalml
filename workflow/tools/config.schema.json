@@ -143,6 +143,7 @@
       "type": "object"
     },
     "DefaultResources": {
+      "additionalProperties": false,
       "description": "Default resource settings for job execution.",
       "properties": {
         "slurm_partition": {
@@ -193,6 +194,19 @@
           "default": null,
           "description": "Default GPU count per job (0 for non-GPU jobs).",
           "title": "Gpus"
+        },
+        "slurm_extra": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Extra sbatch arguments, e.g. \"'--exclude=nid[001-002]'\" (inner quotes needed).",
+          "title": "Slurm Extra"
         }
       },
       "required": [
