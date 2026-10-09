@@ -6,7 +6,9 @@ config:
           dataset_config:
             dataset:
               cutout:
-                - dataset: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-ifsnames-v1.0.zarr
+                - dataset: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2026-1h-pl13-ifsnames-v2.0.zarr
+                  # v2.0 uses ICON names for these; map back to the v1.0 (training) names. Values identical to v1.0 on shared dates.
+                  rename: {CLCT: tcc, CLCL: lcc, CLCM: mcc, CLCH: hcc, SKT: skt, SSO_THETA: anor, SSO_GAMMA: isor}
                   rescale: # cloud cover percent -> fraction, as in training
                     tcc: [0.01, 0.0]
                     lcc: [0.01, 0.0]

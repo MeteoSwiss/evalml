@@ -8,7 +8,9 @@ config:
               cutout:
                 # training datasets not available on system due to training on different system
                 # and/or training period not in dataset
-                - dataset: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-ifsnames-v1.0.zarr
+                - dataset: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2026-1h-pl13-ifsnames-v2.0.zarr
+                  # v2.0 uses ICON names for these; map back to the v1.0 (training) names. Values identical to v1.0 on shared dates.
+                  rename: {CLCT: tcc, CLCL: lcc, CLCM: mcc, CLCH: hcc, SKT: skt, SSO_THETA: anor, SSO_GAMMA: isor}
                 - dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2026-6h-v1-combined-land.zarr
             # avoid errors from frequency mismatch between LAM (1h) and global (6h) datasets when aligning datasets
             frequency: 6h
