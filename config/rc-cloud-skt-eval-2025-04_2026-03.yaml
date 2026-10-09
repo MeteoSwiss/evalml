@@ -60,6 +60,11 @@ runs:
           - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@e5f95f3eb7b8907407faa7ac2e2771c1d7fe5aa4
 
   - baseline:
+      label: INCA
+      root: /store_new/mch/msclim/INCA # archive ends 2025-12-31: no INCA for the 2026 inits
+      steps: 0/6/1
+
+  - baseline:
       label: ICON-CH1-CTRL
       root: /store_new/mch/msopr/osm/ICON-CH1-EPS
       steps: 0/33/1
@@ -79,7 +84,9 @@ experiment:
     - TD_2M
     - U_10M
     - V_10M
-    - TOT_PREC
+    - SP_10M
+    - TOT_PREC1
+    - PMSL
     - T_G
     - CLCT
     - CLCL
@@ -87,11 +94,53 @@ experiment:
     - CLCH
   stratification:
     regions:
-      - mittelland
+      - icon 
     root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
+  thresholds: # as in varda-single-1.0.yaml, plus clear / overcast for cloud cover frequency bias
+    TOT_PREC1:
+      gt: [0.0, 0.1, 1, 5, 10]
+    SP_10M:
+      gt: [2.5, 5.0, 10.0]
+    T_2M:
+      lt: [273.15]
+      gt: [288.15, 298.15]
+    CLCT:
+      lt: [20]
+      gt: [80]
   dashboard:
     stratification:
       - season
+      - init_hour
+  scorecards: # as in varda-single-1.0.yaml, with TOT_PREC1 instead of TOT_PREC6
+    enabled: true
+    sections:
+      nowcasting:
+        baseline: INCA
+        lead_times: "0/6/1"
+        stratification: region
+        variables:
+          - "U_10M:RMSE,R2,ETS"
+          - "V_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2,ETS"
+          - "TOT_PREC1:RMSE,R2,ETS"
+      short_range:
+        baseline: ICON-CH1-CTRL
+        lead_times: "6/33/6"
+        stratification: region
+        variables:
+          - "U_10M:RMSE,R2,ETS"
+          - "V_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2,ETS"
+          - "TOT_PREC1:RMSE,R2,ETS"
+      medium_range:
+        baseline: ICON-CH2-CTRL
+        lead_times: "24/120/24"
+        stratification: region
+        variables:
+          - "U_10M:RMSE,R2,ETS"
+          - "V_10M:RMSE,R2,ETS"
+          - "T_2M:RMSE,R2,ETS"
+          - "TOT_PREC1:RMSE,R2,ETS"
   scoremaps:
     enabled: false
 
