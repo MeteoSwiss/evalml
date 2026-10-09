@@ -186,9 +186,10 @@ rule verification_metrics_plot:
             for sid in EXPERIMENT_PARTICIPANTS
         )
         + ",truth-{}:{}".format(TRUTH_HASH, config["truth"]["label"]),
+        default_region=config["experiment"]["stratification"]["default_region"],
     shell:
         """
-        uv run {input.script} {input.verif} --output_dir {output} --labels "{params.label_map}" >{log} 2>&1
+        uv run {input.script} {input.verif} --output_dir {output} --labels "{params.label_map}" --default_region {params.default_region:q} >{log} 2>&1
         """
 
 

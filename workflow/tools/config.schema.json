@@ -889,6 +889,19 @@
           "title": "Regions",
           "type": "array"
         },
+        "default_region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Region used when region stratification is not active. Must be one of 'regions'; defaults to the first entry.",
+          "title": "Default Region"
+        },
         "root": {
           "anyOf": [
             {

@@ -65,6 +65,8 @@ experiment:
       - alpennordseite
       - alpensuedseite
       - jura
+    # region shown when results are not stratified by region
+    default_region: icon
     root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
   thresholds:
     TOT_PREC1:

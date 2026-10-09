@@ -112,9 +112,7 @@ def main(args: Namespace) -> None:
     metrics = all_df["metric"].unique()
     params = all_df["param"].unique()
     seasons = all_df["season"].unique() if args.stratify else ["all"]
-    regions = (
-        all_df["region"].unique() if args.stratify else [all_df["region"].unique()[0]]
-    )
+    regions = all_df["region"].unique() if args.stratify else [args.default_region]
     init_hours = (
         all_df["init_hour"].unique() if args.stratify else [-999]
     )  # numeric code to indicate all init hours
@@ -185,6 +183,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Stratify results by hour, season, and init_hour.",
         default=False,
+    )
+    parser.add_argument(
+        "--default_region",
+        type=str,
+        required=True,
+        help="Region to use when results are not stratified by region.",
     )
     parser.add_argument(
         "--output_dir",
