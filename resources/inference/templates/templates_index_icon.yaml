@@ -3,7 +3,7 @@
 - - {levtype: pl, param: [T, QV, U, V, OMEGA, FI]}
   - resources/icon-ch1-typeOfLevel=isobaricInhPa.grib
 
-- - {levtype: sfc, param: [T_2M, TD_2M, U_10M, V_10M]}
+- - {levtype: sfc, param: [T_2M, TD_2M, U_10M, V_10M, SP_10M, DD_10M, RELHUM_2M]}
   - resources/icon-ch1-typeOfLevel=heightAboveGround.grib
 
 - - {levtype: sfc, param: [FR_LAND, PS, FIS, T_G, SKT, SSO_SIGMA,SSO_STDH]}

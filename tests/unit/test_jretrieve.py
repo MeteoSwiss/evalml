@@ -269,6 +269,43 @@ def test_load_obs_data_from_jretrieve(monkeypatch):
     np.testing.assert_allclose(ds["elevation"].values, [1878.0])
 
 
+def test_load_obs_data_from_jretrieve_relhum(monkeypatch):
+    meta = pd.DataFrame(
+        {
+            "station": [1],
+            "op_since": [19800101000000],
+            "op_till": [""],
+            "parameter": ["ure200h0"],
+            "latitude": [46.79],
+            "longitude": [9.68],
+            "elev": [1878.0],
+            "stn_name": ["Arosa"],
+            "nat_abbr": ["ARO"],
+        }
+    )
+    data = pd.DataFrame(
+        {
+            "station": [1, 1],
+            "termin": [20250115000000, 20250115010000],
+            "ure200h0": [55.0, 60.0],  # %
+        }
+    )
+    monkeypatch.setattr(jr, "check_prerequisites", lambda *a, **k: None)
+    monkeypatch.setattr(jr, "fetch_meta", lambda **kw: meta)
+    monkeypatch.setattr(jr, "fetch_data", lambda **kw: data)
+
+    ds = data_input.load_obs_data_from_jretrieve(
+        "jretrievedwh:locations=ARO",
+        datetime(2025, 1, 15, 0, 0),
+        [0, 1],
+        ["RELHUM_2M"],
+    )
+
+    assert set(ds.data_vars) == {"RELHUM_2M"}
+    # Fetched directly from the DWH sensor code, no T/TD derivation.
+    np.testing.assert_allclose(ds["RELHUM_2M"].sel(values="ARO").values, [55.0, 60.0])
+
+
 def test_load_truth_data_forwards_root(monkeypatch):
     seen = {}
 
