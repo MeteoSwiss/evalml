@@ -115,8 +115,15 @@ def _estimate_native_spacing_chord(lat: np.ndarray, lon: np.ndarray) -> float:
     """Estimate the native grid spacing as a 3-D chord distance on the unit sphere.
 
     For 2-D ``(y, x)`` arrays the median of adjacent-cell chord distances (both
-    y- and x-direction neighbours) is used. For flat/scattered arrays the median
+    y- and x-direction neighbours) is used. For flat/scattered arrays the maximum
     nearest-neighbour distance within the source points is used.
+
+    1.5× the maximum (rather than the median) is used for unstructured grids because
+    the ICON triangular mesh is irregular: some cells are larger than average, so their
+    circumradii exceed the median NN distance. Using the median as the extrapolation
+    threshold would incorrectly flag observation stations that fall inside these larger
+    cells as "outside the domain". The 1.5× factor provides an additional safety margin
+    for stations near the domain boundary or in the most irregular cells.
     """
     lat_rad = np.deg2rad(lat)
     lon_rad = np.deg2rad(lon)
@@ -136,7 +143,7 @@ def _estimate_native_spacing_chord(lat: np.ndarray, lon: np.ndarray) -> float:
         pts = xyz.reshape(-1, 3)
         tree = cKDTree(pts)
         dists, _ = tree.query(pts, k=2)  # k=2 to skip the self-match (dist=0)
-        return float(np.median(dists[:, 1]))
+        return float(1.5 * np.max(dists[:, 1]))
 
 
 def map_forecast_to_truth(
