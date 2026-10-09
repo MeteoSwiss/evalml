@@ -246,7 +246,7 @@ if __name__ == "__main__":
         "--lapse_rate_correction",
         action="store_true",
         default=False,
-        help="Apply standard-atmosphere lapse-rate correction to T_2M and TD_2M.",
+        help="Apply lapse-rate correction to T_2M and PS.",
     )
     args = parser.parse_args()
 
