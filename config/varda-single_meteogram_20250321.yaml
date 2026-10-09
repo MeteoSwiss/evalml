@@ -9,7 +9,7 @@ description: |
 dates:
   start: 2025-03-21T00:00
   end: 2025-03-21T00:00
-  frequency: 30h
+  - 2025-03-21T00:00
 
 runs:
   - temporal_downscaler:
