@@ -5,6 +5,8 @@ from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
+
 from verification import verify, apply_lapse_rate_correction_inplace  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
 from data_input import (
@@ -28,6 +30,11 @@ class ScriptConfig(Namespace):
     reftime: datetime = None
     params: list[str] = ["T_2M", "TD_2M", "U_10M", "V_10M"]
     steps: list[int] = parse_steps("0/120/6")
+
+
+def load_holdout_stations(path: Path) -> list[str]:
+    """Read the holdout station nat_abbr from the CSV written by rule station_holdout."""
+    return pd.read_csv(path, dtype=str, keep_default_na=False)["nat_abbr"].tolist()
 
 
 def program_summary_log(args):
@@ -90,9 +97,14 @@ def main(args: ScriptConfig):
     # holdout stations for station-holdout stratification, restricted to those
     # present in the truth dataset.
     holdout_stations = None
-    if args.holdout_stations and "values" in truth.dims:
+    requested_holdout = (
+        load_holdout_stations(args.holdout_stations_file)
+        if args.holdout_stations_file
+        else []
+    )
+    if requested_holdout and "values" in truth.dims:
         all_stations = list(truth["values"].values)
-        holdout_stations = [s for s in args.holdout_stations if s in all_stations]
+        holdout_stations = [s for s in requested_holdout if s in all_stations]
         if holdout_stations:
             LOG.info(
                 "Station holdout: %d / %d stations in holdout group",
@@ -101,11 +113,11 @@ def main(args: ScriptConfig):
             )
         else:
             LOG.warning(
-                "holdout_stations set but none of them are in the truth dataset."
+                "holdout_stations_file set but none of its stations are in the truth dataset."
             )
-    elif args.holdout_stations:
+    elif requested_holdout:
         LOG.warning(
-            "holdout_stations set but truth dataset has no 'values' dimension; station stratification skipped."
+            "holdout_stations_file set but truth dataset has no 'values' dimension; station stratification skipped."
         )
 
     # compute metrics and statistics
@@ -209,11 +221,11 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
-        "--holdout_stations",
-        type=lambda s: json.loads(s) if s else None,
+        "--holdout_stations_file",
+        type=Path,
         default=None,
         help=(
-            "JSON list of holdout station nat_abbr. When non-empty, adds "
+            "CSV file with a nat_abbr column listing the holdout stations. When set, adds "
             "station_group stratification (all/holdout/holdin) to all models and "
             "baselines using the truth dataset's station list."
         ),

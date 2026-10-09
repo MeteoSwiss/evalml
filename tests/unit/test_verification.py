@@ -282,3 +282,12 @@ def test_verify_obs_stats_not_masked_by_forecast_gaps():
     assert not np.isnan(obs_mean), (
         "Obs mean should not be NaN when obs data is complete"
     )
+
+
+def test_load_holdout_stations(tmp_path):
+    """Station codes round-trip through the holdout CSV, including NaN-like ones."""
+    from verification_metrics import load_holdout_stations
+
+    path = tmp_path / "holdout.csv"
+    path.write_text("nat_abbr\nCHM\nNA\nFRE\n")
+    assert load_holdout_stations(path) == ["CHM", "NA", "FRE"]

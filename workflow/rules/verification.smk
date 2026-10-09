@@ -17,6 +17,7 @@ rule verification_metrics_baseline:
         script="workflow/scripts/verification_metrics.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth_dep=truth_file_dep,
+        holdout=holdout_dep,
     output:
         OUT_ROOT / f"data/baselines/{{baseline_id}}/{{init_time}}/verif_{VERIF_HASH}.nc",
     log:
@@ -33,7 +34,9 @@ rule verification_metrics_baseline:
         regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
-        holdout_stations=json.dumps(HOLDOUT_STATIONS),
+        holdout_flag=lambda wc, input: (
+            f"--holdout_stations_file {input.holdout}" if input.holdout else ""
+        ),
         lapse_rate_flag=(
             "--lapse_rate_correction"
             if config.get("lapse_rate_correction", True)
@@ -52,7 +55,7 @@ rule verification_metrics_baseline:
             --regions '{params.regions}' \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
-            --holdout_stations '{params.holdout_stations}' \
+            {params.holdout_flag} \
             --member "{params.member}" \
             {params.lapse_rate_flag} \
             --output {output} >{log} 2>&1
@@ -73,6 +76,7 @@ rule verification_metrics:
         script="workflow/scripts/verification_metrics.py",
         inference_okfile=rules.inference_execute.output.okfile,
         truth_dep=truth_file_dep,
+        holdout=holdout_dep,
     output:
         OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/verif_{VERIF_HASH}.nc",
     log:
@@ -94,7 +98,9 @@ rule verification_metrics:
         ).resolve(),
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=config["experiment"]["thresholds"],
-        holdout_stations=json.dumps(HOLDOUT_STATIONS),
+        holdout_flag=lambda wc, input: (
+            f"--holdout_stations_file {input.holdout}" if input.holdout else ""
+        ),
         lapse_rate_flag=(
             "--lapse_rate_correction"
             if config.get("lapse_rate_correction", True)
@@ -113,7 +119,7 @@ rule verification_metrics:
             --regions '{params.regions}' \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
-            --holdout_stations '{params.holdout_stations}' \
+            {params.holdout_flag} \
             {params.lapse_rate_flag} \
             --output {output} >{log} 2>&1
         """
