@@ -82,6 +82,7 @@ experiment:
     - V_10M
     - SP_10M
     - TOT_PREC1
+    - TOT_PREC6
     - PMSL
     - T_G
     - CLCT
