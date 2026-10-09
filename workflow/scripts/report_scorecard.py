@@ -441,15 +441,29 @@ def _draw_data_rows(
                 )  # separator sits halfway between rows
             cur_group = group
 
-        ax.text(
-            layout["metric_x"],
-            y,
-            decode_metric(metric),
-            ha="left",
-            va="center",
-            fontsize=fonts["metric"],
-            transform=group_transform,
-        )
+        if group_as_header:
+            # Header-row layout (publication): metric labels left-aligned under the
+            # variable subtitle, shifted with the same group transform.
+            ax.text(
+                layout["metric_x"],
+                y,
+                decode_metric(metric),
+                ha="left",
+                va="center",
+                fontsize=fonts["metric"],
+                transform=group_transform,
+            )
+        else:
+            # Legacy layout (standard workflow scorecard): metric labels
+            # right-aligned at metric_x, clear of the bold group label.
+            ax.text(
+                layout["metric_x"],
+                y,
+                decode_metric(metric),
+                ha="right",
+                va="center",
+                fontsize=fonts["metric"],
+            )
 
         for sec_idx, slice_val in enumerate(slices):
             x_off = sec_idx * (n_leads + layout["slice_gap"])
