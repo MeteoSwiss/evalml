@@ -20,27 +20,31 @@ from shapely.geometry import Polygon
 LOG = logging.getLogger(__name__)
 
 _T_LAPSE_RATE = 0.0065  # K/m — ICAO standard atmosphere
-_LAPSE_RATE_PARAMS: dict[str, float] = {"T_2M": _T_LAPSE_RATE}
+_PS_LAPSE_RATE = 11.5  # Pa/m — near-surface pressure decrease with height
+# param -> (lapse rate per metre, unit of the parameter)
+_LAPSE_RATE_PARAMS: dict[str, tuple[float, str]] = {
+    "T_2M": (_T_LAPSE_RATE, "K"),
+    "PS": (_PS_LAPSE_RATE, "Pa"),
+}
 
 
 def apply_lapse_rate_correction_inplace(
     fcst: xr.Dataset,
     obs: xr.Dataset,
     params: list[str],
-) -> xr.Dataset:
-    """Correct T_2M and TD_2M in *fcst* to the elevation of *obs*.
+) -> None:
+    """Correct T_2M and PS in *fcst* to the elevation of *obs*.
 
     Requires both *fcst* and *obs* to carry an ``elevation`` coordinate (metres).
     For forecasts this is the model orography from the ICON external parameter
     file; for observations it comes from station metadata or FIS geopotential.
-    The function silently returns *fcst* unchanged when either coordinate is
-    absent so that pipelines without elevation data are not broken.
+    Raises ``ValueError`` when either coordinate is absent.
 
     Formula applied per parameter:
-        T_corrected = T_forecast − Γ × (elevation_obs − elevation_fcst)
+        X_corrected = X_forecast − Γ_X × (elevation_obs − elevation_fcst)
 
-    A positive height difference (obs higher than forecast grid cell) lowers the
-    corrected value, consistent with the standard atmospheric lapse rate.
+    with Γ_T_2M = 0.0065 K/m and Γ_PS = 11.5 Pa/m. A positive height difference
+    (obs higher than forecast grid cell) lowers the corrected value.
     """
     missing = [
         name
@@ -79,19 +83,22 @@ def apply_lapse_rate_correction_inplace(
             float(np.nanmean(dz_vals)),
         )
 
-    for param, rate in _LAPSE_RATE_PARAMS.items():
+    for param, (rate, unit) in _LAPSE_RATE_PARAMS.items():
         if param in params and param in fcst.data_vars:
             correction = rate * dz
             if max_abs_dz >= 1.0:
                 c_vals = np.asarray(correction).ravel()
                 LOG.info(
-                    "Lapse-rate correction for %s (Γ=%.4f K/m): "
-                    "correction range [%.3f, %.3f] K, mean %.3f K.",
+                    "Lapse-rate correction for %s (Γ=%g %s/m): "
+                    "correction range [%.3f, %.3f] %s, mean %.3f %s.",
                     param,
                     rate,
+                    unit,
                     float(np.nanmin(c_vals)),
                     float(np.nanmax(c_vals)),
+                    unit,
                     float(np.nanmean(c_vals)),
+                    unit,
                 )
             fcst[param] = fcst[param] - correction
 
