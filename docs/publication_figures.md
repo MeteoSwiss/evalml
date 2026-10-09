@@ -248,7 +248,7 @@ scores RMSE + ETS, stratified by region.
 **`scoremaps.py` — Spatial skill-score maps.** 2-D skill maps (MSE skill and the
 bias contribution to it) for each parameter at chosen lead times, candidate vs
 baseline; plus a per-season variant.
-- *Needs:* a **gridded (zarr) truth** manifest with scoremap NC files (produced
+- *Needs:* truth dataset manifest(s) with scoremap NC files (produced
   via `experiment.scoremaps` / `publication.scoremaps`); earthkit + cartopy.
 - *Output:* `publication_scoremaps_<lt>h.{pdf,png}`,
   `publication_scoremaps_seasonal_<lt>h.{pdf,png}`, `publication_scoremaps.html`.
