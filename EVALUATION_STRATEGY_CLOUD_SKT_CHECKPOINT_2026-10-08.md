@@ -66,3 +66,4 @@ Only if stages 1 and 2 do not give a clear picture, and only where implementatio
 3. Showcase cases: which dates?
 4. Further ideas from Pirmin, Andreas and Julien Delbeke; literature search on cloud verification.
 5. Whether stage 3 is needed at all.
+6. NWP baselines: control run or ensemble mean? For now the control run (EvalML default, member 000) is used. The ensemble mean (`member: mean`) is arguably fairer for RMSE-type scores, but it is a smoothed field, which makes cloud cover histograms, frequency bias and FSS unfair to compare against a single deterministic run. It also requires loading all members. Possible answer: both, the mean only for headline scores. Asked Daniele Nerini (2026-10-09).
