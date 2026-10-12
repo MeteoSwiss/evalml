@@ -29,7 +29,7 @@ New variables: total, low, medium and high cloud cover (CLCT, CLCL, CLCM, CLCH) 
 ## Test period
 
 - April 2025 to March 2026 (full year). No overlap with the training period, which ends 2025-03-31.
-- Initialisations roughly every second day. Exact init times and lead times to be decided.
+- Initialisations every 42 hours.
 - Why a full year: autumn and early winter are the main fog and low stratus season on the Swiss Plateau (hardest case for clouds and SKT). Spring brings snowmelt (SKT held near 0 °C over melting snow) and the start of convection. Summer brings convection.
 - Known caveat: validation during training used the whole dataset (limited to 10 batches). This was also the case for Varda-single 1.0 and the team considers it unproblematic.
 
@@ -38,11 +38,10 @@ New variables: total, low, medium and high cloud cover (CLCT, CLCL, CLCM, CLCH) 
 Goal: answer "is the RC comparable to Varda-single 1.0" (a slight degradation is acceptable in exchange for the new variables) with the standard EvalML tools.
 
 1. **Degradation check on existing variables.** Headline scores (as for Varda-single 1.0) for T_2M, TD_2M, wind, TOT_PREC, PMSL etc. Adding new variables can degrade the old ones. For the go/no-go question this is probably the most important check.
-2. **Headline scores for the new variables.** Bias, MAE and RMSE over lead time, for CLCT, CLCL, CLCM, CLCH and SKT.
+2. **Headline scores for the new variables.** Bias, STDE and RMSE over lead time, for CLCT, CLCL, CLCM, CLCH and SKT.
 3. **Distribution of cloud cover.** Cloud cover is mostly near 0 % or near 100 %. A model that predicts smooth, intermediate values everywhere can still get a reasonable RMSE. Therefore: histograms of forecast vs. KENDA values, and frequency bias at a few thresholds (e.g. clear < 20 %, overcast > 80 %).
 4. **Showcase animations** of cloud cover (and SKT) for a few selected cases: a fog / low stratus episode, a frontal passage, a summer convection day.
 
-Prerequisite: the TOT_PREC unit fix (precipitation in metres) must be merged into the branch used for the evaluation, otherwise precipitation scores and the stage 2 checks are wrong.
 
 ## Stage 2: physical consistency
 
@@ -59,11 +58,22 @@ Only if stages 1 and 2 do not give a clear picture, and only where implementatio
 - **Fractions Skill Score (FSS)** on thresholded cloud masks (e.g. cloud cover > 50 %, > 80 %). Shows at which spatial scale the forecast becomes useful. Cheap if a generic implementation can be added to EvalML.
 - **SAL, S and L components** for cloud cover. SAL exists partly in EvalML (for precipitation). Open question: cloud fields often cover most of the domain, so object identification needs care. The A component is just the domain-mean bias and adds little beyond stage 1.
 
-## Open points for discussion
+
+## Executive Decision
+
+NWP baselines: control run or ensemble mean? The ensemble mean (`member: mean`) is arguably fairer for RMSE-type scores, but it is a smoothed field, which makes cloud cover histograms, frequency bias and FSS unfair to compare against a single deterministic run. It also requires loading all members. For now the control run (EvalML default, member 000) is used. 
+
+
+## Open points
+
+- Showcase cases: which dates? -> tbd. Louis will decide on the fly.
+- Further ideas from Pirmin, Andreas and Julien Delbeke; literature search on cloud verification. (conditional on whether stage 3 is desired / reached)
+
+
+## Open points for discussion in the team
 
 1. KENDA as the only reference (see above).
-2. Init times and lead times.
-3. Showcase cases: which dates?
-4. Further ideas from Pirmin, Andreas and Julien Delbeke; literature search on cloud verification.
-5. Whether stage 3 is needed at all.
-6. NWP baselines: control run or ensemble mean? For now the control run (EvalML default, member 000) is used. The ensemble mean (`member: mean`) is arguably fairer for RMSE-type scores, but it is a smoothed field, which makes cloud cover histograms, frequency bias and FSS unfair to compare against a single deterministic run. It also requires loading all members. Possible answer: both, the mean only for headline scores. Asked Daniele Nerini (2026-10-09).
+2. Whether stage 3 is needed at all.
+
+
+
