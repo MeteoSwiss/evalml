@@ -39,6 +39,8 @@ import numpy as np
 import xarray as xr
 
 from data_input import (
+    TOT_PREC_UNIT_FACTORS,
+    is_inca_archive,
     load_forecast_data,
     load_truth_data,
     open_truth_zarr,
@@ -119,7 +121,7 @@ def main(args: Namespace) -> None:
                 f"Lead time {args.step}h is smaller than the {accum_h}h "
                 f"accumulation period encoded in '{args.param}'."
             )
-        if args.baseline_root and "INCA" in args.baseline_root.parts and accum_h != 1:
+        if args.baseline_root and is_inca_archive(args.baseline_root) and accum_h != 1:
             raise ValueError(
                 f"INCA provides native 1h accumulations only; '{args.param}' "
                 f"requires a {accum_h}h accumulation period. Use TOT_PREC1 for "
@@ -224,7 +226,12 @@ def main(args: Namespace) -> None:
         src_root = args.baseline_root if args.baseline_root else grib_dir
         try:
             fcst = load_forecast_data(
-                src_root, reftime, [args.step], [args.param], member=args.member
+                src_root,
+                reftime,
+                [args.step],
+                [args.param],
+                member=args.member,
+                tot_prec_units=args.tot_prec_units,
             )
         except Exception as exc:
             raise RuntimeError(
@@ -463,6 +470,13 @@ if __name__ == "__main__":
             "'median' for the pre-computed median, 'mean' to average all "
             "members, or any 3-digit member ID. Ignored for runs and INCA."
         ),
+    )
+    parser.add_argument(
+        "--tot_prec_units",
+        type=str,
+        default="kg m-2",
+        choices=list(TOT_PREC_UNIT_FACTORS),
+        help="Units of TOT_PREC in the GRIB files of an ML run; converted to kg m-2.",
     )
     parser.add_argument(
         "--truth",

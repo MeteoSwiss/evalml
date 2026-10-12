@@ -9,6 +9,7 @@ from pathlib import Path
 from verification import verify, apply_lapse_rate_correction_inplace  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
 from data_input import (
+    TOT_PREC_UNIT_FACTORS,
     parse_steps,
     load_forecast_data,
     load_truth_data,
@@ -53,7 +54,12 @@ def main(args: ScriptConfig):
     now = datetime.now()
 
     fcst = load_forecast_data(
-        args.forecast, args.reftime, args.steps, args.params, member=args.member
+        args.forecast,
+        args.reftime,
+        args.steps,
+        args.params,
+        member=args.member,
+        tot_prec_units=args.tot_prec_units,
     )
 
     LOG.info(
@@ -192,6 +198,13 @@ if __name__ == "__main__":
         type=str,
         default="000",
         help="Ensemble member to load: '000' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID.",
+    )
+    parser.add_argument(
+        "--tot_prec_units",
+        type=str,
+        default="kg m-2",
+        choices=list(TOT_PREC_UNIT_FACTORS),
+        help="Units of TOT_PREC in the GRIB files of an ML run; converted to kg m-2.",
     )
     parser.add_argument(
         "--output",

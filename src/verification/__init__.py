@@ -300,6 +300,35 @@ def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
     return out
 
 
+def _truth_only_statistics(
+    fcst: xr.Dataset,
+    obs: xr.Dataset,
+    masks: xr.DataArray,
+    obs_label: str,
+    dim: list[str],
+    num_workers: int,
+) -> list[xr.Dataset]:
+    """Statistics of the parameters that only the truth provides (no forecast yet).
+
+    No scores can be computed for them, but their truth statistics are kept so
+    that they still appear in the reports.
+    """
+    stats = []
+    for param in obs.data_vars:
+        if param in fcst.data_vars:
+            continue
+        LOG.info("Parameter %s only in obs: computing obs statistics only", param)
+        obs_stats = _compute_statistics(
+            obs[param].where(masks), prefix=param + ".", source=obs_label, dim=dim
+        )
+        if "forecast_reference_time" in fcst.coords:
+            obs_stats = obs_stats.assign_coords(
+                forecast_reference_time=fcst["forecast_reference_time"]
+            )
+        stats.append(_merge_metrics([obs_stats], num_workers=num_workers))
+    return stats
+
+
 def _bbox_polygon(lon_min, lon_max, lat_min, lat_max) -> Polygon:
     return Polygon(
         [
@@ -450,6 +479,10 @@ def verify(
         scores.append(
             _merge_metrics([score, param_statistics], num_workers=num_workers)
         )
+
+    scores += _truth_only_statistics(
+        fcst_aligned, obs_aligned, masks, obs_label, dim, num_workers
+    )
 
     out = xr.merge(scores, join="outer", compat="no_conflicts")
     LOG.info("Computed metrics in %.2f seconds", time.time() - start)

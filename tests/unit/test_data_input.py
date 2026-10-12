@@ -9,6 +9,8 @@ from data_input import (
     _disaggregate_accum,
     _disaggregated_and_derived_params,
     _ensure_accum_ic,
+    _mask_icon_missing_values,
+    _tot_prec_to_kg_per_m2,
     compute_derived,
     get_base_params,
     get_steps,
@@ -300,3 +302,44 @@ def test_full_roundtrip_hourly_zarr_to_disaggregated():
     np.testing.assert_allclose(
         result["TOT_PREC6"].sel(step=np.timedelta64(12, "h")).item(), sum(block2)
     )
+
+
+# ---------------------------------------------------------------------------
+# Precipitation units of ML runs
+# ---------------------------------------------------------------------------
+
+
+def _cumul_dataset(final_total: float) -> xr.Dataset:
+    steps = [0, 6, 12, 18, 24]
+    values = np.linspace(0.0, final_total, len(steps))
+    return xr.Dataset(
+        {"TOT_PREC": _make_cumul(steps, values), "T_2M": _make_cumul(steps, values)}
+    )
+
+
+def test_precip_in_metres_is_converted_to_kg_per_m2():
+    ds = _tot_prec_to_kg_per_m2(_cumul_dataset(0.012), "m")
+
+    np.testing.assert_allclose(ds["TOT_PREC"].values[-1], 12.0)
+    np.testing.assert_allclose(ds["T_2M"].values[-1], 0.012)  # only precipitation
+
+
+def test_precip_in_kg_per_m2_is_unchanged():
+    ds = _tot_prec_to_kg_per_m2(_cumul_dataset(12.0), "kg m-2")
+
+    np.testing.assert_allclose(ds["TOT_PREC"].values[-1], 12.0)
+
+
+def test_undefined_cin_is_masked():
+    ds = xr.Dataset(
+        {
+            "CIN_MU": ("values", [-999.9, 0.0, 35.0]),
+            "T_2M": ("values", [-999.9, 280.0, 281.0]),
+        }
+    )
+
+    out = _mask_icon_missing_values(ds)
+
+    assert np.isnan(out["CIN_MU"].values[0])
+    np.testing.assert_allclose(out["CIN_MU"].values[1:], [0.0, 35.0])
+    np.testing.assert_allclose(out["T_2M"].values, [-999.9, 280.0, 281.0])

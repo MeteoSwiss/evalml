@@ -13,6 +13,9 @@ import pandas as pd
 import xarray as xr
 from pyproj import Transformer
 
+from data_input import inca
+from data_input.accumulation import _accumulate_from_hourly
+
 LOG = logging.getLogger(__name__)
 
 # IFS shortNames that differ from ICON parameter names.
@@ -47,15 +50,26 @@ XARRAY_ENGINE_PROFILE = {
 
 ZERO_KELVIN = -273.15  # °C
 
+# Accepted units of TOT_PREC in the output of ML runs (RunConfig.tot_prec_units),
+# with the factor that converts them to kg m-2.
+TOT_PREC_UNIT_FACTORS: dict[str, float] = {"kg m-2": 1.0, "m": 1000.0}
+
 # Base params whose GRIB representation is cumulative-from-start.
 # Extend this frozenset to enable new accumulatable variables.
-_ACCUMULATABLE_PARAMS: frozenset[str] = frozenset({"TOT_PREC"})
+# TOT_SNOW and the *_RADAR variants come from the INCA truth (see data_input.inca).
+_ACCUMULATABLE_PARAMS: frozenset[str] = frozenset(
+    {"TOT_PREC", "TOT_SNOW", "TOT_PREC_RADAR", "TOT_SNOW_RADAR"}
+)
 
 # Spatial/multi-field derivations: output param → required input params.
 DERIVED_PARAMS: dict[str, tuple[str, ...]] = {
     "SP_10M": ("U_10M", "V_10M"),
     "SP": ("U", "V"),
 }
+
+# ICON writes -999.9 where CIN is undefined; physical values are >= 0.
+# Values at or below the threshold are treated as missing when loading forecasts.
+_ICON_MISSING_VALUE_THRESHOLDS: dict[str, float] = {"CIN_MU": -999.0, "CIN_ML": -999.0}
 
 
 def parse_aggregated_param(param: str) -> tuple[str, int | None]:
@@ -222,24 +236,6 @@ def _load_icon_topography(const_grib: Path) -> np.ndarray:
     """Return HSURF [m] from an ICON constants GRIB file."""
     ds = load_from_grib_file(const_grib, {"parameter.variable": "HSURF"})
     return ds["HSURF"].values.astype(np.float32).ravel()
-
-
-def _load_inca_dem(
-    topo_nc: Path, x_target: np.ndarray, y_target: np.ndarray
-) -> np.ndarray:
-    """Return DEM [m] from INCA topography file, interpolated to the target (y, x) grid."""
-    with xr.open_dataset(topo_nc) as ds:
-        dem = (
-            ds["DEM"]
-            .assign_coords(
-                p_j=("p_j", ds["x"].values.astype(np.float64)),
-                p_i=("p_i", ds["y"].values.astype(np.float64)),
-            )
-            .rename({"p_j": "x", "p_i": "y"})
-        )
-        return dem.interp(x=x_target, y=y_target, method="linear").values.astype(
-            np.float32
-        )
 
 
 def _try_assign_elevation(ds: xr.Dataset) -> xr.Dataset:
@@ -493,6 +489,9 @@ def variable_name_profile(
         "surface",
         "pressure",
         "entire_atmosphere",
+        "isothermZero",
+        "atmMU",
+        "atmML",
     ],
 ) -> dict[str, Any]:
     """Resolve variable name profile based on the level type."""
@@ -501,6 +500,10 @@ def variable_name_profile(
         "mean_sea",
         "surface",
         "entire_atmosphere",
+        # single-level ICON fields: HZEROCL, SNOWLMT, CAPE_*, CIN_*
+        "isothermZero",
+        "atmMU",
+        "atmML",
     ]:
         return {}
     elif level_type == "pressure":
@@ -598,30 +601,6 @@ def _disaggregate_accum(cumul: xr.DataArray, steps: list[int], n: int) -> xr.Dat
     return result.clip(min=0)  # clip leaves NaN intact
 
 
-def _accumulate_from_hourly(da_1h: xr.DataArray, steps: list[int]) -> xr.DataArray:
-    """Reconstruct cumulative-from-start from 1H period-accumulated zarr values.
-
-    da_1h must have a 'step' dimension with hourly timedelta64 coordinates
-    covering steps 1h through max(steps). Computes the cumulative sum,
-    prepends step=0 with value 0 (IC), then subsets to steps.
-    """
-    max_step = max(steps)
-    all_1h = da_1h.sel(step=[np.timedelta64(h, "h") for h in range(1, max_step + 1)])
-    cumul = all_1h.cumsum(dim="step")
-    # expand_dims ensures step is the leading dimension in step0 before concat.
-    # Also assign the correct time coord for step=0 (= time[step=1] - 1h = reftime)
-    # so it agrees with plain-param DataArrays that have time=reftime at step=0,
-    # preventing a MergeError when xr.Dataset(vars_out) is called.
-    step0 = xr.zeros_like(cumul.isel(step=0)).expand_dims(
-        step=[np.timedelta64(0, "ns")]
-    )
-    if "time" in all_1h.coords:
-        ref_time = all_1h["time"].values[0] - np.timedelta64(1, "h")
-        step0 = step0.assign_coords(time=("step", np.array([ref_time])))
-    cumul = xr.concat([step0, cumul], dim="step")
-    return cumul.sel(step=[np.timedelta64(s, "h") for s in steps])
-
-
 def _load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
     """Load forecast data from a list of GRIB files. Returns raw fields as-is.
 
@@ -644,6 +623,14 @@ def _load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Da
     if ifs_rename:
         ds = ds.rename(ifs_rename)
 
+    return _mask_icon_missing_values(ds)
+
+
+def _mask_icon_missing_values(ds: xr.Dataset) -> xr.Dataset:
+    """Replace ICON's missing-value markers (see _ICON_MISSING_VALUE_THRESHOLDS) by NaN."""
+    for p, threshold in _ICON_MISSING_VALUE_THRESHOLDS.items():
+        if p in ds.data_vars:
+            ds[p] = ds[p].where(ds[p] > threshold)
     return ds
 
 
@@ -776,6 +763,29 @@ def load_obs_data_from_jretrieve(
     return _select_valid_times(out, times, strict=True)
 
 
+def is_inca_archive(root) -> bool:
+    """True for a path into the INCA-CH archive, i.e. one with an ``INCA`` directory."""
+    return "INCA" in Path(root).parts
+
+
+TruthSource = Literal["zarr", "jretrieve", "inca"]
+
+
+def truth_source(root) -> TruthSource:
+    """Classify a ``truth.root`` value: an anemoi ``.zarr`` analysis (e.g. KENDA),
+    ``jretrievedwh:<selector>`` for DWH station observations, or the INCA archive."""
+    if Path(root).suffix == ".zarr":
+        return "zarr"
+    if "jretrieve" in str(root):
+        return "jretrieve"
+    if is_inca_archive(root):
+        return "inca"
+    raise ValueError(
+        f"Unsupported truth root: {root}. Expected a path ending in '.zarr', "
+        "'jretrievedwh:<selector>', or a path with an 'INCA' directory."
+    )
+
+
 def load_truth_data(
     root,
     reftime: datetime,
@@ -783,7 +793,8 @@ def load_truth_data(
     params: list[str],
     lazy_ds: xr.Dataset | None = None,
 ) -> xr.Dataset:
-    """Load truth data from an analysis Zarr dataset or DWH observations via jretrieve.
+    """Load truth data from an analysis (Zarr dataset or INCA archive) or from DWH
+    observations via jretrieve.
 
     Handles derived and aggregated params transparently (same contract as
     load_forecast_data): SP_10M is computed from U_10M/V_10M; TOT_PREC6 is
@@ -793,38 +804,51 @@ def load_truth_data(
     Pass ``lazy_ds`` (from ``open_truth_zarr``) to reuse a pre-opened zarr
     store across multiple reftimes instead of reopening it on every call.
     """
-    if root.suffix == ".zarr":
-        LOG.info("Loading ground truth from an analysis zarr dataset...")
-        load_params = get_base_params(params)
-        load_steps = get_steps(steps, params)
-        ds = _load_analysis_data_from_zarr(
-            root, reftime, load_steps, load_params, lazy_ds=lazy_ds
-        )
-        ds = _disaggregated_and_derived_params(ds, steps, params)
-        # Restore time dimension: convert step offsets back to valid datetimes.
-        # Drop 'step' before returning — it's a non-dim coord indexed by 'time'
-        # that conflicts with the 'step' dimension of fcst["valid_time"] when
-        # truth is used as truth.sel(time=fcst["valid_time"]) downstream.
-        ref_np = np.datetime64(reftime, "ns")
-        time_vals = ref_np + ds["step"].values.astype("timedelta64[ns]")
-        ds = ds.assign_coords(time=("step", time_vals)).swap_dims({"step": "time"})
-        ds = ds.drop_vars("step")
-        truth = ds.compute().chunk(
-            {"time": 1, "y": -1, "x": -1}
-            if "y" in ds.dims and "x" in ds.dims
-            else {"time": 1, "values": -1}
-        )
-    elif "jretrieve" in str(root):
+    source = truth_source(root)
+    if source == "jretrieve":
         LOG.info("Loading ground truth from JRetrieve...")
-        truth = load_obs_data_from_jretrieve(
+        return load_obs_data_from_jretrieve(
             root=root,
             reftime=reftime,
             steps=steps,
             params=params,
         )
+
+    load_params = get_base_params(params)
+    load_steps = get_steps(steps, params)
+    if source == "zarr":
+        LOG.info("Loading ground truth from an analysis zarr dataset...")
+        ds = _load_analysis_data_from_zarr(
+            root, reftime, load_steps, load_params, lazy_ds=lazy_ds
+        )
     else:
-        raise ValueError(f"Unsupported truth root: {root}")
-    return truth
+        LOG.info("Loading ground truth from INCA analyses...")
+        ds = inca.load_analysis(root, reftime, load_steps, load_params)
+    return _analysis_to_truth(ds, reftime, steps, params)
+
+
+def _analysis_to_truth(
+    ds: xr.Dataset, reftime: datetime, steps: list[int], params: list[str]
+) -> xr.Dataset:
+    """Turn a gridded analysis with a 'step' dimension into truth data.
+
+    Applies disaggregation and derived params, then replaces 'step' by the
+    valid 'time' dimension.
+    """
+    ds = _disaggregated_and_derived_params(ds, steps, params)
+    # Restore time dimension: convert step offsets back to valid datetimes.
+    # Drop 'step' before returning — it's a non-dim coord indexed by 'time'
+    # that conflicts with the 'step' dimension of fcst["valid_time"] when
+    # truth is used as truth.sel(time=fcst["valid_time"]) downstream.
+    ref_np = np.datetime64(reftime, "ns")
+    time_vals = ref_np + ds["step"].values.astype("timedelta64[ns]")
+    ds = ds.assign_coords(time=("step", time_vals)).swap_dims({"step": "time"})
+    ds = ds.drop_vars("step")
+    return ds.compute().chunk(
+        {"time": 1, "y": -1, "x": -1}
+        if "y" in ds.dims and "x" in ds.dims
+        else {"time": 1, "values": -1}
+    )
 
 
 def _load_INCA_baseline_from_netcdf(
@@ -1219,10 +1243,10 @@ def _load_INCA_baseline_from_netcdf(
     merged = merged.swap_dims({"valid_time": "step"})
     merged = merged.assign_coords(forecast_reference_time=ref_time_np)
 
-    topo_nc = root / "INCA1km_topography_parameters.nc"
+    topo_nc = inca.topography_file(root)
     if not topo_nc.exists():
         raise FileNotFoundError(f"INCA topography file not found: {topo_nc}")
-    dem = _load_inca_dem(topo_nc, merged.x.values, merged.y.values)
+    dem = inca.load_dem(topo_nc, merged.x.values, merged.y.values)
     merged = merged.assign_coords(elevation=(("y", "x"), dem))
     LOG.info("Assigned elevation from %s", topo_nc.name)
 
@@ -1349,8 +1373,20 @@ def _disaggregated_and_derived_params(
     return ds
 
 
+def _tot_prec_to_kg_per_m2(ds: xr.Dataset, units: str) -> xr.Dataset:
+    """Convert TOT_PREC of an ML run from ``units`` to kg m-2."""
+    if "TOT_PREC" in ds:
+        ds["TOT_PREC"] = ds["TOT_PREC"] * TOT_PREC_UNIT_FACTORS[units]
+    return ds
+
+
 def load_forecast_data(
-    root, reftime: datetime, steps: list[int], params: list[str], member: str = "000"
+    root,
+    reftime: datetime,
+    steps: list[int],
+    params: list[str],
+    member: str = "000",
+    tot_prec_units: str = "kg m-2",
 ) -> xr.Dataset:
     """Load forecast data from GRIB files or an ICON archive.
 
@@ -1358,6 +1394,9 @@ def load_forecast_data(
     - ``SP_10M`` is computed from ``U_10M`` / ``V_10M``
     - ``TOT_PREC6`` is disaggregated from the cumulative ``TOT_PREC`` field
     - Plain ``TOT_PREC`` is returned as cumulative-from-start without disaggregation
+
+    ``tot_prec_units``: units of TOT_PREC in the GRIB files of an ML run
+    (``RunConfig.tot_prec_units``), converted to kg m-2. Ignored for baselines.
 
     Routing (in order):
     1. ``*.grib`` files present in *root* → :func:`_load_forecast_data_from_grib`
@@ -1386,7 +1425,8 @@ def load_forecast_data(
                 ds = ds.assign_coords(elevation=elevation)
         if "elevation" not in ds.coords:
             ds = _try_assign_elevation(ds)
-    elif "INCA" in root.parts:
+        ds = _tot_prec_to_kg_per_m2(ds, tot_prec_units)
+    elif is_inca_archive(root):
         LOG.info("Loading INCA baseline from NetCDF files...")
         # INCA provides wind speed natively (FF), so don't expand SP_10M → U_10M/V_10M.
         # Only expand aggregated params (e.g. TOT_PREC6 → TOT_PREC).

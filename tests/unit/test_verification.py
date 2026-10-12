@@ -252,26 +252,53 @@ def test_verify_missing_fraction_varies_by_lead_time():
     )
 
 
+def _half_missing_forecast():
+    """Forecast missing at half of the stations; obs complete; both equal to 1 elsewhere."""
+    n = 10
+    coords = _station_coords(n)
+    fcst_vals = np.ones(n, dtype=np.float32)
+    fcst_vals[:5] = np.nan
+    fcst = xr.Dataset({"T_2M": ("values", fcst_vals)}, coords=coords)
+    obs = xr.Dataset({"T_2M": ("values", np.ones(n, dtype=np.float32))}, coords=coords)
+    return fcst, obs
+
+
+def test_verify_tolerant_threshold_scores_available_points_despite_gaps():
+    """With max_missing_fraction=1.0, gaps are left out instead of masking."""
+    fcst, obs = _half_missing_forecast()
+
+    result = verify(
+        fcst,
+        obs,
+        "fcst",
+        "obs",
+        regions=_REGION,
+        num_workers=1,
+        max_missing_fraction=1.0,
+    )
+
+    bias = result["T_2M.BIAS"].sel(region="all", source="fcst").values.item()
+    assert bias == pytest.approx(0.0), "BIAS should use the 5 points with a forecast"
+
+
 def test_verify_obs_stats_not_masked_by_forecast_gaps():
     """Obs statistics must remain non-NaN in regions where the forecast has gaps.
 
-    Half of the forecast values are NaN (simulating extrapolation masking), so
-    the missing fraction exceeds the default threshold and scores are masked.
-    Obs statistics should still be valid because they do not depend on forecast
-    coverage.
+    Half of the forecast values are NaN (simulating extrapolation masking) and a
+    strict threshold is requested, so scores are masked. Obs statistics should
+    still be valid because they do not depend on forecast coverage.
     """
-    n = 10
-    coords = _station_coords(n)
+    fcst, obs = _half_missing_forecast()
 
-    fcst_vals = np.ones(n, dtype=np.float32)
-    fcst_vals[:5] = (
-        np.nan
-    )  # forecast missing at half the obs-valid stations → masked region
-
-    fcst = xr.Dataset({"T_2M": ("values", fcst_vals)}, coords=coords)
-    obs = xr.Dataset({"T_2M": ("values", np.ones(n, dtype=np.float32))}, coords=coords)
-
-    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+    result = verify(
+        fcst,
+        obs,
+        "fcst",
+        "obs",
+        regions=_REGION,
+        num_workers=1,
+        max_missing_fraction=0.0,
+    )
 
     # Score should be NaN (too many missing forecasts)
     bias = result["T_2M.BIAS"].sel(region="all", source="fcst").values.item()
@@ -282,3 +309,21 @@ def test_verify_obs_stats_not_masked_by_forecast_gaps():
     assert not np.isnan(obs_mean), (
         "Obs mean should not be NaN when obs data is complete"
     )
+
+
+def test_verify_keeps_obs_statistics_for_truth_only_params():
+    """A parameter only the truth provides yields obs statistics and no scores."""
+    n = 10
+    coords = _station_coords(n)
+    fcst = xr.Dataset({"T_2M": ("values", np.ones(n))}, coords=coords)
+    obs = xr.Dataset(
+        {"T_2M": ("values", np.ones(n)), "CAPE_MU": ("values", np.full(n, 300.0))},
+        coords=coords,
+    )
+
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+
+    assert result["CAPE_MU.mean"].sel(region="all", source="obs").item() == 300.0
+    assert np.isnan(result["CAPE_MU.mean"].sel(region="all", source="fcst").item())
+    assert "CAPE_MU.BIAS" not in result
+    assert "forecast_reference_time" in result["CAPE_MU.mean"].dims

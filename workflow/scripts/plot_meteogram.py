@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import xarray as xr
 
 from data_input import (
+    TOT_PREC_UNIT_FACTORS,
     parse_steps,
     load_forecast_data,
     load_truth_data,
@@ -37,6 +38,13 @@ def main():
         type=str,
         default="forecast",
         help="Label for forecast line in plot legend.",
+    )
+    parser.add_argument(
+        "--forecast_tot_prec_units",
+        type=str,
+        default="kg m-2",
+        choices=list(TOT_PREC_UNIT_FACTORS),
+        help="Units of TOT_PREC in the GRIB files of an ML run; converted to kg m-2.",
     )
     parser.add_argument(
         "--baseline",
@@ -123,20 +131,32 @@ def main():
     # Build station coordinate lookup from the loaded analysis dataset so that
     # any station with data for the plotted parameter is found (a fixed
     # parameter like rre150h0 would exclude stations like JUN).
-    catalog_lookup = {
-        str(sta): (float(lat), float(lon), float(elev))
-        for sta, lat, lon, elev in zip(
-            analysis_ds["values"].values,
-            analysis_ds["latitude"].values,
-            analysis_ds["longitude"].values,
-            analysis_ds["elevation"].values,
+    # A gridded truth on a (y, x) grid (e.g. INCA) has no station axis.
+    if "values" in analysis_ds.dims:
+        catalog_lookup = {
+            str(sta): (float(lat), float(lon), float(elev))
+            for sta, lat, lon, elev in zip(
+                analysis_ds["values"].values,
+                analysis_ds["latitude"].values,
+                analysis_ds["longitude"].values,
+                analysis_ds["elevation"].values,
+            )
+        }
+    else:
+        LOG.warning(
+            "Truth %s has no station axis; meteograms require station observations.",
+            analysis_root,
         )
-    }
+        catalog_lookup = {}
 
     # Load gridded data once — shared across all station plots
     LOG.info("Loading forecast data from %s", forecast_grib_dir)
     forecast_ds = load_forecast_data(
-        forecast_grib_dir, init_time, forecast_steps, [param]
+        forecast_grib_dir,
+        init_time,
+        forecast_steps,
+        [param],
+        tot_prec_units=args.forecast_tot_prec_units,
     ).squeeze()
 
     baseline_ds_list = []
