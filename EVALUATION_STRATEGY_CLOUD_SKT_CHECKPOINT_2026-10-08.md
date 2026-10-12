@@ -14,8 +14,8 @@ Guiding principle (suggestion by Carlos): keep it simple. Do not introduce new v
 
 | Role | System | Notes |
 |---|---|---|
-| Candidate | Varda-single RC, stage 4 fine-tuning, run `07f642102d8a4da99680f187422170b6` (ECMWF MLflow, experiment `meteoswiss-varda-single-training-mrb-847`) | Checkpoint: `/scratch/mch/huppd/checkpoint/07f642102d8a4da99680f187422170b6`. Fine-tuned on ICON-CH1 analysis 2024-01 to 2025-03-31. |
-| Scientific reference | Varda-single 1.0 | The RC should be comparable to it. A slight degradation is acceptable in exchange for gaining cloud cover and SKT. Not a baseline in the technical EvalML sense, it is run as a second candidate. |
+| Candidate | Forecaster: `/scratch/mch/huppd/checkpoint/07f642102d8a4da99680f187422170b6/inference-last.ckpt` Downscaler: `/scratch/mch/huppd/checkpoint/d642c4ba99e54ad9a38fcbcaeab21cf8/inference-last.ckpt` | Forecaster Stage E with Rollout, Downscaler Stage C (fully comparable to Varda-single 1.0) |
+| Scientific reference | Varda-single 1.0 | The RC should have comparable performance. A slight degradation is acceptable in exchange for gaining cloud cover and SKT. |
 | Baselines | ICON-CH1, ICON-CH2 | Baselines in both the technical and the scientific sense. |
 
 New variables: total, low, medium and high cloud cover (CLCT, CLCL, CLCM, CLCH) and skin temperature (SKT, called T_G in ICON).
