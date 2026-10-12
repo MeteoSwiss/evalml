@@ -27,6 +27,10 @@ runs:
       label: Release-Candidate
       steps: 0/120/1
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
+      inference_resources: # 2 per node: 4 downscalers (~150 GB each) on one 446 GB node get OOM-killed
+        cpus_per_task: 64
+        mem_mb_per_cpu: 3000
+        runtime: 60m
       extra_requirements:
         - anemoi-datasets==0.5.35
         - git+https://github.com/ecmwf/anemoi-inference.git@88c1ec13632c570f246cc2580ce324e45f36a03b
@@ -46,6 +50,10 @@ runs:
       label: Varda-single-1.0
       steps: 0/120/1
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
+      inference_resources: # 2 per node: 4 downscalers (~150 GB each) on one 446 GB node get OOM-killed
+        cpus_per_task: 64
+        mem_mb_per_cpu: 3000
+        runtime: 60m
       extra_requirements:
         - anemoi-datasets==0.5.35
         - git+https://github.com/ecmwf/anemoi-inference.git@88c1ec13632c570f246cc2580ce324e45f36a03b
