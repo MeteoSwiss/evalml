@@ -1,0 +1,30 @@
+image = "container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main"
+workdir = "/scratch/mch/mmcgloho/evalml-tests/evalml/output/data/runs/..."   # real path
+
+entrypoint = true
+
+mounts = [
+  "/scratch/mch/mmcgloho/MEC/2025090900_mec_testcase:/src/bin2",
+  "/scratch/mch/mmcgloho/MEC/2025090900_mec_testcase:/scratch/mch/mmcgloho/MEC/2025090900_mec_testcase:ro",
+  "/oprusers/osm/opr.inn/data/:/oprusers/osm/opr.inn/data/:ro",
+]
+
+[env]
+NVIDIA_VISIBLE_DEVICES = "all"
+NVIDIA_DRIVER_CAPABILITIES = "compute,utility"
+
+
+#image = "container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main"
+#workdir = "${abs_run_dir}"                    
+
+#entrypoint=True
+
+#mounts = [
+#    "${abs_run_dir}:/src/bin2",
+#    "${abs_mod_root}:${abs_mod_root}:ro",
+#    "/oprusers/osm/opr.inn/data/:/oprusers/osm/opr.inn/data/:ro",
+#]
+
+#[env]
+#NVIDIA_VISIBLE_DEVICES = "all"
+#NVIDIA_DRIVER_CAPABILITIES = "compute,utility"

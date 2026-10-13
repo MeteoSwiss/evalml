@@ -175,7 +175,8 @@ if config["mec"] is not None:
             touch(OUT_ROOT / "logs/sarus_pull_mec.ok"),
         localrule: True
         shell:
-            "sarus pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main"
+            "echo 'skipping sarus on linard'"
+            #"sarus pull container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main"
 
     rule run_mec:
         """Run the MEC container for one initialisation time, producing a verSYNOP feedback file in fdbk_files/.
@@ -184,6 +185,7 @@ if config["mec"] is not None:
         """
         input:
             namelist=rules.generate_mec_namelist.output.namelist,
+            edf="resources/mec/mec.edf.toml",
             prepare_obs=rules.prepare_mec_input.output.obs_file,
             mod_dir=directory(rules.link_mec_input.output.mod),
             pull_ok=rules.sarus_pull_mec.output,
@@ -198,15 +200,13 @@ if config["mec"] is not None:
                 set -euo pipefail
 
                 run_dir=$(dirname {input.namelist})
-                abs_run_dir=$(realpath "$run_dir")
-                abs_mod_root=$(realpath "$run_dir/../..") # two levels up (so that all links are mounted to the container)
+                export abs_run_dir=$(realpath "$run_dir")
+                export abs_mod_root=$(realpath "$run_dir/../..") # two levels up (so that all links are mounted to the container)
+                edf=$(realpath "{input.edf}")
 
                 # run container
-                sarus run \
-                    --mount=type=bind,source=$abs_run_dir,destination=/src/bin2 \
-                    --mount=type=bind,source=$abs_mod_root,destination=$abs_mod_root,readonly \
-                    --mount=type=bind,source=/oprusers/osm/opr.inn/data/,destination=/oprusers/osm/opr.inn/data/ \
-                    container-registry.meteoswiss.ch/mecctr/mec-container:0.1.0-main
+                srun \
+                --environment=$edf
 
                 # Run MEC using local executable (Alternative to sarus container)
                 #cd "$run_dir"
