@@ -674,7 +674,7 @@ class ConfigModel(BaseModel):
     truth: TruthConfig | None
     lapse_rate_correction: bool = Field(
         default=True,
-        description="Apply standard-atmosphere lapse-rate correction to T_2M.",
+        description="Apply lapse-rate correction to T_2M (0.0065 K/m) and PS (11.5 Pa/m).",
     )
     experiment: ExperimentConfig = Field(
         ...,

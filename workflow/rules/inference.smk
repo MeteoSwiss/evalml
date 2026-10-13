@@ -358,9 +358,9 @@ else:
 
                 cd {params.workdir}
 
-                _run_inference() {{
-                    local VENV=$1
-                    source "$VENV/bin/activate"
+            _run_inference() {{
+                local VENV=/user-environment
+                source "$VENV/bin/activate"
 
                     if [ "{params.disable_local_definitions}" = "False" ]; then
                         export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
@@ -368,26 +368,28 @@ else:
 
                     CMD_ARGS=()
 
-                    # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
-                    if [ {resources.gpus} -gt 1 ]; then
-                        CMD_ARGS+=(runner.parallel.cluster=slurm)
-                    fi
+                # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
+                if [ {resources.gpus} -gt 1 ]; then
+                    CMD_ARGS+=(runner.parallel.cluster=slurm)
+                fi
 
-                    srun \
-                        --unbuffered \
-                        {params.account_flag} \
-                    --partition={resources.slurm_partition} \
-                        --cpus-per-task={resources.cpus_per_task} \
-                        --mem-per-cpu={resources.mem_mb_per_cpu} \
-                        --time={resources.runtime} \
-                        --gres={resources.gres} \
-                        --ntasks={resources.ntasks} \
-                        anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
-                }}
-                export -f _run_inference
+                anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+            }}
+            export -f _run_inference
 
-                squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
-            ) >{log} 2>&1
-            touch {output.okfile}
-            """
-        # fmt: on
+            srun \
+                --job-name=anemoi-inference \
+                --uenv={params.env_path}:/user-environment \
+                --unbuffered \
+                {params.account_flag} \
+                --partition={resources.slurm_partition} \
+                --cpus-per-task={resources.cpus_per_task} \
+                --mem-per-cpu={resources.mem_mb_per_cpu} \
+                --time={resources.runtime} \
+                --gres={resources.gres} \
+                --ntasks={resources.ntasks} \
+                bash -c '_run_inference'
+        ) >{log} 2>&1
+        touch {output.okfile}
+        """
+# fmt: on
