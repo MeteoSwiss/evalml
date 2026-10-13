@@ -1,6 +1,7 @@
 import glob
 import subprocess
 from pathlib import Path
+import shutil
 
 import pytest
 import xarray as xr
@@ -22,7 +23,9 @@ OUTPUT_ROOT = PROJECT_ROOT / _CFG["locations"]["output_root"]
 # Marked longtest: still needs sarus (MEC container). Inference is replayed from
 # the frozen fixture and obs come from the frozen ver_synop_root, so no
 # GPU/MLflow is needed. Observed runtime on Balfrin: ~5 min.
-@pytest.mark.longtest
+# Disable test until MEC container workflow is updated for linard / new balfrin.
+#@pytest.mark.longtest
+@pytest.mark.skipif(not shutil.which("sarus"), reason="sarus not enabled on this runner")
 def test_mec_produces_feedback_files():
     """Run `evalml experiment ... --mec` end to end and check fdbk_files are produced.
 
