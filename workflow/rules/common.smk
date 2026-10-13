@@ -6,6 +6,8 @@ import hashlib
 import json
 from urllib.parse import urlparse
 
+from evalml.config import MODEL_REGISTRY_ROOT
+
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
 
@@ -191,7 +193,12 @@ def model_id(checkpoint_uri: str) -> str:
     elif ckpt_type == "huggingface":
         return checkpoint_uri.split("/")[-1].split(".")[0]
     elif ckpt_type == "local":
-        return checkpoint_uri.split("/")[-2][:HASH_LENGTH]
+        # A checkpoint resolved from the model registry keeps its registered name as
+        # the id, so output paths and dashboards say "amber-ridge", not "ambe".
+        try:
+            return Path(checkpoint_uri).relative_to(MODEL_REGISTRY_ROOT).parts[0]
+        except ValueError:
+            return checkpoint_uri.split("/")[-2][:HASH_LENGTH]
 
 
 def register_run(model_type, run_config, as_candidate=True):
