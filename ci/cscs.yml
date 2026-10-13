@@ -6,7 +6,7 @@ include:
   extends: [.baremetal-runner-santis-gh200]
   variables:
     F7T_URL: 'https://api.cscs.ch/mch/firecrest/v2'
-    FIRECREST_SYSTEM: 'balfrin'
+    FIRECREST_SYSTEM: 'linard'  # TODO: update to balfrin once available
     ARCH: 'x86_64'
     SLURM_JOB_NUM_NODES: 1
     SLURM_NTASKS: 1
