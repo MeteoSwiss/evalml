@@ -2,7 +2,7 @@
 description: |
   Evaluation of the Varda-single release candidate (clouds + skin temperature), MRB-984:
   RC forecaster (stage 4, run 07f64210) alone and with the RC temporal downscaler (run d642c4ba),
-  next to the operational Varda-single 1.0 chain. One year, inits every 42 h (cycling 00/18/12/06 UTC).
+  next to the operational Varda-single 1.0 chain. Evaluation focus: regressions in existing variables. One year, inits every 42 h (cycling 00/18/12/06 UTC).
   Needs the cloud-skt-support branch and the KENDA-CH1 v2.0 metadata patches.
 
 dates:
@@ -90,10 +90,9 @@ experiment:
   params:
     - T_2M
     - TD_2M
-    - U_10M
-    - V_10M
     - SP_10M
     - TOT_PREC1
+    - TOT_PREC6
     - PMSL
     - T_G
     - CLCT
@@ -102,24 +101,42 @@ experiment:
     - CLCH
   stratification:
     regions:
-      - icon 
+      - icon
+      - mittelland      # fog / low stratus
+      - berge           # Alps
+      - alpensuedseite  # different precipitation climate
     root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
-  thresholds: # as in varda-single-1.0.yaml, plus clear / overcast for cloud cover frequency bias
-    TOT_PREC1:
-      gt: [0.0, 0.1, 1, 5, 10]
-    SP_10M:
-      gt: [2.5, 5.0, 10.0]
-    T_2M:
-      lt: [273.15]
-      gt: [288.15, 298.15]
+  thresholds:
+    # cloud cover in %: octa boundaries 2.5 / 6.5 (31.25 / 81.25 %; 1.5 octas = 18.75 % is not intended explicitly),
+    # plus the SYNOP special cases translated to %: 0 octas only if clear (< 1 %), 8 only if overcast (> 99 %)
     CLCT:
-      lt: [20]
-      gt: [80]
+      lt: [1, 31.25]
+      gt: [81.25, 99]
+    CLCL:
+      lt: [1, 31.25]
+      gt: [81.25, 99]
+    CLCM:
+      lt: [1, 31.25]
+      gt: [81.25, 99]
+    CLCH:
+      lt: [1, 31.25]
+      gt: [81.25, 99]
+    # existing variables (regression check), incl. extremes
+    TOT_PREC1:
+      gt: [0.1, 1, 5, 10, 20]
+    TOT_PREC6:
+      gt: [0.1, 5, 20, 50]
+    SP_10M:
+      gt: [5.0, 10.0, 15.0, 20]
+    T_2M:
+      lt: [263.15, 268.15, 273.15]
+      gt: [298.15, 303.15, 308.15]
   dashboard:
     stratification:
       - season
+      - region
       - init_hour
-  scorecards: # as in varda-single-1.0.yaml, with TOT_PREC1 instead of TOT_PREC6
+  scorecards: # as in varda-single-1.0.yaml; SP_10M instead of U/V_10M
     enabled: true
     sections:
       nowcasting:
@@ -127,28 +144,32 @@ experiment:
         lead_times: "0/6/1"
         stratification: region
         variables:
-          - "U_10M:RMSE,R2,ETS"
-          - "V_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2,ETS"
+          - "SP_10M:RMSE,R2,ETS"
           - "TOT_PREC1:RMSE,R2,ETS"
+          - "CLCT:RMSE,R2,ETS"
       short_range:
         baseline: ICON-CH1-CTRL
         lead_times: "6/33/6"
         stratification: region
         variables:
-          - "U_10M:RMSE,R2,ETS"
-          - "V_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2,ETS"
-          - "TOT_PREC1:RMSE,R2,ETS"
+          - "TD_2M:RMSE,R2"
+          - "SP_10M:RMSE,R2,ETS"
+          - "PMSL:RMSE,R2"
+          - "TOT_PREC6:RMSE,R2,ETS"
+          - "CLCT:RMSE,R2,ETS"
       medium_range:
         baseline: ICON-CH2-CTRL
         lead_times: "24/120/24"
         stratification: region
         variables:
-          - "U_10M:RMSE,R2,ETS"
-          - "V_10M:RMSE,R2,ETS"
           - "T_2M:RMSE,R2,ETS"
-          - "TOT_PREC1:RMSE,R2,ETS"
+          - "TD_2M:RMSE,R2"
+          - "SP_10M:RMSE,R2,ETS"
+          - "PMSL:RMSE,R2"
+          - "TOT_PREC6:RMSE,R2,ETS"
+          - "CLCT:RMSE,R2,ETS"
   scoremaps:
     enabled: false
 
