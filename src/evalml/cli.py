@@ -244,6 +244,74 @@ def showcase(
     )
 
 
+@cli.command(
+    "capture-fixture",
+    help="Snapshot inference GRIB output into a test fixture directory for replay.",
+)
+@click.argument(
+    "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
+@click.argument("fixture_root", type=click.Path(file_okay=False, path_type=Path))
+def capture_fixture_cmd(configfile: Path, fixture_root: Path) -> None:
+    from datetime import datetime
+
+    from evalml.fixtures import capture_fixture, config_init_times, write_manifest
+
+    def _evalml_commit() -> str | None:
+        try:
+            out = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=Path(__file__).resolve().parent,
+                capture_output=True,
+                text=True,
+            )
+            return out.stdout.strip() if out.returncode == 0 else None
+        except OSError:
+            return None
+
+    # Load and validate via the same path the workflow uses, so the CLI and the
+    # workflow cannot disagree on output_root.
+    raw = load_yaml(configfile)
+    model = ConfigModel.model_validate(raw)
+    output_root = model.locations.output_root
+
+    # Scope capture to this config's dates so an unrelated experiment sharing
+    # the same output/ tree is not swept into the fixture.
+    init_times = config_init_times(raw["dates"])
+
+    copied = capture_fixture(output_root, fixture_root, init_times=init_times)
+    if not copied:
+        raise click.ClickException(
+            f"No inference GRIB dirs found under {output_root}/data/runs for the "
+            f"config's dates ({', '.join(sorted(init_times))}). "
+            "Run the pipeline once (with a GPU) before capturing."
+        )
+
+    # Record every checkpoint the config references, including the nested
+    # forecaster.checkpoint of a temporal_downscaler run.
+    checkpoints: list[str] = []
+    for entry in raw.get("runs", []):
+        for kind, run in entry.items():
+            if kind == "baseline" or not isinstance(run, dict):
+                continue
+            if run.get("checkpoint"):
+                checkpoints.append(run["checkpoint"])
+            nested = run.get("forecaster")
+            if isinstance(nested, dict) and nested.get("checkpoint"):
+                checkpoints.append(nested["checkpoint"])
+
+    write_manifest(
+        fixture_root,
+        config_label=model.config_label,
+        checkpoints=checkpoints,
+        captured_at=datetime.now().astimezone().isoformat(timespec="seconds"),
+        grib_dirs=copied,
+        dates=init_times,
+        evalml_commit=_evalml_commit(),
+    )
+    click.echo(f"Captured {len(copied)} GRIB dir(s) into {fixture_root}")
+
+
 @cli.command(help="Generate a sandbox for inference runs in the YAML config file.")
 @click.argument(
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)

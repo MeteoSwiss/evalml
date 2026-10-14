@@ -1,6 +1,8 @@
 import json
 import logging
+import os
 import re
+import tempfile
 import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -174,10 +176,18 @@ def _fetch_icon_const_grib(model: str) -> Path:
             href = asset["href"]
             break
     LOG.info("Downloading %s constants to %s", model, cached)
-    tmp = cached.with_suffix(".tmp")
+    # Download to a process-unique temp file, then atomically publish with
+    # os.replace. Concurrent workers share this cache dir, so with a cold
+    # cache they all race to fetch the same asset; a fixed ".tmp" name
+    # would let them clobber one another's partial download and publish a
+    # truncated (all-zero) file.
+    # This is a temporary fix until the caching issue is fixed in earthkit.
+    fd, tmp_name = tempfile.mkstemp(dir=_ICON_CONST_CACHE, suffix=".tmp")
+    os.close(fd)
+    tmp = Path(tmp_name)
     try:
         urllib.request.urlretrieve(href, tmp)
-        tmp.rename(cached)
+        os.replace(tmp, cached)
     except Exception:
         tmp.unlink(missing_ok=True)
         raise

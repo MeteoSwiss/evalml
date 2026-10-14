@@ -5,14 +5,21 @@ description: |
   animations disabled. Driven by tests/integration/test_showcase.py.
 config_label: meteogram-test
 
+# Always replay inference from this frozen fixture (no GPU / MLflow / sandbox
+# build); truth still comes live from the DWH. To (re)capture the fixture you
+# must run real inference, so temporarily comment this line out, run
+# `evalml showcase <this config>`, then `evalml capture-fixture <this config>
+# <path>`, and restore it (see tests/integration/README.md).
+fixture_root: /store_new/mch/msopr/ml/evalml/test_fixtures/meteogram-small/v_20240801_b30a
+
 dates:
-  - 2024-01-01T00:00
+  - 2024-08-01T00:00
 
 runs:
   - forecaster:
       checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/409/runs/b30acf68520a4bbd8324c44666561696
       label: stage_C_icon_1km
-      steps: 0/6/6
+      steps: 0/12/6
       config: resources/inference/configs/sgm-forecaster-global-ich1.yaml
       extra_requirements:
         - earthkit-utils<0.2.0
@@ -20,10 +27,14 @@ runs:
         - anemoi-inference==0.11.1
 
   - baseline:
+      label: ICON-CH1-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/6/6
+
+  - baseline:
       label: ICON-CH2-EPS
       root: /store_new/mch/msopr/osm/ICON-CH2-EPS
       steps: 0/6/6
-
 truth:
   label: SwissMetNet
   root: jretrievedwh:1,2
@@ -34,7 +45,8 @@ experiment:
   params:
     - T_2M
   stratification:
-    regions: []
+    regions:
+      - icon
   dashboard:
     stratification:
       - season
@@ -43,12 +55,16 @@ showcase:
   params:
     - T_2M
     - SP_10M
+    - TOT_PREC6
   meteograms:
     enabled: true
     stations:
       - GVE
+      - SAE
   animations:
     enabled: false
+
+lapse_rate_correction: false
 
 locations:
   output_root: output/

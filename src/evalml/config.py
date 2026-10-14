@@ -681,6 +681,15 @@ class ConfigModel(BaseModel):
         description="Settings for the experiment workflow outputs.",
     )
     locations: Locations
+    fixture_root: Path | None = Field(
+        None,
+        description=(
+            "Opt-in test/dev setting. When set, inference is not run: the "
+            "workflow replays frozen inference GRIB from this directory "
+            "(layout: <fixture_root>/data/runs/<run_id>/<init_time>/grib). "
+            "Populate it with `evalml capture-fixture`. Leave unset in production."
+        ),
+    )
     profile: Profile
     showcase: ShowcaseConfig = Field(
         default_factory=ShowcaseConfig,
