@@ -311,6 +311,29 @@ def test_load_holdout_stations(tmp_path):
     assert load_holdout_stations(path) == ["CHM", "NA", "FRE"]
 
 
+@pytest.mark.parametrize(
+    "truth_root, values, expected",
+    [
+        # station truth: stations missing from the truth are dropped
+        ("jretrievedwh:bbox=45.7,48.0,5.8,10.8", ["CHM", "FRE", "KLO"], ["CHM"]),
+        # station truth without any of the holdout stations
+        ("jretrievedwh:SwissMetNet", ["KLO", "LUG"], None),
+        # gridded truth on an unstructured grid also has a values dimension
+        ("/data/analysis.zarr", [0, 1, 2], None),
+        # a zarr is gridded even if its path mentions jretrieve
+        ("/data/jretrieve-comparison/analysis.zarr", [0, 1, 2], None),
+    ],
+)
+def test_select_holdout_stations(truth_root, values, expected):
+    """Holdout stations are only used with station truth, restricted to its stations."""
+    from verification_metrics import select_holdout_stations
+
+    truth = xr.Dataset(
+        {"T_2M": ("values", np.zeros(len(values)))}, coords={"values": values}
+    )
+    assert select_holdout_stations(["CHM", "BAS"], truth, Path(truth_root)) == expected
+
+
 def test_verify_station_groups_split_holdout_and_holdin():
     """With holdout stations, scores are computed separately for all, holdout and
     holdin stations; without, only the "all" group is present."""

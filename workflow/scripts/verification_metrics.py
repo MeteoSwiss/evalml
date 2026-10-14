@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import xarray as xr
 
 from verification import verify, apply_lapse_rate_correction_inplace  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
@@ -35,6 +36,43 @@ class ScriptConfig(Namespace):
 def load_holdout_stations(path: Path) -> list[str]:
     """Read the holdout station nat_abbr from the CSV written by rule station_holdout."""
     return pd.read_csv(path, dtype=str, keep_default_na=False)["nat_abbr"].tolist()
+
+
+def select_holdout_stations(
+    requested: list[str], truth: xr.Dataset, truth_root: Path
+) -> list[str] | None:
+    """Holdout stations for the station_group stratification, or None to skip it.
+
+    The stratification only applies to station truth (jretrieve observations),
+    whose ``values`` dimension holds the station nat_abbr. Gridded truth may
+    also have a ``values`` dimension (unstructured grids), so the truth source
+    is checked instead. Stations missing from the truth are dropped.
+    """
+    # Same criterion as load_truth_data(): a .zarr is gridded, a jretrieve marker is stations.
+    truth_is_station_data = Path(truth_root).suffix != ".zarr" and "jretrieve" in str(
+        truth_root
+    )
+    if not truth_is_station_data:
+        LOG.warning(
+            "Holdout stations given, but the truth is gridded data, not station "
+            "observations; station_group stratification skipped."
+        )
+        return None
+    truth_stations = set(truth["values"].values)  # station nat_abbr
+    holdout_stations = [s for s in requested if s in truth_stations]
+    if not holdout_stations:
+        LOG.warning(
+            "None of the %d holdout stations are in the station truth; "
+            "station_group stratification skipped.",
+            len(requested),
+        )
+        return None
+    LOG.info(
+        "Station holdout: %d / %d truth stations in holdout group",
+        len(holdout_stations),
+        len(truth_stations),
+    )
+    return holdout_stations
 
 
 def program_summary_log(args):
@@ -94,31 +132,13 @@ def main(args: ScriptConfig):
     if args.lapse_rate_correction:
         apply_lapse_rate_correction_inplace(fcst, truth, args.params)
 
-    # holdout stations for station-holdout stratification, restricted to those
-    # present in the truth dataset.
-    holdout_stations = None
-    requested_holdout = (
-        load_holdout_stations(args.holdout_stations_file)
-        if args.holdout_stations_file
-        else []
-    )
-    if requested_holdout and "values" in truth.dims:
-        all_stations = list(truth["values"].values)
-        holdout_stations = [s for s in requested_holdout if s in all_stations]
-        if holdout_stations:
-            LOG.info(
-                "Station holdout: %d / %d stations in holdout group",
-                len(holdout_stations),
-                len(all_stations),
-            )
-        else:
-            LOG.warning(
-                "holdout_stations_file set but none of its stations are in the truth dataset."
-            )
-    elif requested_holdout:
-        LOG.warning(
-            "holdout_stations_file set but truth dataset has no 'values' dimension; station stratification skipped."
+    holdout_stations = (
+        select_holdout_stations(
+            load_holdout_stations(args.holdout_stations_file), truth, args.truth
         )
+        if args.holdout_stations_file
+        else None
+    )
 
     # compute metrics and statistics
     now = datetime.now()
