@@ -2,27 +2,34 @@
 description: |
   HiRAD downscaling experiments.
 
-config_label: hirad-forecast-comparisons-1.0
+config_label: hirad-forecast-comparisons-March-tp-1.0
 
 dates:
   start: 2025-03-01T00:00
-  end: 2025-05-31T00:00
+  end: 2025-03-31T00:00
+  #end: 2025-05-31T00:00
   frequency: 12h
 
 
 
 runs:
+# todo: fix the precipitation accumulation for baseline/regression
+#  - grib_forecaster:
+#      root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs_ft_with_baseline/grib-baseline'
+#      label: IFS-interpolated-baseline
+      #steps: 0/12/1
+#      steps: 0/33/1
+#  - grib_forecaster:
+#      root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs_ft_with_baseline/grib-regression-pred'
+#      label: HiRAD-downscaling-IFS-ft-regression-pred
+#      steps: 0/33/1
   - grib_forecaster:
       root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs_ft_with_baseline/grib-pred'
-      label: HiRAD-downscaling-IFS-ft-pred
+      label: HiRAD-downscaling-IFS-ft-ensemble-member
       steps: 0/33/1
   - grib_forecaster:
-      root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs_ft_with_baseline/grib-ensemble-mean'
+      root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs_ft_with_baseline/grib-ensemble-mean-corrected'
       label: HiRAD-downscaling-IFS-ft-ensemble-mean
-      steps: 0/33/1
-  - grib_forecaster:
-      root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs_ft_with_baseline/grib-baseline'
-      label: IFS-interpolated-baseline
       steps: 0/33/1
   #- grib_forecaster:
   #    root: '/scratch/mch/mmcgloho/outputs/generation/gen_ifs/grib'
@@ -60,11 +67,14 @@ experiment:
     - TOT_PREC1
   stratification:
     regions:
+      - berge # first region is the default verification region (will be used for plots)
       - mittelland
-      - berge
       - alpennordseite
       - alpensuedseite
       - jura
+      # Station-only regions
+      #- JUN: [7.975, 7.995, 46.538, 46.558]   # tight box around Jungfraujoch
+      #- KLO: [8.526, 8.546, 47.470, 47.490]   # tight box around Zürich-Kloten
     root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
   thresholds:
     TOT_PREC1:
@@ -96,6 +106,8 @@ experiment:
           - "U_10M:RMSE,R2,ETS"
           - "V_10M:RMSE,R2,ETS"
           - "TOT_PREC1:RMSE,R2,ETS"
+          - "TOT_PREC:RMSE,R2,ETS"
+          - "TOT_PREC6:RMSE,R2,ETS"
   scoremaps:
     enabled: false # requires 24h lead times
 
@@ -105,12 +117,12 @@ showcase:
     - SP_10M
     - U_10M
     - V_10M
-    - TOT_PREC1
   meteograms:
-    enabled: false
-    stations: [JUN] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
-  animations:
     enabled: true
+    # JUN - Junfraujoch, KLO - Kloten
+    stations: [JUN, KLO] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
+  animations:
+    enabled: false
     frames_per_second: 5
     domains:
       # - globe
