@@ -617,13 +617,25 @@ def _accumulate_from_hourly(da_1h: xr.DataArray, steps: list[int]) -> xr.DataArr
     return cumul.sel(step=[np.timedelta64(s, "h") for s in steps])
 
 
-def _load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Dataset:
+def _load_forecast_data_from_grib(
+    files: list[Path], params: list[str], convert_ifs_precip_units: bool
+) -> xr.Dataset:
     """Load forecast data from a list of GRIB files. Returns raw fields as-is.
 
     External callers should use :func:`load_forecast_data`, which handles
     param expansion, step expansion, IC synthesis, and disaggregation.
     Cumulative-from-start fields (e.g. TOT_PREC) are returned without
     disaggregation — that is the caller's responsibility.
+
+    convert_ifs_precip_units: required, no default, on purpose -- this
+    function is called both for genuinely IFS-origin GRIB (ML inference
+    output, meters, needs ×1000) and for genuine ICON-native GRIB (the
+    operational archive, read via _load_icon_baseline_from_grib, already
+    in mm). There is no reliable way to tell these apart from the loaded
+    field itself (see the WARNING below), so the caller must say which one
+    this is. Getting this wrong silently corrupts TOT_PREC by 1000x in one
+    direction or the other -- that already happened once, which is why
+    this is spelled out instead of defaulted.
     """
     # Extend param selection to include IFS aliases so that global-model GRIB files
     # (which use IFS shortNames like "tp", "2t") are also matched.
@@ -641,8 +653,31 @@ def _load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Da
 
     # IFS/ECMWF convention: "tp" is accumulated precip in meters.
     # Convert to kg m-2 (mm) to match the ICON-native TOT_PREC convention.
-    if "tp" in ifs_rename and "TOT_PREC" in ds:
+    #
+    # WARNING -- do not gate this on shortName == "tp" (it used to be, and
+    # the conversion silently never ran in production for IFS-origin data).
+    # Under the COSMO-resources eccodes definitions (ECCODES_DEFINITION_PATH,
+    # set by the verification_metrics and plot_meteogram rules), an
+    # IFS-origin field decodes directly as shortName "TOT_PREC" (local
+    # paramId 500041) instead of "tp" -- so "tp" never shows up in
+    # ifs_rename and a shortName-based check skips the conversion while
+    # still letting "TOT_PREC" through unconverted (1000x too small).
+    #
+    # It also CANNOT be made unconditional on "TOT_PREC" in ds -- this
+    # function is called both for IFS-origin data (meters) AND genuine
+    # ICON-native data (_load_icon_baseline_from_grib calls this too, for
+    # the operational archive, already in mm). An earlier version of this
+    # fix assumed the baseline never reached this code; it does, via that
+    # call, and unconditionally multiplying corrupted real ICON TOT_PREC
+    # values by 1000 (observed: 140296.875 mm). Trust only the explicit
+    # convert_ifs_precip_units flag passed by the caller.
+    if convert_ifs_precip_units and "TOT_PREC" in ds:
         ds["TOT_PREC"] = ds["TOT_PREC"] * 1000
+        LOG.info(
+            "TOT_PREC range: %s..%s",
+            ds["TOT_PREC"].min().item(),
+            ds["TOT_PREC"].max().item(),
+        )
 
     return ds
 
@@ -1260,6 +1295,7 @@ def _load_icon_baseline_from_grib(
                         root, reftime, steps, member_id=mid
                     ),
                     params=params,
+                    convert_ifs_precip_units=False,
                 )
                 if "number" in ds.dims:
                     ds = ds.isel(number=0, drop=True)
@@ -1277,6 +1313,7 @@ def _load_icon_baseline_from_grib(
         result = _load_forecast_data_from_grib(
             files=_collect_icon_archive_files(root, reftime, steps, member_id=member),
             params=params,
+            convert_ifs_precip_units=False,
         )
 
     # Attach model orography as elevation coordinate
@@ -1367,12 +1404,15 @@ def load_forecast_data(
         ds = _load_forecast_data_from_grib(
             files=_collect_ml_grib_files(root, load_steps),
             params=load_params,
+            convert_ifs_precip_units=True,
         )
         # Try to derive elevation from surface geopotential (FIS/z at step 0)
         # before falling back to ICON grid constants lookup.
         fis_files = _collect_ml_grib_files(root, [0])
         if fis_files:
-            fis_ds = _load_forecast_data_from_grib(fis_files, ["FIS"])
+            fis_ds = _load_forecast_data_from_grib(
+                fis_files, ["FIS"], convert_ifs_precip_units=True
+            )
             if "FIS" in fis_ds:
                 elevation = ekdv.geopotential_height_from_geopotential(
                     fis_ds["FIS"].isel(step=0, drop=True).squeeze(drop=True)

@@ -38,9 +38,26 @@ def load_state_from_grib(
     }
     if ifs_rename:
         ds = ds.rename(ifs_rename)
-    if "tp" in ifs_rename and "TOT_PREC" in ds:
+    if "TOT_PREC" in ds:
         # IFS/ECMWF convention: "tp" is accumulated precip in meters.
         # Convert to kg m-2 (mm) to match the ICON-native convention.
+        #
+        # WARNING -- do not gate this on shortName == "tp" (it used to be,
+        # and the conversion silently never ran). Under the COSMO-resources
+        # eccodes definitions this field decodes directly as shortName
+        # "TOT_PREC" rather than "tp", so a shortName-based check skips the
+        # conversion. See data_input.py's _load_forecast_data_from_grib for
+        # the full explanation.
+        #
+        # ASSUMPTION THIS RELIES ON: this function is only ever called by
+        # plot_forecast_frame.py for grib_forecaster/forecaster/
+        # temporal_downscaler runs (always IFS-origin, always meters) --
+        # the ICON-CH1-CTRL baseline never reaches this code path (see
+        # `if model_type == "baseline": continue` in common.smk's
+        # collect_all_runs). If that ever changes, this unconditional
+        # multiply will silently corrupt already-correct mm values --
+        # thread an explicit is-IFS-origin flag down from the caller
+        # before doing that, instead of trying to detect it here.
         ds["TOT_PREC"] = ds["TOT_PREC"] * 1000
     state = {}
     ref_param = next((p for p in (paramlist or []) if p in ds), None)
