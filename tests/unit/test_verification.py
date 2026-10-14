@@ -106,12 +106,13 @@ def test_aggregate_results_n_samples_by_season_and_init_hour():
 
 @pytest.fixture
 def make_lapse_rate_datasets():
-    def _make(fcst_elev, obs_elev, t2m=280.0, td2m=270.0):
+    def _make(fcst_elev, obs_elev, t2m=280.0, td2m=270.0, ps=90000.0):
         n = len(fcst_elev)
         fcst = xr.Dataset(
             {
                 "T_2M": (["step", "values"], np.full((3, n), t2m, dtype=np.float32)),
                 "TD_2M": (["step", "values"], np.full((3, n), td2m, dtype=np.float32)),
+                "PS": (["step", "values"], np.full((3, n), ps, dtype=np.float32)),
             },
             coords={"elevation": ("values", np.array(fcst_elev, dtype=np.float32))},
         )
@@ -144,6 +145,22 @@ def test_lapse_rate_correction_station_below_grid(make_lapse_rate_datasets):
     np.testing.assert_allclose(fcst["T_2M"].values, 280.0 + 0.0065 * 300.0, atol=1e-4)
 
 
+def test_lapse_rate_correction_surface_pressure(make_lapse_rate_datasets):
+    # Station 500 m above forecast grid cell → PS should decrease by 11.5 * 500 = 5750 Pa
+    fcst, obs = make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
+    apply_lapse_rate_correction_inplace(fcst, obs, ["T_2M", "PS"])
+    np.testing.assert_allclose(fcst["PS"].values, 90000.0 - 11.5 * 500.0, atol=1e-2)
+
+
+def test_lapse_rate_correction_surface_pressure_station_below_grid(
+    make_lapse_rate_datasets,
+):
+    # Station 300 m below forecast grid → PS should increase by 11.5 * 300 = 3450 Pa
+    fcst, obs = make_lapse_rate_datasets(fcst_elev=[800.0], obs_elev=[500.0])
+    apply_lapse_rate_correction_inplace(fcst, obs, ["PS"])
+    np.testing.assert_allclose(fcst["PS"].values, 90000.0 + 11.5 * 300.0, atol=1e-2)
+
+
 def test_lapse_rate_correction_raises_without_forecast_elevation(
     make_lapse_rate_datasets,
 ):
@@ -161,11 +178,12 @@ def test_lapse_rate_correction_raises_without_obs_elevation(make_lapse_rate_data
 
 
 def test_lapse_rate_correction_only_requested_params(make_lapse_rate_datasets):
-    # Pass only T_2M in params — TD_2M should not be corrected
+    # Pass only T_2M in params — TD_2M and PS should not be corrected
     fcst, obs = make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
     apply_lapse_rate_correction_inplace(fcst, obs, ["T_2M"])
     np.testing.assert_allclose(fcst["T_2M"].values, 280.0 - 0.0065 * 500.0, atol=1e-4)
     np.testing.assert_array_equal(fcst["TD_2M"].values, 270.0)
+    np.testing.assert_array_equal(fcst["PS"].values, 90000.0)
 
 
 # ---------------------------------------------------------------------------
