@@ -1,3 +1,4 @@
+from math import isfinite
 from pathlib import Path
 from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
 
@@ -265,6 +266,83 @@ class ScoreMapsConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class SalConfig(BaseModel):
+    """SAL (Structure–Amplitude–Location; Wernli et al. 2008) per-init precip
+    scores, computed for every run and baseline when enabled and written to
+    per-participant CSVs."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to compute SAL scores.",
+    )
+    params: List[str] = Field(
+        default=["TOT_PREC6"],
+        description="Accumulated precip params to score, period encoded in the name (e.g. TOT_PREC6).",
+    )
+    leadtimes: List[int] = Field(
+        default=[6, 12, 18, 24, 30],
+        description="List of lead times (hours) to score.",
+    )
+    grid_extent: List[float] = Field(
+        default=[-1.0, 18.0, 42.0, 50.5],
+        description=(
+            "SAL raster extent [lon_min, lon_max, lat_min, lat_max] in degrees "
+            "(PlateCarree). Both forecast and truth are remapped onto this "
+            "raster. The default is the ICON-CH1 analysis bounding box; keep it "
+            "close to the truth's footprint, since cells outside it only repeat "
+            "the nearest border value."
+        ),
+    )
+    grid_step_lat: float = Field(
+        default=0.01,
+        gt=0,
+        description="SAL raster latitude spacing in degrees.",
+    )
+    grid_step_lon: float = Field(
+        default=0.0145,
+        gt=0,
+        description=(
+            "SAL raster longitude spacing in degrees. Choose grid_step_lat and "
+            "grid_step_lon so cells are metrically near-square at the extent's "
+            "central latitude (pysteps' Location term assumes square pixels)."
+        ),
+    )
+
+    @field_validator("grid_extent")
+    @classmethod
+    def validate_grid_extent(cls, v: List[float]) -> List[float]:
+        if len(v) != 4:
+            raise ValueError(
+                f"sal.grid_extent must be [lon_min, lon_max, lat_min, lat_max]; got {v}."
+            )
+        lon_min, lon_max, lat_min, lat_max = v
+        if not (
+            all(isfinite(x) for x in v)
+            and -180.0 <= lon_min < lon_max <= 180.0
+            and -90.0 <= lat_min < lat_max <= 90.0
+        ):
+            raise ValueError(
+                "sal.grid_extent needs finite, increasing bounds with lon in "
+                f"[-180, 180] and lat in [-90, 90]; got {v}."
+            )
+        return v
+
+    @field_validator("params")
+    @classmethod
+    def validate_params_are_precip(cls, v: List[str]) -> List[str]:
+        bad = [p for p in v if not p.startswith("TOT_PREC")]
+        if bad:
+            raise ValueError(
+                "sal.params must be precipitation parameters starting with "
+                "'TOT_PREC' (e.g. TOT_PREC1, TOT_PREC6, or bare TOT_PREC for "
+                "cumulative-from-start); SAL is defined for precipitation only. "
+                f"Invalid: {bad}."
+            )
+        return v
+
+    model_config = {"extra": "forbid"}
+
+
 class DomainConfig(BaseModel):
     """A custom map domain defined by name, extent, and projection."""
 
@@ -485,6 +563,10 @@ class ExperimentConfig(BaseModel):
         default=None,
         description="Score map plot configuration. Omit or set enabled: false to disable.",
     )
+    sal: Optional[SalConfig] = Field(
+        default=None,
+        description="SAL precipitation verification. Omit or set enabled: false to disable.",
+    )
 
     @field_validator("thresholds")
     @classmethod
@@ -696,21 +778,23 @@ class ConfigModel(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_scoremap_leadtimes(self) -> "ConfigModel":
-        sm = self.experiment.scoremaps
-        if sm is None or not sm.enabled:
-            return self
-        requested = set(sm.leadtimes)
-        for item in self.runs:
-            steps = getattr(item, next(iter(item.model_fields))).steps
-            start, end, step = map(int, steps.split("/"))
-            producible = set(range(start, end + 1, step))
-            unsupported = requested - producible
-            if unsupported:
-                raise ValueError(
-                    f"scoremaps.leadtimes contains {sorted(unsupported)} h which are not "
-                    f"produced by participant with steps '{steps}'."
-                )
+    def validate_leadtimes_producible(self) -> "ConfigModel":
+        """Reject scoremaps/sal lead times not produced by every participant."""
+        for label, cfg in (
+            ("scoremaps", self.experiment.scoremaps),
+            ("sal", self.experiment.sal),
+        ):
+            if cfg is None or not cfg.enabled:
+                continue
+            for item in self.runs:
+                steps = getattr(item, next(iter(type(item).model_fields))).steps
+                start, end, step = map(int, steps.split("/"))
+                unsupported = set(cfg.leadtimes) - set(range(start, end + 1, step))
+                if unsupported:
+                    raise ValueError(
+                        f"{label}.leadtimes contains {sorted(unsupported)} h which are not "
+                        f"produced by participant with steps '{steps}'."
+                    )
         return self
 
     model_config = {
