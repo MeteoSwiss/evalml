@@ -323,6 +323,21 @@ def fetch_data(
     return _parse_csv(_run_with_retry(argv, env=_build_env(stage), timeout_s=timeout_s))
 
 
+# Priority for choosing which parameter's metadata row defines a station's
+# single coordinate when several parameters are current at once.
+# Parameters not listed sort last.
+_META_PARAM_PRIORITY: tuple[str, ...] = (
+    "tre200s0",  # T_2M
+    "tde200s0",  # TD_2M
+    "pp0qffs0",  # PMSL
+    "prestas0",  # PS
+    "fkl010z0",  # 10m wind speed
+    "dkl010z0",  # 10m wind direction
+    "rre150h0",  # 1h precip
+    "rre006i0",  # 6h precip
+)
+
+
 @dataclass(frozen=True)
 class StationCatalog:
     """Stable, nat_abbr-sorted station catalog used as the cell axis."""
@@ -340,8 +355,27 @@ class StationCatalog:
 
     @classmethod
     def from_meta(cls, meta: pd.DataFrame) -> "StationCatalog":
+        # A station has one metadata rows per parameter and operational period).
+        # Collapse to one row per station by preferring, in order:
+        #   1. the *current* location (empty/absent op_till),
+        #   2. a fixed parameter priority,
+        #   3. the most recent operational period (largest op_since).
+        # Stations with no current row fall back to their latest period.
+        #
+        # Currently, we select one metadata entry per station, even though they
+        # might vary across parameters. This could be improved in the future, i.e.
+        # the code adapted to handle metadata per station and parameter.
+        m = meta.copy()
+        op_till = m["op_till"]
+        m["_current"] = op_till.isna() | (op_till.astype(str).str.strip() == "")
+        priority = {p: i for i, p in enumerate(_META_PARAM_PRIORITY)}
+        m["_prio"] = m["parameter"].map(priority).fillna(len(priority)).astype(int)
         per_station = (
-            meta.sort_values(["nat_abbr", "parameter", "op_since"], kind="stable")
+            m.sort_values(
+                ["nat_abbr", "_current", "_prio", "op_since"],
+                ascending=[True, False, True, False],
+                kind="stable",
+            )
             .drop_duplicates(subset=["station"], keep="first")
             .sort_values("nat_abbr", kind="stable")
             .reset_index(drop=True)

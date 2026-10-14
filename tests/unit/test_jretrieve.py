@@ -154,6 +154,69 @@ def test_station_catalog_from_meta_collapses_and_sorts():
     np.testing.assert_allclose(cat.latitude, [46.79, 47.48])
 
 
+def _meta_with_history():
+    """Meta with historical relocations, mixing current (empty op_till) and
+    retired (populated op_till) rows across several parameters.
+
+    GEN  – retired 1892 wind row (alphabetically-first param) vs current 2012 rows.
+    CDF  – only the precip sensor is current; the pressure sensor was retired.
+    ZZZ  – no current row at all (all retired) -> must fall back to latest op_since.
+    """
+    return pd.DataFrame(
+        {
+            "station": [1, 1, 1, 2, 2, 3, 3],
+            "op_since": [
+                18920101000000,
+                20120101000000,
+                20120101000000,
+                19700101000000,
+                20200101000000,
+                19500101000000,
+                19900101000000,
+            ],
+            "op_till": [
+                "19390101000000",
+                "",
+                "",
+                "19710101000000",
+                "",
+                "19700101000000",
+                "20000101000000",
+            ],
+            "parameter": [
+                "fkl010z0",
+                "fkl010z0",
+                "tde200s0",
+                "pp0qffs0",
+                "rre006i0",
+                "tre200s0",
+                "tre200s0",
+            ],
+            "latitude": [45.9313, 45.9276, 45.9276, 47.10, 47.20, 40.0, 41.0],
+            "longitude": [9.0198, 9.0179, 9.0179, 6.79, 6.80, 1.0, 2.0],
+            "elev": [1701.0, 1600.0, 1600.0, 1060.0, 500.0, 100.0, 200.0],
+            "stn_name": ["Gen", "Gen", "Gen", "Cdf", "Cdf", "Zzz", "Zzz"],
+            "nat_abbr": ["GEN", "GEN", "GEN", "CDF", "CDF", "ZZZ", "ZZZ"],
+        }
+    )
+
+
+def test_from_meta_prefers_current_priority_and_falls_back():
+    cat = jr.StationCatalog.from_meta(_meta_with_history())
+    coord = {
+        a: (la, lo, el)
+        for a, la, lo, el in zip(
+            cat.nat_abbr, cat.latitude, cat.longitude, cat.elevation
+        )
+    }
+    # GEN: retired 1892 wind row must NOT win; current 2012 location chosen.
+    assert coord["GEN"] == pytest.approx((45.9276, 9.0179, 1600.0))
+    # CDF: pressure sensor retired 1971; current precip sensor location wins.
+    assert coord["CDF"] == pytest.approx((47.20, 6.80, 500.0))
+    # ZZZ: no current row -> fall back to the most recent op_since (1990).
+    assert coord["ZZZ"] == pytest.approx((41.0, 2.0, 200.0))
+
+
 def test_load_obs_data_from_jretrieve(monkeypatch):
     meta = pd.DataFrame(
         {
