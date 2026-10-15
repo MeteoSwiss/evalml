@@ -64,7 +64,7 @@ def main(args):
     _check_n_samples_consistency(dfs, args.verif_files)
     dfs = [_ensure_unique_lead_time(d) for d in dfs]
     dfs = _select_best_sources(dfs)
-    ds = xr.concat(dfs, dim="source", join="outer")
+    ds = xr.concat(dfs, dim="source", join="outer", coords="minimal")
     LOG.info("Loaded verification netcdf: \n%s", ds)
 
     # extract only  non-spatial variables to pd.DataFrame
