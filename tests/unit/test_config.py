@@ -29,3 +29,11 @@ def test_station_holdout(example_config):
     example_config["experiment"]["station_holdout"] = ["CHM", "FRE", "CHM"]
     with pytest.raises(ValueError, match="duplicate stations"):
         _ = ConfigModel.model_validate(example_config)
+
+
+def test_experiment_optional(example_config):
+    """The experiment block can be omitted, e.g. for showcase or sandbox configs."""
+
+    del example_config["experiment"]
+    cfg = ConfigModel.model_validate(example_config)
+    assert cfg.experiment is None

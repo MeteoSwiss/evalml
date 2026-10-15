@@ -1111,8 +1111,16 @@
       "type": "boolean"
     },
     "experiment": {
-      "$ref": "#/$defs/ExperimentConfig",
-      "description": "Settings for the experiment workflow outputs."
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExperimentConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Settings for the experiment workflow outputs. Required when running `evalml experiment`."
     },
     "locations": {
       "$ref": "#/$defs/Locations"
@@ -1154,7 +1162,6 @@
     "dates",
     "runs",
     "truth",
-    "experiment",
     "locations",
     "profile"
   ],
