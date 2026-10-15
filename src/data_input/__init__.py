@@ -721,7 +721,7 @@ def load_obs_data_from_jretrieve(
 
     from data_input import jretrieve as jr
 
-    stations, stage, seq_type = jr.parse_selection(root)
+    stations, stage, seq_type, use_limitation = jr.parse_selection(root)
     jr.check_prerequisites(stage)
 
     want_uv = "U_10M" in params or "V_10M" in params
@@ -751,6 +751,7 @@ def load_obs_data_from_jretrieve(
         increment_minutes=step_hours * 60,
         seq_type=seq_type,
         stage=stage,
+        use_limitation=use_limitation,
     )
     raw = _jretrieve_df_to_xarray(df, short_names, catalog)
 
@@ -773,7 +774,16 @@ def load_obs_data_from_jretrieve(
 
     out = out.dropna("values", how="all")
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
-    return _select_valid_times(out, times, strict=True)
+    result = _select_valid_times(out, times, strict=True)
+
+    # Per-variable station-coverage log, so ground-truth coverage can be compared
+    # against what was actually available to nudge.
+    n_total = result.sizes["values"]
+    for name in result.data_vars:
+        n_valid = int(result[name].notnull().any("time").sum())
+        LOG.info("Stations with valid %s: %d / %d stations", name, n_valid, n_total)
+
+    return result
 
 
 def load_truth_data(
