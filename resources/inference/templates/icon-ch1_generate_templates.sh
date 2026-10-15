@@ -19,3 +19,6 @@ grib_copy -w shortName=T,level=500 $PL_SAMPLE /dev/stdout | grib_set -d 0 - icon
 
 # template for typeOfLevel=meanSea
 grib_copy -w shortName=PMSL $SFC_SAMPLE /dev/stdout | grib_set -d 0 - icon-ch1-typeOfLevel=meanSea.grib
+
+# template for typeOfLevel=isothermZero (HZEROCL, SNOWLMT); drop the bitmap of undefined cells
+grib_copy -w shortName=HZEROCL $SFC_SAMPLE /dev/stdout | grib_set -s bitmapPresent=0 - /dev/stdout | grib_set -d 0 - icon-ch1-typeOfLevel=isothermZero.grib
