@@ -160,7 +160,7 @@ dataset:
         mars:
           date: 20050101
           levtype: sfc
-          param: T_G
+          param: SKT
           step: 12
           time: 0
       t_100:

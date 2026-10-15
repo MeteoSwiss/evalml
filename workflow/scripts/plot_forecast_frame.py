@@ -80,7 +80,7 @@ def preprocess_field(param: str, state: dict):
     Returns: (field_array, units_override or None)
     """
     fields = state["fields"]
-    if param in ("T_2M", "TD_2M", "T_G", "T", "TD"):
+    if param in ("T_2M", "TD_2M", "SKT", "T", "TD"):
         return kelvin_to_celsius(fields[param]), "°C"
     if param == "SP_10M":
         return ekm_wind.speed(fields["U_10M"], fields["V_10M"]), "m/s"

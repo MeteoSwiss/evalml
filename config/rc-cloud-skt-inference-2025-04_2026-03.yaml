@@ -92,7 +92,7 @@ experiment:
     - TOT_PREC1
     - TOT_PREC6
     - PMSL
-    - T_G
+    - SKT
     - CLCT
     - CLCL
     - CLCM

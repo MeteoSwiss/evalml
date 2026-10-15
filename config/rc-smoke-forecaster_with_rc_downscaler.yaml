@@ -78,7 +78,7 @@ experiment:
     - U_10M
     - V_10M
     - TOT_PREC
-    - T_G
+    - SKT
     - CLCT
     - CLCL
     - CLCM

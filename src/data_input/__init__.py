@@ -30,7 +30,7 @@ _IFS_TO_ICON = {
     "lcc": "CLCL",
     "mcc": "CLCM",
     "hcc": "CLCH",
-    "skt": "T_G",
+    "skt": "SKT",
     # TODO: ssrd is treated as a plain per-step field (no de-accumulation),
     # which only holds because it's not currently listed in any
     # accumulate_from_start_of_forecast.accumulations in the inference
@@ -41,8 +41,6 @@ _IFS_TO_ICON = {
     "z": "FIS",
 }
 _ICON_TO_IFS = {v: k for k, v in _IFS_TO_ICON.items()}
-# ICON-named analysis zarrs (e.g. KENDA-CH1) store skin temperature as SKT
-_ICON_TO_ZARR = {"T_G": "SKT"}
 # Cloud cover is in percent in ICON/MeteoSwiss data, but a fraction (0-1) in
 # ECMWF data (IFS shortNames in GRIB, aifs-* zarrs). evalml works in percent.
 _CLOUD_PARAMS = {"CLCT", "CLCL", "CLCM", "CLCH"}
@@ -316,7 +314,7 @@ def _open_analysis_zarr(root: Path, params: list[str]) -> xr.Dataset:
         zarr_names = {p: _ICON_TO_IFS.get(p, p) for p in params_with_altitude}
     else:
         zarr_names = {
-            p: f"{p}_1H" if p in _ACCUMULATABLE_PARAMS else _ICON_TO_ZARR.get(p, p)
+            p: f"{p}_1H" if p in _ACCUMULATABLE_PARAMS else p
             for p in params_with_altitude
         }
 
