@@ -19,7 +19,7 @@ PARAMS_MAP = {
     "CLCL": "lcc",
     "CLCM": "mcc",
     "CLCH": "hcc",
-    "T_G": "skt",
+    "SKT": "skt",
     "SSRD": "ssrd",
 }
 

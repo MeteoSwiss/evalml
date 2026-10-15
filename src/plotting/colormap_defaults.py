@@ -75,7 +75,7 @@ _CMAP_DEFAULTS = {
     },
     "TD_2M": load_ncl_colormap("t2m_29lev.ct") | {"extend": "both"},
     "T_2M": load_ncl_colormap("t2m_29lev.ct") | {"units": "degC", "extend": "both"},
-    "T_G": load_ncl_colormap("t2m_29lev.ct") | {"units": "degC", "extend": "both"},
+    "SKT": load_ncl_colormap("t2m_29lev.ct") | {"units": "degC", "extend": "both"},
     "V_10M": load_ncl_colormap("modified_uv_17lev.ct")
     | {"units": "m/s", "extend": "both"},
     "U_10M": load_ncl_colormap("modified_uv_17lev.ct")
@@ -213,7 +213,7 @@ _CMAP_DEFAULTS = {
     "SP_10M.score.map": _SCORE_REDS | {"units": "m/s"},
     "TD_2M.score.map": _SCORE_REDS | {"units": "°C"},
     "T_2M.score.map": _SCORE_REDS | {"units": "°C"},
-    "T_G.score.map": _SCORE_REDS | {"units": "°C"},
+    "SKT.score.map": _SCORE_REDS | {"units": "°C"},
     **{f"{p}.score.map": _CLOUD_SCORE for p in ("CLCT", "CLCL", "CLCM", "CLCH")},
     "PMSL.score.map": _SCORE_REDS_PA | {"units": "Pa"},
     "PS.score.map": _SCORE_REDS_PA | {"units": "Pa"},
@@ -249,7 +249,7 @@ _CMAP_DEFAULTS = {
         "levels": np.arange(start=-2.75, stop=2.76, step=0.5),
     }
     | {"units": "°C"},
-    "T_G.BIAS.map": {
+    "SKT.BIAS.map": {
         "cmap": plt.get_cmap("RdBu_r", 11),
         "levels": np.arange(start=-2.75, stop=2.76, step=0.5),
     }

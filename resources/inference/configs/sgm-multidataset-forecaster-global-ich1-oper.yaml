@@ -123,7 +123,7 @@ output:
                 mcc: {"param": 187, "shortName": "mcc"}
                 CLCH: {"param": 188, "shortName": "hcc"}
                 hcc: {"param": 188, "shortName": "hcc"}
-                T_G: {"param": 235, "shortName": "skt"}
+                SKT: {"param": 235, "shortName": "skt"}
                 skt: {"param": 235, "shortName": "skt"}
                 TOT_PREC: {"param": 228, "shortName": "tp"}
                 tp: {"param": 228, "shortName": "tp"}
