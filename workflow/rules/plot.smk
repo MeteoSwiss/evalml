@@ -143,7 +143,11 @@ rule plot_forecast_frame:
     resources:
         slurm_partition="postproc",
         cpus_per_task=4,
-        runtime="20m",
+        # Bumped from 20m: under heavy concurrent load on the shared postproc
+        # partition (many plot_forecast_frame jobs at once), a single region's
+        # render has been observed taking ~16m vs ~1.5m uncontended -- 20m was
+        # killing otherwise-healthy jobs via TIMEOUT, not a correctness bug.
+        runtime="45m",
     params:
         grib_out_dir=lambda wc: str(
             (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib").resolve()
