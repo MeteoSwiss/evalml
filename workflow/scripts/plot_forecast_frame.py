@@ -5,7 +5,6 @@ from pathlib import Path
 
 import cartopy.crs as ccrs
 from earthkit.meteo.utils.convert import kelvin_to_celsius
-import earthkit.meteo.wind as ekm_wind
 import earthkit.plots as ekp
 from matplotlib.colors import Colormap
 import numpy as np
@@ -75,17 +74,18 @@ def get_style(param, units_override=None, accu=1):
 def preprocess_field(param: str, state: dict):
     """
     - Temperatures: K -> °C
-    - Wind speed: sqrt(u^2 + v^2)
     - Precipitation: m -> mm
+
+    Note: SP_10M, DD_10M, and RELHUM_2M are NOT computed here -- they're
+    produced by the anemoi-inference surface-diagnostics
+    post-processor filter and read directly from the GRIB via the
+    fallthrough below, same as any other plain field.
+
     Returns: (field_array, units_override or None)
     """
     fields = state["fields"]
     if param in ("T_2M", "TD_2M", "T", "TD"):
         return kelvin_to_celsius(fields[param]), "°C"
-    if param == "SP_10M":
-        return ekm_wind.speed(fields["U_10M"], fields["V_10M"]), "m/s"
-    if param == "SP":
-        return ekm_wind.speed(fields["U"], fields["V"]), "m/s"
     if param == "TOT_PREC":
         return np.maximum(fields[param], 0), "mm"
     if param in ("CLCT", "CLCL"):
@@ -136,12 +136,7 @@ def main():
         list(regions.keys()),
     )
 
-    if param == "SP_10M":
-        paramlist = ["U_10M", "V_10M"]
-    elif param == "SP":
-        paramlist = ["U", "V"]
-    else:
-        paramlist = [param]
+    paramlist = [param]
 
     # Load grib once — shared across all region plots
     # TODO: fix file pattern & globbing
