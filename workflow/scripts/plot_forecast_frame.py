@@ -5,6 +5,7 @@ from pathlib import Path
 
 import cartopy.crs as ccrs
 
+from data_input import parse_aggregated_param
 from plotting import resolve_region
 from plotting import StatePlotter
 from plotting.compat import load_state_from_grib
@@ -44,7 +45,9 @@ def main():
     regions = json.loads(args.regions_json)
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
-    accu = args.accu
+    # Aggregated params encode their period in the name (TOT_PREC1 → TOT_PREC, 1h)
+    base_param, agg_hours = parse_aggregated_param(param)
+    accu = agg_hours or args.accu
 
     LOG.info(
         "Plotting forecast frame: param=%s, init_time=%s, lead_time=%s, regions=%s",
@@ -54,12 +57,12 @@ def main():
         list(regions.keys()),
     )
 
-    if param == "SP_10M":
+    if base_param == "SP_10M":
         paramlist = ["U_10M", "V_10M"]
-    elif param == "SP":
+    elif base_param == "SP":
         paramlist = ["U", "V"]
     else:
-        paramlist = [param]
+        paramlist = [base_param]
 
     # Load grib once — shared across all region plots
     # TODO: fix file pattern & globbing
@@ -82,12 +85,17 @@ def main():
     state = load_state_from_grib(grib_file, paramlist=paramlist)
 
     # tp is accumulated from start of forecast; de-accumulate to get period [lt-accu, lt]
-    if param == "TOT_PREC":
+    if base_param == "TOT_PREC":
         prev_lt = lead_time - accu
         if prev_lt > 0:
             prev_grib_files = list(grib_dir.glob(f"2*_{prev_lt}.grib"))
             if not prev_grib_files:
                 prev_grib_files = list(grib_dir.glob(f"2*_{prev_lt:03d}.grib"))
+            if not prev_grib_files:
+                raise FileNotFoundError(
+                    f"No GRIB file for lead_time={prev_lt} in {grib_dir}, needed to"
+                    f" de-accumulate {param} at lead_time={lead_time}."
+                )
             prev_grib_file = Path(prev_grib_files[0])
             LOG.info(
                 "De-accumulating TOT_PREC: loading previous grib file %s",
@@ -100,7 +108,7 @@ def main():
             )
 
     # Preprocess field once — shared across all region plots
-    field, units_override = preprocess_field(param, state)
+    field, units_override = preprocess_field(base_param, state)
     validtime = state["valid_time"].strftime("%Y%m%d%H%M")
 
     for region_name, region_cfg in regions.items():
@@ -123,7 +131,7 @@ def main():
             field,
             title=f"{param}, time: {validtime}",
             gridline_labels=not region_cfg.get("rotate", False),
-            **get_style(param, units_override, accu=accu),
+            **get_style(base_param, units_override, accu=accu),
         )
         if len(state["lam_envelope"]) > 0:
             subplot.ax.add_geometries(

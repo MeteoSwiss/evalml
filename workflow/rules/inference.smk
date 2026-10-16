@@ -301,6 +301,12 @@ rule inference_execute:
                 local VENV=/user-environment
                 source "$VENV/bin/activate"
 
+                # Importing earthkit.data in the Snakemake process (e.g. via data_input)
+                # exports ECCODES_ECKIT_GEO=1, which srun would pass on. It makes ecCodes
+                # derive unstructured-grid coordinates that differ slightly from the
+                # checkpoint/dataset ones, and anemoi-inference then refuses to combine states.
+                unset ECCODES_ECKIT_GEO
+
                 if [ "{params.disable_local_definitions}" = "False" ]; then
                     export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
                 fi

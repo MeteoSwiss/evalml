@@ -6,6 +6,8 @@ import hashlib
 import json
 from urllib.parse import urlparse
 
+from data_input import parse_aggregated_param
+
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
 
@@ -521,6 +523,12 @@ def resolve_leadtimes(steps_spec, requested="all", param=None):
         )
 
     valid = wanted & supported
-    if param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
+    base_param, agg_hours = parse_aggregated_param(param) if param else (None, None)
+    if agg_hours:
+        # Aggregated params (e.g. TOT_PREC6) need the window start [lead - agg, lead]
+        valid = {
+            lt for lt in valid if lt - agg_hours == 0 or lt - agg_hours in supported
+        }
+    elif base_param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
         valid = {lt for lt in valid if lt >= step}
     return sorted(valid)
