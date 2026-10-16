@@ -140,6 +140,8 @@ profile:
 
 The `runs` list accepts `forecaster`, `temporal_downscaler`, and `baseline` entries. For `dates`, you can either provide a `start` / `end` / `frequency` block as above or an explicit list of ISO timestamps for case-study style runs. Stratification, thresholds, dashboard, and scorecard settings are all grouped under the `experiment` key.
 
+Precipitation (`TOT_PREC`) from forecaster and temporal downscaler runs is expected to be accumulated since the start of the forecast, in kg m-2 (mm), like ICON. If a model writes metres instead, add `tot_prec_units: m` to its run entry and the values are converted when loaded.
+
 You can then run it with:
 
 ```bash
@@ -174,6 +176,42 @@ The `truth.root` value selects how the ground truth is loaded:
   `/oprusers/osm/opr.inn/bin/jretrievedwh.py`) and DWH credentials must be
   available — see [Credentials setup](#credentials-setup). No data is
   pre-downloaded — the obs are queried at verification time.
+- **INCA-CH** — a path into the INCA archive (any path with an `INCA` directory),
+  read directly from the NetCDF files. Step 0 of each INCA run is an analysis, and
+  only step 0 is used: the truth at valid time `t` comes from the run started at `t`.
+  The data are on the 1 km INCA grid (710×640, Swiss LV03), so forecasts are mapped
+  onto it by nearest neighbour, as for a gridded zarr truth.
+
+  ```yaml
+  truth:
+    label: INCA
+    root: /store_new/mch/msclim/INCA
+  ```
+
+  Variables (evalml name ← INCA file prefix):
+
+  | Group | evalml name ← INCA |
+  |---|---|
+  | Temperature (K) | `T_2M` ← TT, `TD_2M` ← TD, `TW_2M` ← TW (wet bulb), `T_G` ← TG (surface) |
+  | Wind (10-min products) | `FF_10M` ← FF_10min, `DD_10M` ← DD_10min, `VMAX_10M` ← WG_10min; `U_10M`, `V_10M` and `SP_10M` are derived from FF_10min/DD_10min |
+  | Precipitation (kg m-2) | `TOT_PREC` ← RR, `TOT_SNOW` ← RS (CombiPrecip based); `TOT_PREC_RADAR` ← RP, `TOT_SNOW_RADAR` ← PN (radar based). Use period names such as `TOT_PREC1`, `TOT_PREC6` |
+  | Precipitation type | `PREC_TYPE` ← PT, `PREC_TYPE_RADAR` ← NT |
+  | Cloud, sun, lightning | `CLCT` ← CT (%), `SUNSHINE_REL` ← SU (%), `LIGHTNING_PROB` ← LP |
+  | Freezing level (m) | `HZEROCL` ← Z0, `SNOWLMT` ← ZS, `MELTLAYER_TOP` ← ZM |
+  | Convection (J/kg) | `CAPE_MU` ← CP, `CIN_MU` ← CN (from `{YYYY}/analysis/{MM}/`) |
+
+  Notes:
+  - Precipitation rates (mm/h) are turned into hourly amounts: the rate stamped `t`
+    is taken as the mean over `(t − 10 min, t]` (5 min for the radar products), and
+    the hourly amount is the mean of the available rates in the hour. An hour
+    without any run is NaN, as are the later totals of that forecast.
+  - Missing files are filled with NaN and reported in the log.
+  - Parameters INCA does not provide (e.g. `PS`, `PMSL`) are skipped.
+  - Availability differs per variable (as of 2026-10): the main archive starts in May 2021, the
+    10-min wind and radar products in May 2025, CAPE/CIN end in December 2024, and
+    `TD` has gaps in 2025.
+  - Meteograms need station truth; with a gridded truth they show a placeholder.
+  - Scorecard rows for variables a run or baseline lacks are left empty.
 
 ### Holdout stations
 

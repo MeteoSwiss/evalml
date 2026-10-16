@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
+from typing import Dict, List, Any, ClassVar, FrozenSet, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
@@ -106,6 +106,13 @@ class RunConfig(BaseModel):
         False,
         description="If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
     )
+    tot_prec_units: Literal["kg m-2", "m"] = Field(
+        "kg m-2",
+        description=(
+            "Units of TOT_PREC in the run's GRIB output. Use 'm' if the model writes "
+            "metres; values are converted to kg m-2 when loaded."
+        ),
+    )
     config: Dict[str, Any] | str
 
     model_config = {"extra": "forbid"}
@@ -207,7 +214,11 @@ class TruthConfig(BaseModel):
     root: str = Field(
         ...,
         min_length=1,
-        description="Path to the root of the dataset.",
+        description=(
+            "Truth source: an anemoi '.zarr' analysis (e.g. KENDA), the INCA-CH "
+            "archive (a path with an 'INCA' directory), or 'jretrievedwh:<selector>' "
+            "for DWH station observations."
+        ),
     )
 
 
@@ -358,7 +369,8 @@ class ScorecardConfig(BaseModel):
             "Variables and metrics as scorecard rows (VAR:M1,M2 format). "
             "An empty list [] is accepted by the schema but falls back to a "
             "hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). "
-            "Omit ':...' after a variable name to include all available metrics for it."
+            "Omit ':...' after a variable name to include all available metrics for it. "
+            "Variables without data are shown as empty rows."
         ),
     )
 
@@ -464,7 +476,10 @@ class ExperimentConfig(BaseModel):
     )
     params: List[str] = Field(
         default=["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"],
-        description="List of parameters to compute verification metrics for.",
+        description=(
+            "List of parameters to compute verification metrics for. With INCA truth, "
+            "parameters INCA does not provide are skipped."
+        ),
     )
     thresholds: Dict[str, Dict[str, List[float]]] = Field(
         default_factory=dict,

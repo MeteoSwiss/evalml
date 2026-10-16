@@ -307,8 +307,42 @@ def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
     return out
 
 
+def _truth_only_statistics(
+    fcst: xr.Dataset,
+    obs: xr.Dataset,
+    masks: xr.DataArray,
+    station_masks: xr.DataArray,
+    obs_label: str,
+    dim: list[str],
+    num_workers: int,
+) -> list[xr.Dataset]:
+    """Statistics of the parameters that only the truth provides (no forecast yet).
+
+    No scores can be computed for them, but their truth statistics are kept so
+    that they still appear in the reports. Like the other parameters, they carry
+    the region and station_group dimensions.
+    """
+    stats = []
+    for param in obs.data_vars:
+        if param in fcst.data_vars:
+            continue
+        LOG.info("Parameter %s only in obs: computing obs statistics only", param)
+        obs_stats = _compute_statistics(
+            obs[param].where(masks).where(station_masks),
+            prefix=param + ".",
+            source=obs_label,
+            dim=dim,
+        )
+        if "forecast_reference_time" in fcst.coords:
+            obs_stats = obs_stats.assign_coords(
+                forecast_reference_time=fcst["forecast_reference_time"]
+            )
+        stats.append(_merge_metrics([obs_stats], num_workers=num_workers))
+    return stats
+
+
 def _create_station_group_masks(
-    values_coord: xr.DataArray, holdout_stations: list[str] | None
+    values_coord: xr.DataArray | None, holdout_stations: list[str] | None
 ) -> xr.DataArray:
     """Boolean masks over the values dimension for station groups.
 
@@ -316,7 +350,16 @@ def _create_station_group_masks(
     so downstream consumers never need to check whether it's present). When
     holdout_stations is empty/None, "all" is the only group — the holdout/holdin
     split is only meaningful, and only added, when stations are actually held out.
+
+    values_coord is None for truth on a regular (y, x) grid, e.g. INCA. Such data has
+    no stations, so only the "all" group exists, as a mask without spatial dims.
     """
+    if values_coord is None:
+        if holdout_stations:
+            raise ValueError("Holdout stations require station truth on 'values'.")
+        return xr.DataArray(
+            [True], coords={"station_group": ["all"]}, dims=["station_group"]
+        )
     all_nat_abbr = values_coord.values
     if not holdout_stations:
         return xr.DataArray(
@@ -437,7 +480,10 @@ def verify(
         lon=obs_aligned["longitude"], lat=obs_aligned["latitude"]
     )
 
-    station_masks = _create_station_group_masks(obs_aligned["values"], holdout_stations)
+    station_masks = _create_station_group_masks(
+        obs_aligned["values"] if "values" in obs_aligned.dims else None,
+        holdout_stations,
+    )
     if holdout_stations:
         LOG.info(
             "Station group masks created: %d holdout, %d holdin stations",
@@ -503,6 +549,10 @@ def verify(
         scores.append(
             _merge_metrics([score, param_statistics], num_workers=num_workers)
         )
+
+    scores += _truth_only_statistics(
+        fcst_aligned, obs_aligned, masks, station_masks, obs_label, dim, num_workers
+    )
 
     out = xr.merge(scores, join="outer", compat="no_conflicts")
     LOG.info("Computed metrics in %.2f seconds", time.time() - start)

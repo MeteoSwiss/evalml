@@ -271,7 +271,7 @@
             "PMSL",
             "TOT_PREC6"
           ],
-          "description": "List of parameters to compute verification metrics for.",
+          "description": "List of parameters to compute verification metrics for. With INCA truth, parameters INCA does not provide are skipped.",
           "items": {
             "type": "string"
           },
@@ -496,6 +496,16 @@
           "description": "If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
           "title": "Disable Local Eccodes Definitions",
           "type": "boolean"
+        },
+        "tot_prec_units": {
+          "default": "kg m-2",
+          "description": "Units of TOT_PREC in the run's GRIB output. Use 'm' if the model writes metres; values are converted to kg m-2 when loaded.",
+          "enum": [
+            "kg m-2",
+            "m"
+          ],
+          "title": "Tot Prec Units",
+          "type": "string"
         },
         "config": {
           "anyOf": [
@@ -839,7 +849,7 @@
           "type": "string"
         },
         "variables": {
-          "description": "Variables and metrics as scorecard rows (VAR:M1,M2 format). An empty list [] is accepted by the schema but falls back to a hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). Omit ':...' after a variable name to include all available metrics for it.",
+          "description": "Variables and metrics as scorecard rows (VAR:M1,M2 format). An empty list [] is accepted by the schema but falls back to a hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). Omit ':...' after a variable name to include all available metrics for it. Variables without data are shown as empty rows.",
           "items": {
             "type": "string"
           },
@@ -975,6 +985,16 @@
           "title": "Disable Local Eccodes Definitions",
           "type": "boolean"
         },
+        "tot_prec_units": {
+          "default": "kg m-2",
+          "description": "Units of TOT_PREC in the run's GRIB output. Use 'm' if the model writes metres; values are converted to kg m-2 when loaded.",
+          "enum": [
+            "kg m-2",
+            "m"
+          ],
+          "title": "Tot Prec Units",
+          "type": "string"
+        },
         "config": {
           "anyOf": [
             {
@@ -1030,7 +1050,7 @@
           "type": "string"
         },
         "root": {
-          "description": "Path to the root of the dataset.",
+          "description": "Truth source: an anemoi '.zarr' analysis (e.g. KENDA), the INCA-CH archive (a path with an 'INCA' directory), or 'jretrievedwh:<selector>' for DWH station observations.",
           "minLength": 1,
           "title": "Root",
           "type": "string"
