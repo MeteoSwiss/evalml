@@ -6,7 +6,7 @@ import tempfile
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import MultiPoint
-from data_input import load_from_grib_file, _fetch_fdb_grib_bytes, _FDB_MODEL, _FDB_GLOBAL_MODEL
+from data_input import load_from_grib_file, _fetch_fdb_fieldlist, _FDB_MODEL, _FDB_GLOBAL_MODEL
 
 
 PARAMS_MAP = {
@@ -116,7 +116,8 @@ def load_state_from_fdb(
     """FDB equivalent of :func:`load_state_from_grib` for one lead time.
 
     Fetches the regional (`_FDB_MODEL`) and global (`_FDB_GLOBAL_MODEL`) grids
-    from FDB and writes them to temp files using the same naming convention
+    from FDB -- exactly the requested params, via `_fetch_fdb_fieldlist` --
+    and writes them to temp files using the same naming convention
     `load_state_from_grib` already expects locally (a primary file plus an
     `ifs-<stem>.grib` companion in the same directory), then delegates to it
     unchanged -- reusing its state-dict construction and global-grid
@@ -125,18 +126,29 @@ def load_state_from_fdb(
     load_forecast_data` sidesteps by dropping the global grid entirely isn't a
     problem here).
     """
-    regional = _fetch_fdb_grib_bytes(fdb_root, reftime, [step], model=_FDB_MODEL)
-    if not regional:
+    regional = _fetch_fdb_fieldlist(fdb_root, reftime, [step], paramlist, model=_FDB_MODEL)
+    if regional is None:
         raise FileNotFoundError(
             f"No FDB data found for step={step} model={_FDB_MODEL} in {fdb_root}"
         )
-    global_ = _fetch_fdb_grib_bytes(fdb_root, reftime, [step], model=_FDB_GLOBAL_MODEL)
+    try:
+        global_ = _fetch_fdb_fieldlist(fdb_root, reftime, [step], paramlist, model=_FDB_GLOBAL_MODEL)
+    except ValueError:
+        # Some requested params may have no known id for the global grid
+        # (_FDB_GLOBAL_PARAM_IDS only covers what's actually been needed from
+        # it) -- tolerate that the same way as "nothing archived" below,
+        # rather than failing the whole frame over a companion grid.
+        global_ = None
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         primary = Path(tmp_dir) / "frame.grib"
-        primary.write_bytes(regional)
-        if global_:
-            (Path(tmp_dir) / "ifs-frame.grib").write_bytes(global_)
+        with open(primary, "wb") as f:
+            for fld in regional:
+                f.write(fld.message())
+        if global_ is not None:
+            with open(Path(tmp_dir) / "ifs-frame.grib", "wb") as f:
+                for fld in global_:
+                    f.write(fld.message())
         return load_state_from_grib(primary, paramlist=paramlist)
 
 
