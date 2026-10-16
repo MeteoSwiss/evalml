@@ -224,6 +224,19 @@ rule showcase_all:
             if config["showcase"]["meteograms"]["enabled"]
             else []
         ),
+        (
+            expand(
+                rules.compare_forecast_frames.output,
+                init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+                run_id=CANDIDATES,
+                baseline=COMPARISONS_CONFIG["baselines"],
+                param=SHOWCASE_CONFIG["params"],
+                leadtime=COMPARISONS_CONFIG["lead_times"],
+                showcase=EXPERIMENT_NAME,
+            )
+            if COMPARISONS_CONFIG["enabled"]
+            else []
+        ),
 
 
 rule sandbox_all:

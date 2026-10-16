@@ -88,6 +88,57 @@
       "title": "BaselineItem",
       "type": "object"
     },
+    "ComparisonsConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for side-by-side map comparisons of runs and baselines.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate side-by-side maps of each run and each selected baseline.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "baselines": {
+          "description": "Labels of the baselines to compare each run with, one plot per baseline. Required (non-empty) when comparisons are enabled.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Baselines",
+          "type": "array"
+        },
+        "domains": {
+          "default": [
+            "alps"
+          ],
+          "description": "Domains to plot. Same format as `animations.domains`: a named domain defined in plotting.DOMAINS or a custom domain dict.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/DomainConfig"
+              }
+            ]
+          },
+          "title": "Domains",
+          "type": "array"
+        },
+        "lead_times": {
+          "default": [
+            24
+          ],
+          "description": "Lead times (hours) to plot. A run or baseline without data at a lead time is shown as an empty panel.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Lead Times",
+          "type": "array"
+        }
+      },
+      "title": "ComparisonsConfig",
+      "type": "object"
+    },
     "Dashboard": {
       "description": "Settings for the dashboard",
       "properties": {
@@ -876,6 +927,10 @@
         },
         "animations": {
           "$ref": "#/$defs/AnimationsConfig"
+        },
+        "comparisons": {
+          "$ref": "#/$defs/ComparisonsConfig",
+          "description": "Configuration for side-by-side map comparisons."
         }
       },
       "title": "ShowcaseConfig",

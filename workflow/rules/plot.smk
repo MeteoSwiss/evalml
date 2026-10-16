@@ -214,3 +214,50 @@ use rule plot_scoremaps as plot_scoremaps_baseline with:
     log:
         OUT_ROOT
         / "logs/plot_scoremaps/{experiment}/{baseline_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",
+
+
+rule compare_forecast_frames:
+    input:
+        script="workflow/scripts/compare_forecast_frames.py",
+        inference_okfile=rules.inference_execute.output.okfile,
+    output:
+        expand(
+            OUT_ROOT
+            / "results/{{showcase}}/{{run_id}}/{{init_time}}/compare/{{baseline}}/{{init_time}}_{{leadtime}}_{{param}}_{region}.png",
+            region=list(COMPARISONS_CONFIG["regions"].keys()),
+        ),
+    log:
+        OUT_ROOT
+        / "logs/{showcase}/{run_id}/{init_time}/compare_forecast_frames_{baseline}_{leadtime}_{param}.log",
+    wildcard_constraints:
+        leadtime=r"\d+",
+        baseline=r"[^/]+",
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=4,
+        runtime="30m",
+    params:
+        fcst_grib=lambda wc: (
+            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
+        ).resolve(),
+        fcst_label=lambda wc: RUN_CONFIGS[wc.run_id]["label"],
+        baseline_root=lambda wc: BASELINE_CONFIGS[resolve_baseline_id(wc.baseline)][
+            "root"
+        ],
+        regions_json=json.dumps(COMPARISONS_CONFIG["regions"]),
+        outdir=lambda wc: str(
+            (
+                Path(OUT_ROOT)
+                / f"results/{wc.showcase}/{wc.run_id}/{wc.init_time}/compare/{wc.baseline}"
+            ).resolve()
+        ),
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run python {input.script} \
+            --forecast {params.fcst_grib:q} --forecast_label {params.fcst_label:q} \
+            --baseline {params.baseline_root:q} --baseline_label {wildcards.baseline:q} \
+            --date {wildcards.init_time:q} --leadtime {wildcards.leadtime:q} \
+            --param {wildcards.param:q} --regions_json {params.regions_json:q} \
+            --outdir {params.outdir:q} >{log} 2>&1
+        """
