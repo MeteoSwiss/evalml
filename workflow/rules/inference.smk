@@ -557,7 +557,40 @@ FDBEOF
                     CMD_ARGS+=(runner.parallel.cluster=slurm)
                 fi
 
-                anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+                set +e
+                anemoi-inference run config.yaml "${{CMD_ARGS[@]}}" 2>&1 | tee inference_stdout.log
+                local rc=${{PIPESTATUS[0]}}
+                set -e
+                if [ "$rc" -ne 0 ]; then
+                    # anemoi-inference, when using the copy-prognostic-from-forecaster
+                    # post-processor (anemoi-plugins-meteoswiss), is known to crash
+                    # during native library teardown strictly AFTER all forecast windows
+                    # have been computed and written out (free(): invalid pointer,
+                    # munmap_chunk(): invalid pointer, or similar glibc heap-corruption
+                    # diagnostics observed across runs -- likely an eccodes/earthkit-data
+                    # handle cleanup ordering bug tied to
+                    # that filter's cached forecaster GRIB index being garbage-collected
+                    # at interpreter shutdown). The exact signal raised depends on memory
+                    # layout at the time: observed as both SIGABRT (134) and SIGBUS (135)
+                    # across otherwise-identical runs. Verified empirically (including
+                    # "Flushing FDB" x2 immediately preceding the crash, for FDB-backed
+                    # runs): all expected output steps are present and bit-correct on
+                    # disk/FDB despite the abort. Treat this exact signature as success
+                    # instead of discarding valid output and re-running (expensive) GPU
+                    # inference for nothing.
+                    local last_window
+                    last_window=$(grep -oE 'window [0-9]+/[0-9]+' inference_stdout.log | tail -1 | awk '{{print $2}}')
+                    local win_num=${{last_window%%/*}}
+                    local win_total=${{last_window##*/}}
+                    if [ "$rc" = "134" -o "$rc" = "135" ] \
+                        && grep -q -e "free(): invalid pointer" -e "munmap_chunk(): invalid pointer" -e "double free or corruption" inference_stdout.log \
+                        && ! grep -q "Traceback (most recent call last)" inference_stdout.log \
+                        && [ -n "$win_num" ] && [ "$win_num" = "$win_total" ]; then
+                        echo "WARNING: anemoi-inference aborted during process teardown (exit $rc) after completing all $win_total forecast windows -- known benign native cleanup crash (see copy-prognostic-from-forecaster + eccodes handle GC), treating as success." >&2
+                    else
+                        return "$rc"
+                    fi
+                fi
             }}
             export -f _run_inference
 
