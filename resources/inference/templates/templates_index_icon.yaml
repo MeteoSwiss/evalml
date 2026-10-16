@@ -9,11 +9,15 @@
 - - {levtype: sfc, param: [FR_LAND, PS, FIS, T_G, SKT, SSO_SIGMA,SSO_STDH]}
   - resources/icon-ch1-typeOfLevel=surface.grib
 
+# setting the shortName switches to the right level (atmML/atmMU, surface)
+- - {levtype: sfc, param: [CAPE_ML, CIN_ML, CAPE_MU, CIN_MU, PREC_TYPE]}
+  - resources/icon-ch1-typeOfLevel=surface.grib
+
 - - {levtype: sfc, param: [PMSL]}
   - resources/icon-ch1-typeOfLevel=meanSea.grib
 
 - - {levtype: sfc, param: [HZEROCL, SNOWLMT]}
   - resources/icon-ch1-typeOfLevel=isothermZero.grib
 
-- - {levtype: sfc, param: [TOT_PREC]}
+- - {levtype: sfc, param: [TOT_PREC, TOT_SNOW]}
   - resources/icon-ch1-shortName=TOT_PREC.grib
