@@ -28,3 +28,27 @@ def test_tot_prec_units(example_config):
     run["tot_prec_units"] = "mm"
     with pytest.raises(ValueError, match="tot_prec_units"):
         ConfigModel.model_validate(example_config)
+
+
+def test_station_holdout(example_config):
+    """station_holdout accepts a list of nat_abbr and rejects empty or duplicate lists."""
+
+    example_config["experiment"]["station_holdout"] = ["CHM", "FRE"]
+    cfg = ConfigModel.model_validate(example_config)
+    assert cfg.experiment.station_holdout == ["CHM", "FRE"]
+
+    example_config["experiment"]["station_holdout"] = []
+    with pytest.raises(ValueError, match="must not be empty"):
+        _ = ConfigModel.model_validate(example_config)
+
+    example_config["experiment"]["station_holdout"] = ["CHM", "FRE", "CHM"]
+    with pytest.raises(ValueError, match="duplicate stations"):
+        _ = ConfigModel.model_validate(example_config)
+
+
+def test_experiment_optional(example_config):
+    """The experiment block can be omitted, e.g. for showcase or sandbox configs."""
+
+    del example_config["experiment"]
+    cfg = ConfigModel.model_validate(example_config)
+    assert cfg.experiment is None

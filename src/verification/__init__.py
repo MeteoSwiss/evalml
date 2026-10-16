@@ -311,6 +311,7 @@ def _truth_only_statistics(
     fcst: xr.Dataset,
     obs: xr.Dataset,
     masks: xr.DataArray,
+    station_masks: xr.DataArray,
     obs_label: str,
     dim: list[str],
     num_workers: int,
@@ -318,7 +319,8 @@ def _truth_only_statistics(
     """Statistics of the parameters that only the truth provides (no forecast yet).
 
     No scores can be computed for them, but their truth statistics are kept so
-    that they still appear in the reports.
+    that they still appear in the reports. Like the other parameters, they carry
+    the region and station_group dimensions.
     """
     stats = []
     for param in obs.data_vars:
@@ -326,7 +328,10 @@ def _truth_only_statistics(
             continue
         LOG.info("Parameter %s only in obs: computing obs statistics only", param)
         obs_stats = _compute_statistics(
-            obs[param].where(masks), prefix=param + ".", source=obs_label, dim=dim
+            obs[param].where(masks).where(station_masks),
+            prefix=param + ".",
+            source=obs_label,
+            dim=dim,
         )
         if "forecast_reference_time" in fcst.coords:
             obs_stats = obs_stats.assign_coords(
@@ -334,6 +339,43 @@ def _truth_only_statistics(
             )
         stats.append(_merge_metrics([obs_stats], num_workers=num_workers))
     return stats
+
+
+def _create_station_group_masks(
+    values_coord: xr.DataArray | None, holdout_stations: list[str] | None
+) -> xr.DataArray:
+    """Boolean masks over the values dimension for station groups.
+
+    Always includes "all" (every verify() output carries a station_group dimension,
+    so downstream consumers never need to check whether it's present). When
+    holdout_stations is empty/None, "all" is the only group — the holdout/holdin
+    split is only meaningful, and only added, when stations are actually held out.
+
+    values_coord is None for truth on a regular (y, x) grid, e.g. INCA. Such data has
+    no stations, so only the "all" group exists, as a mask without spatial dims.
+    """
+    if values_coord is None:
+        if holdout_stations:
+            raise ValueError("Holdout stations require station truth on 'values'.")
+        return xr.DataArray(
+            [True], coords={"station_group": ["all"]}, dims=["station_group"]
+        )
+    all_nat_abbr = values_coord.values
+    if not holdout_stations:
+        return xr.DataArray(
+            np.ones((1, len(all_nat_abbr)), dtype=bool),
+            coords={"station_group": ["all"], "values": all_nat_abbr},
+            dims=["station_group", "values"],
+        )
+    is_holdout = np.isin(all_nat_abbr, holdout_stations)
+    return xr.DataArray(
+        np.stack([np.ones_like(is_holdout), is_holdout, ~is_holdout]),
+        coords={
+            "station_group": ["all", "holdout", "holdin"],
+            "values": all_nat_abbr,
+        },
+        dims=["station_group", "values"],
+    )
 
 
 def _bbox_polygon(lon_min, lon_max, lat_min, lat_max) -> Polygon:
@@ -357,6 +399,7 @@ def verify(
     dim: list[str] | None = None,
     threshold_dict: dict[str, dict[str, list[float]]] | None = None,
     num_workers: int | None = None,
+    holdout_stations: list[str] | None = None,
     max_missing_fraction: float = 0.0,
 ) -> xr.Dataset:
     """
@@ -390,6 +433,11 @@ def verify(
         If None, no thresholds used.
     num_workers : int or None, optional
         Number of parallel workers for computation. If None, uses available CPU cores minus 2.
+    holdout_stations : list[str] or None, optional
+        Station nat_abbr forming the "holdout" station group. The output always
+        carries a station_group dimension — ["all"] when this is None/empty, or
+        ["all", "holdout", "holdin"] when stations are given — so callers never need to check
+        for its presence.
     max_missing_fraction : float, optional
         Maximum allowed fraction of missing forecast values among obs-valid in-region points
         before a metric is set to NaN. Computed per region and time step over the reduction
@@ -432,6 +480,17 @@ def verify(
         lon=obs_aligned["longitude"], lat=obs_aligned["latitude"]
     )
 
+    station_masks = _create_station_group_masks(
+        obs_aligned["values"] if "values" in obs_aligned.dims else None,
+        holdout_stations,
+    )
+    if holdout_stations:
+        LOG.info(
+            "Station group masks created: %d holdout, %d holdin stations",
+            int(station_masks.sel(station_group="holdout").sum()),
+            int(station_masks.sel(station_group="holdin").sum()),
+        )
+
     scores = []
     for param in fcst_aligned.data_vars:
         if param not in obs_aligned.data_vars:
@@ -453,6 +512,10 @@ def verify(
         fcst_param = fcst_aligned[param].where(masks)
         obs_param = obs_aligned[param].where(masks)
 
+        # Apply station group masks — adds "station_group" dim, always present
+        # (["all"], or ["all", "holdout", "holdin"] when holdout_stations is set)
+        fcst_param = fcst_param.where(station_masks)
+        obs_param = obs_param.where(station_masks)
         # Missing fraction: among obs-valid in-region points, fraction where fcst is missing.
         # Normalising by obs availability avoids penalising parameters with fewer stations.
         missing_fraction = (
@@ -488,7 +551,7 @@ def verify(
         )
 
     scores += _truth_only_statistics(
-        fcst_aligned, obs_aligned, masks, obs_label, dim, num_workers
+        fcst_aligned, obs_aligned, masks, station_masks, obs_label, dim, num_workers
     )
 
     out = xr.merge(scores, join="outer", compat="no_conflicts")

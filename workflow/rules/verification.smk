@@ -17,6 +17,7 @@ rule verification_metrics_baseline:
         script="workflow/scripts/verification_metrics.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth_dep=truth_file_dep,
+        holdout=holdout_dep,
     output:
         OUT_ROOT / f"data/baselines/{{baseline_id}}/{{init_time}}/verif_{VERIF_HASH}.nc",
     log:
@@ -32,7 +33,10 @@ rule verification_metrics_baseline:
         truth_source_id=f"truth-{TRUTH_HASH}",
         regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
-        threshold_dict=config["experiment"]["thresholds"],
+        threshold_dict=EXPERIMENT_CONFIG.get("thresholds", {}),
+        holdout_flag=lambda wc, input: (
+            f"--holdout_stations_file {input.holdout}" if input.holdout else ""
+        ),
         lapse_rate_flag=(
             "--lapse_rate_correction"
             if config.get("lapse_rate_correction", True)
@@ -43,7 +47,7 @@ rule verification_metrics_baseline:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {input.forecast} \
-            --truth {params.truth} \
+            --truth "{params.truth}" \
             --reftime {wildcards.init_time} \
             --steps "{params.baseline_steps}" \
             --source_id "{wildcards.baseline_id}" \
@@ -51,6 +55,7 @@ rule verification_metrics_baseline:
             --regions '{params.regions}' \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
+            {params.holdout_flag} \
             --member "{params.member}" \
             {params.lapse_rate_flag} \
             --output {output} >{log} 2>&1
@@ -72,6 +77,7 @@ rule verification_metrics:
         script="workflow/scripts/verification_metrics.py",
         inference_okfile=rules.inference_execute.output.okfile,
         truth_dep=truth_file_dep,
+        holdout=holdout_dep,
     output:
         OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/verif_{VERIF_HASH}.nc",
     log:
@@ -93,7 +99,10 @@ rule verification_metrics:
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
         experiment_params=",".join(EXPERIMENT_PARAMS),
-        threshold_dict=config["experiment"]["thresholds"],
+        threshold_dict=EXPERIMENT_CONFIG.get("thresholds", {}),
+        holdout_flag=lambda wc, input: (
+            f"--holdout_stations_file {input.holdout}" if input.holdout else ""
+        ),
         lapse_rate_flag=(
             "--lapse_rate_correction"
             if config.get("lapse_rate_correction", True)
@@ -105,7 +114,7 @@ rule verification_metrics:
         uv run {input.script} \
             --forecast {params.grib_out_dir} \
             --tot_prec_units "{params.tot_prec_units}" \
-            --truth {params.truth} \
+            --truth "{params.truth}" \
             --reftime {wildcards.init_time} \
             --steps "{params.fcst_steps}" \
             --source_id "{wildcards.run_id}" \
@@ -113,6 +122,7 @@ rule verification_metrics:
             --regions '{params.regions}' \
             --params "{params.experiment_params}" \
             --threshold_dict "{params.threshold_dict}" \
+            {params.holdout_flag} \
             {params.lapse_rate_flag} \
             --output {output} >{log} 2>&1
         """
@@ -235,7 +245,7 @@ rule verification_scoremaps:
             --run_root {params.run_root} \
             --tot_prec_units "{params.tot_prec_units}" \
             --reftimes {params.reftimes} \
-            --truth {params.truth} \
+            --truth "{params.truth}" \
             --step {wildcards.leadtime} \
             --steps "{params.fcst_steps}" \
             --param {wildcards.param} \
@@ -271,7 +281,7 @@ rule verification_scoremaps_baseline:
         uv run {input.script} \
             --baseline_root {input.forecast} \
             --reftimes {params.reftimes} \
-            --truth {params.truth} \
+            --truth "{params.truth}" \
             --step {wildcards.leadtime} \
             --steps "{params.baseline_steps}" \
             --param {wildcards.param} \

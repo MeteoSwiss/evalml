@@ -341,7 +341,113 @@ def test_verify_keeps_obs_statistics_for_truth_only_params():
 
     result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
 
-    assert result["CAPE_MU.mean"].sel(region="all", source="obs").item() == 300.0
-    assert np.isnan(result["CAPE_MU.mean"].sel(region="all", source="fcst").item())
+    cape_mean = result["CAPE_MU.mean"].sel(region="all", station_group="all")
+    assert cape_mean.sel(source="obs").item() == 300.0
+    assert np.isnan(cape_mean.sel(source="fcst").item())
     assert "CAPE_MU.BIAS" not in result
     assert "forecast_reference_time" in result["CAPE_MU.mean"].dims
+
+
+def test_verify_gridded_truth_has_only_all_station_group():
+    """Truth on a regular (y, x) grid, like INCA, has no stations: verify() works
+    and every variable carries the single "all" station group."""
+    lat, lon = np.meshgrid(
+        np.linspace(46.0, 47.0, 3), np.linspace(5.0, 10.0, 4), indexing="ij"
+    )
+    coords = {
+        "y": np.arange(3),
+        "x": np.arange(4),
+        "latitude": (("y", "x"), lat),
+        "longitude": (("y", "x"), lon),
+        "forecast_reference_time": _FRT,
+    }
+    fcst = xr.Dataset({"T_2M": (("y", "x"), np.ones((3, 4)))}, coords=coords)
+    obs = xr.Dataset(
+        {
+            "T_2M": (("y", "x"), np.zeros((3, 4))),
+            "CAPE_MU": (("y", "x"), np.full((3, 4), 300.0)),
+        },
+        coords=coords,
+    )
+
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+
+    assert list(result["station_group"].values) == ["all"]
+    for var in ("T_2M.BIAS", "CAPE_MU.mean"):
+        assert "station_group" in result[var].dims
+    bias = result["T_2M.BIAS"].sel(region="all", source="fcst", station_group="all")
+    assert bias.item() == pytest.approx(1.0)
+
+    with pytest.raises(ValueError, match="Holdout stations"):
+        verify(
+            fcst,
+            obs,
+            "fcst",
+            "obs",
+            regions=_REGION,
+            num_workers=1,
+            holdout_stations=["CHM"],
+        )
+
+
+def test_load_holdout_stations(tmp_path):
+    """Station codes round-trip through the holdout CSV, including NaN-like ones."""
+    from verification_metrics import load_holdout_stations
+
+    path = tmp_path / "holdout.csv"
+    path.write_text("nat_abbr\nCHM\nNA\nFRE\n")
+    assert load_holdout_stations(path) == ["CHM", "NA", "FRE"]
+
+
+@pytest.mark.parametrize(
+    "truth_root, values, expected",
+    [
+        # station truth: stations missing from the truth are dropped
+        ("jretrievedwh:bbox=45.7,48.0,5.8,10.8", ["CHM", "FRE", "KLO"], ["CHM"]),
+        # station truth without any of the holdout stations
+        ("jretrievedwh:SwissMetNet", ["KLO", "LUG"], None),
+        # gridded truth on an unstructured grid also has a values dimension
+        ("/data/analysis.zarr", [0, 1, 2], None),
+        # a zarr is gridded even if its path mentions jretrieve
+        ("/data/jretrieve-comparison/analysis.zarr", [0, 1, 2], None),
+    ],
+)
+def test_select_holdout_stations(truth_root, values, expected):
+    """Holdout stations are only used with station truth, restricted to its stations."""
+    from verification_metrics import select_holdout_stations
+
+    truth = xr.Dataset(
+        {"T_2M": ("values", np.zeros(len(values)))}, coords={"values": values}
+    )
+    assert select_holdout_stations(["CHM", "BAS"], truth, Path(truth_root)) == expected
+
+
+def test_verify_station_groups_split_holdout_and_holdin():
+    """With holdout stations, scores are computed separately for all, holdout and
+    holdin stations; without, only the "all" group is present."""
+    stations = ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"]
+    coords = _station_coords(len(stations)) | {"values": ("values", stations)}
+    # Forecast error 1 at the holdout stations (BBB, EEE), 3 at the others.
+    err = np.array([3, 1, 3, 3, 1, 3], dtype=np.float32)
+    fcst = xr.Dataset({"T_2M": ("values", err)}, coords=coords)
+    obs = xr.Dataset(
+        {"T_2M": ("values", np.zeros(len(stations), np.float32))}, coords=coords
+    )
+
+    result = verify(
+        fcst,
+        obs,
+        "fcst",
+        "obs",
+        regions=_REGION,
+        num_workers=1,
+        holdout_stations=["BBB", "EEE"],
+    )
+    bias = result["T_2M.BIAS"].sel(region="all", source="fcst")
+    assert list(result["station_group"].values) == ["all", "holdout", "holdin"]
+    assert bias.sel(station_group="holdout").item() == pytest.approx(1.0)
+    assert bias.sel(station_group="holdin").item() == pytest.approx(3.0)
+    assert bias.sel(station_group="all").item() == pytest.approx(err.mean())
+
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+    assert list(result["station_group"].values) == ["all"]

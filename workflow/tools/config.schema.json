@@ -296,6 +296,22 @@
           "$ref": "#/$defs/Dashboard",
           "description": "Settings for the experiment dashboard."
         },
+        "station_holdout": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "List of holdout station nat_abbr. When set, adds a 'station_group' dimension (all/holdout/holdin) to verification metrics for all models and baselines. The workflow writes the list to a CSV file and stages it as holdout_stations.csv in the working directory of every inference run whose config references that file.",
+          "title": "Station Holdout"
+        },
         "scorecards": {
           "anyOf": [
             {
@@ -1115,8 +1131,16 @@
       "type": "boolean"
     },
     "experiment": {
-      "$ref": "#/$defs/ExperimentConfig",
-      "description": "Settings for the experiment workflow outputs."
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExperimentConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Settings for the experiment workflow outputs. Required when running `evalml experiment`."
     },
     "locations": {
       "$ref": "#/$defs/Locations"
@@ -1158,7 +1182,6 @@
     "dates",
     "runs",
     "truth",
-    "experiment",
     "locations",
     "profile"
   ],

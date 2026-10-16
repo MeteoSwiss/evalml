@@ -168,20 +168,26 @@ def _stations_to_argv(stations: dict[str, Any]) -> list[str]:
     raise AssertionError("unreachable")
 
 
-def parse_selection(root: Any) -> tuple[dict[str, Any], str, str]:
-    """Parse a truth-root marker into (stations, stage, seq_type).
+def parse_selection(
+    root: Any,
+) -> tuple[dict[str, Any], str, str, int | None]:
+    """Parse a truth-root marker into (stations, stage, seq_type, use_limitation).
 
     Examples (slash-free so they survive ``Path()`` normalisation):
       ``jretrievedwh:SwissMetNet``                       -> group
       ``jretrievedwh:group=SwissMetNet;stage=devt``
       ``jretrievedwh:locations=ARO,KLO``
       ``jretrievedwh:bbox=45.8,47.8,5.9,10.5``
+      ``jretrievedwh:bbox=45.7,48.0,5.8,10.8;use_limitation=40``
+
+    Defaults when not given: use_limitation=40.
     """
     _, _, rest = str(root).partition(":")
     rest = rest.strip()
     stations: dict[str, Any] = {}
     stage = "prod"
     seq_type = "surface"
+    use_limitation: int | None = 40
     for i, part in enumerate([p for p in rest.split(";") if p]):
         if "=" not in part:
             if i == 0:
@@ -196,11 +202,13 @@ def parse_selection(root: Any) -> tuple[dict[str, Any], str, str]:
             stage = value
         elif key == "seq_type":
             seq_type = value
+        elif key == "use_limitation":
+            use_limitation = int(value)
         else:
             raise ValueError(f"Unknown jretrieve selector key: {key!r}")
     if not stations:
         stations = {"group": DEFAULT_GROUP}
-    return stations, stage, seq_type
+    return stations, stage, seq_type, use_limitation
 
 
 def _run(argv: list[str], env: dict[str, str], timeout_s: int) -> str:
@@ -299,7 +307,7 @@ def fetch_data(
     increment_minutes=60,
     seq_type="surface",
     stage="prod",
-    use_limitation: int = 40,
+    use_limitation: int | None = 40,
     timeout_s=600,
 ) -> pd.DataFrame:
     """Fetch observation data; columns: station (int), termin (YYYYMMDDhhmmss),
@@ -318,7 +326,8 @@ def fetch_data(
         "csv",
         *_stations_to_argv(stations),
     ]
-    argv += ["--use-limitation", str(use_limitation)]
+    if use_limitation is not None:
+        argv += ["--use-limitation", str(use_limitation)]
     LOG.info("jretrieve data: %s", " ".join(argv))
     return _parse_csv(_run_with_retry(argv, env=_build_env(stage), timeout_s=timeout_s))
 
