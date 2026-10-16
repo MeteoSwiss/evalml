@@ -216,41 +216,22 @@ use rule plot_scoremaps as plot_scoremaps_baseline with:
         / "logs/plot_scoremaps/{experiment}/{baseline_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",
 
 
-def _get_compare_baselines(wc) -> list[dict[str, str]]:
-    """Baselines selected for the side-by-side comparison maps."""
-    selected = COMPARISONS_CONFIG["baselines"]
-    baselines = _get_available_baselines(wc)
-    if selected is None:
-        return baselines
-    return [b for b in baselines if b["label"] in selected]
-
-
-def get_compare_leadtimes(run_id, param):
-    """Requested lead times produced by the run and by every selected baseline."""
-    requested = COMPARISONS_CONFIG["lead_times"]
-    leadtimes = set(resolve_leadtimes(RUN_CONFIGS[run_id]["steps"], requested, param))
-    selected = COMPARISONS_CONFIG["baselines"]
-    for cfg in BASELINE_CONFIGS.values():
-        if selected is None or cfg.get("label") in selected:
-            leadtimes &= set(resolve_leadtimes(cfg["steps"], requested, param))
-    return sorted(leadtimes)
-
-
-rule plot_compare_maps:
+rule compare_forecast_frames:
     input:
-        script="workflow/scripts/plot_compare_maps.py",
+        script="workflow/scripts/compare_forecast_frames.py",
         inference_okfile=rules.inference_execute.output.okfile,
     output:
         expand(
             OUT_ROOT
-            / "results/{{showcase}}/{{run_id}}/{{init_time}}/compare/{{init_time}}_{{leadtime}}_{{param}}_{region}.png",
+            / "results/{{showcase}}/{{run_id}}/{{init_time}}/compare/{{baseline}}/{{init_time}}_{{leadtime}}_{{param}}_{region}.png",
             region=list(COMPARISONS_CONFIG["regions"].keys()),
         ),
     log:
         OUT_ROOT
-        / "logs/{showcase}/{run_id}/{init_time}/plot_compare_maps_{leadtime}_{param}.log",
+        / "logs/{showcase}/{run_id}/{init_time}/compare_forecast_frames_{baseline}_{leadtime}_{param}.log",
     wildcard_constraints:
         leadtime=r"\d+",
+        baseline=r"[^/]+",
     resources:
         slurm_partition="postproc",
         cpus_per_task=4,
@@ -260,37 +241,23 @@ rule plot_compare_maps:
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id]["label"],
-        baseline_roots=lambda wc: [x["root"] for x in _get_compare_baselines(wc)],
-        baseline_labels=lambda wc: [x["label"] for x in _get_compare_baselines(wc)],
+        baseline_root=lambda wc: BASELINE_CONFIGS[resolve_baseline_id(wc.baseline)][
+            "root"
+        ],
         regions_json=json.dumps(COMPARISONS_CONFIG["regions"]),
         outdir=lambda wc: str(
             (
                 Path(OUT_ROOT)
-                / f"results/{wc.showcase}/{wc.run_id}/{wc.init_time}/compare"
+                / f"results/{wc.showcase}/{wc.run_id}/{wc.init_time}/compare/{wc.baseline}"
             ).resolve()
         ),
     shell:
         """
-        set -euo pipefail
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
-
-        BASELINE_ROOTS=({params.baseline_roots:q})
-        BASELINE_LABELS=({params.baseline_labels:q})
-
-        CMD_ARGS=(
-            --forecast {params.fcst_grib:q}
-            --forecast_label {params.fcst_label:q}
-            --date {wildcards.init_time:q}
-            --leadtime {wildcards.leadtime:q}
-            --param {wildcards.param:q}
-            --regions_json {params.regions_json:q}
-            --outdir {params.outdir:q}
-        )
-
-        for i in "${{!BASELINE_ROOTS[@]}}"; do
-            CMD_ARGS+=(--baseline "${{BASELINE_ROOTS[$i]}}")
-            CMD_ARGS+=(--baseline_label "${{BASELINE_LABELS[$i]}}")
-        done
-
-        uv run python {input.script} "${{CMD_ARGS[@]}}" >{log} 2>&1
+        uv run python {input.script} \
+            --forecast {params.fcst_grib:q} --forecast_label {params.fcst_label:q} \
+            --baseline {params.baseline_root:q} --baseline_label {wildcards.baseline:q} \
+            --date {wildcards.init_time:q} --leadtime {wildcards.leadtime:q} \
+            --param {wildcards.param:q} --regions_json {params.regions_json:q} \
+            --outdir {params.outdir:q} >{log} 2>&1
         """

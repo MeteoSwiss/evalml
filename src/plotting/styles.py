@@ -66,21 +66,32 @@ def preprocess_field(param: str, state: dict):
     Returns: (field_array, units_override or None)
     """
     fields = state["fields"]
-    if param in ("T_2M", "TD_2M", "T", "TD"):
-        return kelvin_to_celsius(fields[param]), "°C"
     if param == "SP_10M":
         return ekm_wind.speed(fields["U_10M"], fields["V_10M"]), "m/s"
     if param == "SP":
         return ekm_wind.speed(fields["U"], fields["V"]), "m/s"
+    return prepare_values(param, fields[param])
+
+
+def prepare_values(param: str, values):
+    """Unit conversion and clipping of an already derived ``param`` field.
+
+    Same as :func:`preprocess_field`, for callers that load derived params
+    (e.g. ``SP_10M``) directly. Returns: (field_array, units_override or None)
+    """
+    if param in ("T_2M", "TD_2M", "T", "TD"):
+        return kelvin_to_celsius(values), "°C"
+    if param in ("SP_10M", "SP"):
+        return values, "m/s"
     if param == "TOT_PREC":
-        return np.maximum(fields[param], 0), "mm"
+        return np.maximum(values, 0), "mm"
     if param in ("CLCT", "CLCL"):
         # Avoid exact 0/1 plateaus breaking tricontourf on orthographic
         # projections (tmp/reproduce_clct_bug.py). Pair with extend="neither".
         # Any new bounded field with silent-blank or GeometryCollection-crash
         # globe frames likely needs the same clip-away-from-boundary fix.
-        return np.clip(fields[param], 1e-6, 1 - 1e-6), None
+        return np.clip(values, 1e-6, 1 - 1e-6), None
     if param == "SSRD":
         # Same issue, bottom boundary only (night-side plateau).
-        return np.maximum(fields[param], 1e-6), None
-    return fields[param], None
+        return np.maximum(values, 1e-6), None
+    return values, None

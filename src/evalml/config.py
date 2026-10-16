@@ -342,13 +342,13 @@ class ComparisonsConfig(BaseModel):
 
     enabled: bool = Field(
         default=False,
-        description="Whether to generate side-by-side maps of each run and the selected baselines.",
+        description="Whether to generate side-by-side maps of each run and each selected baseline.",
     )
-    baselines: List[str] | None = Field(
-        default=None,
+    baselines: List[str] = Field(
+        default_factory=list,
         description=(
-            "Labels of the baselines to show next to each run. "
-            "None (default) means all baselines in the config."
+            "Labels of the baselines to compare each run with, one plot per baseline. "
+            "Required (non-empty) when comparisons are enabled."
         ),
     )
     domains: List[str | DomainConfig] = Field(
@@ -358,19 +358,24 @@ class ComparisonsConfig(BaseModel):
             "defined in plotting.DOMAINS or a custom domain dict."
         ),
     )
-    params: List[str] = Field(
-        default=["SP_10M"],
-        description="Parameters to plot.",
-    )
     lead_times: List[int] = Field(
         default=[24],
         description=(
-            "Lead times (hours) to plot. Lead times not produced by the run or by "
-            "a selected baseline are skipped."
+            "Lead times (hours) to plot. A run or baseline without data at a lead "
+            "time is shown as an empty panel."
         ),
     )
 
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _enabled_requires_baselines(self):
+        if self.enabled and not self.baselines:
+            raise ValueError(
+                "comparisons.baselines must list the baseline labels to compare "
+                "when comparisons are enabled."
+            )
+        return self
 
 
 class ScorecardConfig(BaseModel):

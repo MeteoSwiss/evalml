@@ -444,8 +444,7 @@ _comparisons = _showcase.get("comparisons", {})
 COMPARISONS_CONFIG = {
     "enabled": _comparisons.get("enabled", False),
     "regions": parse_showcase_regions(_comparisons.get("domains", ["alps"])),
-    "params": _comparisons.get("params", ["SP_10M"]),
-    "baselines": _comparisons.get("baselines"),
+    "baselines": _comparisons.get("baselines", []),
     "lead_times": _comparisons.get("lead_times", [24]),
 }
 EXPERIMENT_PARAMS = config.get("experiment", {}).get(

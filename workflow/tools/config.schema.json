@@ -94,25 +94,17 @@
       "properties": {
         "enabled": {
           "default": false,
-          "description": "Whether to generate side-by-side maps of each run and the selected baselines.",
+          "description": "Whether to generate side-by-side maps of each run and each selected baseline.",
           "title": "Enabled",
           "type": "boolean"
         },
         "baselines": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Labels of the baselines to show next to each run. None (default) means all baselines in the config.",
-          "title": "Baselines"
+          "description": "Labels of the baselines to compare each run with, one plot per baseline. Required (non-empty) when comparisons are enabled.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Baselines",
+          "type": "array"
         },
         "domains": {
           "default": [
@@ -132,22 +124,11 @@
           "title": "Domains",
           "type": "array"
         },
-        "params": {
-          "default": [
-            "SP_10M"
-          ],
-          "description": "Parameters to plot.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Params",
-          "type": "array"
-        },
         "lead_times": {
           "default": [
             24
           ],
-          "description": "Lead times (hours) to plot. Lead times not produced by the run or by a selected baseline are skipped.",
+          "description": "Lead times (hours) to plot. A run or baseline without data at a lead time is shown as an empty panel.",
           "items": {
             "type": "integer"
           },

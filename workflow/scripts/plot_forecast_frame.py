@@ -5,8 +5,7 @@ from pathlib import Path
 
 import cartopy.crs as ccrs
 
-from plotting import DOMAINS
-from plotting import get_projection
+from plotting import resolve_region
 from plotting import StatePlotter
 from plotting.compat import load_state_from_grib
 from plotting.styles import get_style
@@ -108,22 +107,7 @@ def main():
         LOG.info("Plotting region %s", region_name)
         outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
         plotter = StatePlotter(state["longitudes"], state["latitudes"], outdir)
-        if region_cfg.get("extent") is not None:
-            projection = get_projection(region_cfg.get("projection") or "orthographic")
-            extent = region_cfg["extent"]
-        elif region_cfg.get("rotate"):
-            base = DOMAINS[region_name]["projection"].proj4_params
-            central_longitude = (
-                base["lon_0"] + 360.0 * lead_time / region_cfg["hours_per_revolution"]
-            ) % 360
-            #  central_longitude=central_longitude, central_latitude=0.0 for zero-centered
-            projection = ccrs.Orthographic(
-                central_longitude=central_longitude, central_latitude=base["lat_0"]
-            )
-            extent = DOMAINS[region_name]["extent"]
-        else:
-            projection = DOMAINS[region_name]["projection"]
-            extent = DOMAINS[region_name]["extent"]
+        projection, extent = resolve_region(region_name, region_cfg, lead_time)
         fig = plotter.init_geoaxes(
             nrows=1,
             ncols=1,
