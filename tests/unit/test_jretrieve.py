@@ -37,11 +37,13 @@ def test_parse_selection_default_group():
         {"group": "SwissMetNet"},
         "prod",
         "surface",
+        40,
     )
     assert jr.parse_selection("jretrievedwh:SwissMetNet") == (
         {"group": "SwissMetNet"},
         "prod",
         "surface",
+        40,
     )
 
 
@@ -50,6 +52,18 @@ def test_parse_selection_keyvalue_and_stage():
         {"locations": "ARO,KLO"},
         "devt",
         "surface",
+        40,
+    )
+
+
+def test_parse_selection_bbox_and_use_limitation():
+    assert jr.parse_selection(
+        "jretrievedwh:bbox=45.7,48.0,5.8,10.8;use_limitation=20"
+    ) == (
+        {"bbox": "45.7,48.0,5.8,10.8"},
+        "prod",
+        "surface",
+        20,
     )
 
 
