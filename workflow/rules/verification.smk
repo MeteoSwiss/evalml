@@ -33,7 +33,7 @@ rule verification_metrics_baseline:
         truth_source_id=f"truth-{TRUTH_HASH}",
         regions=REGIONS,
         experiment_params=",".join(EXPERIMENT_PARAMS),
-        threshold_dict=config["experiment"]["thresholds"],
+        threshold_dict=EXPERIMENT_CONFIG.get("thresholds", {}),
         holdout_flag=lambda wc, input: (
             f"--holdout_stations_file {input.holdout}" if input.holdout else ""
         ),
@@ -98,7 +98,7 @@ rule verification_metrics:
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
         experiment_params=",".join(EXPERIMENT_PARAMS),
-        threshold_dict=config["experiment"]["thresholds"],
+        threshold_dict=EXPERIMENT_CONFIG.get("thresholds", {}),
         holdout_flag=lambda wc, input: (
             f"--holdout_stations_file {input.holdout}" if input.holdout else ""
         ),

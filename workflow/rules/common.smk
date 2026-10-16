@@ -8,6 +8,8 @@ from urllib.parse import urlparse
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
+# the experiment block is optional (e.g. for showcase/sandbox configs)
+EXPERIMENT_CONFIG = config.get("experiment") or {}
 
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
 HASH_LENGTH = 4
@@ -88,7 +90,7 @@ def parse_regions():
     """
     from evalml.config import PREDEFINED_REGIONS
 
-    cfg = config["experiment"]["stratification"]
+    cfg = EXPERIMENT_CONFIG.get("stratification", {})
     root = cfg.get("root", "")
     result = []
     for entry in cfg.get("regions", []):
@@ -447,7 +449,7 @@ if "jretrieve" in str(config["truth"]["root"]):
 
 
 TRUTH_HASH = truth_hash(config["truth"])
-HOLDOUT_STATIONS = sorted(config.get("experiment", {}).get("station_holdout") or [])
+HOLDOUT_STATIONS = sorted(EXPERIMENT_CONFIG.get("station_holdout") or [])
 HOLDOUT_FILE = (
     OUT_ROOT / f"data/station_holdout/{generate_json_hash(HOLDOUT_STATIONS)}.csv"
 )
@@ -460,7 +462,7 @@ SHOWCASE_CONFIG = {
     "params": _showcase.get("params", ["T_2M", "SP_10M"]),
     "fps": _showcase.get("animations", {}).get("frames_per_second", 2.0),
 }
-EXPERIMENT_PARAMS = config.get("experiment", {}).get(
+EXPERIMENT_PARAMS = EXPERIMENT_CONFIG.get(
     "params", ["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"]
 )
 REFTIMES = parse_reference_times()
@@ -478,7 +480,7 @@ if not HOLDOUT_STATIONS:
                 f"references {HOLDOUT_WORKDIR_NAME}, but experiment.station_holdout "
                 "is not set."
             )
-_scorecard = config.get("experiment", {}).get("scorecards") or {}
+_scorecard = EXPERIMENT_CONFIG.get("scorecards") or {}
 SCORECARD_CONFIGS = (
     _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
 )

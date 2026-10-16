@@ -698,9 +698,9 @@ class ConfigModel(BaseModel):
         default=True,
         description="Apply lapse-rate correction to T_2M (0.0065 K/m) and PS (11.5 Pa/m).",
     )
-    experiment: ExperimentConfig = Field(
-        ...,
-        description="Settings for the experiment workflow outputs.",
+    experiment: ExperimentConfig | None = Field(
+        None,
+        description="Settings for the experiment workflow outputs. Required when running `evalml experiment`.",
     )
     locations: Locations
     profile: Profile
@@ -719,7 +719,7 @@ class ConfigModel(BaseModel):
 
     @model_validator(mode="after")
     def validate_scoremap_leadtimes(self) -> "ConfigModel":
-        sm = self.experiment.scoremaps
+        sm = self.experiment.scoremaps if self.experiment else None
         if sm is None or not sm.enabled:
             return self
         requested = set(sm.leadtimes)
