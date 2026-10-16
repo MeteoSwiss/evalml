@@ -1,5 +1,6 @@
 import logging
 import copy
+import re
 from datetime import datetime, timedelta
 import yaml
 import hashlib
@@ -518,6 +519,10 @@ def resolve_leadtimes(steps_spec, requested="all", param=None):
         )
 
     valid = wanted & supported
-    if param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
+    # Showcase-facing names encode an accumulation window as a numeric suffix
+    # (e.g. "TOT_PREC1", "TOT_PREC6"); strip it before checking membership so
+    # those aggregated variants are recognized the same as their base param.
+    base_param = re.sub(r"\d+$", "", param) if param else param
+    if param in PARAMS_WITHOUT_STEP_ZERO_VALUE or base_param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
         valid = {lt for lt in valid if lt >= step}
     return sorted(valid)
