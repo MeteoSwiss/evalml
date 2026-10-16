@@ -282,5 +282,13 @@ class StatePlotter:
     ) -> tuple[Triangulation, np.ndarray]:
         """Compute the triangulation for an orthographic-family projection."""
         x, y, _ = proj.transform_points(ccrs.PlateCarree(), self.lon, self.lat).T
-        mask = ~(np.isnan(x) | np.isnan(y))
+        # Drop limb points falling just outside the projection limits (cartopy
+        # shrinks them slightly below the globe radius). Contour vertices beyond
+        # the limits make cartopy re-project the paths via shapely instead of
+        # passing them through, which can turn a band's holes inside out and
+        # paint it over the whole globe.
+        x_min, x_max = proj.x_limits
+        y_min, y_max = proj.y_limits
+        with np.errstate(invalid="ignore"):
+            mask = (x >= x_min) & (x <= x_max) & (y >= y_min) & (y <= y_max)
         return Triangulation(x[mask], y[mask]), mask
