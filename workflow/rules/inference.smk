@@ -123,10 +123,16 @@ rule inference_prepare_env:
 
                 echo "[$(date)] Cloning eccodes-cosmo-mars (varda-ext branch) for MARS definitions..."
                 mkdir -p "$VENV/data/share"
-                git clone --branch varda-ext --depth 1 \
+                # Pinned to d043635 (pre "add a grid Name") rather than a bare
+                # --depth 1 branch clone: f9b4603 adds a mars.gridName concept
+                # that the current realtime-varda.schema doesn't account for,
+                # breaking FDB archival with a "Keywords not used" error.
+                # Un-pin once the schema is updated to match.
+                git clone --branch varda-ext \
                     git@github.com:meteoswiss/eccodes-cosmo-mars.git \
                     "$VENV/data/share/eccodes-cosmo-mars"
-                echo "[$(date)] Cloned eccodes-cosmo-mars definitions"
+                git -C "$VENV/data/share/eccodes-cosmo-mars" checkout d04363540bb24b1fd432dce2b1e65ba0f27ba591
+                echo "[$(date)] Cloned eccodes-cosmo-mars definitions (pinned to d043635)"
 
                 # metkitlib (pulled in by pyfdb) ships its own language.yaml, used to
                 # validate fdb.retrieve() requests. Our custom `model` values (added
@@ -293,9 +299,9 @@ checkpoint inference_check_fdb:
                 # is a pre-provisioned system directory, but there's no such slot for a second
                 # image, so the venv gets a job-local directory we create ourselves.
                 VENV_MOUNT=$(mktemp -d)
-                trap "rmdir '$VENV_MOUNT'" EXIT
+                trap "rmdir '$VENV_MOUNT' 2>/dev/null || true" EXIT
                 FDB_SQUASHFS=$(uenv image inspect --format='{{sqfs}}' {params.fdb_uenv})
-                squashfs-mount {params.image_path}:$VENV_MOUNT "$FDB_SQUASHFS:/user-environment" -- bash -c '
+                squashfs-mount -s "{params.image_path}:$VENV_MOUNT,$FDB_SQUASHFS:/user-environment" -- bash -c '
                     source '"$VENV_MOUNT"'/bin/activate
                     export LD_LIBRARY_PATH=/user-environment/env/{params.fdb_view}/lib64:/user-environment/env/{params.fdb_view}/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}
                     python {input.script} '"$GLOBAL_ARG"' \
@@ -568,7 +574,7 @@ FDBEOF
             # mount around srun is fine; two images at once are not.
             VENV_MOUNT="{params.workdir}/.venv-mount"
             mkdir -p "$VENV_MOUNT"
-            trap "rmdir '$VENV_MOUNT'" EXIT
+            trap "rmdir '$VENV_MOUNT' 2>/dev/null || true" EXIT
 
             MOUNT_ARGS=("{params.env_path}:$VENV_MOUNT")
             INNER_CMD="_run_inference $VENV_MOUNT"
@@ -586,7 +592,7 @@ FDBEOF
                 --time={resources.runtime} \
                 --gres={resources.gres} \
                 --ntasks={resources.ntasks} \
-                squashfs-mount "${{MOUNT_ARGS[@]}}" -- bash -c "$INNER_CMD"
+                squashfs-mount -s "$(IFS=,; echo "${{MOUNT_ARGS[*]}}")" -- bash -c "$INNER_CMD"
         ) >{log} 2>&1 && touch {output.okfile}
         """
 # fmt: on
