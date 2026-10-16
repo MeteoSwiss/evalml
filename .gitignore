@@ -55,3 +55,12 @@ uv.lock
 
 # evalml
 .evalml_snakemake_cmd.txt
+
+# Core dumps
+core_*
+
+# Local clone of MeteoSwiss's eccodes-cosmo-mars (MARS-namespace GRIB
+# definitions needed for FDB reads outside the squashfs-mounted venv, see
+# workflow/rules/plot.smk and verification.smk). Not vendored: each checkout
+# clones it locally, same as the one baked into the inference venv.
+/eccodes-cosmo-mars/
