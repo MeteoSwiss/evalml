@@ -100,7 +100,7 @@ def main(args: Namespace) -> None:
     # 2) For sources present in multiple datasets, keep the one with most lead_times
     dfs = _select_best_sources(dfs)
     # 3) Concatenate by source; outer join to keep the union of lead_times
-    ds = xr.concat(dfs, dim="source", join="outer")
+    ds = xr.concat(dfs, dim="source", join="outer", coords="minimal")
 
     # extract only  non-spatial variables to pd.DataFrame
     nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
