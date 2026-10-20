@@ -176,6 +176,7 @@ rule inference_prepare_forecaster:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
+        holdout=lambda wc: holdout_dep(wc) if run_uses_holdout(wc.run_id) else [],
     output:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
@@ -188,6 +189,7 @@ rule inference_prepare_forecaster:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
+        holdout_workdir_name=HOLDOUT_WORKDIR_NAME,
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
@@ -206,6 +208,7 @@ rule inference_prepare_temporal_downscaler:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
+        holdout=lambda wc: holdout_dep(wc) if run_uses_holdout(wc.run_id) else [],
         forecasts=lambda wc: (
             [
                 OUT_ROOT
@@ -230,6 +233,7 @@ rule inference_prepare_temporal_downscaler:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
+        holdout_workdir_name=HOLDOUT_WORKDIR_NAME,
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
@@ -318,7 +322,11 @@ rule inference_execute:
                     CMD_ARGS+=(runner.parallel.cluster=slurm)
                 fi
 
-                anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+                # Equivalent to `anemoi-inference run`, but imports pyproj before eccodes:
+                # the eckitlib wheel bundles its own PROJ, which aborts at exit (double free)
+                # if loaded before pyproj. See https://github.com/ecmwf/eckit/issues/354
+                python -c 'import sys, importlib.util; importlib.util.find_spec("pyproj") and __import__("pyproj"); from anemoi.inference.__main__ import main; sys.argv[0] = "anemoi-inference"; sys.exit(main())' \
+                    run config.yaml "${{CMD_ARGS[@]}}"
             }}
             export -f _run_inference
 

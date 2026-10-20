@@ -106,12 +106,13 @@ def test_aggregate_results_n_samples_by_season_and_init_hour():
 
 @pytest.fixture
 def make_lapse_rate_datasets():
-    def _make(fcst_elev, obs_elev, t2m=280.0, td2m=270.0):
+    def _make(fcst_elev, obs_elev, t2m=280.0, td2m=270.0, ps=90000.0):
         n = len(fcst_elev)
         fcst = xr.Dataset(
             {
                 "T_2M": (["step", "values"], np.full((3, n), t2m, dtype=np.float32)),
                 "TD_2M": (["step", "values"], np.full((3, n), td2m, dtype=np.float32)),
+                "PS": (["step", "values"], np.full((3, n), ps, dtype=np.float32)),
             },
             coords={"elevation": ("values", np.array(fcst_elev, dtype=np.float32))},
         )
@@ -144,6 +145,22 @@ def test_lapse_rate_correction_station_below_grid(make_lapse_rate_datasets):
     np.testing.assert_allclose(fcst["T_2M"].values, 280.0 + 0.0065 * 300.0, atol=1e-4)
 
 
+def test_lapse_rate_correction_surface_pressure(make_lapse_rate_datasets):
+    # Station 500 m above forecast grid cell → PS should decrease by 11.5 * 500 = 5750 Pa
+    fcst, obs = make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
+    apply_lapse_rate_correction_inplace(fcst, obs, ["T_2M", "PS"])
+    np.testing.assert_allclose(fcst["PS"].values, 90000.0 - 11.5 * 500.0, atol=1e-2)
+
+
+def test_lapse_rate_correction_surface_pressure_station_below_grid(
+    make_lapse_rate_datasets,
+):
+    # Station 300 m below forecast grid → PS should increase by 11.5 * 300 = 3450 Pa
+    fcst, obs = make_lapse_rate_datasets(fcst_elev=[800.0], obs_elev=[500.0])
+    apply_lapse_rate_correction_inplace(fcst, obs, ["PS"])
+    np.testing.assert_allclose(fcst["PS"].values, 90000.0 + 11.5 * 300.0, atol=1e-2)
+
+
 def test_lapse_rate_correction_raises_without_forecast_elevation(
     make_lapse_rate_datasets,
 ):
@@ -161,11 +178,12 @@ def test_lapse_rate_correction_raises_without_obs_elevation(make_lapse_rate_data
 
 
 def test_lapse_rate_correction_only_requested_params(make_lapse_rate_datasets):
-    # Pass only T_2M in params — TD_2M should not be corrected
+    # Pass only T_2M in params — TD_2M and PS should not be corrected
     fcst, obs = make_lapse_rate_datasets(fcst_elev=[500.0], obs_elev=[1000.0])
     apply_lapse_rate_correction_inplace(fcst, obs, ["T_2M"])
     np.testing.assert_allclose(fcst["T_2M"].values, 280.0 - 0.0065 * 500.0, atol=1e-4)
     np.testing.assert_array_equal(fcst["TD_2M"].values, 270.0)
+    np.testing.assert_array_equal(fcst["PS"].values, 90000.0)
 
 
 # ---------------------------------------------------------------------------
@@ -282,3 +300,66 @@ def test_verify_obs_stats_not_masked_by_forecast_gaps():
     assert not np.isnan(obs_mean), (
         "Obs mean should not be NaN when obs data is complete"
     )
+
+
+def test_load_holdout_stations(tmp_path):
+    """Station codes round-trip through the holdout CSV, including NaN-like ones."""
+    from verification_metrics import load_holdout_stations
+
+    path = tmp_path / "holdout.csv"
+    path.write_text("nat_abbr\nCHM\nNA\nFRE\n")
+    assert load_holdout_stations(path) == ["CHM", "NA", "FRE"]
+
+
+@pytest.mark.parametrize(
+    "truth_root, values, expected",
+    [
+        # station truth: stations missing from the truth are dropped
+        ("jretrievedwh:bbox=45.7,48.0,5.8,10.8", ["CHM", "FRE", "KLO"], ["CHM"]),
+        # station truth without any of the holdout stations
+        ("jretrievedwh:SwissMetNet", ["KLO", "LUG"], None),
+        # gridded truth on an unstructured grid also has a values dimension
+        ("/data/analysis.zarr", [0, 1, 2], None),
+        # a zarr is gridded even if its path mentions jretrieve
+        ("/data/jretrieve-comparison/analysis.zarr", [0, 1, 2], None),
+    ],
+)
+def test_select_holdout_stations(truth_root, values, expected):
+    """Holdout stations are only used with station truth, restricted to its stations."""
+    from verification_metrics import select_holdout_stations
+
+    truth = xr.Dataset(
+        {"T_2M": ("values", np.zeros(len(values)))}, coords={"values": values}
+    )
+    assert select_holdout_stations(["CHM", "BAS"], truth, Path(truth_root)) == expected
+
+
+def test_verify_station_groups_split_holdout_and_holdin():
+    """With holdout stations, scores are computed separately for all, holdout and
+    holdin stations; without, only the "all" group is present."""
+    stations = ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"]
+    coords = _station_coords(len(stations)) | {"values": ("values", stations)}
+    # Forecast error 1 at the holdout stations (BBB, EEE), 3 at the others.
+    err = np.array([3, 1, 3, 3, 1, 3], dtype=np.float32)
+    fcst = xr.Dataset({"T_2M": ("values", err)}, coords=coords)
+    obs = xr.Dataset(
+        {"T_2M": ("values", np.zeros(len(stations), np.float32))}, coords=coords
+    )
+
+    result = verify(
+        fcst,
+        obs,
+        "fcst",
+        "obs",
+        regions=_REGION,
+        num_workers=1,
+        holdout_stations=["BBB", "EEE"],
+    )
+    bias = result["T_2M.BIAS"].sel(region="all", source="fcst")
+    assert list(result["station_group"].values) == ["all", "holdout", "holdin"]
+    assert bias.sel(station_group="holdout").item() == pytest.approx(1.0)
+    assert bias.sel(station_group="holdin").item() == pytest.approx(3.0)
+    assert bias.sel(station_group="all").item() == pytest.approx(err.mean())
+
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+    assert list(result["station_group"].values) == ["all"]
