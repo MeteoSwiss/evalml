@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Override for ImageMagick's system policy.xml, which caps "area" at 16KP
+  (16 thousand pixels -- smaller than almost any real image) as a security
+  hardening measure. A system policy.xml is a hard ceiling that the `-limit`
+  CLI flag cannot raise, so make_forecast_animation's `convert` call to
+  assemble ~120 full-resolution frames into a GIF silently failed with
+  "cache resources exhausted" / "TooManyExceptions" even with generous
+  -limit flags. Point MAGICK_CONFIGURE_PATH at this file's directory to
+  use these limits instead -- generous enough for this workflow's frames,
+  not unbounded.
+-->
+<policymap>
+  <policy domain="resource" name="memory" value="4GiB"/>
+  <policy domain="resource" name="map" value="8GiB"/>
+  <policy domain="resource" name="area" value="4GP"/>
+  <policy domain="resource" name="disk" value="8GiB"/>
+  <policy domain="resource" name="width" value="32KP"/>
+  <policy domain="resource" name="height" value="32KP"/>
+  <policy domain="resource" name="list-length" value="1024"/>
+</policymap>

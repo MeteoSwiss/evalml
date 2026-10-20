@@ -227,6 +227,14 @@ rule make_forecast_animation:
     shell:
         """
         FRAMES=$(for f in {input}; do [ -s "$f" ] && echo "$f"; done | tr '\\n' ' ')
+        # The system ImageMagick policy.xml caps "area" at 16KP (16 thousand
+        # pixels -- smaller than almost any real image) as a hardening
+        # measure; that's a hard ceiling the -limit CLI flag cannot raise, so
+        # assembling ~120 full-resolution frames into a GIF silently failed
+        # ("cache resources exhausted" / "TooManyExceptions"). Point
+        # MAGICK_CONFIGURE_PATH at our own policy.xml with generous (not
+        # unbounded) limits instead.
+        export MAGICK_CONFIGURE_PATH=$(realpath resources/imagemagick)
         convert -delay {params.delay} -loop 0 $FRAMES {output}
         """
 
