@@ -17,6 +17,47 @@ input:
                   scale: 0.001 # convert from kg m-2 to m
                   offset: 0
                   param: TOT_PREC
+            # filters see the model name (tcc) with anemoi-inference <= 0.11.1 and the GRIB name (CLCT) from 0.11.2
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: tcc
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: CLCT
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: lcc
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: CLCL
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: mcc
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: CLCM
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: hcc
+            - forward_transform_filter: # cloud cover percent -> fraction, as in training
+                rescale:
+                  scale: 0.01
+                  offset: 0
+                  param: CLCH
           namer: &namer
             rules:
               # ICON short names (uppercase)
@@ -42,8 +83,16 @@ input:
                 - 2t
               - - shortName: TD_2M
                 - 2d
-              - - shortName: T_G
+              - - shortName: SKT
                 - skt
+              - - shortName: CLCT
+                - tcc
+              - - shortName: CLCL
+                - lcc
+              - - shortName: CLCM
+                - mcc
+              - - shortName: CLCH
+                - hcc
               - - shortName: U_10M
                 - 10u
               - - shortName: V_10M
@@ -51,46 +100,6 @@ input:
               - - shortName: FR_LAND
                 - lsm
               - - shortName: TOT_PREC
-                - tp
-              # IFS short names (lowercase) for the global grid output
-              - - shortName: t
-                  levtype: pl
-                - t_{level}
-              - - shortName: u
-                  levtype: pl
-                - u_{level}
-              - - shortName: v
-                  levtype: pl
-                - v_{level}
-              - - shortName: w
-                  levtype: pl
-                - w_{level}
-              - - shortName: q
-                  levtype: pl
-                - q_{level}
-              - - shortName: z
-                  levtype: pl
-                - z_{level}
-              - - shortName: z
-                  levtype: sfc
-                - z
-              - - shortName: 10u
-                - 10u
-              - - shortName: 10v
-                - 10v
-              - - shortName: 2t
-                - 2t
-              - - shortName: 2d
-                - 2d
-              - - shortName: msl
-                - msl
-              - - shortName: sp
-                - sp
-              - - shortName: lsm
-                - lsm
-              - - shortName: skt
-                - skt
-              - - shortName: tp
                 - tp
     - global:
         grib:
@@ -131,6 +140,47 @@ output:
           - extract_mask: # removes global points
               mask: "lam_0/cutout_mask"
               as_slice: true
+          # filters see the model name (tcc) with anemoi-inference <= 0.11.1 and the GRIB name (CLCT) from 0.11.2
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: tcc
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: CLCT
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: lcc
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: CLCL
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: mcc
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: CLCM
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: hcc
+          - forward_transform_filter: # cloud cover fraction -> percent, before copy-prognostic
+              rescale:
+                scale: 100
+                offset: 0
+                param: CLCH
 
     - fdb:
         encoding:
@@ -175,6 +225,14 @@ output:
                 slor: {"param": 163, "shortName": "slor"}
                 SSO_STDH: {"param": 160, "shortName": "sdor"}
                 sdor: {"param": 160, "shortName": "sdor"}
+                CLCT: {"param": 164, "shortName": "tcc"}
+                tcc: {"param": 164, "shortName": "tcc"}
+                CLCL: {"param": 186, "shortName": "lcc"}
+                lcc: {"param": 186, "shortName": "lcc"}
+                CLCM: {"param": 187, "shortName": "mcc"}
+                mcc: {"param": 187, "shortName": "mcc"}
+                CLCH: {"param": 188, "shortName": "hcc"}
+                hcc: {"param": 188, "shortName": "hcc"}
                 TOT_PREC: {"param": 228, "shortName": "tp"}
                 tp: {"param": 228, "shortName": "tp"}
                 z: {"param": 129, "shortName": "z"}
