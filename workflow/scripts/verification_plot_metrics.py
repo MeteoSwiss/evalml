@@ -85,7 +85,7 @@ def _concat_sources(dfs: list[xr.Dataset]) -> xr.Dataset:
     participants that provide the parameter and would make the concatenation fail.
     """
     dfs = [d.drop_vars([c for c in d.coords if c.endswith(".threshold")]) for d in dfs]
-    return xr.concat(dfs, dim="source", join="outer")
+    return xr.concat(dfs, dim="source", join="outer", coords="minimal")
 
 
 def subset_df(df, **kwargs):

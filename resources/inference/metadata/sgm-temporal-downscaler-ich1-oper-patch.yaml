@@ -59,6 +59,14 @@ dataset:
         mars: {date: 20050101, levtype: sfc, param: TD_2M, step: 12, time: 0}
       2t:
         mars: {date: 20050101, levtype: sfc, param: T_2M, step: 12, time: 0}
+      tcc:
+        mars: {date: 20050101, levtype: sfc, param: CLCT, step: 12, time: 0}
+      lcc:
+        mars: {date: 20050101, levtype: sfc, param: CLCL, step: 12, time: 0}
+      mcc:
+        mars: {date: 20050101, levtype: sfc, param: CLCM, step: 12, time: 0}
+      hcc:
+        mars: {date: 20050101, levtype: sfc, param: CLCH, step: 12, time: 0}
       cos_julian_day:
         computed_forcing: true
         constant_in_time: false
@@ -118,7 +126,7 @@ dataset:
       sp:
         mars: {date: 20050101, levtype: sfc, param: PS, step: 12, time: 0}
       skt:
-        mars: {date: 20050101, levtype: sfc, param: T_G, step: 12, time: 0}
+        mars: {date: 20050101, levtype: sfc, param: SKT, step: 12, time: 0}
       t_100:
         mars: {date: 20050101, levelist: 100, levtype: pl, param: T, step: 12, time: 0}
       t_1000:
