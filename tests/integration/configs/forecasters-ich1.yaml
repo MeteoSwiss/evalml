@@ -2,9 +2,9 @@
 description: |
   Evaluate skill of ICON-CH1 single.
 
-# Explicit list, not start/end/frequency: 
-# covers two seasons and init times, and has two inits in each bucket, 
-# to meaningfully test aggregation. 
+# Explicit list, not start/end/frequency:
+# covers two seasons and init times, and has two inits in each bucket,
+# to meaningfully test aggregation.
 dates:
   - 2025-04-01T00:00
   - 2025-04-01T06:00

@@ -24,8 +24,10 @@ OUTPUT_ROOT = PROJECT_ROOT / _CFG["locations"]["output_root"]
 # the frozen fixture and obs come from the frozen ver_synop_root, so no
 # GPU/MLflow is needed. Observed runtime on Balfrin: ~5 min.
 # Disable test until MEC container workflow is updated for linard / new balfrin.
-#@pytest.mark.longtest
-@pytest.mark.skipif(not shutil.which("sarus"), reason="sarus not enabled on this runner")
+# @pytest.mark.longtest
+@pytest.mark.skipif(
+    not shutil.which("sarus"), reason="sarus not enabled on this runner"
+)
 def test_mec_produces_feedback_files():
     """Run `evalml experiment ... --mec` end to end and check fdbk_files are produced.
 

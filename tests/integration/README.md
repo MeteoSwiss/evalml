@@ -52,7 +52,7 @@ has drifted (corrupted, partial, or hand-edited); fixtures captured before
 checksums existed simply skip the check.
 
 **Important note:** The test fixtures must always be regenerated, even when you
-just wish to move the location of the test fixture files. The `MANIFEST.yaml` file 
+just wish to move the location of the test fixture files. The `MANIFEST.yaml` file
 that is generated contains absolute paths to the files, so moving them without
 generating a new manifest will cause an error.
 
