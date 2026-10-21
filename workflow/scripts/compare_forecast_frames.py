@@ -1,7 +1,8 @@
-"""Plot side-by-side maps of an ML run and a baseline at a common valid time."""
+"""Plot side-by-side maps of the truth, ML runs and baselines at a common valid time."""
 
 import json
 import logging
+import math
 from argparse import ArgumentParser
 from datetime import datetime
 from datetime import timedelta
@@ -11,6 +12,7 @@ import earthkit.plots as ekp
 import numpy as np
 
 from data_input import load_forecast_data
+from data_input import load_truth_data
 from data_input import parse_aggregated_param
 from plotting import resolve_region
 from plotting import StatePlotter
@@ -24,9 +26,7 @@ logging.basicConfig(
 )
 
 
-def load_source(root, init_time, lead_time, param):
-    """Return (lon, lat, values) as flat arrays."""
-    ds = load_forecast_data(root, init_time, [lead_time], [param]).squeeze()
+def _flat(ds, param):
     base_param, _ = parse_aggregated_param(param)
     values, _ = prepare_values(base_param, np.asarray(ds[param].values).ravel())
     lon = np.asarray(ds["longitude"].values).ravel()
@@ -34,12 +34,38 @@ def load_source(root, init_time, lead_time, param):
     return lon, lat, values
 
 
+def load_source(root, init_time, lead_time, param):
+    """Return (lon, lat, values) as flat arrays."""
+    ds = load_forecast_data(root, init_time, [lead_time], [param]).squeeze()
+    return _flat(ds, param)
+
+
+def load_truth(root, init_time, lead_time, param):
+    """Return (lon, lat, values) of the truth at the valid time as flat arrays."""
+    ds = load_truth_data(Path(root), init_time, [lead_time], [param])
+    valid_time = np.datetime64(init_time + timedelta(hours=lead_time))
+    return _flat(ds.sel(time=valid_time).squeeze(), param)
+
+
+def parse_source(text):
+    """'label=root' -> (label, root); the label may not contain '='."""
+    label, sep, root = text.partition("=")
+    if not sep or not label or not root:
+        raise ValueError(f"Expected 'label=root', got {text!r}")
+    return label, root
+
+
 def main():
     parser = ArgumentParser()
-    parser.add_argument("--forecast", type=str, help="Directory to ML run grib data")
-    parser.add_argument("--forecast_label", type=str, default="Forecast")
-    parser.add_argument("--baseline", type=str, help="Baseline root")
-    parser.add_argument("--baseline_label", type=str, default="Baseline")
+    parser.add_argument(
+        "--source",
+        action="append",
+        default=[],
+        type=parse_source,
+        help="Panel as 'label=root' (ML run grib dir or baseline root), repeatable.",
+    )
+    parser.add_argument("--truth", type=str, default=None, help="Truth root (zarr)")
+    parser.add_argument("--truth_label", type=str, default="Truth")
     parser.add_argument("--date", type=str, help="reference datetime")
     parser.add_argument("--leadtime", type=int, help="leadtime")
     parser.add_argument("--param", type=str, help="parameter")
@@ -59,15 +85,14 @@ def main():
     outdir.mkdir(parents=True, exist_ok=True)
     valid_time = init_time + timedelta(hours=lead_time)
 
-    sources = [
-        (args.forecast_label, args.forecast),
-        (args.baseline_label, args.baseline),
-    ]
+    panels = [(label, root, load_source) for label, root in args.source]
+    if args.truth:
+        panels.insert(0, (args.truth_label, args.truth, load_truth))
     data = {}
-    for label, root in sources:
+    for label, root, loader in panels:
         LOG.info("Loading '%s' from %s", label, root)
         try:
-            lon, lat, values = load_source(root, init_time, lead_time, param)
+            lon, lat, values = loader(root, init_time, lead_time, param)
         except Exception:
             # Loaders fail in different ways for lead times a source does not
             # provide (outside its steps, no accumulation window, ...).
@@ -88,15 +113,17 @@ def main():
     for region_name, region_cfg in regions.items():
         LOG.info("Plotting region %s", region_name)
         projection, extent = resolve_region(region_name, region_cfg, lead_time)
+        columns = min(len(panels), 4)
+        rows = math.ceil(len(panels) / columns)
         fig = ekp.Figure(
             crs=projection,
             domain=extent,
-            rows=1,
-            columns=2,
-            size=(10, 5),
+            rows=rows,
+            columns=columns,
+            size=(5 * columns, 5 * rows),
         )
-        for col, (label, _) in enumerate(sources):
-            subplot = fig.add_map(row=0, column=col)
+        for i, (label, _, _) in enumerate(panels):
+            subplot = fig.add_map(row=i // columns, column=i % columns)
             if label not in data:
                 subplot.standard_layers()
                 subplot.title(f"{label} (not available)")
@@ -105,12 +132,12 @@ def main():
             plotter.plot_field(
                 subplot,
                 values,
-                title=label,
+                title=f"{label}  (max {np.nanmax(values):.1f} {units})",
                 colorbar=False,
                 **style,
             )
         if data:
-            # One colorbar shared by both panels, which use identical levels.
+            # One colorbar shared by all panels, which use identical levels.
             fig.legend(location="bottom")
         fig.title(
             f"{param}  valid: {valid_time:%Y-%m-%d %H:%M} UTC  "

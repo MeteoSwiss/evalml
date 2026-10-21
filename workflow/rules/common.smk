@@ -474,6 +474,9 @@ COMPARISONS_CONFIG = {
     "regions": parse_showcase_regions(_comparisons.get("domains", ["alps"])),
     "baselines": _comparisons.get("baselines", []),
     "lead_times": _comparisons.get("lead_times", [24]),
+    # station truth (jretrievedwh) cannot be drawn as a map
+    "truth": _comparisons.get("truth", True)
+    and "jretrieve" not in str(config["truth"]["root"]),
 }
 EXPERIMENT_PARAMS = EXPERIMENT_CONFIG.get(
     "params", ["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"]

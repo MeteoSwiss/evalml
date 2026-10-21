@@ -37,3 +37,19 @@ def test_experiment_optional(example_config):
     del example_config["experiment"]
     cfg = ConfigModel.model_validate(example_config)
     assert cfg.experiment is None
+
+
+def test_comparisons_truth_only(example_config):
+    example_config["showcase"]["comparisons"] = {"enabled": True, "baselines": []}
+    cfg = ConfigModel.model_validate(example_config)
+    assert cfg.showcase.comparisons.truth is True
+
+
+def test_comparisons_need_a_reference(example_config):
+    example_config["showcase"]["comparisons"] = {
+        "enabled": True,
+        "truth": False,
+        "baselines": [],
+    }
+    with pytest.raises(ValueError, match="enable `truth` or list `baselines`"):
+        ConfigModel.model_validate(example_config)

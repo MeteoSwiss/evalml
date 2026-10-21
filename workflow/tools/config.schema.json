@@ -90,16 +90,22 @@
     },
     "ComparisonsConfig": {
       "additionalProperties": false,
-      "description": "Configuration for side-by-side map comparisons of runs and baselines.",
+      "description": "Configuration for side-by-side map comparisons of truth, runs and baselines.",
       "properties": {
         "enabled": {
           "default": false,
-          "description": "Whether to generate side-by-side maps of each run and each selected baseline.",
+          "description": "Whether to generate side-by-side maps: one figure per init time, lead time, parameter and domain, with a panel for the truth (if gridded), each run and each selected baseline.",
           "title": "Enabled",
           "type": "boolean"
         },
+        "truth": {
+          "default": true,
+          "description": "Whether to include a truth panel. Ignored for station truth (jretrievedwh), which cannot be drawn as a map.",
+          "title": "Truth",
+          "type": "boolean"
+        },
         "baselines": {
-          "description": "Labels of the baselines to compare each run with, one plot per baseline. Required (non-empty) when comparisons are enabled.",
+          "description": "Labels of the baselines to add as panels.",
           "items": {
             "type": "string"
           },
