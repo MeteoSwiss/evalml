@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import xarray as xr
 
 from data_input import (
-    TOT_PREC_UNIT_FACTORS,
     parse_steps,
     load_forecast_data,
     load_truth_data,
@@ -38,13 +37,6 @@ def main():
         type=str,
         default="forecast",
         help="Label for forecast line in plot legend.",
-    )
-    parser.add_argument(
-        "--forecast_tot_prec_units",
-        type=str,
-        default="kg m-2",
-        choices=list(TOT_PREC_UNIT_FACTORS),
-        help="Units of TOT_PREC in the GRIB files of an ML run; converted to kg m-2.",
     )
     parser.add_argument(
         "--baseline",
@@ -152,11 +144,7 @@ def main():
     # Load gridded data once — shared across all station plots
     LOG.info("Loading forecast data from %s", forecast_grib_dir)
     forecast_ds = load_forecast_data(
-        forecast_grib_dir,
-        init_time,
-        forecast_steps,
-        [param],
-        tot_prec_units=args.forecast_tot_prec_units,
+        forecast_grib_dir, init_time, forecast_steps, [param]
     ).squeeze()
 
     baseline_ds_list = []

@@ -14,3 +14,22 @@
 
 - - {levtype: sfc, param: [TOT_PREC]}
   - resources/icon-ch1-shortName=TOT_PREC.grib
+
+# fields of the surface-diagnostics post-processor (anemoi-plugins-meteoswiss)
+- - {levtype: sfc, param: [SP_10M, DD_10M, RELHUM_2M, TW_2M]}
+  - resources/icon-ch1-typeOfLevel=heightAboveGround.grib
+
+- - {levtype: sfc, param: [HZEROCL, SNOWLMT]}
+  - resources/icon-ch1-typeOfLevel=isothermZero.grib
+
+- - {levtype: sfc, param: [CAPE_ML, CIN_ML]}
+  - resources/icon-ch1-typeOfLevel=atmML.grib
+
+- - {levtype: sfc, param: [CAPE_MU, CIN_MU]}
+  - resources/icon-ch1-typeOfLevel=atmMU.grib
+
+- - {levtype: sfc, param: [PTYPE]}
+  - resources/icon-ch1-typeOfLevel=surface.grib
+
+- - {levtype: sfc, param: [TOT_SNOW]}
+  - resources/icon-ch1-shortName=TOT_PREC.grib

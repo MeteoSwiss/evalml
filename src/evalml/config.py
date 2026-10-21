@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet, Literal, Optional, Union
+from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
@@ -105,13 +105,6 @@ class RunConfig(BaseModel):
     disable_local_eccodes_definitions: bool = Field(
         False,
         description="If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
-    )
-    tot_prec_units: Literal["kg m-2", "m"] = Field(
-        "kg m-2",
-        description=(
-            "Units of TOT_PREC in the run's GRIB output. Use 'm' if the model writes "
-            "metres; values are converted to kg m-2 when loaded."
-        ),
     )
     config: Dict[str, Any] | str
 
@@ -246,7 +239,10 @@ class ScoreMapsConfig(BaseModel):
         description=(
             "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
             "PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 "
-            "(period-accumulated precipitation, period encoded in the name)."
+            "(period-accumulated precipitation, period encoded in the name), and the "
+            "surface-diagnostics fields DD_10M, RELHUM_2M, TW_2M (derived from their "
+            "components when a source lacks them), HZEROCL, SNOWLMT, CAPE_ML, CIN_ML, "
+            "CAPE_MU, CIN_MU, TOT_SNOW1/6/24."
         ),
     )
     leadtimes: List[int] = Field(

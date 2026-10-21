@@ -4,11 +4,12 @@ import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import earthkit.meteo.thermo as ekmt
 import numpy as np
 import pytest
 import xarray as xr
 
-from data_input import _accumulate_from_hourly, inca, load_truth_data, truth_source
+from data_input import accumulate_from_hourly, inca, load_truth_data, truth_type
 
 REFTIME = datetime(2025, 11, 1, 0, 0)
 # LV03 grid around Bern; (600000, 200000) is the LV03 reference point.
@@ -76,20 +77,20 @@ def at(ds: xr.Dataset, param: str, step_h: int) -> np.ndarray:
 @pytest.mark.parametrize(
     "root, expected",
     [
-        ("/store/kenda-ch1.zarr", "zarr"),
+        ("/store/kenda-ch1.zarr", "anemoi_dataset"),
         ("jretrievedwh:1,2", "jretrieve"),
         ("jretrievedwh:bbox=45.8,47.8,5.9,10.5", "jretrieve"),
         ("/store_new/mch/msclim/INCA", "inca"),
     ],
 )
-def test_truth_source(root, expected):
-    assert truth_source(root) == expected
-    assert truth_source(Path(root)) == expected
+def test_truth_type(root, expected):
+    assert truth_type(root) == expected
+    assert truth_type(Path(root)) == expected
 
 
-def test_truth_source_rejects_unknown_root():
+def test_truth_type_rejects_unknown_root():
     with pytest.raises(ValueError, match="Unsupported truth root"):
-        truth_source("/store/somewhere/else")
+        truth_type("/store/somewhere/else")
 
 
 def test_check_prerequisites(inca_root, tmp_path):
@@ -149,6 +150,41 @@ def test_wind_uses_10min_products(inca_root):
     assert "FF_10M" not in truth and "DD_10M" not in truth
 
 
+def test_wind_direction_is_read_natively(inca_root):
+    """DD_10M comes from DD_10min directly, not derived back from U/V."""
+    write_run(inca_root, "DD_10min", REFTIME, 359.5, "degrees")
+
+    truth = load_truth_data(inca_root, REFTIME, [0], ["DD_10M"])
+
+    np.testing.assert_allclose(at(truth, "DD_10M", 0), 359.5)
+
+
+def test_relative_humidity_is_derived_from_temperature_and_dew_point(inca_root):
+    write_run(inca_root, "TT", REFTIME, 10.0, "degrees C")
+    write_run(inca_root, "TD", REFTIME, 5.0, "degrees C")
+
+    truth = load_truth_data(inca_root, REFTIME, [0], ["RELHUM_2M"])
+
+    assert list(truth.data_vars) == ["RELHUM_2M"]
+    expected = ekmt.relative_humidity_from_dewpoint(
+        np.array([283.15]), np.array([278.15])
+    )
+    np.testing.assert_allclose(at(truth, "RELHUM_2M", 0), expected[0], rtol=1e-5)
+
+
+def test_precipitation_type_is_recoded_to_wmo_codes(inca_root):
+    """INCA PT codes 0-5 -> ICON PTYPE (WMO code table 4.201); unknown codes -> NaN."""
+    inca_codes = [0, 1, 2, 3, 4, 5, 9]
+    for h, code in enumerate(inca_codes):
+        write_run(inca_root, "PT", REFTIME + timedelta(hours=h), code, "#")
+
+    steps = list(range(len(inca_codes)))
+    truth = load_truth_data(inca_root, REFTIME, steps, ["PTYPE"])
+
+    got = [at(truth, "PTYPE", h)[0, 0] for h in steps]
+    np.testing.assert_array_equal(got, [0, 1, 7, 5, 3, 10, np.nan])
+
+
 def test_missing_file_gives_nan(inca_root, caplog):
     write_run(inca_root, "TT", REFTIME, 10.0, "degrees C")
 
@@ -158,6 +194,21 @@ def test_missing_file_gives_nan(inca_root, caplog):
     assert np.isfinite(at(truth, "T_2M", 0)).all()
     assert np.isnan(at(truth, "T_2M", 1)).all()
     assert "1 of 2 TT files missing" in caplog.text
+
+
+def test_empty_file_is_treated_as_missing(inca_root, caplog):
+    write_run(inca_root, "TT", REFTIME, 10.0, "degrees C")
+    empty = inca.analysis_file(
+        inca_root, inca.INCA_VARIABLES["T_2M"], REFTIME + timedelta(hours=1)
+    )
+    empty.touch()
+
+    with caplog.at_level(logging.WARNING):
+        truth = load_truth_data(inca_root, REFTIME, [0, 1], ["T_2M"])
+
+    assert np.isfinite(at(truth, "T_2M", 0)).all()
+    assert np.isnan(at(truth, "T_2M", 1)).all()
+    assert "cannot read" in caplog.text
 
 
 def test_unsupported_params_are_skipped(inca_root, caplog):
@@ -186,14 +237,6 @@ def test_six_hour_precipitation_from_constant_rate(inca_root):
     truth = load_truth_data(inca_root, REFTIME, [6], ["TOT_PREC6"])
 
     np.testing.assert_allclose(at(truth, "TOT_PREC6", 6), 12.0, rtol=1e-6)
-
-
-def test_radar_precipitation_uses_5min_runs(inca_root):
-    write_rates(inca_root, "RP", hours=1, rate=3.0, interval_min=5)
-
-    truth = load_truth_data(inca_root, REFTIME, [1], ["TOT_PREC_RADAR1"])
-
-    np.testing.assert_allclose(at(truth, "TOT_PREC_RADAR1", 1), 3.0, rtol=1e-6)
 
 
 def test_rate_stamped_at_hour_start_belongs_to_previous_hour(inca_root):
@@ -237,5 +280,5 @@ def test_accumulate_from_hourly_default_still_skips_nan():
             )
         },
     )
-    np.testing.assert_allclose(_accumulate_from_hourly(hourly, [3]).values, [3.0])
-    assert np.isnan(_accumulate_from_hourly(hourly, [3], skipna=False).values).all()
+    np.testing.assert_allclose(accumulate_from_hourly(hourly, [3]).values, [3.0])
+    assert np.isnan(accumulate_from_hourly(hourly, [3], skipna=False).values).all()

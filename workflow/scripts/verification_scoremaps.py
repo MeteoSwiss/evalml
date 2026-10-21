@@ -39,13 +39,13 @@ import numpy as np
 import xarray as xr
 
 from data_input import (
-    TOT_PREC_UNIT_FACTORS,
     is_inca_archive,
     load_forecast_data,
     load_truth_data,
     open_truth_zarr,
     parse_aggregated_param,
 )
+from verification import CATEGORICAL_PARAMS, CIRCULAR_PARAMS, angular_difference
 from verification.spatial import map_forecast_to_truth
 
 LOG = logging.getLogger(__name__)
@@ -112,6 +112,12 @@ def main(args: Namespace) -> None:
     LOG.info("Truth    : %s", args.truth)
     LOG.info("Output   : %s", args.output)
     LOG.info("=" * 60)
+
+    if args.param in CATEGORICAL_PARAMS:
+        raise ValueError(
+            f"'{args.param}' holds class codes: its error maps (BIAS, RMSE, MAE) are "
+            "meaningless. Remove it from experiment.scoremaps.params."
+        )
 
     # The accumulation period is encoded in the param name (e.g. TOT_PREC6 → 6h).
     _, accum_h = parse_aggregated_param(args.param)
@@ -226,12 +232,7 @@ def main(args: Namespace) -> None:
         src_root = args.baseline_root if args.baseline_root else grib_dir
         try:
             fcst = load_forecast_data(
-                src_root,
-                reftime,
-                [args.step],
-                [args.param],
-                member=args.member,
-                tot_prec_units=args.tot_prec_units,
+                src_root, reftime, [args.step], [args.param], member=args.member
             )
         except Exception as exc:
             raise RuntimeError(
@@ -305,7 +306,11 @@ def main(args: Namespace) -> None:
                 fcst_param = fcst_param.squeeze(dim, drop=True)
         fcst_vals = fcst_param.values
         truth_vals = truth_slice.values
-        error = fcst_vals - truth_vals  # shape: spatial dims of truth
+        # shape: spatial dims of truth
+        if args.param in CIRCULAR_PARAMS:
+            error = angular_difference(fcst_vals, truth_vals)
+        else:
+            error = fcst_vals - truth_vals
 
         if first_iter:
             n_nan_mapped = int(np.isnan(fcst_vals).sum())
@@ -470,13 +475,6 @@ if __name__ == "__main__":
             "'median' for the pre-computed median, 'mean' to average all "
             "members, or any 3-digit member ID. Ignored for runs and INCA."
         ),
-    )
-    parser.add_argument(
-        "--tot_prec_units",
-        type=str,
-        default="kg m-2",
-        choices=list(TOT_PREC_UNIT_FACTORS),
-        help="Units of TOT_PREC in the GRIB files of an ML run; converted to kg m-2.",
     )
     parser.add_argument(
         "--truth",

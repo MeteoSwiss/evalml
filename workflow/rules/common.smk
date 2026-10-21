@@ -6,12 +6,14 @@ import hashlib
 import json
 from urllib.parse import urlparse
 
-from data_input import inca, truth_source
+from data_input import inca, truth_type
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
 # the experiment block is optional (e.g. for showcase/sandbox configs)
 EXPERIMENT_CONFIG = config.get("experiment") or {}
+# "anemoi_dataset", "jretrieve" or "inca"
+TRUTH_TYPE = truth_type(config["truth"]["root"])
 
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
 HASH_LENGTH = 4
@@ -416,9 +418,6 @@ def verif_hash(full_config: dict) -> str:
     return generate_json_hash({"truth": truth_cfg, "verif": experiment_verif_cfg})
 
 
-TRUTH_SOURCE = truth_source(config["truth"]["root"])
-
-
 def holdout_dep(_):
     """Holdout station file dependency: the CSV written by rule
     station_holdout, or no input when experiment.station_holdout is unset."""
@@ -439,15 +438,15 @@ def run_uses_holdout(run_id: str) -> bool:
 def truth_file_dep(_):
     """Truth file dependency tracked by Snakemake.
 
-    - zarr: the dataset itself
+    - anemoi dataset: the dataset itself
     - INCA: the static topography file; the archive directory is not tracked
       because its modification time changes whenever new runs are archived
     - jretrieve: none (live query)
     """
     root = config["truth"]["root"]
-    if TRUTH_SOURCE == "zarr":
+    if TRUTH_TYPE == "anemoi_dataset":
         return [root]
-    if TRUTH_SOURCE == "inca":
+    if TRUTH_TYPE == "inca":
         return [str(inca.topography_file(root))]
     return []
 
@@ -455,12 +454,12 @@ def truth_file_dep(_):
 # Fail fast: verify the prerequisites of the truth source at workflow-build time
 # so a misconfigured environment is caught at launch, before any (expensive)
 # inference job runs.
-if TRUTH_SOURCE == "jretrieve":
+if TRUTH_TYPE == "jretrieve":
     from data_input.jretrieve import check_prerequisites, parse_selection
 
     _, _jretrieve_stage, _, _ = parse_selection(config["truth"]["root"])
     check_prerequisites(_jretrieve_stage)
-elif TRUTH_SOURCE == "inca":
+elif TRUTH_TYPE == "inca":
     inca.check_prerequisites(config["truth"]["root"])
 
 

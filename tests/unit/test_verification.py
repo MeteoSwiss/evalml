@@ -451,3 +451,83 @@ def test_verify_station_groups_split_holdout_and_holdin():
 
     result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
     assert list(result["station_group"].values) == ["all"]
+
+
+def test_verify_default_scores_available_points_despite_gaps():
+    """By default (max_missing_fraction=1.0) points without a forecast are left out."""
+    fcst, obs = _half_missing_forecast()
+
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+
+    bias = result["T_2M.BIAS"].sel(region="all", source="fcst").values.item()
+    assert bias == pytest.approx(0.0)
+
+
+def test_verify_wind_direction_uses_shortest_angular_error():
+    """350 deg forecast vs 10 deg obs is an error of -20 deg, not 340 deg."""
+    n = 4
+    coords = _station_coords(n)
+    fcst = xr.Dataset({"DD_10M": ("values", [350.0, 10.0, 180.0, 90.0])}, coords=coords)
+    obs = xr.Dataset({"DD_10M": ("values", [10.0, 350.0, 170.0, 90.0])}, coords=coords)
+
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+
+    scores = result.sel(region="all", station_group="all", source="fcst")
+    errors = np.array([-20.0, 20.0, 10.0, 0.0])
+    assert scores["DD_10M.BIAS"].item() == pytest.approx(errors.mean())
+    assert scores["DD_10M.MAE"].item() == pytest.approx(np.abs(errors).mean())
+    assert scores["DD_10M.MSE"].item() == pytest.approx((errors**2).mean())
+    # statistics keep the raw directions
+    assert scores["DD_10M.mean"].item() == pytest.approx(157.5)
+
+
+def test_verify_precipitation_type_only_gets_categorical_scores():
+    n = 4
+    coords = _station_coords(n)
+    # WMO codes: rain, snow, none, mixed
+    fcst = xr.Dataset({"PTYPE": ("values", [1.0, 5.0, 0.0, 7.0])}, coords=coords)
+    obs = xr.Dataset({"PTYPE": ("values", [1.0, 5.0, 1.0, 5.0])}, coords=coords)
+
+    result = verify(
+        fcst,
+        obs,
+        "fcst",
+        "obs",
+        regions=_REGION,
+        num_workers=1,
+        threshold_dict={"PTYPE": {"eq": [1, 5]}},
+    )
+
+    scores = result.sel(region="all", station_group="all", source="fcst")
+    for name in ("BIAS", "MSE", "MAE", "CORR"):
+        assert np.isnan(scores[f"PTYPE.{name}"]).all()
+    table = scores["PTYPE.contingency_table"]
+    rain = table.sel({"PTYPE.threshold": "eq_1"})
+    snow = table.sel({"PTYPE.threshold": "eq_5"})
+    # rain: hit at 0, miss at 2; snow: hit at 1, miss at 3
+    for t in (rain, snow):
+        assert t.sel(contingency="tp_count").item() == 1
+        assert t.sel(contingency="fn_count").item() == 1
+        assert t.sel(contingency="fp_count").item() == 0
+
+
+def test_verify_wind_direction_thresholds_use_raw_forecast():
+    """Only the continuous scores use the angular error, not the contingency tables."""
+    coords = _station_coords(1)
+    fcst = xr.Dataset({"DD_10M": ("values", [350.0])}, coords=coords)
+    obs = xr.Dataset({"DD_10M": ("values", [10.0])}, coords=coords)
+
+    result = verify(
+        fcst,
+        obs,
+        "fcst",
+        "obs",
+        regions=_REGION,
+        num_workers=1,
+        threshold_dict={"DD_10M": {"gt": [180.0]}},
+    )
+
+    table = result["DD_10M.contingency_table"].sel(
+        region="all", station_group="all", source="fcst"
+    )
+    assert table.sel(contingency="fp_count").item() == 1  # 350 > 180, 10 is not

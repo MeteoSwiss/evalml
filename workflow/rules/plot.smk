@@ -50,7 +50,6 @@ rule plot_meteogram:
         ).resolve(),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id]["label"],
-        fcst_tot_prec_units=lambda wc: RUN_CONFIGS[wc.run_id]["tot_prec_units"],
         baseline_roots=lambda wc: [x["root"] for x in _get_available_baselines(wc)],
         baseline_steps=lambda wc: [x["steps"] for x in _get_available_baselines(wc)],
         baseline_labels=lambda wc: [x["label"] for x in _get_available_baselines(wc)],
@@ -78,7 +77,6 @@ rule plot_meteogram:
             --forecast {params.fcst_grib:q}
             --forecast_steps {params.fcst_steps:q}
             --forecast_label {params.fcst_label:q}
-            --forecast_tot_prec_units {params.fcst_tot_prec_units:q}
             --analysis {params.truth_root:q}
             --analysis_label {params.ana_label:q}
             --date {wildcards.init_time:q}

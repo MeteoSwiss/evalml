@@ -21,34 +21,44 @@ dataset:
     # variables_metadata is necessary due to missing variables_metadata section in temporal downscaler patch_metdata
     # else mapping with grib templates fails
     variables_metadata:
+      # Fields added by the surface-diagnostics post-processor: not predicted by the
+      # checkpoint, but anemoi-inference's TransformFilter.process() wraps the state
+      # with these metadata before every filter, which fails (KeyError) for a field
+      # missing here. See typed_variables in the inference config.
+      SP_10M:
+        mars: {date: 20050101, levtype: sfc, param: SP_10M, step: 12, time: 0}
+      DD_10M:
+        mars: {date: 20050101, levtype: sfc, param: DD_10M, step: 12, time: 0}
+      RELHUM_2M:
+        mars: {date: 20050101, levtype: sfc, param: RELHUM_2M, step: 12, time: 0}
+      TW_2M:
+        mars: {date: 20050101, levtype: sfc, param: TW_2M, step: 12, time: 0}
+      HZEROCL:
+        mars: {date: 20050101, levtype: sfc, param: HZEROCL, step: 12, time: 0}
+      SNOWLMT:
+        mars: {date: 20050101, levtype: sfc, param: SNOWLMT, step: 12, time: 0}
+      CAPE_ML:
+        mars: {date: 20050101, levtype: sfc, param: CAPE_ML, step: 12, time: 0}
+      CIN_ML:
+        mars: {date: 20050101, levtype: sfc, param: CIN_ML, step: 12, time: 0}
+      CAPE_MU:
+        mars: {date: 20050101, levtype: sfc, param: CAPE_MU, step: 12, time: 0}
+      CIN_MU:
+        mars: {date: 20050101, levtype: sfc, param: CIN_MU, step: 12, time: 0}
+      PTYPE:
+        mars: {date: 20050101, levtype: sfc, param: PTYPE, step: 12, time: 0}
+      # accumulated from the start of the forecast like tp (encoded with the TOT_PREC template)
+      TOT_SNOW:
+        mars: {date: 20050101, levtype: sfc, param: TOT_SNOW, step: 12, time: 0}
+        process: accumulation
       10u:
-        mars:
-          date: 20050101
-          levtype: sfc
-          param: U_10M
-          step: 12
-          time: 0
+        mars: {date: 20050101, levtype: sfc, param: U_10M, step: 12, time: 0}
       10v:
-        mars:
-          date: 20050101
-          levtype: sfc
-          param: V_10M
-          step: 12
-          time: 0
+        mars: {date: 20050101, levtype: sfc, param: V_10M, step: 12, time: 0}
       2d:
-        mars:
-          date: 20050101
-          levtype: sfc
-          param: TD_2M
-          step: 12
-          time: 0
+        mars: {date: 20050101, levtype: sfc, param: TD_2M, step: 12, time: 0}
       2t:
-        mars:
-          date: 20050101
-          levtype: sfc
-          param: T_2M
-          step: 12
-          time: 0
+        mars: {date: 20050101, levtype: sfc, param: T_2M, step: 12, time: 0}
       cos_julian_day:
         computed_forcing: true
         constant_in_time: false
@@ -66,19 +76,9 @@ dataset:
         constant_in_time: false
       lsm:
         constant_in_time: true
-        mars:
-          date: 20050101
-          levtype: sfc
-          param: FR_LAND
-          step: 0
-          time: 12
+        mars: {date: 20050101, levtype: sfc, param: FR_LAND, step: 0, time: 12}
       msl:
-        mars:
-          date: 20050101
-          levtype: sfc
-          param: PMSL
-          step: 12
-          time: 0
+        mars: {date: 20050101, levtype: sfc, param: PMSL, step: 12, time: 0}
       q_100:
         mars: {date: 20050101, levelist: 100, levtype: pl, param: QV, step: 12, time: 0}
       q_1000:
@@ -116,19 +116,9 @@ dataset:
         computed_forcing: true
         constant_in_time: true
       sp:
-        mars:
-          date: 20050101
-          levtype: sfc
-          param: PS
-          step: 12
-          time: 0
+        mars: {date: 20050101, levtype: sfc, param: PS, step: 12, time: 0}
       skt:
-        mars:
-          date: 20050101
-          levtype: sfc
-          param: T_G
-          step: 12
-          time: 0
+        mars: {date: 20050101, levtype: sfc, param: T_G, step: 12, time: 0}
       t_100:
         mars: {date: 20050101, levelist: 100, levtype: pl, param: T, step: 12, time: 0}
       t_1000:
@@ -154,12 +144,7 @@ dataset:
       t_925:
         mars: {date: 20050101, levelist: 925, levtype: pl, param: T, step: 12, time: 0}
       tp:
-        mars:
-          date: 20050101
-          levtype: sfc
-          param: TOT_PREC
-          step: 12
-          time: 0
+        mars: {date: 20050101, levtype: sfc, param: TOT_PREC, step: 12, time: 0}
         period:
           - 1h
         process: accumulation
@@ -213,13 +198,7 @@ dataset:
         mars: {date: 20050101, levelist: 925, levtype: pl, param: V, step: 12, time: 0}
       z:
         constant_in_time: true
-        mars:
-          date: 20050101
-          levelist: null
-          levtype: sfc
-          param: FIS
-          step: 0
-          time: 12
+        mars: {date: 20050101, levelist: null, levtype: sfc, param: FIS, step: 0, time: 12}
       z_100:
         mars: {date: 20050101, levelist: 100, levtype: pl, param: FI, step: 12, time: 0}
       z_1000:

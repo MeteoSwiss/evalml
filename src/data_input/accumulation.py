@@ -8,10 +8,10 @@ import numpy as np
 import xarray as xr
 
 
-def _accumulate_from_hourly(
+def accumulate_from_hourly(
     da_1h: xr.DataArray, steps: list[int], skipna: bool = True
 ) -> xr.DataArray:
-    """Reconstruct cumulative-from-start from 1H period-accumulated zarr values.
+    """Reconstruct cumulative-from-start from 1H period-accumulated values.
 
     da_1h must have a 'step' dimension with hourly timedelta64 coordinates
     covering steps 1h through max(steps). Computes the cumulative sum,

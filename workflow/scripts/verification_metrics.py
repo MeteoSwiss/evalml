@@ -11,10 +11,10 @@ import xarray as xr
 from verification import verify, apply_lapse_rate_correction_inplace  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
 from data_input import (
-    TOT_PREC_UNIT_FACTORS,
     parse_steps,
     load_forecast_data,
     load_truth_data,
+    truth_type,
 )  # noqa: E402
 
 LOG = logging.getLogger(__name__)
@@ -49,11 +49,7 @@ def select_holdout_stations(
     also have a ``values`` dimension (unstructured grids), so the truth source
     is checked instead. Stations missing from the truth are dropped.
     """
-    # Same criterion as load_truth_data(): a .zarr is gridded, a jretrieve marker is stations.
-    truth_is_station_data = Path(truth_root).suffix != ".zarr" and "jretrieve" in str(
-        truth_root
-    )
-    if not truth_is_station_data:
+    if truth_type(truth_root) != "jretrieve":
         LOG.warning(
             "Holdout stations given, but the truth is gridded data, not station "
             "observations; station_group stratification skipped."
@@ -98,12 +94,7 @@ def main(args: ScriptConfig):
     now = datetime.now()
 
     fcst = load_forecast_data(
-        args.forecast,
-        args.reftime,
-        args.steps,
-        args.params,
-        member=args.member,
-        tot_prec_units=args.tot_prec_units,
+        args.forecast, args.reftime, args.steps, args.params, member=args.member
     )
 
     LOG.info(
@@ -261,13 +252,6 @@ if __name__ == "__main__":
         type=str,
         default="000",
         help="Ensemble member to load: '000' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID.",
-    )
-    parser.add_argument(
-        "--tot_prec_units",
-        type=str,
-        default="kg m-2",
-        choices=list(TOT_PREC_UNIT_FACTORS),
-        help="Units of TOT_PREC in the GRIB files of an ML run; converted to kg m-2.",
     )
     parser.add_argument(
         "--output",

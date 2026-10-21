@@ -22,7 +22,7 @@ import numpy as np
 import xarray as xr
 from pyproj import Transformer
 
-from data_input.accumulation import _accumulate_from_hourly
+from data_input.accumulation import accumulate_from_hourly
 
 LOG = logging.getLogger(__name__)
 
@@ -49,17 +49,26 @@ class IncaVariable:
     rate_interval_min
         For precipitation rates (mm/h): minutes between runs. The rates are
         summed into amounts (kg m-2). ``None`` for all other variables.
+    class_codes
+        For class fields: (INCA code, ICON code) pairs to recode the values;
+        other values become NaN. ``None`` for all other variables.
     """
 
     prefix: str
     description: str
     subdir: str = ""
     rate_interval_min: int | None = None
+    class_codes: tuple[tuple[float, float], ...] | None = None
 
     @property
     def is_rate(self) -> bool:
         return self.rate_interval_min is not None
 
+
+# INCA precipitation type (0 none, 1 rain, 2 snow and rain, 3 snow, 4 freezing
+# rain, 5 rain and hail) -> ICON PTYPE, WMO GRIB2 code table 4.201 (0 none,
+# 1 rain, 3 freezing rain, 5 snow, 7 mixture of rain and snow, 10 hail).
+_PTYPE_CODES = ((0, 0), (1, 1), (2, 7), (3, 5), (4, 3), (5, 10))
 
 # evalml (ICON) variable name -> INCA source.
 INCA_VARIABLES: dict[str, IncaVariable] = {
@@ -69,7 +78,7 @@ INCA_VARIABLES: dict[str, IncaVariable] = {
     "TW_2M": IncaVariable("TW", "2 m wet-bulb temperature"),
     "T_G": IncaVariable("TG", "surface temperature"),
     # wind: 10-min products, the closest to the instantaneous model wind
-    "FF_10M": IncaVariable("FF_10min", "10 m wind speed, 10-min mean"),
+    "SP_10M": IncaVariable("FF_10min", "10 m wind speed, 10-min mean"),
     "DD_10M": IncaVariable("DD_10min", "10 m wind direction, 10-min mean"),
     "VMAX_10M": IncaVariable("WG_10min", "10 m wind gust, 10-min"),
     # precipitation, accumulated from rates
@@ -79,12 +88,9 @@ INCA_VARIABLES: dict[str, IncaVariable] = {
     "TOT_SNOW": IncaVariable(
         "RS", "snowfall (CombiPrecip based)", rate_interval_min=10
     ),
-    "TOT_PREC_RADAR": IncaVariable(
-        "RP", "precipitation (radar based)", rate_interval_min=5
+    "PTYPE": IncaVariable(
+        "PT", "precipitation type (CombiPrecip based)", class_codes=_PTYPE_CODES
     ),
-    "TOT_SNOW_RADAR": IncaVariable("PN", "snowfall (radar based)", rate_interval_min=5),
-    "PREC_TYPE": IncaVariable("PT", "precipitation type (CombiPrecip based)"),
-    "PREC_TYPE_RADAR": IncaVariable("NT", "precipitation type (radar based)"),
     # clouds, sunshine, lightning
     "CLCT": IncaVariable("CT", "total cloud cover"),
     "SUNSHINE_REL": IncaVariable("SU", "relative sunshine duration"),
@@ -92,14 +98,12 @@ INCA_VARIABLES: dict[str, IncaVariable] = {
     # freezing level
     "HZEROCL": IncaVariable("Z0", "height of the 0 degC isotherm"),
     "SNOWLMT": IncaVariable("ZS", "snowfall limit"),
-    "MELTLAYER_TOP": IncaVariable("ZM", "upper limit of the melting layer"),
     # convection
     "CAPE_MU": IncaVariable("CP", "most unstable CAPE", subdir="analysis"),
     "CIN_MU": IncaVariable("CN", "most unstable CIN", subdir="analysis"),
 }
 
 # Wind components are derived from the 10-min mean speed and direction.
-_WIND_SPEED, _WIND_DIRECTION = "FF_10M", "DD_10M"
 WIND_COMPONENTS = ("U_10M", "V_10M")
 
 SUPPORTED_PARAMS = frozenset(INCA_VARIABLES) | frozenset(WIND_COMPONENTS)
@@ -147,21 +151,34 @@ def analysis_file(root: Path | str, var: IncaVariable, time: datetime) -> Path:
 
 
 def _read_analysis(path: Path, prefix: str) -> xr.DataArray | None:
-    """Step 0 of an INCA file as a (y, x) field in SI units; None if the file is missing.
+    """Step 0 of an INCA file as a (y, x) field in SI units; None if the file is
+    missing or unreadable (the archive has a few empty files).
 
     Step 0 is selected by position; its valid time is the time in the file name.
     """
     if not path.exists():
         return None
-    with xr.open_dataset(
-        path, decode_times=False, drop_variables=["grid_mapping"]
-    ) as ds:
-        da = ds[prefix].isel(time=0, drop=True).load()
+    try:
+        with xr.open_dataset(
+            path, decode_times=False, drop_variables=["grid_mapping"]
+        ) as ds:
+            da = ds[prefix].isel(time=0, drop=True).load()
+    except (OSError, ValueError) as exc:
+        LOG.warning("INCA: cannot read %s, treated as missing: %s", path, exc)
+        return None
     da = da.rename({"chx": "x", "chy": "y"})
     units = da.attrs.get("units", "").strip()
     if units == "degrees C":
         return (da + _CELSIUS_TO_KELVIN).assign_attrs(units="K")
     return da.assign_attrs(units=units)
+
+
+def _recode(da: xr.DataArray, codes: tuple[tuple[float, float], ...]) -> xr.DataArray:
+    """Map the class codes of ``da`` with the (from, to) pairs; other values become NaN."""
+    out = xr.full_like(da, np.nan, dtype=np.float32)
+    for inca_code, icon_code in codes:
+        out = out.where(da != inca_code, icon_code)
+    return out.assign_attrs(da.attrs)
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +198,7 @@ def _sources_to_load(params: list[str]) -> list[str]:
     sources = []
     for p in params:
         if p in WIND_COMPONENTS:
-            sources += [_WIND_SPEED, _WIND_DIRECTION]
+            sources += ["SP_10M", "DD_10M"]
         elif p in INCA_VARIABLES:
             sources.append(p)
     return list(dict.fromkeys(sources))
@@ -193,6 +210,8 @@ def _read_fields(
     """Read the analyses valid at ``times``; log how many files are missing."""
     paths = [analysis_file(root, var, t) for t in times]
     fields = [_read_analysis(p, var.prefix) for p in paths]
+    if var.class_codes is not None:
+        fields = [f if f is None else _recode(f, var.class_codes) for f in fields]
     missing = [p for p, f in zip(paths, fields) if f is None]
     if missing:
         LOG.warning(
@@ -282,25 +301,25 @@ def load_analysis(
     root = Path(root)
     valid_times = [reftime + timedelta(hours=s) for s in steps]
 
-    raw: dict[str, list[xr.DataArray | None]] = {}
-    hourly: dict[str, list[xr.DataArray | None]] = {}
+    instantaneous: dict[str, list[xr.DataArray | None]] = {}
+    accumulated: dict[str, list[xr.DataArray | None]] = {}  # hourly amounts
     for name in _sources_to_load(params):
         var = INCA_VARIABLES[name]
         LOG.info("Loading INCA %s (%s) for %s", var.prefix, var.description, name)
         if var.is_rate:
-            hourly[name] = _hourly_amounts(root, var, reftime, max(steps))
+            accumulated[name] = _hourly_amounts(root, var, reftime, max(steps))
         else:
-            raw[name] = _read_fields(root, var, valid_times)
+            instantaneous[name] = _read_fields(root, var, valid_times)
 
     # The grid is taken from the files themselves; missing files become NaN on it.
     found = [
         f
-        for fields in (*raw.values(), *hourly.values())
+        for fields in (*instantaneous.values(), *accumulated.values())
         for f in fields
         if f is not None
     ]
     if not found:
-        if not raw and not hourly:
+        if not instantaneous and not accumulated:
             return xr.Dataset()
         raise FileNotFoundError(
             f"No INCA analyses found under {root} for reftime {reftime:%Y-%m-%d %H:%M}"
@@ -308,20 +327,23 @@ def load_analysis(
     template = found[0]
 
     ds = xr.Dataset(
-        {name: _stack(fields, steps, template) for name, fields in raw.items()}
+        {
+            name: _stack(fields, steps, template)
+            for name, fields in instantaneous.items()
+        }
     )
-    hours = list(range(1, max(steps) + 1))
-    for name, amounts in hourly.items():
+    hours = list(range(1, max(steps) + 1))  # empty when only step 0 is requested
+    for name, amounts in accumulated.items():
         if hours:
             # skipna=False: a missing hour makes later totals NaN, not zero.
-            ds[name] = _accumulate_from_hourly(
+            ds[name] = accumulate_from_hourly(
                 _stack(amounts, hours, template), steps, skipna=False
             )
         else:  # only step 0 requested: nothing has accumulated yet
             ds[name] = _stack([xr.zeros_like(template)], steps, template)
 
     if any(p in WIND_COMPONENTS for p in params):
-        speed, direction = ds[_WIND_SPEED], np.deg2rad(ds[_WIND_DIRECTION])
+        speed, direction = ds["SP_10M"], np.deg2rad(ds["DD_10M"])
         # meteorological convention: direction the wind blows from, clockwise from north
         ds["U_10M"] = (-speed * np.sin(direction)).assign_attrs(units="m/s")
         ds["V_10M"] = (-speed * np.cos(direction)).assign_attrs(units="m/s")

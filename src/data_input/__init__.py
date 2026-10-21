@@ -2,11 +2,13 @@ import json
 import logging
 import re
 import urllib.request
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Literal, Any
 
 import earthkit.data as ekd
+import earthkit.meteo.thermo as ekmt
 import earthkit.meteo.vertical as ekdv
 import numpy as np
 import pandas as pd
@@ -14,7 +16,7 @@ import xarray as xr
 from pyproj import Transformer
 
 from data_input import inca
-from data_input.accumulation import _accumulate_from_hourly
+from data_input.accumulation import accumulate_from_hourly
 
 LOG = logging.getLogger(__name__)
 
@@ -50,21 +52,22 @@ XARRAY_ENGINE_PROFILE = {
 
 ZERO_KELVIN = -273.15  # °C
 
-# Accepted units of TOT_PREC in the output of ML runs (RunConfig.tot_prec_units),
-# with the factor that converts them to kg m-2.
-TOT_PREC_UNIT_FACTORS: dict[str, float] = {"kg m-2": 1.0, "m": 1000.0}
-
 # Base params whose GRIB representation is cumulative-from-start.
 # Extend this frozenset to enable new accumulatable variables.
-# TOT_SNOW and the *_RADAR variants come from the INCA truth (see data_input.inca).
-_ACCUMULATABLE_PARAMS: frozenset[str] = frozenset(
-    {"TOT_PREC", "TOT_SNOW", "TOT_PREC_RADAR", "TOT_SNOW_RADAR"}
-)
+_ACCUMULATABLE_PARAMS: frozenset[str] = frozenset({"TOT_PREC", "TOT_SNOW"})
 
 # Spatial/multi-field derivations: output param → required input params.
+# A source that provides the param natively (e.g. the surface-diagnostics
+# post-processor of anemoi-plugins-meteoswiss) is used as is; otherwise
+# (e.g. ICON baselines) it is derived with the same formulas (earthkit-meteo).
 DERIVED_PARAMS: dict[str, tuple[str, ...]] = {
     "SP_10M": ("U_10M", "V_10M"),
     "SP": ("U", "V"),
+    "DD_10M": ("U_10M", "V_10M"),
+    "RELHUM_2M": ("T_2M", "TD_2M"),
+    "TW_2M": ("T_2M", "TD_2M", "PS"),
+    # ICON's TOT_SNOW is SNOW_GSP + SNOW_CON; ICON-CH1/CH2 have no convective snow.
+    "TOT_SNOW": ("SNOW_GSP",),
 }
 
 # ICON writes -999.9 where CIN is undefined; physical values are >= 0.
@@ -92,8 +95,26 @@ def parse_aggregated_param(param: str) -> tuple[str, int | None]:
     return param, None
 
 
+def _apply_elementwise(func: Callable, *args: xr.DataArray) -> xr.DataArray:
+    """Apply an earthkit-meteo thermo function element-wise to DataArrays of any shape.
+
+    Some of these functions (e.g. the wet-bulb temperature) only handle 1-D arrays,
+    so the inputs are flattened and the result is reshaped, block by block for dask.
+    """
+
+    def flat(*arrays: np.ndarray) -> np.ndarray:
+        shape = np.broadcast_shapes(*(a.shape for a in arrays))
+        flats = [np.broadcast_to(a, shape).ravel().astype(np.float64) for a in arrays]
+        return np.asarray(func(*flats)).reshape(shape)
+
+    return xr.apply_ufunc(flat, *args, dask="parallelized", output_dtypes=[np.float64])
+
+
 def compute_derived(ds: xr.Dataset, param: str) -> xr.DataArray:
-    """Compute a spatial derived variable from its components already in ds."""
+    """Compute a spatial derived variable from its components already in ds.
+
+    Used by ICON and INCA when the derived variable is not provided natively in the source.
+    """
     if param == "SP_10M":
         da = (ds["U_10M"] ** 2 + ds["V_10M"] ** 2) ** 0.5
         da.attrs["parameter"] = {
@@ -110,10 +131,47 @@ def compute_derived(ds: xr.Dataset, param: str) -> xr.DataArray:
             "name": "Wind speed",
         }
         return da
+    if param == "DD_10M":
+        # Meteorological convention: direction the wind blows from, clockwise from North.
+        da = np.mod(np.degrees(np.arctan2(-ds["U_10M"], -ds["V_10M"])), 360.0)
+        da.attrs["parameter"] = {
+            "shortName": "DD_10M",
+            "units": "degrees",
+            "name": "10m wind direction",
+        }
+        return da
+    if param == "RELHUM_2M":
+        da = _apply_elementwise(
+            ekmt.relative_humidity_from_dewpoint, ds["T_2M"], ds["TD_2M"]
+        )
+        da.attrs["parameter"] = {
+            "shortName": "RELHUM_2M",
+            "units": "%",
+            "name": "2m relative humidity",
+        }
+        return da
+    if param == "TW_2M":
+        da = _apply_elementwise(
+            ekmt.wet_bulb_temperature_from_dewpoint, ds["T_2M"], ds["TD_2M"], ds["PS"]
+        )
+        da.attrs["parameter"] = {
+            "shortName": "TW_2M",
+            "units": "K",
+            "name": "2m wet-bulb temperature",
+        }
+        return da
+    if param == "TOT_SNOW":
+        da = ds["SNOW_GSP"].copy()  # copy: don't overwrite the attrs of SNOW_GSP
+        da.attrs["parameter"] = {
+            "shortName": "TOT_SNOW",
+            "units": "kg m-2",
+            "name": "Total snowfall",
+        }
+        return da
     raise ValueError(f"No recipe for derived variable '{param}'")
 
 
-def get_base_params(params: list[str]) -> list[str]:
+def get_base_params(params: list[str], native: Iterable[str] = ()) -> list[str]:
     """Expand derived/aggregated params to the native params needed for loading.
 
     'SP_10M'    → {'U_10M', 'V_10M'}
@@ -121,10 +179,31 @@ def get_base_params(params: list[str]) -> list[str]:
     'T_2M'      → {'T_2M'}
 
     Two-step: resolve aggregated param names to base params, then resolve
-    spatial derived params to their components. Returns a deduplicated list.
+    spatial derived params to their components. Derived params listed in
+    ``native`` (provided as such by the source) are not expanded. Returns a
+    deduplicated list.
+    """
+    native = set(native)
+    bases = {parse_aggregated_param(p)[0] for p in params}
+    return list(
+        {
+            c
+            for p in bases
+            for c in ((p,) if p in native else DERIVED_PARAMS.get(p, (p,)))
+        }
+    )
+
+
+def get_grib_load_params(params: list[str]) -> list[str]:
+    """Params to select from GRIB files: derived params both as such and as components.
+
+    A GRIB field that isn't in the files is simply not loaded, so a derived param
+    written natively (e.g. by a post-processor) is used as is, and is otherwise
+    derived from its components (see _disaggregated_and_derived_params).
     """
     bases = {parse_aggregated_param(p)[0] for p in params}
-    return list({c for p in bases for c in DERIVED_PARAMS.get(p, (p,))})
+    derived = [p for p in bases if p in DERIVED_PARAMS]
+    return list(dict.fromkeys(get_base_params(params) + derived))
 
 
 def get_steps(steps: list[int], params: list[str]) -> list[int]:
@@ -290,6 +369,16 @@ def _open_analysis_zarr(root: Path, params: list[str]) -> xr.Dataset:
     ds = ds.set_index(time="dates")
     ds = ds.assign_coords({"variable": ds.attrs["variables"]})
 
+    # Skip params the analysis does not provide (e.g. HZEROCL in KENDA), as for INCA.
+    unavailable = [p for p in params if zarr_names[p] not in ds.attrs["variables"]]
+    if unavailable:
+        LOG.warning(
+            "%s does not provide %s; these parameters are skipped.",
+            root.name,
+            unavailable,
+        )
+        params_with_altitude = [p for p in params_with_altitude if p not in unavailable]
+
     # select variables and squeeze ensemble dimension
     ds = ds.sel(variable=[zarr_names[p] for p in params_with_altitude]).squeeze(
         "ensemble", drop=True
@@ -316,6 +405,8 @@ def _open_analysis_zarr(root: Path, params: list[str]) -> xr.Dataset:
     # Unit conversion: m -> mm for TOT_PREC (zarr stores in m)
     if "TOT_PREC" in ds:
         ds["TOT_PREC"] = ds["TOT_PREC"] * 1000
+    # KENDA keeps ICON's missing-value marker for CIN
+    ds = _mask_icon_missing_values(ds)
 
     # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
     if "cell" in ds.dims:
@@ -368,13 +459,14 @@ def _load_analysis_data_from_zarr(
     Returns a dataset with 'step' dimension (timedelta from reftime).
     Accumulatable params (e.g. TOT_PREC) are always 1H period-accumulated in
     analysis zarrs — ICON stores them as TOT_PREC_1H, IFS as tp. Both are
-    converted to cumulative-from-start via _accumulate_from_hourly so that
+    converted to cumulative-from-start via accumulate_from_hourly so that
     _disaggregated_and_derived_params can disaggregate them uniformly.
 
     Pass a pre-opened ``lazy_ds`` (from ``open_truth_zarr``) to skip
     re-opening the zarr store on every call.
     """
     ds = lazy_ds if lazy_ds is not None else _open_analysis_zarr(root, params)
+    params = [p for p in params if p in ds]  # unavailable params were skipped
 
     ref_np = np.datetime64(reftime, "ns")
     accum_params = [p for p in params if p in _ACCUMULATABLE_PARAMS]
@@ -402,7 +494,7 @@ def _load_analysis_data_from_zarr(
             {"time": "step"}
         )
         for p in accum_params:
-            vars_out[p] = _accumulate_from_hourly(ds_hourly[p], steps)
+            vars_out[p] = accumulate_from_hourly(ds_hourly[p], steps)
 
     return xr.Dataset(vars_out)
 
@@ -700,7 +792,10 @@ def load_obs_data_from_jretrieve(
         "SP_10M": "fkl010z0",
         "DD_10M": "dkl010z0",
         "VMAX_10M": "fkl010z1",
+        "RELHUM_2M": "ure200s0",
     }
+    # TW_2M is derived from these (DERIVED_PARAMS), as for ICON baselines.
+    DWH_TW_2M_INPUTS = ("tre200s0", "tde200s0", "prestas0")
     DWH_WIND_SPEED = "fkl010z0"
     DWH_WIND_DIR = "dkl010z0"
     DWH_CELSIUS_TO_KELVIN = {"tre200s0", "tde200s0"}
@@ -715,6 +810,8 @@ def load_obs_data_from_jretrieve(
     short_names: list[str] = [DWH_PARAM_MAP[p] for p in params if p in DWH_PARAM_MAP]
     if want_uv:
         short_names += [DWH_WIND_SPEED, DWH_WIND_DIR]
+    if "TW_2M" in params:
+        short_names += list(DWH_TW_2M_INPUTS)
     short_names = list(dict.fromkeys(short_names))
     if not short_names:
         raise ValueError(f"No DWH parameter mapping for requested params: {params}")
@@ -742,15 +839,19 @@ def load_obs_data_from_jretrieve(
     )
     raw = _jretrieve_df_to_xarray(df, short_names, catalog)
 
+    def _dwh_to_si(short: str) -> xr.DataArray:
+        """DWH parameter ``short`` from ``raw`` in SI units (°C → K, hPa → Pa)."""
+        var = raw[short]
+        if short in DWH_CELSIUS_TO_KELVIN:
+            return var - ZERO_KELVIN
+        if short in DWH_HPA_TO_PA:
+            return var * 100.0
+        return var
+
     out = xr.Dataset(coords=raw.coords)
     for icon, short in DWH_PARAM_MAP.items():
         if icon in params and short in raw:
-            var = raw[short]
-            if short in DWH_CELSIUS_TO_KELVIN:
-                var = var - ZERO_KELVIN
-            elif short in DWH_HPA_TO_PA:
-                var = var * 100.0
-            out[icon] = var
+            out[icon] = _dwh_to_si(short)
     if want_uv and DWH_WIND_SPEED in raw and DWH_WIND_DIR in raw:
         ff = raw[DWH_WIND_SPEED]
         dd_rad = np.deg2rad(raw[DWH_WIND_DIR])
@@ -758,6 +859,11 @@ def load_obs_data_from_jretrieve(
             out["U_10M"] = -ff * np.sin(dd_rad)
         if "V_10M" in params:
             out["V_10M"] = -ff * np.cos(dd_rad)
+    if "TW_2M" in params and all(s in raw for s in DWH_TW_2M_INPUTS):
+        t_2m, td_2m, ps = (_dwh_to_si(short) for short in DWH_TW_2M_INPUTS)
+        out["TW_2M"] = compute_derived(
+            xr.Dataset({"T_2M": t_2m, "TD_2M": td_2m, "PS": ps}), "TW_2M"
+        )
 
     out = out.dropna("values", how="all")
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
@@ -778,20 +884,24 @@ def is_inca_archive(root) -> bool:
     return "INCA" in Path(root).parts
 
 
-TruthSource = Literal["zarr", "jretrieve", "inca"]
+TruthType = Literal["anemoi_dataset", "jretrieve", "inca"]
 
 
-def truth_source(root) -> TruthSource:
-    """Classify a ``truth.root`` value: an anemoi ``.zarr`` analysis (e.g. KENDA),
-    ``jretrievedwh:<selector>`` for DWH station observations, or the INCA archive."""
+def truth_type(root) -> TruthType:
+    """Classify a ``truth.root`` value: an anemoi dataset (``.zarr``, e.g. KENDA),
+    ``jretrievedwh:<selector>`` for DWH station observations, or the INCA archive.
+
+    Any ``.zarr`` path is taken to be an anemoi dataset; other zarr layouts are
+    not supported.
+    """
     if Path(root).suffix == ".zarr":
-        return "zarr"
+        return "anemoi_dataset"
     if "jretrieve" in str(root):
         return "jretrieve"
     if is_inca_archive(root):
         return "inca"
     raise ValueError(
-        f"Unsupported truth root: {root}. Expected a path ending in '.zarr', "
+        f"Unsupported truth root: {root}. Expected an anemoi dataset ('.zarr'), "
         "'jretrievedwh:<selector>', or a path with an 'INCA' directory."
     )
 
@@ -807,34 +917,39 @@ def load_truth_data(
     observations via jretrieve.
 
     Handles derived and aggregated params transparently (same contract as
-    load_forecast_data): SP_10M is computed from U_10M/V_10M; TOT_PREC6 is
-    disaggregated from cumulative TOT_PREC; plain TOT_PREC is returned as-is.
+    load_forecast_data): SP_10M is computed from U_10M/V_10M (RELHUM_2M from
+    T_2M/TD_2M, ...), unless INCA provides it; TOT_PREC6 is disaggregated from
+    cumulative TOT_PREC; plain TOT_PREC is returned as-is.
     Returns a dataset with 'time' dimension (valid datetimes).
 
     Pass ``lazy_ds`` (from ``open_truth_zarr``) to reuse a pre-opened zarr
     store across multiple reftimes instead of reopening it on every call.
     """
-    source = truth_source(root)
-    if source == "jretrieve":
+    kind = truth_type(root)
+    if kind == "anemoi_dataset":
+        LOG.info("Loading ground truth from an analysis zarr dataset...")
+        load_params = get_base_params(params)
+        load_steps = get_steps(steps, params)
+        ds = _load_analysis_data_from_zarr(
+            root, reftime, load_steps, load_params, lazy_ds=lazy_ds
+        )
+        truth = _analysis_to_truth(ds, reftime, steps, params)
+    elif kind == "jretrieve":
         LOG.info("Loading ground truth from JRetrieve...")
-        return load_obs_data_from_jretrieve(
+        truth = load_obs_data_from_jretrieve(
             root=root,
             reftime=reftime,
             steps=steps,
             params=params,
         )
-
-    load_params = get_base_params(params)
-    load_steps = get_steps(steps, params)
-    if source == "zarr":
-        LOG.info("Loading ground truth from an analysis zarr dataset...")
-        ds = _load_analysis_data_from_zarr(
-            root, reftime, load_steps, load_params, lazy_ds=lazy_ds
-        )
-    else:
+    elif kind == "inca":
         LOG.info("Loading ground truth from INCA analyses...")
+        # INCA provides some derived params natively (e.g. DD_10M, TW_2M, TOT_SNOW).
+        load_params = get_base_params(params, native=inca.SUPPORTED_PARAMS)
+        load_steps = get_steps(steps, params)
         ds = inca.load_analysis(root, reftime, load_steps, load_params)
-    return _analysis_to_truth(ds, reftime, steps, params)
+        truth = _analysis_to_truth(ds, reftime, steps, params)
+    return truth
 
 
 def _analysis_to_truth(
@@ -1298,7 +1413,9 @@ def _load_icon_baseline_from_grib(
                 if "number" in ds.dims:
                     ds = ds.isel(number=0, drop=True)
                 for _p, _comps in DERIVED_PARAMS.items():
-                    if all(c in ds.data_vars for c in _comps):
+                    if _p not in ds.data_vars and all(
+                        c in ds.data_vars for c in _comps
+                    ):
                         ds = ds.assign({_p: compute_derived(ds, _p)})
                 acc = ds if acc is None else acc + ds
                 n_loaded += 1
@@ -1342,6 +1459,18 @@ def _disaggregated_and_derived_params(
     """
     load_steps = get_steps(steps, params)
 
+    # Derived params, unless the loader already provided them natively. Done
+    # first, as an aggregated param can have a derived base (TOT_SNOW6 → TOT_SNOW).
+    bases = dict.fromkeys(parse_aggregated_param(p)[0] for p in params)
+    for p in bases:
+        if p not in DERIVED_PARAMS or p in ds.data_vars:
+            continue
+        missing = [c for c in DERIVED_PARAMS[p] if c not in ds.data_vars]
+        if missing:
+            LOG.warning("Cannot derive %s: %s not available; skipped.", p, missing)
+            continue
+        ds = ds.assign({p: compute_derived(ds, p)})
+
     # IC synthesis + disaggregation for suffixed aggregated params (TOT_PREC6 etc.)
     aggregated = {
         p: parse_aggregated_param(p)
@@ -1365,16 +1494,11 @@ def _disaggregated_and_derived_params(
     if load_steps != list(steps) and "step" in ds.dims:
         ds = ds.reindex(step=[np.timedelta64(s, "h") for s in steps])
 
-    # Spatial derived params (skip if the loader already provided the variable natively)
-    for p in params:
-        if p in DERIVED_PARAMS and p not in ds.data_vars:
-            ds = ds.assign({p: compute_derived(ds, p)})
-
     # Drop base params not explicitly requested by the caller
     for base, _ in aggregated.values():
         if base not in params and base in ds.data_vars:
             ds = ds.drop_vars(base)
-    for p in params:
+    for p in bases:
         if p in DERIVED_PARAMS:
             for comp in DERIVED_PARAMS[p]:
                 if comp not in params:
@@ -1383,30 +1507,17 @@ def _disaggregated_and_derived_params(
     return ds
 
 
-def _tot_prec_to_kg_per_m2(ds: xr.Dataset, units: str) -> xr.Dataset:
-    """Convert TOT_PREC of an ML run from ``units`` to kg m-2."""
-    if "TOT_PREC" in ds:
-        ds["TOT_PREC"] = ds["TOT_PREC"] * TOT_PREC_UNIT_FACTORS[units]
-    return ds
-
-
 def load_forecast_data(
-    root,
-    reftime: datetime,
-    steps: list[int],
-    params: list[str],
-    member: str = "000",
-    tot_prec_units: str = "kg m-2",
+    root, reftime: datetime, steps: list[int], params: list[str], member: str = "000"
 ) -> xr.Dataset:
     """Load forecast data from GRIB files or an ICON archive.
 
     Handles derived and aggregated params transparently:
-    - ``SP_10M`` is computed from ``U_10M`` / ``V_10M``
+    - ``SP_10M``, ``DD_10M``, ``RELHUM_2M``, ``TW_2M`` and ``TOT_SNOW`` are read
+      from the GRIB files when present (e.g. written by the surface-diagnostics
+      post-processor), otherwise derived from their components (DERIVED_PARAMS)
     - ``TOT_PREC6`` is disaggregated from the cumulative ``TOT_PREC`` field
     - Plain ``TOT_PREC`` is returned as cumulative-from-start without disaggregation
-
-    ``tot_prec_units``: units of TOT_PREC in the GRIB files of an ML run
-    (``RunConfig.tot_prec_units``), converted to kg m-2. Ignored for baselines.
 
     Routing (in order):
     1. ``*.grib`` files present in *root* → :func:`_load_forecast_data_from_grib`
@@ -1415,7 +1526,7 @@ def load_forecast_data(
     3. Otherwise → ICON operational archive (via :func:`_load_icon_baseline_from_grib`)
     """
     root = Path(root)
-    load_params = get_base_params(params)
+    load_params = get_grib_load_params(params)
     load_steps = get_steps(steps, params)
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
@@ -1435,7 +1546,6 @@ def load_forecast_data(
                 ds = ds.assign_coords(elevation=elevation)
         if "elevation" not in ds.coords:
             ds = _try_assign_elevation(ds)
-        ds = _tot_prec_to_kg_per_m2(ds, tot_prec_units)
     elif is_inca_archive(root):
         LOG.info("Loading INCA baseline from NetCDF files...")
         # INCA provides wind speed natively (FF), so don't expand SP_10M → U_10M/V_10M.

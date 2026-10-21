@@ -27,6 +27,21 @@ _LAPSE_RATE_PARAMS: dict[str, tuple[float, str]] = {
     "PS": (_PS_LAPSE_RATE, "Pa"),
 }
 
+# Angles in degrees: continuous scores use the shortest angular error.
+CIRCULAR_PARAMS: frozenset[str] = frozenset({"DD_10M"})
+# Class codes (WMO code table 4.201 for PTYPE): only the contingency tables of
+# the thresholds are meaningful, the continuous scores are NaN.
+CATEGORICAL_PARAMS: frozenset[str] = frozenset({"PTYPE"})
+
+
+def angular_difference(fcst, obs):
+    """Shortest angular difference fcst - obs in degrees, in [-180, 180).
+
+    E.g. a forecast of 350 deg against an obs of 10 deg is -20 deg, not 340 deg.
+    Works on numpy arrays and xarray objects.
+    """
+    return (fcst - obs + 180.0) % 360.0 - 180.0
+
 
 def apply_lapse_rate_correction_inplace(
     fcst: xr.Dataset,
@@ -235,6 +250,8 @@ def _compute_scores(
     suffix="",
     source="",
     thresholds: dict[str, list[float]] | None = None,
+    circular: bool = False,
+    categorical: bool = False,
 ) -> xr.Dataset:
     """
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
@@ -242,22 +259,34 @@ def _compute_scores(
     Computation of scores for continuous and categorical forecasts are supported.
     Categorical forecasts are specified via a dict mapping operator keys (gt, ge, lt, le, eq, ne)
     to lists of threshold values (e.g. {"gt": [10.0], "lt": [0.0]}).
+    With ``circular`` (angles in degrees) the continuous scores use the shortest
+    angular error; with ``categorical`` (class codes) they are NaN.
     """
     LOG.info(f"Compute scores for {prefix} {suffix}")
+    # Forecast shifted by whole turns to within 180 deg of the obs
+    fcst_unwrapped = obs + angular_difference(fcst, obs) if circular else fcst
     result = xr.Dataset(
         {
             f"{prefix}BIAS{suffix}": scores.continuous.additive_bias(
-                fcst, obs, reduce_dims=dim
+                fcst_unwrapped, obs, reduce_dims=dim
             ),
-            f"{prefix}MSE{suffix}": scores.continuous.mse(fcst, obs, reduce_dims=dim),
-            f"{prefix}MAE{suffix}": scores.continuous.mae(fcst, obs, reduce_dims=dim),
+            f"{prefix}MSE{suffix}": scores.continuous.mse(
+                fcst_unwrapped, obs, reduce_dims=dim
+            ),
+            f"{prefix}MAE{suffix}": scores.continuous.mae(
+                fcst_unwrapped, obs, reduce_dims=dim
+            ),
             f"{prefix}CORR{suffix}": scores.continuous.correlation.pearsonr(
-                fcst,
+                fcst_unwrapped,
                 obs,
                 reduce_dims=dim,
             ),
         }
     )
+    if categorical:
+        # Class codes: only the contingency tables below are meaningful. full_like
+        # keeps the shape only, so the (lazy) continuous scores are never computed.
+        result = xr.full_like(result, np.nan)
     if thresholds is not None:
         LOG.info(f"compute thresholds for {thresholds}")
         threshold_pairs = [
@@ -307,7 +336,7 @@ def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
     return out
 
 
-def _truth_only_statistics(
+def _obs_only_statistics(
     fcst: xr.Dataset,
     obs: xr.Dataset,
     masks: xr.DataArray,
@@ -441,10 +470,12 @@ def verify(
     max_missing_fraction : float, optional
         Maximum allowed fraction of missing forecast values among obs-valid in-region points
         before a metric is set to NaN. Computed per region and time step over the reduction
-        dimensions. Default is 0.0 — no missing forecasts are tolerated where observations
-        exist. Increase to a small positive value (e.g. 0.05) if spurious forecast gaps need
-        to be accommodated. Currently this is not configurable, as we want to guarantee that
-        competing forecasts are evaluated on exactly the same set of observations.
+        dimensions. Default is 0.0 to require that competing forecasts are
+        evaluated on exactly the same set of observations.
+
+    Parameters in ``CIRCULAR_PARAMS`` (wind direction) are scored on the shortest
+    angular error. Parameters in ``CATEGORICAL_PARAMS`` (precipitation type) only get
+    the contingency tables of their thresholds; their continuous scores are NaN.
 
     Returns
     -------
@@ -530,6 +561,8 @@ def verify(
             source=fcst_label,
             dim=dim,
             thresholds=thresholds,
+            circular=param in CIRCULAR_PARAMS,
+            categorical=param in CATEGORICAL_PARAMS,
         ).where(~too_many_missing)
         fcst_stats = _compute_statistics(
             fcst_param,
@@ -550,8 +583,14 @@ def verify(
             _merge_metrics([score, param_statistics], num_workers=num_workers)
         )
 
-    scores += _truth_only_statistics(
-        fcst_aligned, obs_aligned, masks, station_masks, obs_label, dim, num_workers
+    scores += _obs_only_statistics(
+        fcst=fcst_aligned,
+        obs=obs_aligned,
+        masks=masks,
+        station_masks=station_masks,
+        obs_label=obs_label,
+        dim=dim,
+        num_workers=num_workers,
     )
 
     out = xr.merge(scores, join="outer", compat="no_conflicts")

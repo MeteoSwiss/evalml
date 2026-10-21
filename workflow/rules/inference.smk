@@ -316,7 +316,11 @@ rule inference_execute:
                     CMD_ARGS+=(runner.parallel.cluster=slurm)
                 fi
 
-                anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+                # Equivalent to `anemoi-inference run`, but imports pyproj before eccodes:
+                # the eckitlib wheel bundles its own PROJ, which aborts at exit (double free)
+                # if loaded before pyproj. See https://github.com/ecmwf/eckit/issues/354
+                python -c 'import sys, importlib.util; importlib.util.find_spec("pyproj") and __import__("pyproj"); from anemoi.inference.__main__ import main; sys.argv[0] = "anemoi-inference"; sys.exit(main())' \
+                    run config.yaml "${{CMD_ARGS[@]}}"
             }}
             export -f _run_inference
 

@@ -19,3 +19,14 @@ grib_copy -w shortName=T,level=500 $PL_SAMPLE /dev/stdout | grib_set -d 0 - icon
 
 # template for typeOfLevel=meanSea
 grib_copy -w shortName=PMSL $SFC_SAMPLE /dev/stdout | grib_set -d 0 - icon-ch1-typeOfLevel=meanSea.grib
+
+# templates for the fields of the surface-diagnostics post-processor (anemoi-plugins-meteoswiss);
+# SP_10M, DD_10M, RELHUM_2M, TW_2M use heightAboveGround, PTYPE surface and TOT_SNOW the TOT_PREC template
+# template for typeOfLevel=isothermZero (HZEROCL, SNOWLMT)
+grib_copy -w shortName=HZEROCL $SFC_SAMPLE /dev/stdout | grib_set -s bitmapPresent=0 -d 0 - icon-ch1-typeOfLevel=isothermZero.grib
+
+# template for typeOfLevel=atmML (CAPE_ML, CIN_ML)
+grib_copy -w shortName=CAPE_ML $SFC_SAMPLE /dev/stdout | grib_set -d 0 - icon-ch1-typeOfLevel=atmML.grib
+
+# template for typeOfLevel=atmMU (CAPE_MU, CIN_MU)
+grib_copy -w shortName=CAPE_MU $SFC_SAMPLE /dev/stdout | grib_set -d 0 - icon-ch1-typeOfLevel=atmMU.grib

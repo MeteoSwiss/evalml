@@ -91,7 +91,6 @@ rule verification_metrics:
     # TODO: implement logic to use experiment name instead of run_id as wildcard
     params:
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
-        tot_prec_units=lambda wc: RUN_CONFIGS[wc.run_id]["tot_prec_units"],
         truth=config["truth"]["root"],
         truth_source_id=f"truth-{TRUTH_HASH}",
         regions=REGIONS,
@@ -113,7 +112,6 @@ rule verification_metrics:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {params.grib_out_dir} \
-            --tot_prec_units "{params.tot_prec_units}" \
             --truth "{params.truth}" \
             --reftime {wildcards.init_time} \
             --steps "{params.fcst_steps}" \
@@ -233,7 +231,6 @@ rule verification_scoremaps:
     params:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
-        tot_prec_units=lambda wc: RUN_CONFIGS[wc.run_id]["tot_prec_units"],
         truth=config["truth"]["root"],
         truth_label=config["truth"]["label"],
         reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
@@ -243,7 +240,6 @@ rule verification_scoremaps:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --run_root {params.run_root} \
-            --tot_prec_units "{params.tot_prec_units}" \
             --reftimes {params.reftimes} \
             --truth "{params.truth}" \
             --step {wildcards.leadtime} \
