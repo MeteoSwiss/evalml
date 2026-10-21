@@ -1,10 +1,11 @@
 """Check whether inference output for a given init_time already exists in FDB.
 
 Each FDB root passed on the command line is assumed dedicated to a single
-checkpoint (the caller is responsible for pointing --fdb-root at an
-env_id-keyed directory, e.g. '{fdb_root_global}/{env_id}' or
-'{local_base}/{env_id}'), so no cross-checkpoint MARS-key disambiguation
-(class/expver/model) is needed here.
+checkpoint (the caller passes this run's own resolved root -- see
+`_resolve_fdb_root_for_run` in workflow/rules/inference.smk: either the run's
+explicit `root:` config value, or else its local per-checkpoint directory),
+so no cross-checkpoint MARS-key disambiguation (class/expver/model) is
+needed here.
 
 A single init_time's output can still be split into several distinct
 *blocks* within that one root -- e.g. an ICON-grid target and an IFS-grid

@@ -479,6 +479,19 @@
           "title": "Output",
           "type": "string"
         },
+        "root": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Only meaningful when output: fdb. Root directory of a shared/global FDB store this run reads from and writes into, used as-is (same pattern as baseline.root) -- the caller is responsible for pointing different checkpoints at different roots if they shouldn't share one. When unset (the default), this run's FDB output lives in a local per-checkpoint directory under the output root.",
+          "title": "Root"
+        },
         "config": {
           "anyOf": [
             {
@@ -646,25 +659,6 @@
           "default": null,
           "description": "FDB uenv view name to use when bundling FDB libraries, e.g. 'realtime'.",
           "title": "Srun View"
-        },
-        "fdb_root_global": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Base directory for the shared/global FDB store. Each checkpoint gets its own dedicated root at '{fdb_root_global}/{env_id}', keyed by the env_id hash (derived from the checkpoint) so different checkpoints never mix data in the same FDB instance. When set, inference is skipped for a given (run_id, init_time) if this root already holds every requested lead time.",
-          "title": "Fdb Root Global"
-        },
-        "write_to_global_fdb": {
-          "default": false,
-          "description": "If true, inference writes directly into '{fdb_root_global}/{env_id}' instead of the local per-checkpoint root. Requires fdb_root_global to be set.",
-          "title": "Write To Global Fdb",
-          "type": "boolean"
         }
       },
       "title": "InferenceResources",
@@ -1024,6 +1018,19 @@
           ],
           "title": "Output",
           "type": "string"
+        },
+        "root": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Only meaningful when output: fdb. Root directory of a shared/global FDB store this run reads from and writes into, used as-is (same pattern as baseline.root) -- the caller is responsible for pointing different checkpoints at different roots if they shouldn't share one. When unset (the default), this run's FDB output lives in a local per-checkpoint directory under the output root.",
+          "title": "Root"
         },
         "config": {
           "anyOf": [

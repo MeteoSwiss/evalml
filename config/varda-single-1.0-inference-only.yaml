@@ -33,10 +33,6 @@ profile:
   fdb:
     srun_uenv: "fdb/5.19:v2"
     srun_view: "realtime"
-    # Base dir for the shared store; actual root per checkpoint is
-    # {fdb_root_global}/{env_id}. TODO: point at the real shared location.
-    fdb_root_global: "/scratch/mch/cosuna/evalml_fdb/global-fdb"
-    write_to_global_fdb: false
   executor: slurm
   global_resources:
     gpus: 16

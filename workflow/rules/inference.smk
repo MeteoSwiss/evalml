@@ -210,29 +210,6 @@ def _get_fdb_uenv_for_env(env_id):
     return uenv, view
 
 
-def _get_fdb_roots(run_id):
-    """Return (global_root, local_root) for a run, both keyed by env_id.
-
-    Each checkpoint (env_id) gets its own dedicated FDB instance, so different
-    checkpoints never mix data in the same root. global_root is '' if
-    profile.fdb.fdb_root_global is not configured.
-    """
-    env_id = RUN_CONFIGS[run_id]["env_id"]
-    global_base = get_resource_by_env(env_id, "fdb_root_global", "")
-    global_root = f"{global_base}/{env_id}" if global_base else ""
-    local_root = str((OUT_ROOT / f"data/fdb/{env_id}").resolve())
-    return global_root, local_root
-
-
-def get_resource_by_env(env_id, field: str, default):
-    """Like get_resource, but usable outside a rule (no wildcards available)."""
-    fdb = (config.get("profile") or {}).get("fdb") or {}
-    if isinstance(fdb, dict):
-        return fdb.get(field, default) or default
-    else:
-        return getattr(fdb, field, default) or default
-
-
 def _count_fdb_blocks(run_id):
     """Count distinct 'fdb:' targets in this run's own inference config output.tee.
 
@@ -250,10 +227,11 @@ def _count_fdb_blocks(run_id):
 checkpoint inference_check_fdb:
     """Check whether (run_id, init_time) output already exists, complete, in FDB.
 
-    Checks the global root first (if profile.fdb.fdb_root_global is set), then the
-    local per-checkpoint root, in that order. A 'hit' requires every requested lead
-    time to be present in one root -- see inference_check_fdb.py for why no further
-    MARS-key disambiguation (class/expver/model) is needed. Writes 'hit\\t<root>' or
+    Checks this run's one configured FDB root (see _resolve_fdb_root_for_run --
+    the run's own `root:` field if set, otherwise its local per-checkpoint
+    directory). A 'hit' requires every requested lead time to be present in
+    that root -- see inference_check_fdb.py for why no further MARS-key
+    disambiguation (class/expver/model) is needed. Writes 'hit\\t<root>' or
     'miss\\t' to the status file. Runs inside the squashfs venv so that pyfdb and the
     native FDB C library are available. Skipped entirely (writes 'miss') unless this
     run's own config declares `output: fdb` (see the fail-fast validation below this
@@ -272,8 +250,7 @@ checkpoint inference_check_fdb:
         image_path=lambda wc, input: str(Path(input.image).resolve()),
         fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
         fdb_uenv=lambda wc: _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0],
-        fdb_root_global=lambda wc: _get_fdb_roots(wc.run_id)[0],
-        fdb_root_local=lambda wc: _get_fdb_roots(wc.run_id)[1],
+        fdb_root=lambda wc: _resolve_fdb_root_for_run(wc.run_id),
         fdb_schema=str(Path("resources/fdb/realtime-varda.schema").resolve()),
         fdb_view=lambda wc: get_resource(wc, "srun_view", "realtime") or "realtime",
         date=lambda wc: datetime.strptime(wc.init_time, "%Y%m%d%H%M").strftime("%Y%m%d"),
@@ -288,10 +265,6 @@ checkpoint inference_check_fdb:
                 printf 'miss\t' > {output.status}
                 echo "FDB check skipped: FDB not configured for this environment"
             else
-                GLOBAL_ARG=""
-                if [ -n "{params.fdb_root_global}" ]; then
-                    GLOBAL_ARG="--fdb-root {params.fdb_root_global}"
-                fi
                 # Mount the venv (pyfdb, python) and the FDB uenv (native libs, config,
                 # at its required /user-environment path) side by side in one call.
                 # squashfs-mount needs the mountpoint dir to already exist -- /user-environment
@@ -303,8 +276,8 @@ checkpoint inference_check_fdb:
                 squashfs-mount -s "{params.image_path}:$VENV_MOUNT,$FDB_SQUASHFS:/user-environment" -- bash -c '
                     source '"$VENV_MOUNT"'/bin/activate
                     export LD_LIBRARY_PATH=/user-environment/env/{params.fdb_view}/lib64:/user-environment/env/{params.fdb_view}/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}
-                    python {input.script} '"$GLOBAL_ARG"' \
-                        --fdb-root {params.fdb_root_local} \
+                    python {input.script} \
+                        --fdb-root {params.fdb_root} \
                         --fdb-schema {params.fdb_schema} \
                         --date {params.date} \
                         --time {params.time} \
@@ -318,15 +291,15 @@ checkpoint inference_check_fdb:
 
 
 def _resolve_fdb_root_for_run(run_id):
-    """Which FDB root this run's own inference_execute would write fresh output
-    into: the global one if write_to_global_fdb is set (and configured),
-    otherwise the local per-checkpoint root. Same logic as inference_execute's
-    own `fdb_root` param -- factored out so the read side can agree with it."""
-    global_root, local_root = _get_fdb_roots(run_id)
+    """This run's one FDB root: its own `root:` config value if set (a
+    shared/global store, used as-is -- same pattern as baseline.root),
+    otherwise a local directory dedicated to this checkpoint (env_id-keyed)
+    under the output root."""
+    custom_root = RUN_CONFIGS[run_id].get("root")
+    if custom_root:
+        return custom_root
     env_id = RUN_CONFIGS[run_id]["env_id"]
-    if get_resource_by_env(env_id, "write_to_global_fdb", False) and global_root:
-        return global_root
-    return local_root
+    return str((OUT_ROOT / f"data/fdb/{env_id}").resolve())
 
 
 def _get_inference_status(wc):
@@ -499,8 +472,8 @@ rule inference_execute:
 
             cd {params.workdir}
 
-            # Write into this checkpoint's dedicated FDB root (env_id-keyed): the global
-            # one if write_to_global_fdb is set, otherwise the local per-checkpoint root.
+            # Write into this run's one FDB root (see _resolve_fdb_root_for_run): its
+            # own `root:` config value if set, otherwise its local per-checkpoint root.
             # Exported so _run_inference (executed by squashfs-mount in a fresh bash) can see it.
             export FDB5_CONFIG_OVERRIDE=""
             if [ "{params.fdb_configured}" = "True" ]; then

@@ -79,20 +79,6 @@ class InferenceResources(BaseModel):
         None,
         description="FDB uenv view name to use when bundling FDB libraries, e.g. 'realtime'.",
     )
-    fdb_root_global: str | None = Field(
-        None,
-        description="Base directory for the shared/global FDB store. Each checkpoint gets "
-        "its own dedicated root at '{fdb_root_global}/{env_id}', keyed by the env_id hash "
-        "(derived from the checkpoint) so different checkpoints never mix data in the same "
-        "FDB instance. When set, inference is skipped for a given (run_id, init_time) if "
-        "this root already holds every requested lead time.",
-    )
-    write_to_global_fdb: bool = Field(
-        False,
-        description="If true, inference writes directly into "
-        "'{fdb_root_global}/{env_id}' instead of the local per-checkpoint root. "
-        "Requires fdb_root_global to be set.",
-    )
 
 
 class RunConfig(BaseModel):
@@ -138,9 +124,27 @@ class RunConfig(BaseModel):
         "is the single declared source of truth for backend routing; nothing probes for "
         "data presence or parses the inference config to guess it.",
     )
+    root: str | None = Field(
+        None,
+        description="Only meaningful when output: fdb. Root directory of a shared/global "
+        "FDB store this run reads from and writes into, used as-is (same pattern as "
+        "baseline.root) -- the caller is responsible for pointing different checkpoints "
+        "at different roots if they shouldn't share one. When unset (the default), this "
+        "run's FDB output lives in a local per-checkpoint directory under the output root.",
+    )
     config: Dict[str, Any] | str
 
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _root_requires_fdb_output(self) -> "RunConfig":
+        if self.root and self.output != "fdb":
+            raise ValueError(
+                "root is set but output is not 'fdb' -- a custom root only applies to "
+                "FDB-backed runs (grib output always lives under the local run "
+                "directory); set output: fdb or remove root."
+            )
+        return self
 
     @field_validator("steps")
     def validate_steps(cls, v: str) -> str:
