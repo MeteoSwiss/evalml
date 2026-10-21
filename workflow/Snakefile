@@ -5,6 +5,7 @@
 import time
 
 from evalml.config import ConfigModel
+from evalml.failures import summarize_failures
 
 # validate configuration and add defaults
 update_config(config, ConfigModel.model_validate(dict(config)).model_dump(mode="json"))
@@ -124,8 +125,23 @@ onerror:
     print(_c(f"   Duration:       {dt}", "90"))
     print(_c(f"   Results:        {RESULTS_DIR}", "90"))
     print(_c(f"   Rule logs:      {LOGS_DIR}", "90"))
-    print(_c(f"   Snakemake logs: .snakemake/logs/", "90"))
+    print(_c(f"   Snakemake logs: .snakemake/log/", "90"))
     print(_c(f"   Slurm logs:     .snakemake/slurm_logs/", "90"))
+    if _T0:
+        failures = summarize_failures(
+            _T0, Path(".snakemake/slurm_logs"), Path(LOGS_DIR)
+        )
+        if failures:
+            print()
+            print(_c(f"   Failed jobs ({len(failures)}, newest first):", "1"))
+            for f in failures[:20]:
+                print(f"   - {f.what}")
+                print(_c(f"     log: {f.log}", "90"))
+                if f.message:
+                    print(_c(f"     {f.message[:200]}", "90"))
+            if len(failures) > 20:
+                print(_c(f"   ... and {len(failures) - 20} more", "90"))
+        print(_c("   SLURM states: sacct -u $USER -S <start> -X", "90"))
     _hr()
     print()
 
@@ -152,12 +168,15 @@ rule experiment_all:
             [
                 path
                 for c in CANDIDATES
+                for name in SCORECARD_CONFIGS
+                # a run used as the scorecard reference is not scored against itself
+                if resolve_reference_id(SCORECARD_CONFIGS[name]["baseline"]) != c
                 for path in expand(
                     rules.report_scorecard.output,
                     env_id=c.split("/")[0],
                     config_hash=c.split("/")[1],
                     experiment=EXPERIMENT_NAME,
-                    scorecard_name=list(SCORECARD_CONFIGS),
+                    scorecard_name=name,
                 )
             ]
             if (EXPERIMENT_CONFIG.get("scorecards") or {}).get("enabled", True)

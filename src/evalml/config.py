@@ -342,7 +342,10 @@ class ScorecardConfig(BaseModel):
 
     baseline: str = Field(
         ...,
-        description="Baseline label to compare against (must match the `label` field of a baseline entry in `runs`).",
+        description=(
+            "Label of the reference to compare against: a baseline or a forecaster/"
+            "temporal downscaler run in `runs`. A run is not scored against itself."
+        ),
     )
     lead_times: str = Field(
         ...,
@@ -732,6 +735,28 @@ class ConfigModel(BaseModel):
                 raise ValueError(
                     f"scoremaps.leadtimes contains {sorted(unsupported)} h which are not "
                     f"produced by participant with steps '{steps}'."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_scorecard_references(self) -> "ConfigModel":
+        sc = self.experiment.scorecards if self.experiment else None
+        if sc is None or not sc.enabled:
+            return self
+        labels = [
+            getattr(item, next(iter(type(item).model_fields))).label
+            for item in self.runs
+        ]
+        for name, section in sc.sections.items():
+            if section.baseline not in labels:
+                raise ValueError(
+                    f"scorecards.sections.{name}.baseline {section.baseline!r} does "
+                    f"not match the label of any entry in `runs`: {labels}"
+                )
+            if labels.count(section.baseline) > 1:
+                raise ValueError(
+                    f"scorecards.sections.{name}.baseline {section.baseline!r} is "
+                    f"ambiguous: several entries in `runs` use this label."
                 )
         return self
 

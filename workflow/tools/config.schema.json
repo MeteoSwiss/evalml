@@ -824,7 +824,7 @@
       "description": "Configuration for a single named scorecard.",
       "properties": {
         "baseline": {
-          "description": "Baseline label to compare against (must match the `label` field of a baseline entry in `runs`).",
+          "description": "Label of the reference to compare against: a baseline or a forecaster/temporal downscaler run in `runs`. A run is not scored against itself.",
           "title": "Baseline",
           "type": "string"
         },
