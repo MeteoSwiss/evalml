@@ -35,7 +35,8 @@ include:
       export PATH="$PWD/.local/bin:$PATH"
       # uv: bare metal assumes a user-managed env so evalml ships no installer
       export UV_INSTALL_DIR="$PWD/.local/bin"
-      curl -LsSf https://astral.sh/uv/install.sh | env INSTALLER_NO_MODIFY_PATH=1 sh
+      UV_VERSION='0.11.32'
+      curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | env INSTALLER_NO_MODIFY_PATH=1 sh
       uv --version
 
 .install_evalml:
