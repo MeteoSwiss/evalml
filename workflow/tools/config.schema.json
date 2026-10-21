@@ -88,6 +88,63 @@
       "title": "BaselineItem",
       "type": "object"
     },
+    "ComparisonsConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for side-by-side map comparisons of truth, runs and baselines.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate side-by-side maps: one figure per init time, lead time, parameter and domain, with a panel for the truth (if gridded), each run and each selected baseline.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "truth": {
+          "default": true,
+          "description": "Whether to include a truth panel. Ignored for station truth (jretrievedwh), which cannot be drawn as a map.",
+          "title": "Truth",
+          "type": "boolean"
+        },
+        "baselines": {
+          "description": "Labels of the baselines to add as panels.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Baselines",
+          "type": "array"
+        },
+        "domains": {
+          "default": [
+            "alps"
+          ],
+          "description": "Domains to plot. Same format as `animations.domains`: a named domain defined in plotting.DOMAINS or a custom domain dict.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/DomainConfig"
+              }
+            ]
+          },
+          "title": "Domains",
+          "type": "array"
+        },
+        "lead_times": {
+          "default": [
+            24
+          ],
+          "description": "Lead times (hours) to plot. A run or baseline without data at a lead time is shown as an empty panel.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Lead Times",
+          "type": "array"
+        }
+      },
+      "title": "ComparisonsConfig",
+      "type": "object"
+    },
     "Dashboard": {
       "description": "Settings for the dashboard",
       "properties": {
@@ -876,6 +933,10 @@
         },
         "animations": {
           "$ref": "#/$defs/AnimationsConfig"
+        },
+        "comparisons": {
+          "$ref": "#/$defs/ComparisonsConfig",
+          "description": "Configuration for side-by-side map comparisons."
         }
       },
       "title": "ShowcaseConfig",

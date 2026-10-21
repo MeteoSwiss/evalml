@@ -337,6 +337,55 @@ class AnimationsConfig(BaseModel):
     )
 
 
+class ComparisonsConfig(BaseModel):
+    """Configuration for side-by-side map comparisons of truth, runs and baselines."""
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Whether to generate side-by-side maps: one figure per init time, lead "
+            "time, parameter and domain, with a panel for the truth (if gridded), "
+            "each run and each selected baseline."
+        ),
+    )
+    truth: bool = Field(
+        default=True,
+        description=(
+            "Whether to include a truth panel. Ignored for station truth "
+            "(jretrievedwh), which cannot be drawn as a map."
+        ),
+    )
+    baselines: List[str] = Field(
+        default_factory=list,
+        description="Labels of the baselines to add as panels.",
+    )
+    domains: List[str | DomainConfig] = Field(
+        default=["alps"],
+        description=(
+            "Domains to plot. Same format as `animations.domains`: a named domain "
+            "defined in plotting.DOMAINS or a custom domain dict."
+        ),
+    )
+    lead_times: List[int] = Field(
+        default=[24],
+        description=(
+            "Lead times (hours) to plot. A run or baseline without data at a lead "
+            "time is shown as an empty panel."
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _enabled_requires_a_reference(self):
+        if self.enabled and not (self.truth or self.baselines):
+            raise ValueError(
+                "comparisons need something to compare the runs with: enable "
+                "`truth` or list `baselines`."
+            )
+        return self
+
+
 class ScorecardConfig(BaseModel):
     """Configuration for a single named scorecard."""
 
@@ -394,6 +443,10 @@ class ShowcaseConfig(BaseModel):
     animations: AnimationsConfig = Field(
         default_factory=AnimationsConfig,
         description="Configuration for animation generation.",
+    )
+    comparisons: ComparisonsConfig = Field(
+        default_factory=ComparisonsConfig,
+        description="Configuration for side-by-side map comparisons.",
     )
 
 
