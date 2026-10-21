@@ -176,7 +176,30 @@ def main():
         units = units or "mm"
         name = name or f"{forecast_steps[1] - forecast_steps[0]}h total precipitation"
 
-    # Loop over stations — data is loaded once, mapping is per station
+    # Map all stations at once: each mapping builds a nearest-neighbour index over
+    # the full source grid, so doing it per station is slow for km-scale fields.
+    found = [s for s in stations if s in catalog_lookup]
+    if found:
+        stations_ds = xr.Dataset(
+            coords={
+                "values": found,
+                "latitude": ("values", [catalog_lookup[s][0] for s in found]),
+                "longitude": ("values", [catalog_lookup[s][1] for s in found]),
+                "elevation": ("values", [catalog_lookup[s][2] for s in found]),
+            }
+        )
+        forecast_stations_ds = map_forecast_to_truth(forecast_ds, stations_ds)
+        analysis_stations_ds = map_forecast_to_truth(analysis_ds, stations_ds)
+        baseline_stations_ds_list = [
+            map_forecast_to_truth(ds, stations_ds) for ds in baseline_ds_list
+        ]
+        if args.lapse_rate_correction:
+            apply_lapse_rate_correction_inplace(
+                forecast_stations_ds, stations_ds, [variable]
+            )
+            for ds in baseline_stations_ds_list:
+                apply_lapse_rate_correction_inplace(ds, stations_ds, [variable])
+
     for station in stations:
         LOG.info(
             "Plotting station %s (%d/%d)",
@@ -205,28 +228,11 @@ def main():
             plt.close(fig)
             LOG.info("saved placeholder: %s", outfn)
             continue
-        lat, lon, elev = catalog_lookup[station]
-        station_ds = xr.Dataset(
-            coords={
-                "values": [station],
-                "latitude": ("values", [lat]),
-                "longitude": ("values", [lon]),
-                "elevation": ("values", [elev]),
-            }
-        )
-
-        forecast_station_ds = map_forecast_to_truth(forecast_ds, station_ds)
-        analysis_station_ds = map_forecast_to_truth(analysis_ds, station_ds)
+        forecast_station_ds = forecast_stations_ds.sel(values=station)
+        analysis_station_ds = analysis_stations_ds.sel(values=station)
         baseline_station_ds_list = [
-            map_forecast_to_truth(ds, station_ds) for ds in baseline_ds_list
+            ds.sel(values=station) for ds in baseline_stations_ds_list
         ]
-
-        if args.lapse_rate_correction:
-            apply_lapse_rate_correction_inplace(
-                forecast_station_ds, station_ds, [variable]
-            )
-            for ds in baseline_station_ds_list:
-                apply_lapse_rate_correction_inplace(ds, station_ds, [variable])
 
         fig, ax = plt.subplots()
 
