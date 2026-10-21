@@ -224,7 +224,7 @@ rule verification_scoremaps:
     resources:
         cpus_per_task=balfrin_cpus(50_000, actual_cpus=2),
         mem_mb=50_000,
-        runtime="60m",
+        runtime=scoremap_runtime,
     # wildcard_constraints:
     # run_id="^" # to avoid ambiguitiy with run_baseline_verif
     # TODO: implement logic to use experiment name instead of run_id as wildcard
@@ -264,7 +264,7 @@ rule verification_scoremaps_baseline:
     resources:
         cpus_per_task=balfrin_cpus(50_000, actual_cpus=24),
         mem_mb=50_000,
-        runtime="60m",
+        runtime=scoremap_runtime,
     params:
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
