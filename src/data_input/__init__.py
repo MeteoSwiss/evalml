@@ -124,7 +124,7 @@ _FDB_PARAM_TIMESPAN: dict[str, str] = {
 # _FDB_GLOBAL_MODEL ("varda-single-g", IFS-origin global grid) is archived
 # under standard WMO/ECMWF param ids, not VARDA's custom local table -- see
 # the `modifiers.patches` block in
-# resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi-fdb.yaml,
+# resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml,
 # which explicitly pairs each ICON name with its archived (param, shortName).
 # No pressure-level params mapped here: nothing in this codebase currently
 # requests one from the global grid.
@@ -595,7 +595,11 @@ def _discover_icon_member_ids(
     )
 
 
-def load_from_grib_file(file: str | list[str], sel_kwargs):
+def load_fieldlist_from_grib_file(file: str | list[str], sel_kwargs):
+    """Load an earthkit FieldList from one or more local GRIB files, filtered
+    by `sel_kwargs` -- the part of :func:`load_from_grib_file` that's reusable
+    by callers (e.g. plotting.compat) that need the fieldlist itself rather
+    than an already-decoded xarray Dataset."""
     # Coerce Path objects to str: earthkit-data unwraps a single-element list
     # into one File source without converting, and then fails on non-str paths.
     if isinstance(file, (list, tuple)):
@@ -603,7 +607,11 @@ def load_from_grib_file(file: str | list[str], sel_kwargs):
     else:
         file = str(file)
     fieldlist = ekd.from_source("file", file, lazily=True).to_fieldlist()
-    return fieldlist_to_xarray(fieldlist.sel(**sel_kwargs))
+    return fieldlist.sel(**sel_kwargs)
+
+
+def load_from_grib_file(file: str | list[str], sel_kwargs):
+    return fieldlist_to_xarray(load_fieldlist_from_grib_file(file, sel_kwargs))
 
 
 def variable_name_profile(

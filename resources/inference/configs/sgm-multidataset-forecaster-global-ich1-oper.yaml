@@ -32,6 +32,7 @@ output:
         path: grib/{date}{time:04}_{step:03}.grib
         encoding:
           typeOfGeneratingProcess: 2
+          generatingProcessIdentifier: 180
           centre: lssw
         templates:
           samples: resources/templates_index_icon.yaml
@@ -84,6 +85,7 @@ output:
         path: grib/ifs-{date}{time:04}_{step:03}.grib
         encoding:
           typeOfGeneratingProcess: 2
+          generatingProcessIdentifier: 180
           centre: ecmf
         templates:
           samples: resources/templates_index_ifs.yaml

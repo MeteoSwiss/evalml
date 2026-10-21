@@ -14,7 +14,7 @@ runs:
       checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-2-interpolator/versions/3
       label: Varda-single-1.0
       steps: 0/120/1
-      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi-fdb.yaml
+      config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
       output: fdb
       extra_requirements:
         - anemoi-datasets==0.5.35

@@ -211,17 +211,35 @@ def _get_fdb_uenv_for_env(env_id):
 
 
 def _count_fdb_blocks(run_id):
-    """Count distinct 'fdb:' targets in this run's own inference config output.tee.
+    """Count how many output.tee targets this run will write into FDB.
+
+    Zero whenever this run doesn't declare output: fdb -- regardless of what
+    its config's output.tee contains, a grib-output run never writes to FDB.
+
+    For output: fdb runs, inference configs are maintained once, in grib: form,
+    as the single source of truth for both backends -- inference_prepare.py's
+    _convert_tee_to_fdb rewrites every 'grib:' tee entry to 'fdb:' at
+    config-prep time (see resources/inference/configs/
+    sgm-temporal-downscaler-global_trimedge_multi.yaml). So each on-disk
+    'grib:' entry becomes one FDB target; a literal 'fdb:' entry (a config
+    authored directly in fdb: form, bypassing the conversion) is also counted,
+    for robustness.
 
     A single init_time can write several output blocks (e.g. an ICON-grid target
     and an IFS-grid target) into the same env_id-keyed root; the check needs to
     know how many to expect so a run that silently dropped one entirely doesn't
     read as complete just because the other is.
     """
+    if RUN_CONFIGS[run_id]["output"] != "fdb":
+        return 0
     with open(RUN_CONFIGS[run_id]["config"]) as f:
         run_cfg = yaml.safe_load(f)
     tee = ((run_cfg.get("output") or {}).get("tee")) or []
-    return sum(1 for entry in tee if isinstance(entry, dict) and "fdb" in entry)
+    return sum(
+        1
+        for entry in tee
+        if isinstance(entry, dict) and ({"fdb", "grib"} & entry.keys())
+    )
 
 
 checkpoint inference_check_fdb:
@@ -416,6 +434,7 @@ rule inference_prepare_temporal_downscaler:
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None
             else _get_forecaster_run_id(wc.run_id)
         ),
+        output_backend=lambda wc: RUN_CONFIGS[wc.run_id]["output"],
     script:
         "../scripts/inference_prepare.py"
 

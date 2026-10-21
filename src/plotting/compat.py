@@ -1,13 +1,12 @@
 from datetime import datetime
 from pathlib import Path
 
-import tempfile
-
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import MultiPoint
 from data_input import (
-    load_from_grib_file,
+    load_fieldlist_from_grib_file,
+    fieldlist_to_xarray,
     rename_ifs_to_icon,
     _fetch_fdb_fieldlist,
     _FDB_MODEL,
@@ -34,28 +33,31 @@ PARAMS_MAP = {
 PARAMS_MAP_INV = {v: k for k, v in PARAMS_MAP.items()}
 
 
-def load_state_from_grib(
-    file: Path, paramlist: list[str] | None = None
+def _decode_state(
+    regional_fieldlist,
+    global_fieldlist,
+    paramlist: list[str] | None,
+    source: str,
 ) -> dict[str, np.ndarray | dict[str, np.ndarray] | gpd.GeoSeries]:
-    # Also request IFS shortname aliases
-    paramlist_extended = list(
-        {p for p in (paramlist or [])}
-        | {PARAMS_MAP[p] for p in (paramlist or []) if p in PARAMS_MAP}
-    )
-    ds = load_from_grib_file(file, {"parameter.variable": paramlist_extended})
+    """Build a plotting state dict from the regional (lam_0) and optional
+    global (IFS) fieldlists for one lead time.
+
+    This is the common decoding step shared by :func:`load_state_from_grib`
+    and :func:`load_state_from_fdb`, which differ only in how they fetch the
+    two fieldlists (local files vs FDB retrieve) -- once both have an
+    earthkit FieldList in hand, the xarray conversion, renaming, and
+    flat-point-list state assembly are identical. `source` is only used to
+    make the "nothing found" error message useful.
+    """
+    ds = fieldlist_to_xarray(regional_fieldlist)
     # Rename any IFS shortnames back to COSMO names
     ds = rename_ifs_to_icon(ds, PARAMS_MAP_INV)
-    # TODO check if needed
-    # if "tp" in ifs_rename and "TOT_PREC" in ds:
-    #     # IFS/ECMWF convention: "tp" is accumulated precip in meters.
-    #     # Convert to kg m-2 (mm) to match the ICON-native convention.
-    #     ds["TOT_PREC"] = ds["TOT_PREC"] * 1000
     state = {}
     ref_param = next((p for p in (paramlist or []) if p in ds), None)
     if ref_param is None:
         raise ValueError(
-            f"None of the requested params {paramlist} found in {file}. "
-            "The GRIB file may not contain these fields at this lead time "
+            f"None of the requested params {paramlist} found in {source}. "
+            "The source may not contain these fields at this lead time "
             "(e.g. accumulated fields like TOT_PREC are undefined at step 0)."
         )
     # Cast datetime64 directly: datetime.fromtimestamp() would read the epoch
@@ -85,24 +87,24 @@ def load_state_from_grib(
             state["fields"][param] = np.full(
                 ds["longitude"].values.size, np.nan, dtype=float
             )
-    global_file = str(file.parent / f"ifs-{file.stem}.grib")
-    if Path(global_file).exists():
+
+    if global_fieldlist is not None:
         _paramlist_ecmwf = [PARAMS_MAP[p] for p in paramlist]
-        ds = load_from_grib_file(global_file, {"parameter.variable": _paramlist_ecmwf})
-        mask = ~np.isnan(ds[_paramlist_ecmwf[0]].values.squeeze())
-        global_lons = ds["longitude"].values.flatten()
+        gds = fieldlist_to_xarray(global_fieldlist)
+        mask = ~np.isnan(gds[_paramlist_ecmwf[0]].values.squeeze())
+        global_lons = gds["longitude"].values.flatten()
         if np.max(global_lons) > 180:
             global_lons = ((global_lons + 180) % 360) - 180
         state["longitudes"] = np.concatenate([state["longitudes"], global_lons[mask]])
         state["latitudes"] = np.concatenate(
-            [state["latitudes"], ds["latitude"].values.flatten()[mask]]
+            [state["latitudes"], gds["latitude"].values.flatten()[mask]]
         )
         for param in _paramlist_ecmwf:
-            if param in ds:
+            if param in gds:
                 state["fields"][PARAMS_MAP_INV[param]] = np.concatenate(
                     [
                         state["fields"][PARAMS_MAP_INV[param]],
-                        ds[param].values.flatten()[mask],
+                        gds[param].values.flatten()[mask],
                     ]
                 )
             else:
@@ -115,6 +117,29 @@ def load_state_from_grib(
     return state
 
 
+def load_state_from_grib(
+    file: Path, paramlist: list[str] | None = None
+) -> dict[str, np.ndarray | dict[str, np.ndarray] | gpd.GeoSeries]:
+    # Also request IFS shortname aliases
+    paramlist_extended = list(
+        {p for p in (paramlist or [])}
+        | {PARAMS_MAP[p] for p in (paramlist or []) if p in PARAMS_MAP}
+    )
+    regional_fieldlist = load_fieldlist_from_grib_file(
+        file, {"parameter.variable": paramlist_extended}
+    )
+
+    global_fieldlist = None
+    global_file = file.parent / f"ifs-{file.stem}.grib"
+    if global_file.exists():
+        _paramlist_ecmwf = [PARAMS_MAP[p] for p in paramlist]
+        global_fieldlist = load_fieldlist_from_grib_file(
+            global_file, {"parameter.variable": _paramlist_ecmwf}
+        )
+
+    return _decode_state(regional_fieldlist, global_fieldlist, paramlist, source=str(file))
+
+
 def load_state_from_fdb(
     fdb_root: str, reftime: datetime, step: int, paramlist: list[str] | None = None
 ) -> dict[str, np.ndarray | dict[str, np.ndarray] | gpd.GeoSeries]:
@@ -122,39 +147,33 @@ def load_state_from_fdb(
 
     Fetches the regional (`_FDB_MODEL`) and global (`_FDB_GLOBAL_MODEL`) grids
     from FDB -- exactly the requested params, via `_fetch_fdb_fieldlist` --
-    and writes them to temp files using the same naming convention
-    `load_state_from_grib` already expects locally (a primary file plus an
-    `ifs-<stem>.grib` companion in the same directory), then delegates to it
-    unchanged -- reusing its state-dict construction and global-grid
-    concatenation (it works with flat point lists, not an aligned xarray grid,
-    so the regional/global point-count mismatch that :func:`data_input.
-    load_forecast_data` sidesteps by dropping the global grid entirely isn't a
-    problem here).
+    and decodes them directly through the same :func:`_decode_state` shared
+    with the local-file path (it works with flat point lists, not an aligned
+    xarray grid, so the regional/global point-count mismatch that
+    :func:`data_input.load_forecast_data` sidesteps by dropping the global
+    grid entirely isn't a problem here).
     """
-    regional = _fetch_fdb_fieldlist(fdb_root, reftime, [step], paramlist, model=_FDB_MODEL)
-    if regional is None:
+    regional_fieldlist = _fetch_fdb_fieldlist(
+        fdb_root, reftime, [step], paramlist, model=_FDB_MODEL
+    )
+    if regional_fieldlist is None:
         raise FileNotFoundError(
             f"No FDB data found for step={step} model={_FDB_MODEL} in {fdb_root}"
         )
     try:
-        global_ = _fetch_fdb_fieldlist(fdb_root, reftime, [step], paramlist, model=_FDB_GLOBAL_MODEL)
+        global_fieldlist = _fetch_fdb_fieldlist(
+            fdb_root, reftime, [step], paramlist, model=_FDB_GLOBAL_MODEL
+        )
     except ValueError:
         # Some requested params may have no known id for the global grid
         # (_FDB_GLOBAL_PARAM_IDS only covers what's actually been needed from
         # it) -- tolerate that the same way as "nothing archived" below,
         # rather than failing the whole frame over a companion grid.
-        global_ = None
+        global_fieldlist = None
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        primary = Path(tmp_dir) / "frame.grib"
-        with open(primary, "wb") as f:
-            for fld in regional:
-                f.write(fld.message())
-        if global_ is not None:
-            with open(Path(tmp_dir) / "ifs-frame.grib", "wb") as f:
-                for fld in global_:
-                    f.write(fld.message())
-        return load_state_from_grib(primary, paramlist=paramlist)
+    return _decode_state(
+        regional_fieldlist, global_fieldlist, paramlist, source=f"{fdb_root} (step={step})"
+    )
 
 
 def load_state_from_raw(

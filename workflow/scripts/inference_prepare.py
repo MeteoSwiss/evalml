@@ -12,6 +12,7 @@ def prepare_config(
     default_config_path: str,
     output_config_path: str,
     params: dict,
+    output_backend: str = "grib",
 ):
     """Prepare the configuration file for the inference run.
 
@@ -26,10 +27,18 @@ def prepare_config(
         Path where the updated configuration file will be written.
     params : dict
         Dictionary of parameters to override in the default configuration.
+    output_backend : str
+        "grib" (default) leaves output.tee untouched -- the inference config is
+        itself the single source of truth, always written in grib: form. "fdb"
+        rewrites every `output.tee` entry from `grib:` to `fdb:` (dropping the
+        grib-only `path` key) -- see `_convert_tee_to_fdb`.
     """
 
     with open(default_config_path, "r") as f:
         config = yaml.safe_load(f)
+
+    if output_backend == "fdb":
+        config = _convert_tee_to_fdb(config)
 
     config = _override_recursive(config, params)
 
@@ -111,7 +120,12 @@ def prepare_temporal_downscaler(smk):
 
     # prepare config
     overrides = _overrides_from_params(smk)
-    prepare_config(smk.input.config, smk.output.config, overrides)
+    prepare_config(
+        smk.input.config,
+        smk.output.config,
+        overrides,
+        output_backend=smk.params.output_backend,
+    )
 
     LOG.info("Wrote config file at %s", smk.output.config)
     with open(smk.output.config, "r") as f:
@@ -175,6 +189,39 @@ def _setup_logger(smk) -> logging.Logger:
     logger_name = f"{smk.rule}_{run_id}_{init_time}"
     LOG = setup_logger(logger_name, log_file=smk.log[0])
     return LOG
+
+
+def _convert_tee_to_fdb(config: dict) -> dict:
+    """Rewrite every `output.tee` entry from `{grib: {...}}` to `{fdb: {...}}`.
+
+    The inference config is maintained once, in grib: form, as the single
+    source of truth for both backends -- see
+    resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml,
+    whose output.tee encoding/templates/post_processors/modifiers are already
+    FDB-compatible (generatingProcessIdentifier, marsStream/marsType, etc.) and
+    were kept in parity with the (now-deleted) *-fdb-parity.yaml by hand before
+    this. Only the grib-specific `path` key doesn't apply to fdb: and is
+    dropped; everything else under the tee entry carries over unchanged.
+    """
+    tee = config.get("output", {}).get("tee")
+    if not tee:
+        raise ValueError(
+            "output_backend='fdb' but this inference config has no output.tee "
+            "entries to convert -- check the referenced config file."
+        )
+    new_tee = []
+    for entry in tee:
+        if set(entry.keys()) != {"grib"}:
+            raise ValueError(
+                f"output_backend='fdb' expects every output.tee entry to be a "
+                f"single 'grib:' block, got keys {sorted(entry.keys())} -- "
+                "this config isn't written in the expected grib: source-of-truth form."
+            )
+        inner = dict(entry["grib"])
+        inner.pop("path", None)
+        new_tee.append({"fdb": inner})
+    config["output"]["tee"] = new_tee
+    return config
 
 
 def _override_recursive(original: dict, updates: dict) -> dict:
