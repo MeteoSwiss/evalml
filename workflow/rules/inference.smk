@@ -315,6 +315,12 @@ rule inference_execute:
                     export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
                 fi
 
+                # earthkit-data (>=1.0) sets ECCODES_ECKIT_GEO=1 on import, which leaks from the
+                # Snakemake process into this job. With recent eccodeslib wheels it makes ecCodes
+                # compute coordinates with eckit.geo, whose Gaussian latitudes differ in the last
+                # bits from the datasets, so anemoi-inference fails to combine the input states.
+                unset ECCODES_ECKIT_GEO
+
                 CMD_ARGS=()
 
                 # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
