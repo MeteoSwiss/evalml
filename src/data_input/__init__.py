@@ -28,6 +28,9 @@ _IFS_TO_ICON = {
     "lsm": "FR_LAND",
     "tcc": "CLCT",
     "lcc": "CLCL",
+    "mcc": "CLCM",
+    "hcc": "CLCH",
+    "skt": "SKT",
     # TODO: ssrd is treated as a plain per-step field (no de-accumulation),
     # which only holds because it's not currently listed in any
     # accumulate_from_start_of_forecast.accumulations in the inference
@@ -38,6 +41,31 @@ _IFS_TO_ICON = {
     "z": "FIS",
 }
 _ICON_TO_IFS = {v: k for k, v in _IFS_TO_ICON.items()}
+# Cloud cover is in percent in ICON/MeteoSwiss data, but a fraction (0-1) in
+# ECMWF data (IFS shortNames in GRIB, aifs-* zarrs). evalml works in percent.
+_CLOUD_PARAMS = {"CLCT", "CLCL", "CLCM", "CLCH"}
+
+
+def _check_cloud_percent(param: str, vmax: float, source: str) -> None:
+    if not 1 < vmax <= 100.5:
+        LOG.warning(
+            "%s from %s has maximum %.3g, expected percent (0-100): wrong unit?",
+            param,
+            source,
+            vmax,
+        )
+
+
+def rename_ifs_to_icon(ds: xr.Dataset, mapping: dict[str, str]) -> xr.Dataset:
+    """Rename IFS shortNames to ICON names, converting cloud cover to percent."""
+    rename = {ifs: icon for ifs, icon in mapping.items() if ifs in ds.data_vars}
+    ds = ds.rename(rename)
+    for p in _CLOUD_PARAMS & set(ds.data_vars):
+        if p in rename.values():
+            ds[p] = ds[p] * 100
+        _check_cloud_percent(p, float(ds[p].max()), "GRIB")
+    return ds
+
 
 # FDB schema shared by archival (workflow/rules/inference.smk) and reads (this module).
 # Root marker prefix: load_forecast_data(root=...) treats an "fdb:<path>" string the
@@ -393,6 +421,10 @@ def _open_analysis_zarr(root: Path, params: list[str]) -> xr.Dataset:
         ds = ds.rename({"latitudes": "latitude", "longitudes": "longitude"})
     if "latitude" in ds and "longitude" in ds:
         ds = ds.set_coords(["latitude", "longitude"])
+    cloud_max = {
+        p: float(ds["maximum"].sel(variable=zarr_names[p]))
+        for p in _CLOUD_PARAMS & set(params_with_altitude)
+    }
     ds = (
         ds["data"]
         .to_dataset("variable")
@@ -402,6 +434,12 @@ def _open_analysis_zarr(root: Path, params: list[str]) -> xr.Dataset:
     # Unit conversion: m -> mm for TOT_PREC (zarr stores in m)
     if "TOT_PREC" in ds:
         ds["TOT_PREC"] = ds["TOT_PREC"] * 1000
+
+    is_ecmwf = root.name.startswith("aifs-")
+    for p, vmax in cloud_max.items():
+        if is_ecmwf:
+            ds[p] = ds[p] * 100
+        _check_cloud_percent(p, vmax * (100 if is_ecmwf else 1), root.name)
 
     # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
     if "cell" in ds.dims:
@@ -575,6 +613,8 @@ def variable_name_profile(
         "surface",
         "isobaricInhPa",
         "atmosphere",
+        "isobaricLayer",
+        "unknown",
     ],
 ) -> dict[str, Any]:
     """Resolve variable name profile based on the raw GRIB `typeOfLevel` value.
@@ -585,8 +625,22 @@ def variable_name_profile(
     keys don't resolve at all with the currently pinned earthkit-data (they
     raise KeyError / silently match nothing) -- this now uses the raw,
     always-available `typeOfLevel`/`shortName`/`levelist` GRIB keys instead.
+
+    "isobaricLayer" is the raw-key equivalent of the semantic "pressure_layer"
+    level type (CLCH/CLCM: a pressure layer between two isobaric surfaces).
+    "unknown" covers CLCL specifically: ICON-CH1 defines its low-cloud layer
+    with an unset second fixed surface, so eccodes can't name a typeOfLevel
+    for it at all -- confirmed on the real GRIB template, not just a loading
+    gap (see resources/inference/templates/templates.md).
     """
-    if level_type in ["heightAboveGround", "meanSea", "surface", "atmosphere"]:
+    if level_type in [
+        "heightAboveGround",
+        "meanSea",
+        "surface",
+        "atmosphere",
+        "isobaricLayer",
+        "unknown",
+    ]:
         return {}
     elif level_type == "isobaricInhPa":
         return {
@@ -657,17 +711,32 @@ def _disaggregate_accum(cumul: xr.DataArray, steps: list[int], n: int) -> xr.Dat
 
     For each step s in steps where s >= n: result[s] = cumul[s] - cumul[s-n],
     clipped to 0. For steps s < n (window extends before model start), result is NaN.
+    If cumul lacks any required step (e.g. 6-hourly source with n=1 requested), the
+    corresponding result is NaN — no KeyError is raised.
     Raises ValueError if any valid window gives significantly negative values (data is
     not actually cumulative from start).
     """
     step_coords = [np.timedelta64(s, "h") for s in steps]
-    result = xr.full_like(cumul.sel(step=step_coords), fill_value=np.nan)
-
     valid_steps = [s for s in steps if s >= n]
+
+    # Reindex cumul to cover every step we need (both s and s-n for valid windows).
+    # Missing steps in the source become NaN, so a coarser-resolution cumul (e.g.
+    # 6-hourly) naturally produces all-NaN results for a finer aggregation (e.g. n=1).
+    needed = sorted(
+        {np.timedelta64(s, "h") for s in steps}
+        | {np.timedelta64(s - n, "h") for s in valid_steps}
+    )
+    cumul_r = cumul.reindex(
+        step=needed
+    )  # default fill: NaN for float, NaT for datetime
+
+    result = xr.full_like(cumul_r.sel(step=step_coords), fill_value=np.nan)
+
     for s in valid_steps:
-        result.loc[{"step": np.timedelta64(s, "h")}] = cumul.sel(
-            step=np.timedelta64(s, "h")
-        ) - cumul.sel(step=np.timedelta64(s - n, "h"))
+        s_td = np.timedelta64(s, "h")
+        result.loc[{"step": s_td}] = cumul_r.sel(step=s_td) - cumul_r.sel(
+            step=np.timedelta64(s - n, "h")
+        )
 
     if valid_steps:
         valid_min = float(
@@ -722,15 +791,7 @@ def _load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Da
         {p for p in params} | {_ICON_TO_IFS[p] for p in params if p in _ICON_TO_IFS}
     )
     ds = load_from_grib_file(files, {"parameter.variable": params_extended})
-    return _rename_ifs_to_icon(ds)
-
-
-def _rename_ifs_to_icon(ds: xr.Dataset) -> xr.Dataset:
-    """Rename any IFS shortNames present in `ds` back to their ICON equivalents."""
-    ifs_rename = {
-        ifs: icon for ifs, icon in _IFS_TO_ICON.items() if ifs in ds.data_vars
-    }
-    return ds.rename(ifs_rename) if ifs_rename else ds
+    return rename_ifs_to_icon(ds, _IFS_TO_ICON)
 
 
 def _fdb_config(fdb_root: str) -> dict:
@@ -930,7 +991,7 @@ def load_obs_data_from_jretrieve(
 
     from data_input import jretrieve as jr
 
-    stations, stage, seq_type = jr.parse_selection(root)
+    stations, stage, seq_type, use_limitation = jr.parse_selection(root)
     jr.check_prerequisites(stage)
 
     want_uv = "U_10M" in params or "V_10M" in params
@@ -960,6 +1021,7 @@ def load_obs_data_from_jretrieve(
         increment_minutes=step_hours * 60,
         seq_type=seq_type,
         stage=stage,
+        use_limitation=use_limitation,
     )
     raw = _jretrieve_df_to_xarray(df, short_names, catalog)
 
@@ -982,7 +1044,16 @@ def load_obs_data_from_jretrieve(
 
     out = out.dropna("values", how="all")
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
-    return _select_valid_times(out, times, strict=True)
+    result = _select_valid_times(out, times, strict=True)
+
+    # Per-variable station-coverage log, so ground-truth coverage can be compared
+    # against what was actually available to nudge.
+    n_total = result.sizes["values"]
+    for name in result.data_vars:
+        n_valid = int(result[name].notnull().any("time").sum())
+        LOG.info("Stations with valid %s: %d / %d stations", name, n_valid, n_total)
+
+    return result
 
 
 def load_truth_data(
@@ -1472,6 +1543,9 @@ def _load_icon_baseline_from_grib(
                 )
                 if "number" in ds.dims:
                     ds = ds.isel(number=0, drop=True)
+                for _p, _comps in DERIVED_PARAMS.items():
+                    if all(c in ds.data_vars for c in _comps):
+                        ds = ds.assign({_p: compute_derived(ds, _p)})
                 acc = ds if acc is None else acc + ds
                 n_loaded += 1
             except Exception as exc:
@@ -1530,9 +1604,12 @@ def _disaggregated_and_derived_params(
                 cumuls[base] = _ensure_accum_ic(ds[base], load_steps)
             ds[agg_param] = _disaggregate_accum(cumuls[base], steps, n)
 
-    # Select only the originally requested steps (drop preceding helper steps)
+    # Select only the originally requested steps (drop preceding helper steps).
+    # Use reindex rather than sel so that steps absent from the loaded dataset
+    # (e.g. step 0 when the forecaster writes no step-0 file) are NaN-filled
+    # instead of raising a KeyError.
     if load_steps != list(steps) and "step" in ds.dims:
-        ds = ds.sel(step=[np.timedelta64(s, "h") for s in steps])
+        ds = ds.reindex(step=[np.timedelta64(s, "h") for s in steps])
 
     # Spatial derived params (skip if the loader already provided the variable natively)
     for p in params:

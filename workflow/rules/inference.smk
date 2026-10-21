@@ -351,6 +351,7 @@ rule inference_prepare_forecaster:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
+        holdout=lambda wc: holdout_dep(wc) if run_uses_holdout(wc.run_id) else [],
     output:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
@@ -363,6 +364,7 @@ rule inference_prepare_forecaster:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
+        holdout_workdir_name=HOLDOUT_WORKDIR_NAME,
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
@@ -381,6 +383,7 @@ rule inference_prepare_temporal_downscaler:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
+        holdout=lambda wc: holdout_dep(wc) if run_uses_holdout(wc.run_id) else [],
         forecasts=lambda wc: (
             [
                 OUT_ROOT
@@ -404,6 +407,7 @@ rule inference_prepare_temporal_downscaler:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
+        holdout_workdir_name=HOLDOUT_WORKDIR_NAME,
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
@@ -464,6 +468,11 @@ rule inference_execute:
         fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
         fdb_root=lambda wc: _resolve_fdb_root_for_run(wc.run_id),
         fdb_schema=str(Path("resources/fdb/realtime-varda.schema").resolve()),
+        account_flag=lambda wc: (
+            f"--account={config['profile']['default_resources']['slurm_account']}"
+            if config["profile"]["default_resources"].get("slurm_account")
+            else ""
+        ),
     # fmt: off
     shell:
         """
@@ -528,7 +537,11 @@ FDBEOF
                 fi
 
                 set +e
-                anemoi-inference run config.yaml "${{CMD_ARGS[@]}}" 2>&1 | tee inference_stdout.log
+                # Equivalent to `anemoi-inference run`, but imports pyproj before eccodes:
+                # the eckitlib wheel bundles its own PROJ, which aborts at exit (double free)
+                # if loaded before pyproj. See https://github.com/ecmwf/eckit/issues/354
+                python -c 'import sys, importlib.util; importlib.util.find_spec("pyproj") and __import__("pyproj"); from anemoi.inference.__main__ import main; sys.argv[0] = "anemoi-inference"; sys.exit(main())' \
+                    run config.yaml "${{CMD_ARGS[@]}}" 2>&1 | tee inference_stdout.log
                 local rc=${{PIPESTATUS[0]}}
                 set -e
                 if [ "$rc" -ne 0 ]; then
@@ -588,7 +601,9 @@ FDBEOF
             fi
 
             {params.srun_prefix} srun \
+                --job-name=anemoi-inference \
                 --unbuffered \
+                {params.account_flag} \
                 --partition={resources.slurm_partition} \
                 --cpus-per-task={resources.cpus_per_task} \
                 --mem-per-cpu={resources.mem_mb_per_cpu} \

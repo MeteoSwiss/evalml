@@ -9,6 +9,8 @@ from urllib.parse import urlparse
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
+# the experiment block is optional (e.g. for showcase/sandbox configs)
+EXPERIMENT_CONFIG = config.get("experiment") or {}
 
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
 HASH_LENGTH = 4
@@ -89,9 +91,7 @@ def parse_regions():
     """
     from evalml.config import PREDEFINED_REGIONS
 
-    if config.get("experiment") is None:
-        return "[]"
-    cfg = config["experiment"]["stratification"]
+    cfg = EXPERIMENT_CONFIG.get("stratification", {})
     root = cfg.get("root", "")
     result = []
     for entry in cfg.get("regions", []):
@@ -409,8 +409,9 @@ def verif_hash(full_config: dict) -> str:
     """Hash of all settings that affect verification outputs.
 
     Combines the truth source with verification-method settings so that
-    changing either (e.g. switching lapse_rate_correction on/off) produces
-    new output paths and unconditionally triggers a rerun.
+    changing any of them (e.g. switching lapse_rate_correction on/off, or
+    changing the station_holdout selection) produces new output
+    paths and unconditionally triggers a rerun.
     """
     truth_cfg = (
         {k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE}
@@ -419,8 +420,26 @@ def verif_hash(full_config: dict) -> str:
     )
     experiment_verif_cfg = {
         "lapse_rate_correction": full_config.get("lapse_rate_correction", True),
+        "station_holdout": HOLDOUT_STATIONS,
     }
     return generate_json_hash({"truth": truth_cfg, "verif": experiment_verif_cfg})
+
+
+def holdout_dep(_):
+    """Holdout station file dependency: the CSV written by rule
+    station_holdout, or no input when experiment.station_holdout is unset."""
+    return [HOLDOUT_FILE] if HOLDOUT_STATIONS else []
+
+
+def run_uses_holdout(run_id: str) -> bool:
+    """Whether the run's inference config consumes the holdout station file.
+
+    The contract is the file name: an inference config that references
+    HOLDOUT_WORKDIR_NAME (e.g. as the nudge_toward_observation filter's
+    holdout_station_file) gets the file staged in its working directory.
+    """
+    with open(RUN_CONFIGS[run_id]["config"], "r") as f:
+        return HOLDOUT_WORKDIR_NAME in f.read()
 
 
 def truth_file_dep(_):
@@ -438,11 +457,16 @@ def truth_file_dep(_):
 if config.get("truth") is not None and "jretrieve" in str(config["truth"]["root"]):
     from data_input.jretrieve import check_prerequisites, parse_selection
 
-    _, _jretrieve_stage, _ = parse_selection(config["truth"]["root"])
+    _, _jretrieve_stage, _, _ = parse_selection(config["truth"]["root"])
     check_prerequisites(_jretrieve_stage)
 
 
 TRUTH_HASH = truth_hash(config.get("truth"))
+HOLDOUT_STATIONS = sorted(EXPERIMENT_CONFIG.get("station_holdout") or [])
+HOLDOUT_FILE = (
+    OUT_ROOT / f"data/station_holdout/{generate_json_hash(HOLDOUT_STATIONS)}.csv"
+)
+HOLDOUT_WORKDIR_NAME = "holdout_stations.csv"
 REGIONS = parse_regions()
 VERIF_HASH = verif_hash(config)
 _showcase = config.get("showcase", {})
@@ -451,7 +475,7 @@ SHOWCASE_CONFIG = {
     "params": _showcase.get("params", ["T_2M", "SP_10M"]),
     "fps": _showcase.get("animations", {}).get("frames_per_second", 2.0),
 }
-EXPERIMENT_PARAMS = (config.get("experiment") or {}).get(
+EXPERIMENT_PARAMS = EXPERIMENT_CONFIG.get(
     "params", ["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"]
 )
 REFTIMES = parse_reference_times()
@@ -459,7 +483,17 @@ RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
-_scorecard = (config.get("experiment") or {}).get("scorecards") or {}
+# Fail fast: an inference config that consumes the holdout station file needs
+# experiment.station_holdout to be set.
+if not HOLDOUT_STATIONS:
+    for _run_id in RUN_CONFIGS:
+        if run_uses_holdout(_run_id):
+            raise ValueError(
+                f"Inference config {RUN_CONFIGS[_run_id]['config']} of run {_run_id} "
+                f"references {HOLDOUT_WORKDIR_NAME}, but experiment.station_holdout "
+                "is not set."
+            )
+_scorecard = EXPERIMENT_CONFIG.get("scorecards") or {}
 SCORECARD_CONFIGS = (
     _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
 )
@@ -469,8 +503,10 @@ SCORECARD_CONFIGS = (
 # - period-accumulated params (TOT_PREC/tp) verify a [lead - period, lead]
 #   window, so they have no value at lead times shorter than one step spacing
 #   (e.g. no 0h precip map).
-# - diagnostic params (e.g. CLCT/tcc) aren't part of the model's input state,
+# - diagnostic params (e.g. CLCT/tcc in AIFS) aren't part of the model's input state,
 #   so they're simply absent from the initial-state GRIB file written at step 0.
+#   Cloud cover is prognostic in some models (Varda-single RC); listing it here
+#   only drops their 0h animation frame.
 # Short and canonical names both appear across the workflow (showcases vs maps).
 PARAMS_WITHOUT_STEP_ZERO_VALUE = {
     "TOT_PREC",
@@ -479,6 +515,10 @@ PARAMS_WITHOUT_STEP_ZERO_VALUE = {
     "tcc",
     "CLCL",
     "lcc",
+    "CLCM",
+    "mcc",
+    "CLCH",
+    "hcc",
     "SSRD",
     "ssrd",
 }

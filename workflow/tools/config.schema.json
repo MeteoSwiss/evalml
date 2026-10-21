@@ -296,6 +296,22 @@
           "$ref": "#/$defs/Dashboard",
           "description": "Settings for the experiment dashboard."
         },
+        "station_holdout": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "List of holdout station nat_abbr. When set, adds a 'station_group' dimension (all/holdout/holdin) to verification metrics for all models and baselines. The workflow writes the list to a CSV file and stages it as holdout_stations.csv in the working directory of every inference run whose config references that file.",
+          "title": "Station Holdout"
+        },
         "scorecards": {
           "anyOf": [
             {
@@ -1164,7 +1180,7 @@
     },
     "lapse_rate_correction": {
       "default": true,
-      "description": "Apply standard-atmosphere lapse-rate correction to T_2M.",
+      "description": "Apply lapse-rate correction to T_2M (0.0065 K/m) and PS (11.5 Pa/m).",
       "title": "Lapse Rate Correction",
       "type": "boolean"
     },
@@ -1178,7 +1194,7 @@
         }
       ],
       "default": null,
-      "description": "Settings for the experiment workflow outputs. Required for full experiment runs; optional for inference-only runs."
+      "description": "Settings for the experiment workflow outputs. Required when running `evalml experiment`."
     },
     "locations": {
       "$ref": "#/$defs/Locations"

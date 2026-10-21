@@ -206,21 +206,21 @@ rule make_forecast_animation:
         param="|".join(map(re.escape, SHOWCASE_CONFIG["params"])),
         region="|".join(map(re.escape, SHOWCASE_CONFIG["regions"].keys())),
     localrule: True
-    params:
-        delay=round(100 / SHOWCASE_CONFIG["fps"]),
-    shell:
-        """
-        FRAMES=$(for f in {input}; do [ -s "$f" ] && echo "$f"; done | tr '\\n' ' ')
-        # The system ImageMagick policy.xml caps "area" at 16KP (16 thousand
-        # pixels -- smaller than almost any real image) as a hardening
-        # measure; that's a hard ceiling the -limit CLI flag cannot raise, so
-        # assembling ~120 full-resolution frames into a GIF silently failed
-        # ("cache resources exhausted" / "TooManyExceptions"). Point
-        # MAGICK_CONFIGURE_PATH at our own policy.xml with generous (not
-        # unbounded) limits instead.
-        export MAGICK_CONFIGURE_PATH=$(realpath resources/imagemagick)
-        convert -delay {params.delay} -loop 0 $FRAMES {output}
-        """
+    run:
+        from PIL import Image
+
+        frames = [
+            Image.open(f).convert("RGB").quantize()
+            for f in input
+            if Path(f).stat().st_size > 0
+        ]
+        frames[0].save(
+            output[0],
+            save_all=True,
+            append_images=frames[1:],
+            duration=1000 / SHOWCASE_CONFIG["fps"],
+            loop=0,
+        )
 
 
 rule plot_scoremaps:
