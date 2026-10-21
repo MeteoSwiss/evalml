@@ -198,6 +198,7 @@ rule experiment_all:
 rule showcase_all:
     """Target rule for showcase workflow."""
     input:
+        meteogram_prerequisites,
         (
             expand(
                 rules.make_forecast_animation.output,

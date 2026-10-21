@@ -719,6 +719,29 @@ def _jretrieve_df_to_xarray(df, short_names, catalog) -> xr.Dataset:
     return xr.Dataset(data_vars=data_vars, coords=coords)
 
 
+# ICON parameter names -> DWH (SwissMetNet) short names.
+DWH_PARAM_MAP = {
+    "T_2M": "tre200s0",
+    "TD_2M": "tde200s0",
+    "PS": "prestas0",
+    "PMSL": "pp0qffs0",
+    "TOT_PREC1": "rre150h0",
+    "TOT_PREC6": "rre006i0",
+    "TOT_PREC12": "rre012i0",
+    "TOT_PREC24": "rre024i0",
+    "TOT_PREC48": "rre048i0",
+    "TOT_PREC72": "rre072i0",
+    "FF_10M": "fkl010z0",
+    "SP_10M": "fkl010z0",
+    "DD_10M": "dkl010z0",
+    "VMAX_10M": "fkl010z1",
+}
+DWH_WIND_SPEED = "fkl010z0"
+DWH_WIND_DIR = "dkl010z0"
+DWH_CELSIUS_TO_KELVIN = {"tre200s0", "tde200s0"}
+DWH_HPA_TO_PA = {"prestas0", "pp0qffs0"}
+
+
 def load_obs_data_from_jretrieve(
     root, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
@@ -731,27 +754,6 @@ def load_obs_data_from_jretrieve(
     variables renamed to ICON names in SI units (T/TD in Kelvin, pressure in Pa).
     Only the requested hourly valid times are kept.
     """
-    DWH_PARAM_MAP = {
-        "T_2M": "tre200s0",
-        "TD_2M": "tde200s0",
-        "PS": "prestas0",
-        "PMSL": "pp0qffs0",
-        "TOT_PREC1": "rre150h0",
-        "TOT_PREC6": "rre006i0",
-        "TOT_PREC12": "rre012i0",
-        "TOT_PREC24": "rre024i0",
-        "TOT_PREC48": "rre048i0",
-        "TOT_PREC72": "rre072i0",
-        "FF_10M": "fkl010z0",
-        "SP_10M": "fkl010z0",
-        "DD_10M": "dkl010z0",
-        "VMAX_10M": "fkl010z1",
-    }
-    DWH_WIND_SPEED = "fkl010z0"
-    DWH_WIND_DIR = "dkl010z0"
-    DWH_CELSIUS_TO_KELVIN = {"tre200s0", "tde200s0"}
-    DWH_HPA_TO_PA = {"prestas0", "pp0qffs0"}
-
     from data_input import jretrieve as jr
 
     stations, stage, seq_type, use_limitation = jr.parse_selection(root)
@@ -817,6 +819,37 @@ def load_obs_data_from_jretrieve(
         LOG.info("Stations with valid %s: %d / %d stations", name, n_valid, n_total)
 
     return result
+
+
+def load_station_coords(
+    stations: list[str], param: str, stage: str = "prod"
+) -> xr.Dataset:
+    """Coordinates of SwissMetNet stations, by nat_abbr, from the DWH metadata.
+
+    Used to sample gridded data at stations when the truth itself carries no
+    station coordinates (e.g. an analysis zarr). Stations are looked up through
+    ``param``'s DWH parameter and 2m temperature, so stations without a sensor
+    for ``param`` (e.g. no rain gauge) are still found. Returns an empty-variable
+    Dataset on the ``values`` dimension with ``latitude``, ``longitude`` and
+    ``elevation`` coords; stations unknown to the DWH are absent.
+    """
+    from data_input import jretrieve as jr
+
+    jr.check_prerequisites(stage)
+    params = list(dict.fromkeys([DWH_PARAM_MAP.get(param, "tre200s0"), "tre200s0"]))
+    catalog = jr.StationCatalog.from_meta(
+        jr.fetch_meta(
+            stations={"locations": list(stations)}, params=params, stage=stage
+        )
+    )
+    return xr.Dataset(
+        coords={
+            "values": catalog.nat_abbr.astype(str),
+            "latitude": ("values", catalog.latitude),
+            "longitude": ("values", catalog.longitude),
+            "elevation": ("values", catalog.elevation),
+        }
+    )
 
 
 def load_truth_data(
