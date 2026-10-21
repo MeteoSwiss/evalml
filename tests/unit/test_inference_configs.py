@@ -27,11 +27,23 @@ def _rescales(node, out):
     return out
 
 
+GRIB_NAMES = {
+    "tp": "TOT_PREC",
+    "tcc": "CLCT",
+    "lcc": "CLCL",
+    "mcc": "CLCM",
+    "hcc": "CLCH",
+}
+
+
 @pytest.mark.parametrize("path", CONFIGS, ids=lambda p: p.name)
-def test_tp_rescale_has_grib_name_twin(path):
-    """anemoi-inference <= 0.11.1 exposes the model name (tp) to output filters, >= 0.11.2
-    and GRIB inputs the GRIB name (TOT_PREC); a filter on only one name silently does nothing."""
+def test_rescale_has_grib_name_twin(path):
+    """anemoi-inference <= 0.11.1 exposes the model name (e.g. tp) to output filters, >= 0.11.2
+    and GRIB inputs the GRIB name (e.g. TOT_PREC); a filter on only one name silently does nothing."""
     rescales = _rescales(yaml.safe_load(path.read_text()), [])
     for key, param, scale, offset in rescales:
-        if param == "tp":
-            assert (key, "TOT_PREC", scale, offset) in rescales, path.name
+        if param in GRIB_NAMES:
+            assert (key, GRIB_NAMES[param], scale, offset) in rescales, (
+                path.name,
+                param,
+            )

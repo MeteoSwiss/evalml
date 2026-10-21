@@ -93,12 +93,14 @@ def main(args: Namespace) -> None:
 
     # remove duplicated but not identical values from analyses (rounding errors)
     dfs = [xr.open_dataset(f) for f in args.verif_files]
+    # verify() always carries a station_group dim; select "all" for standard plots.
+    dfs = [d.sel(station_group="all", drop=True) for d in dfs]
     # 1) Ensure each dataset has unique lead_time values
     dfs = [_ensure_unique_lead_time(d) for d in dfs]
     # 2) For sources present in multiple datasets, keep the one with most lead_times
     dfs = _select_best_sources(dfs)
     # 3) Concatenate by source; outer join to keep the union of lead_times
-    ds = xr.concat(dfs, dim="source", join="outer")
+    ds = xr.concat(dfs, dim="source", join="outer", coords="minimal")
 
     # extract only  non-spatial variables to pd.DataFrame
     nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]

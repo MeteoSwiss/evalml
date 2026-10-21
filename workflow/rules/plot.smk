@@ -160,13 +160,21 @@ rule make_forecast_animation:
         param="|".join(map(re.escape, SHOWCASE_CONFIG["params"])),
         region="|".join(map(re.escape, SHOWCASE_CONFIG["regions"].keys())),
     localrule: True
-    params:
-        delay=round(100 / SHOWCASE_CONFIG["fps"]),
-    shell:
-        """
-        FRAMES=$(for f in {input}; do [ -s "$f" ] && echo "$f"; done | tr '\\n' ' ')
-        convert -delay {params.delay} -loop 0 $FRAMES {output}
-        """
+    run:
+        from PIL import Image
+
+        frames = [
+            Image.open(f).convert("RGB").quantize()
+            for f in input
+            if Path(f).stat().st_size > 0
+        ]
+        frames[0].save(
+            output[0],
+            save_all=True,
+            append_images=frames[1:],
+            duration=1000 / SHOWCASE_CONFIG["fps"],
+            loop=0,
+        )
 
 
 rule plot_prefetch_natural_earth:
