@@ -469,6 +469,16 @@
           "title": "Disable Local Eccodes Definitions",
           "type": "boolean"
         },
+        "output": {
+          "default": "grib",
+          "description": "Where this run's forecast output is stored, and therefore where downstream reads (verification, meteograms, frames, scoremaps) should look for it. Must match what the referenced inference `config`'s own output.tee actually writes to (an 'fdb' tee block requires output: fdb here, and vice versa) -- this is the single declared source of truth for backend routing; nothing probes for data presence or parses the inference config to guess it.",
+          "enum": [
+            "grib",
+            "fdb"
+          ],
+          "title": "Output",
+          "type": "string"
+        },
         "config": {
           "anyOf": [
             {
@@ -1004,6 +1014,16 @@
           "description": "If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
           "title": "Disable Local Eccodes Definitions",
           "type": "boolean"
+        },
+        "output": {
+          "default": "grib",
+          "description": "Where this run's forecast output is stored, and therefore where downstream reads (verification, meteograms, frames, scoremaps) should look for it. Must match what the referenced inference `config`'s own output.tee actually writes to (an 'fdb' tee block requires output: fdb here, and vice versa) -- this is the single declared source of truth for backend routing; nothing probes for data presence or parses the inference config to guess it.",
+          "enum": [
+            "grib",
+            "fdb"
+          ],
+          "title": "Output",
+          "type": "string"
         },
         "config": {
           "anyOf": [

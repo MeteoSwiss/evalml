@@ -255,8 +255,9 @@ checkpoint inference_check_fdb:
     time to be present in one root -- see inference_check_fdb.py for why no further
     MARS-key disambiguation (class/expver/model) is needed. Writes 'hit\\t<root>' or
     'miss\\t' to the status file. Runs inside the squashfs venv so that pyfdb and the
-    native FDB C library are available. Skipped entirely (writes 'miss') when this
-    run's environment has no FDB uenv bundled (profile.fdb.srun_uenv unset).
+    native FDB C library are available. Skipped entirely (writes 'miss') unless this
+    run's own config declares `output: fdb` (see the fail-fast validation below this
+    rule, which rejects output: fdb runs whose environment has no FDB uenv bundled).
     """
     input:
         image=lambda wc: OUT_ROOT
@@ -269,9 +270,7 @@ checkpoint inference_check_fdb:
     localrule: True
     params:
         image_path=lambda wc, input: str(Path(input.image).resolve()),
-        fdb_configured=lambda wc: bool(
-            _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
-        ),
+        fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
         fdb_uenv=lambda wc: _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0],
         fdb_root_global=lambda wc: _get_fdb_roots(wc.run_id)[0],
         fdb_root_local=lambda wc: _get_fdb_roots(wc.run_id)[1],
@@ -489,9 +488,7 @@ rule inference_execute:
         srun_prefix=lambda wc: get_resource(wc, "srun_prefix", "") or "",
         fdb_view=lambda wc: get_resource(wc, "srun_view", "realtime") or "realtime",
         fdb_uenv=lambda wc: _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0],
-        fdb_configured=lambda wc: bool(
-            _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
-        ),
+        fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
         fdb_root=lambda wc: _resolve_fdb_root_for_run(wc.run_id),
         fdb_schema=str(Path("resources/fdb/realtime-varda.schema").resolve()),
     # fmt: off
@@ -629,3 +626,32 @@ FDBEOF
         ) >{log} 2>&1 && touch {output.okfile}
         """
 # fmt: on
+
+
+# Fail fast: a run declaring `output: fdb` is relying on infrastructure and on its
+# own referenced inference config to actually deliver FDB output -- catch the two
+# ways that silently doesn't happen, at workflow-build time, before any (expensive)
+# inference job runs:
+# - no FDB uenv configured -> inference_check_fdb/inference_execute's own
+#   fdb_configured gate would just read False and FDB would never be touched at all,
+#   despite the declared intent.
+# - the referenced inference config has zero `fdb:` output.tee blocks ->
+#   inference_check_fdb.py's completeness check is vacuously true when
+#   expected_blocks == 0 (0 complete blocks found >= 0 expected), reporting a false
+#   "hit" against whatever (possibly unrelated, possibly empty) data already sits in
+#   that FDB root.
+for _run_id, _run_cfg in RUN_CONFIGS.items():
+    if _run_cfg.get("output") != "fdb":
+        continue
+    if not _get_fdb_uenv_for_env(_run_cfg["env_id"])[0]:
+        raise ValueError(
+            f"Run '{_run_id}' declares output: fdb but profile.fdb.srun_uenv is not "
+            "set -- FDB archival/reads need a mounted FDB uenv to supply the native "
+            "libfdb5 library. Set profile.fdb.srun_uenv (e.g. 'fdb/5.21:v2')."
+        )
+    if _count_fdb_blocks(_run_id) == 0:
+        raise ValueError(
+            f"Run '{_run_id}' declares output: fdb but its inference config "
+            f"({_run_cfg['config']}) has no 'fdb:' blocks under output.tee -- either "
+            "add one, or set output: grib to match what it actually writes."
+        )

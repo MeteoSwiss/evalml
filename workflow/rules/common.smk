@@ -361,11 +361,17 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
     Changes to these fields create a new run_id (new outputs) but reuse the environment:
     - steps (lead times)
     - config YAML file contents (inference parameters)
+    - output (grib/fdb), only when non-default -- see below
     - For temporal downscalers: the forecaster's run_id (which run's outputs to read)
     """
     configs_to_hash = [{"steps": run_config["steps"]}]
     with open(run_config["config"], "r") as f:
         configs_to_hash.append(yaml.safe_load(f))
+    # Hashed only when set to the non-default "fdb": hashing it unconditionally would
+    # change run_id (and thus the output directory) for every existing run in the repo
+    # the moment this field shipped, making every already-computed grib run look stale.
+    if run_config.get("output", "grib") != "grib":
+        configs_to_hash.append({"output": run_config["output"]})
     if model_type == "temporal_downscaler" and run_config.get("forecaster"):
         # run output depends on which forecaster RUN was used (not just the env)
         configs_to_hash.append(run_config["forecaster"].get("run_id"))

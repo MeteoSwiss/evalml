@@ -39,7 +39,6 @@ import numpy as np
 import xarray as xr
 
 from data_input import (
-    fdb_has_data,
     load_forecast_data,
     load_truth_data,
     open_truth_zarr,
@@ -79,21 +78,27 @@ def _season_of(dt: datetime) -> str:
 def iter_init_dirs(
     run_root: Path, fdb_root: str | None = None
 ) -> list[tuple[datetime, Path | str]]:
-    """Return ``(reftime, grib_dir)`` pairs for every complete init time.
+    """Return ``(reftime, source)`` pairs for every init-time directory found.
 
     Expects subdirectories named ``YYYYMMDDHHMI`` directly under *run_root*.
-    GRIB files may live either directly in the init-time directory or inside a
-    ``grib/`` subdirectory.
+    ``fdb_root`` being set or ``None`` is the caller's explicit declaration of
+    this run's backend (derived from its config's ``output: fdb``/``grib``
+    field -- see ``workflow/rules/verification.smk``'s ``fdb_root`` param),
+    not a hint to probe with: every directory found is assigned a source the
+    same way, with no per-directory existence check of either backend.
+    - ``output: fdb`` (``fdb_root`` given): every reftime maps to an
+      ``"fdb:<root>"`` marker string -- see ``data_input.load_forecast_data``'s
+      routing on that prefix, which every caller of this function's output
+      already goes through.
+    - ``output: grib`` (``fdb_root`` is ``None``): every reftime maps to its
+      GRIB directory (files may live directly in the init-time directory or
+      inside a ``grib/`` subdirectory -- a layout detail, not a backend guess).
 
-    If `fdb_root` is given, init-time directories with no local GRIB output
-    (e.g. runs that archive directly to FDB and never write local grib/ at
-    all) are additionally checked against it and returned as an ``"fdb:<root>"``
-    marker string in place of a real path -- see data_input.load_forecast_data's
-    routing on that prefix, which every caller of this function's output
-    already goes through. Presence is checked with fdb_has_data(), a bare
-    existence check: completeness was already established upstream, by the
-    Snakemake dependency on this reftime's inference_check_fdb/inference_execute
-    okfile, before this script ever runs.
+    Completeness is the caller's job, not this function's: ``main()`` requires
+    every configured reftime to be discovered here, raising a hard error
+    otherwise (see its module docstring) -- consistent with the Snakemake
+    dependency on this reftime's inference_check_fdb/inference_execute okfile
+    already having established completeness before this script ever runs.
     """
     result = []
     for d in sorted(run_root.iterdir()):
@@ -103,13 +108,11 @@ def iter_init_dirs(
             reftime = datetime.strptime(d.name, DATETIME_FMT)
         except ValueError:
             continue
-        grib_dir = d / "grib" if (d / "grib").is_dir() else d
-        if any(grib_dir.glob("*.grib")):
-            result.append((reftime, grib_dir))
-        elif fdb_root is not None and fdb_has_data(fdb_root, reftime):
+        if fdb_root is not None:
             result.append((reftime, f"fdb:{fdb_root}"))
         else:
-            LOG.debug("No GRIB files in %s, skipping", grib_dir)
+            grib_dir = d / "grib" if (d / "grib").is_dir() else d
+            result.append((reftime, grib_dir))
     return result
 
 

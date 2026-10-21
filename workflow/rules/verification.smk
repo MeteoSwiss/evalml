@@ -97,18 +97,10 @@ rule verification_metrics:
             if config.get("lapse_rate_correction", True)
             else ""
         ),
-        fdb_configured=lambda wc: bool(
-            _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
-        ),
+        fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
         fdb_forecast=lambda wc: (
-            "fdb:"
-            + (
-                _get_fdb_roots(wc.run_id)[0]
-                if get_resource(wc, "write_to_global_fdb", False)
-                and _get_fdb_roots(wc.run_id)[0]
-                else _get_fdb_roots(wc.run_id)[1]
-            )
-            if _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
+            "fdb:" + _resolve_fdb_root_for_run(wc.run_id)
+            if RUN_CONFIGS[wc.run_id]["output"] == "fdb"
             else ""
         ),
     shell:
@@ -116,9 +108,9 @@ rule verification_metrics:
         set -euo pipefail
 
         # See plot_meteogram (plot.smk) for why this always wins over the
-        # (nonexistent) local grib dir when the run's environment archives to
-        # FDB, and why no squashfs-mount is needed to read it (pyfdb bundles
-        # its own native libs).
+        # (nonexistent) local grib dir when the run declares output: fdb, and
+        # why no squashfs-mount is needed to read it (pyfdb bundles its own
+        # native libs).
         FORECAST_SRC={params.grib_out_dir:q}
         if [ "{params.fdb_configured}" = "True" ]; then
             FORECAST_SRC={params.fdb_forecast:q}
@@ -254,22 +246,20 @@ rule verification_scoremaps:
         truth_label=(config.get("truth") or {}).get("label", ""),
         reftimes=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
         run_root=lambda wc: (Path(OUT_ROOT) / f"data/runs/{wc.run_id}").resolve(),
-        fdb_configured=lambda wc: bool(
-            _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
-        ),
+        fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
         # Bare root (no "fdb:" marker prefix): --fdb_root is consumed by
-        # iter_init_dirs/fdb_has_data, which add the marker themselves when
-        # constructing load_forecast_data's root argument for a discovered
-        # FDB-resident reftime -- unlike plot.smk/verification_metrics' single
-        # --forecast argument, which IS load_forecast_data's root directly.
+        # iter_init_dirs, which adds the marker itself when constructing
+        # load_forecast_data's root argument for each reftime -- unlike
+        # plot.smk/verification_metrics' single --forecast argument, which IS
+        # load_forecast_data's root directly. A run's declared `output` is the
+        # same for every reftime under its run_root (it's a property of the run
+        # config, not of any one reftime), so this is the one root iter_init_dirs
+        # uses for all of them -- it never needs to guess per-directory.
         fdb_root=lambda wc: (
-            _get_fdb_roots(wc.run_id)[0]
-            if get_resource(wc, "write_to_global_fdb", False)
-            and _get_fdb_roots(wc.run_id)[0]
-            else _get_fdb_roots(wc.run_id)[1]
-        )
-        if _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
-        else "",
+            _resolve_fdb_root_for_run(wc.run_id)
+            if RUN_CONFIGS[wc.run_id]["output"] == "fdb"
+            else ""
+        ),
     shell:
         """
         set -euo pipefail

@@ -64,18 +64,10 @@ rule plot_meteogram:
             if config.get("lapse_rate_correction", True)
             else ""
         ),
-        fdb_configured=lambda wc: bool(
-            _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
-        ),
+        fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
         fdb_forecast=lambda wc: (
-            "fdb:"
-            + (
-                _get_fdb_roots(wc.run_id)[0]
-                if get_resource(wc, "write_to_global_fdb", False)
-                and _get_fdb_roots(wc.run_id)[0]
-                else _get_fdb_roots(wc.run_id)[1]
-            )
-            if _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
+            "fdb:" + _resolve_fdb_root_for_run(wc.run_id)
+            if RUN_CONFIGS[wc.run_id]["output"] == "fdb"
             else ""
         ),
     shell:
@@ -86,9 +78,9 @@ rule plot_meteogram:
         BASELINE_STEPS=({params.baseline_steps:q})
         BASELINE_LABELS=({params.baseline_labels:q})
 
-        # If this run's environment archives to FDB, its forecast output lives
-        # there (never in local grib -- see workflow/rules/inference.smk), so
-        # always prefer the FDB source over the (nonexistent) local grib dir.
+        # If this run declares output: fdb, its forecast output lives there
+        # (never in local grib -- see workflow/rules/inference.smk), so always
+        # prefer the FDB source over the (nonexistent) local grib dir.
         # Reading from FDB needs pyfdb (an evalml dependency, see pyproject.toml)
         # and eccodes-cosmo-mars's MARS-namespace GRIB concepts (a repo-level
         # clone, resources/fdb/patch_metkit_language.py's docstring has details)
@@ -157,18 +149,10 @@ rule plot_forecast_frame:
             (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/frames").resolve()
         ),
         accu=lambda wc: int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
-        fdb_configured=lambda wc: bool(
-            _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
-        ),
+        fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
         fdb_forecast=lambda wc: (
-            "fdb:"
-            + (
-                _get_fdb_roots(wc.run_id)[0]
-                if get_resource(wc, "write_to_global_fdb", False)
-                and _get_fdb_roots(wc.run_id)[0]
-                else _get_fdb_roots(wc.run_id)[1]
-            )
-            if _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0]
+            "fdb:" + _resolve_fdb_root_for_run(wc.run_id)
+            if RUN_CONFIGS[wc.run_id]["output"] == "fdb"
             else ""
         ),
     shell:
@@ -176,7 +160,7 @@ rule plot_forecast_frame:
         set -euo pipefail
 
         # See plot_meteogram for why this always wins over the (nonexistent)
-        # local grib dir when the run's environment archives to FDB, and why no
+        # local grib dir when the run declares output: fdb, and why no
         # squashfs-mount is needed to read it (pyfdb bundles its own native libs).
         INPUT_SRC={params.grib_out_dir:q}
         if [ "{params.fdb_configured}" = "True" ]; then

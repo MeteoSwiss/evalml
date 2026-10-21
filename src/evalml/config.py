@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
+from typing import Dict, List, Any, ClassVar, FrozenSet, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
@@ -129,6 +129,15 @@ class RunConfig(BaseModel):
         False,
         description="If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
     )
+    output: Literal["grib", "fdb"] = Field(
+        "grib",
+        description="Where this run's forecast output is stored, and therefore where "
+        "downstream reads (verification, meteograms, frames, scoremaps) should look for "
+        "it. Must match what the referenced inference `config`'s own output.tee actually "
+        "writes to (an 'fdb' tee block requires output: fdb here, and vice versa) -- this "
+        "is the single declared source of truth for backend routing; nothing probes for "
+        "data presence or parses the inference config to guess it.",
+    )
     config: Dict[str, Any] | str
 
     model_config = {"extra": "forbid"}
@@ -186,6 +195,21 @@ class TemporalDownscalerConfig(RunConfig):
         None,
         description="Configuration for the forecaster run that this temporal downscaler is based on.",
     )
+
+    @model_validator(mode="after")
+    def _forecaster_output_must_be_grib(self) -> "TemporalDownscalerConfig":
+        # inference_prepare.py's prepare_temporal_downscaler() hardcodes a symlink to
+        # the forecaster's local grib directory to chain its output into the downscaler
+        # as input -- an FDB-backed forecaster would make that symlink point at an empty
+        # directory, failing confusingly deep inside anemoi-inference rather than here.
+        if self.forecaster is not None and self.forecaster.output == "fdb":
+            raise ValueError(
+                "temporal_downscaler.forecaster.output: fdb' is not supported -- the "
+                "downscaler reads its forecaster's prognostic state via a local grib "
+                "symlink (inference_prepare.py), so the forecaster must use output: grib "
+                "(the default). Only the temporal_downscaler's own output may be fdb."
+            )
+        return self
 
 
 class BaselineConfig(BaseModel):

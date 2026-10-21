@@ -733,39 +733,6 @@ def _rename_ifs_to_icon(ds: xr.Dataset) -> xr.Dataset:
     return ds.rename(ifs_rename) if ifs_rename else ds
 
 
-def fdb_has_data(fdb_root: str, reftime: datetime, model: str = _FDB_MODEL) -> bool:
-    """Lightweight existence check: does `fdb_root` have any entry for this
-    date/time under `model`?
-
-    Doesn't check completeness (see workflow/scripts/inference_check_fdb.py's
-    block/step/param accounting for that) -- for callers where completeness was
-    already established upstream (e.g. by a Snakemake dependency on this
-    reftime's inference_check_fdb/inference_execute okfile before this runs),
-    a bare presence check is enough to decide whether to route a reftime to
-    the FDB path at all.
-    """
-    import pyfdb
-
-    config = {
-        "type": "local",
-        "engine": "toc",
-        "schema": str(_FDB_SCHEMA.resolve()),
-        "spaces": [{"handler": "Default", "roots": [{"path": fdb_root}]}],
-    }
-    with pyfdb.FDB(config) as fdb:
-        entries = list(
-            fdb.list(
-                {
-                    "date": reftime.strftime("%Y%m%d"),
-                    "time": reftime.strftime("%H%M"),
-                    "model": model,
-                },
-                level=1,
-            )
-        )
-    return bool(entries)
-
-
 def _fdb_config(fdb_root: str) -> dict:
     return {
         "type": "local",
