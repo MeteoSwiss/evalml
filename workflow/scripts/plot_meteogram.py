@@ -9,6 +9,7 @@ import xarray as xr
 from data_input import (
     parse_steps,
     load_forecast_data,
+    load_station_coords,
     load_truth_data,
 )
 from verification import apply_lapse_rate_correction_inplace
@@ -19,6 +20,17 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
+
+
+def resolve_plot_variable(param: str, steps: list[int]) -> str:
+    """Variable to load and plot for ``param``.
+
+    TOT_PREC is cumulative from the start of the forecast: plot totals over the
+    forecast step instead (e.g. TOT_PREC6), which station and gridded truth provide.
+    """
+    if param == "TOT_PREC" and len(steps) > 1:
+        return f"TOT_PREC{steps[1] - steps[0]}"
+    return param
 
 
 def main():
@@ -108,48 +120,61 @@ def main():
     param = args.param
     stations = args.stations
 
+    variable = resolve_plot_variable(param, forecast_steps)
+
     LOG.info(
-        "Plotting meteogram: param=%s, stations=%s, init_time=%s",
+        "Plotting meteogram: param=%s (variable=%s), stations=%s, init_time=%s",
         param,
+        variable,
         stations,
         init_time,
     )
 
     LOG.info("Loading analysis data from %s", analysis_root)
     analysis_ds = load_truth_data(
-        analysis_root, init_time, forecast_steps, [param]
+        analysis_root, init_time, forecast_steps, [variable]
     ).squeeze()
 
-    # Build station coordinate lookup from the loaded analysis dataset so that
-    # any station with data for the plotted parameter is found (a fixed
-    # parameter like rre150h0 would exclude stations like JUN).
+    # Station coordinates: station truth carries them, so take them from the loaded
+    # observations (any station with data for the plotted parameter is found; a
+    # fixed parameter like rre150h0 would exclude stations like JUN). Gridded truth
+    # has none, so look the stations up in the DWH metadata.
+    if "jretrieve" in str(analysis_root):
+        coords_ds = analysis_ds
+    else:
+        LOG.info("Looking up station coordinates for gridded truth")
+        coords_ds = load_station_coords(stations, variable)
     catalog_lookup = {
         str(sta): (float(lat), float(lon), float(elev))
         for sta, lat, lon, elev in zip(
-            analysis_ds["values"].values,
-            analysis_ds["latitude"].values,
-            analysis_ds["longitude"].values,
-            analysis_ds["elevation"].values,
+            coords_ds["values"].values,
+            coords_ds["latitude"].values,
+            coords_ds["longitude"].values,
+            coords_ds["elevation"].values,
         )
     }
 
     # Load gridded data once — shared across all station plots
     LOG.info("Loading forecast data from %s", forecast_grib_dir)
     forecast_ds = load_forecast_data(
-        forecast_grib_dir, init_time, forecast_steps, [param]
+        forecast_grib_dir, init_time, forecast_steps, [variable]
     ).squeeze()
 
     baseline_ds_list = []
     for root, step, label in zip(baseline_roots, baseline_steps, baseline_labels):
         LOG.info("Loading baseline '%s' from %s", label, root)
         baseline_ds_list.append(
-            load_forecast_data(root, init_time, step, [param]).squeeze()
+            load_forecast_data(root, init_time, step, [variable]).squeeze()
         )
 
-    param2plot = forecast_ds[param].attrs.get("parameter", {})
+    param2plot = forecast_ds[variable].attrs.get("parameter", {})
     short = param2plot.get("shortName", "")
     units = param2plot.get("units", "")
     name = param2plot.get("name", "")
+    if variable != param:  # derived period totals carry no GRIB metadata
+        short = short or variable
+        units = units or "mm"
+        name = name or f"{forecast_steps[1] - forecast_steps[0]}h total precipitation"
 
     # Loop over stations — data is loaded once, mapping is per station
     for station in stations:
@@ -163,14 +188,14 @@ def main():
             LOG.warning(
                 "Station %r has no observations for parameter %s — writing placeholder.",
                 station,
-                param,
+                variable,
             )
             outfn = outdir / f"{init_time.strftime('%Y%m%d%H%M')}_{param}_{station}.png"
             fig, ax = plt.subplots()
             ax.text(
                 0.5,
                 0.5,
-                f"No observations for {param}\nat station {station}",
+                f"No observations for {variable}\nat station {station}",
                 ha="center",
                 va="center",
                 transform=ax.transAxes,
@@ -198,16 +223,16 @@ def main():
 
         if args.lapse_rate_correction:
             apply_lapse_rate_correction_inplace(
-                forecast_station_ds, station_ds, [param]
+                forecast_station_ds, station_ds, [variable]
             )
             for ds in baseline_station_ds_list:
-                apply_lapse_rate_correction_inplace(ds, station_ds, [param])
+                apply_lapse_rate_correction_inplace(ds, station_ds, [variable])
 
         fig, ax = plt.subplots()
 
         ax.plot(
             analysis_station_ds["time"].values,
-            analysis_station_ds[param].values,
+            analysis_station_ds[variable].values,
             color="k",
             ls="--",
             label=analysis_label,
@@ -217,13 +242,13 @@ def main():
         ):
             ax.plot(
                 baseline_station_ds["valid_time"].values,
-                baseline_station_ds[param].values,
+                baseline_station_ds[variable].values,
                 color=f"C{i}",
                 label=baseline_label,
             )
         ax.plot(
             forecast_station_ds["valid_time"].values,
-            forecast_station_ds[param].values,
+            forecast_station_ds[variable].values,
             color="C0",
             label=forecast_label,
         )
