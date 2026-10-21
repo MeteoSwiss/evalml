@@ -59,6 +59,11 @@ input:
                   scale: 0.01
                   offset: 0
                   param: CLCH
+            - forward_transform_filter:
+                clean_observation:
+                  obs_path_in: observation/nudging_station_obs_raw.parquet
+                  obs_path_out: observation/nudging_station_obs.parquet
+                  config_file: resources/qc/clean_observation_config.yaml
           namer: &namer
             rules:
               - - shortName: T
