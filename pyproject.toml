@@ -63,5 +63,12 @@ packages = [
   "src/data_input"
 ]
 
+[tool.uv]
+# Always use a uv-managed (python-build-standalone) interpreter. System Pythons
+# on the CI runners are built without the sqlite3 C extension, which breaks
+# coverage.py (pytest-cov imports sqlite3 at startup). The standalone builds
+# bundle sqlite3, so this guarantees a working interpreter everywhere.
+python-preference = "only-managed"
+
 [tool.uv.sources]
 eccodes-cosmo-resources-python = { git = "https://github.com/MeteoSwiss/eccodes-cosmo-resources-python" }
