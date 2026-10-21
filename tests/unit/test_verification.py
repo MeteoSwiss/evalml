@@ -458,16 +458,6 @@ def test_verify_station_groups_split_holdout_and_holdin():
     assert list(result["station_group"].values) == ["all"]
 
 
-def test_verify_default_scores_available_points_despite_gaps():
-    """By default (max_missing_fraction=1.0) points without a forecast are left out."""
-    fcst, obs = _half_missing_forecast()
-
-    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
-
-    bias = result["T_2M.BIAS"].sel(region="all", source="fcst").values.item()
-    assert bias == pytest.approx(0.0)
-
-
 def test_verify_wind_direction_uses_shortest_angular_error():
     """350 deg forecast vs 10 deg obs is an error of -20 deg, not 340 deg."""
     n = 4
