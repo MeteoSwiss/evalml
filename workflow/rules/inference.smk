@@ -350,11 +350,11 @@ else:
                 "disable_local_eccodes_definitions", False
             ),
             account_flag=lambda wc: (
-            f"--account={config['profile']['default_resources']['slurm_account']}"
-            if config["profile"]["default_resources"].get("slurm_account")
-            else ""
-        ),
-    # fmt: off
+                f"--account={config['profile']['default_resources']['slurm_account']}"
+                if config["profile"]["default_resources"].get("slurm_account")
+                else ""
+            ),
+        # fmt: off
         shell:
             """
             (

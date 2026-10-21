@@ -16,7 +16,15 @@ ROOT = Path.cwd()
 DEST = ROOT / "tests" / "log"
 DEST.mkdir(exist_ok=True)
 
-ERROR_KEYWORDS = {"error", "exception", "traceback", "failed", "oom", "killed", "cancel"}
+ERROR_KEYWORDS = {
+    "error",
+    "exception",
+    "traceback",
+    "failed",
+    "oom",
+    "killed",
+    "cancel",
+}
 
 # Known-benign noise that happens to contain an ERROR_KEYWORDS substring.
 # eckit prints this directly (no logger prefix) when a grid-cache lock file is
