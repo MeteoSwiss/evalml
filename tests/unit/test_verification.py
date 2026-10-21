@@ -8,7 +8,12 @@ import xarray as xr
 sys.path.insert(0, str(Path(__file__).parents[2] / "workflow" / "scripts"))
 from verification_aggregation import aggregate_results
 
-from verification import decode_metric, apply_lapse_rate_correction_inplace, verify
+from verification import (
+    _compute_statistics,
+    apply_lapse_rate_correction_inplace,
+    decode_metric,
+    verify,
+)
 
 
 @pytest.mark.parametrize(
@@ -477,8 +482,28 @@ def test_verify_wind_direction_uses_shortest_angular_error():
     assert scores["DD_10M.BIAS"].item() == pytest.approx(errors.mean())
     assert scores["DD_10M.MAE"].item() == pytest.approx(np.abs(errors).mean())
     assert scores["DD_10M.MSE"].item() == pytest.approx((errors**2).mean())
-    # statistics keep the raw directions
-    assert scores["DD_10M.mean"].item() == pytest.approx(157.5)
+
+    # statistics are circular: mean direction of the unit vectors, no min/max
+    rad = np.deg2rad([350.0, 10.0, 180.0, 90.0])
+    sin_mean, cos_mean = np.sin(rad).mean(), np.cos(rad).mean()
+    assert scores["DD_10M.mean"].item() == pytest.approx(
+        np.degrees(np.arctan2(sin_mean, cos_mean)) % 360
+    )
+    assert scores["DD_10M.var"].item() == pytest.approx(
+        1 - np.hypot(sin_mean, cos_mean)
+    )
+    assert "DD_10M.min" not in result and "DD_10M.max" not in result
+
+
+def test_circular_statistics_wrap_around_north():
+    """The circular mean of 359 and 1 deg is 0 deg, not 180 deg."""
+    data = xr.DataArray([359.0, 1.0], dims="values")
+
+    stats = _compute_statistics(data, dim=["values"], prefix="DD_10M.", circular=True)
+
+    mean = stats["DD_10M.mean"].item()
+    assert min(mean, 360 - mean) == pytest.approx(0.0, abs=1e-9)
+    assert stats["DD_10M.var"].item() == pytest.approx(1 - np.cos(np.deg2rad(1.0)))
 
 
 def test_verify_precipitation_type_only_gets_categorical_scores():

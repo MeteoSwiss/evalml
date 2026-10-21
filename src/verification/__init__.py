@@ -303,25 +303,50 @@ def _compute_scores(
     return result
 
 
+def _circular_mean_var(
+    data: xr.DataArray, dim: list[str]
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """Circular mean and variance of angles in degrees.
+
+    The mean is the direction of the average unit vector, so the mean of 359 and
+    1 deg is 0 deg, not 180 deg. The variance is 1 - (length of the average unit
+    vector): 0 when all angles are equal, 1 when they are spread evenly.
+    """
+    rad = np.deg2rad(data)
+    sin_mean = np.sin(rad).mean(dim=dim, skipna=True)
+    cos_mean = np.cos(rad).mean(dim=dim, skipna=True)
+    mean = np.mod(np.degrees(np.arctan2(sin_mean, cos_mean)), 360.0)
+    var = 1 - np.hypot(sin_mean, cos_mean)
+    return mean, var
+
+
 def _compute_statistics(
     data: xr.DataArray,
     dim: list[str],
     prefix="",
     suffix="",
     source="",
+    circular: bool = False,
 ) -> xr.Dataset:
     """
     Compute basic statistics of a xarray DataArray (data).
     Returns a xarray Dataset with the computed statistics.
+    With ``circular`` (angles in degrees) the mean and variance are circular
+    (see _circular_mean_var), and min and max are left out: they have no meaning
+    on a circle.
     """
-    stats = xr.Dataset(
-        {
-            f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),
-            f"{prefix}var{suffix}": data.var(dim=dim, skipna=True),
-            f"{prefix}min{suffix}": data.min(dim=dim, skipna=True),
-            f"{prefix}max{suffix}": data.max(dim=dim, skipna=True),
-        }
-    )
+    if circular:
+        mean, var = _circular_mean_var(data, dim=dim)
+        stats = xr.Dataset({f"{prefix}mean{suffix}": mean, f"{prefix}var{suffix}": var})
+    else:
+        stats = xr.Dataset(
+            {
+                f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),
+                f"{prefix}var{suffix}": data.var(dim=dim, skipna=True),
+                f"{prefix}min{suffix}": data.min(dim=dim, skipna=True),
+                f"{prefix}max{suffix}": data.max(dim=dim, skipna=True),
+            }
+        )
     stats = stats.expand_dims({"source": [source]})
     return stats
 
@@ -361,6 +386,7 @@ def _obs_only_statistics(
             prefix=param + ".",
             source=obs_label,
             dim=dim,
+            circular=param in CIRCULAR_PARAMS,
         )
         if "forecast_reference_time" in fcst.coords:
             obs_stats = obs_stats.assign_coords(
@@ -569,12 +595,14 @@ def verify(
             prefix=param + ".",
             source=fcst_label,
             dim=dim,
+            circular=param in CIRCULAR_PARAMS,
         ).where(~too_many_missing)
         obs_stats = _compute_statistics(
             obs_param,
             prefix=param + ".",
             source=obs_label,
             dim=dim,
+            circular=param in CIRCULAR_PARAMS,
         )
         param_statistics = xr.concat([fcst_stats, obs_stats], dim="source")
         # Single compute per parameter: score + statistics share fcst_param/obs_param
