@@ -14,6 +14,7 @@ from data_input import (
     parse_steps,
     load_forecast_data,
     load_truth_data,
+    truth_type,
 )  # noqa: E402
 
 LOG = logging.getLogger(__name__)
@@ -48,11 +49,7 @@ def select_holdout_stations(
     also have a ``values`` dimension (unstructured grids), so the truth source
     is checked instead. Stations missing from the truth are dropped.
     """
-    # Same criterion as load_truth_data(): a .zarr is gridded, a jretrieve marker is stations.
-    truth_is_station_data = Path(truth_root).suffix != ".zarr" and "jretrieve" in str(
-        truth_root
-    )
-    if not truth_is_station_data:
+    if truth_type(truth_root) != "jretrieve":
         LOG.warning(
             "Holdout stations given, but the truth is gridded data, not station "
             "observations; station_group stratification skipped."

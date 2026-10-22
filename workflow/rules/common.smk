@@ -6,10 +6,14 @@ import hashlib
 import json
 from urllib.parse import urlparse
 
+from data_input import inca, truth_type
+
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
 # the experiment block is optional (e.g. for showcase/sandbox configs)
 EXPERIMENT_CONFIG = config.get("experiment") or {}
+# "anemoi_dataset", "jretrieve" or "inca"
+TRUTH_TYPE = truth_type(config["truth"]["root"])
 
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
 HASH_LENGTH = 4
@@ -432,20 +436,31 @@ def run_uses_holdout(run_id: str) -> bool:
 
 
 def truth_file_dep(_):
-    """Truth file dependency: a real path for zarr, but a live-query
-    marker (no input file) for jretrieve."""
+    """Truth file dependency tracked by Snakemake.
+
+    - anemoi dataset: the dataset itself
+    - INCA: the static topography file; the archive directory is not tracked
+      because its modification time changes whenever new runs are archived
+    - jretrieve: none (live query)
+    """
     root = config["truth"]["root"]
-    return [] if "jretrieve" in str(root) else [root]
+    if TRUTH_TYPE == "anemoi_dataset":
+        return [root]
+    if TRUTH_TYPE == "inca":
+        return [str(inca.topography_file(root))]
+    return []
 
 
-# Fail fast: when the truth source is the live DWH (jretrievedwh), verify its
-# prerequisites at workflow-build time so a misconfigured environment is caught
-# at launch, before any (expensive) inference job runs.
-if "jretrieve" in str(config["truth"]["root"]):
+# Fail fast: verify the prerequisites of the truth source at workflow-build time
+# so a misconfigured environment is caught at launch, before any (expensive)
+# inference job runs.
+if TRUTH_TYPE == "jretrieve":
     from data_input.jretrieve import check_prerequisites, parse_selection
 
     _, _jretrieve_stage, _, _ = parse_selection(config["truth"]["root"])
     check_prerequisites(_jretrieve_stage)
+elif TRUTH_TYPE == "inca":
+    inca.check_prerequisites(config["truth"]["root"])
 
 
 TRUTH_HASH = truth_hash(config["truth"])

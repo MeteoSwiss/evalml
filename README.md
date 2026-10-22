@@ -140,6 +140,8 @@ profile:
 
 The `runs` list accepts `forecaster`, `temporal_downscaler`, and `baseline` entries. For `dates`, you can either provide a `start` / `end` / `frequency` block as above or an explicit list of ISO timestamps for case-study style runs. Stratification, thresholds, dashboard, and scorecard settings are all grouped under the `experiment` key.
 
+Precipitation (`TOT_PREC`) from forecaster and temporal downscaler runs is expected to be accumulated since the start of the forecast, in kg m-2 (mm), like ICON.
+
 You can then run it with:
 
 ```bash
@@ -150,11 +152,13 @@ evalml experiment path/to/experiment/config.yaml --report
 
 The `truth.root` value selects how the ground truth is loaded:
 
-- **Analysis Zarr** — a path ending in `.zarr` (anemoi analysis dataset).
+- **Anemoi dataset** — a path ending in `.zarr`, read as an anemoi analysis dataset
+  (e.g. KENDA); other zarr layouts are not supported.
 - **DWH / jretrievedwh** — a `jretrievedwh:` marker string fetching surface observations
   (e.g. SMN) live from the MeteoSwiss data warehouse. Variables are mapped to
   ICON names in SI units (temperatures in K, pressure in Pa, precipitation as the hourly
-  sum); wind `U_10M`/`V_10M` are derived from speed + direction.
+  sum); wind `U_10M`/`V_10M` are derived from speed + direction, `RELHUM_2M` is read
+  directly and `TW_2M` is derived from temperature, dew point and station pressure.
 
   Marker syntax (station selection is required; pick one of group/locations/bbox):
 
@@ -174,6 +178,71 @@ The `truth.root` value selects how the ground truth is loaded:
   `/oprusers/osm/opr.inn/bin/jretrievedwh.py`) and DWH credentials must be
   available — see [Credentials setup](#credentials-setup). No data is
   pre-downloaded — the obs are queried at verification time.
+- **INCA-CH** — a path into the INCA archive (any path with an `INCA` directory),
+  read directly from the NetCDF files. Step 0 of each INCA run is an analysis, and
+  only step 0 is used: the truth at valid time `t` comes from the run started at `t`.
+  The data are on the 1 km INCA grid (710×640, Swiss LV03), so forecasts are mapped
+  onto it by nearest neighbour, as for a gridded zarr truth.
+
+  ```yaml
+  truth:
+    label: INCA
+    root: /store_new/mch/msclim/INCA
+  ```
+
+  Variables (evalml name ← INCA file prefix):
+
+  | Group | evalml name ← INCA |
+  |---|---|
+  | Temperature (K) | `T_2M` ← TT, `TD_2M` ← TD, `TW_2M` ← TW (wet bulb), `T_G` ← TG (surface) |
+  | Humidity (%) | `RELHUM_2M`, derived from TT/TD |
+  | Wind (10-min products) | `SP_10M` ← FF_10min, `DD_10M` ← DD_10min, `VMAX_10M` ← WG_10min; `U_10M`, `V_10M` are derived from FF_10min/DD_10min |
+  | Precipitation (kg m-2) | `TOT_PREC` ← RR, `TOT_SNOW` ← RS (CombiPrecip based). Use period names such as `TOT_PREC1`, `TOT_PREC6` |
+  | Precipitation type | `PTYPE` ← PT (CombiPrecip based), recoded to the ICON convention (WMO code table 4.201: 0 none, 1 rain, 3 freezing rain, 5 snow, 7 rain and snow, 10 hail) |
+  | Cloud, sun, lightning | `CLCT` ← CT (%), `SUNSHINE_REL` ← SU (%), `LIGHTNING_PROB` ← LP |
+  | Freezing level (m) | `HZEROCL` ← Z0, `SNOWLMT` ← ZS |
+  | Convection (J/kg) | `CAPE_MU` ← CP, `CIN_MU` ← CN (from `{YYYY}/analysis/{MM}/`) |
+
+  Notes:
+  - Precipitation rates (mm/h) are turned into hourly amounts: the rate stamped `t`
+    is taken as the mean over `(t − 10 min, t]`, and
+    the hourly amount is the mean of the available rates in the hour. An hour
+    without any run is NaN, as are the later totals of that forecast.
+  - Missing files are filled with NaN and reported in the log.
+  - Parameters INCA does not provide (e.g. `PS`, `PMSL`) are skipped.
+  - Availability differs per variable (as of 2026-10): the main archive starts in May 2021
+    and runs to January 2026, the 10-min wind products start in May 2025. Most
+    months miss a few runs.
+  - INCA has no mixed-layer parcel: `CAPE_ML`/`CIN_ML` are not verified against it.
+  - Meteograms need station truth; with a gridded truth they show a placeholder.
+  - Scorecard rows for variables a run or baseline lacks are left empty.
+
+### Fields of the derive-diagnostic post-processor
+
+The `derive-diagnostic` post-processor of
+[anemoi-plugins-meteoswiss](https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss) adds
+`SP_10M`, `DD_10M`, `RELHUM_2M`, `TW_2M`, `HZEROCL`, `SNOWLMT`, `CAPE_ML`, `CIN_ML`,
+`CAPE_MU`, `CIN_MU`, `PTYPE` and `TOT_SNOW` to the output of an ML run
+(see `resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml`).
+They are written as ICON-CH1 GRIB (`templates_index_icon.yaml`) and follow the ICON
+conventions: CIN is positive (missing without a level of free convection), `PTYPE`
+uses WMO code table 4.201, `TOT_SNOW` is accumulated from the start of the forecast
+in kg m-2, like `TOT_PREC`.
+
+- ICON baselines lack some of them: `DD_10M`, `RELHUM_2M`, `TW_2M` (earthkit-meteo,
+  as the post-processor) and `TOT_SNOW` (from `SNOW_GSP`) are derived from their
+  components; a field present in the GRIB files is always used as is.
+- Truth: INCA provides all but `CAPE_ML`/`CIN_ML`; a KENDA zarr has CAPE/CIN and the
+  components of the derived fields, but no `HZEROCL`, `SNOWLMT`, `PTYPE` or `TOT_SNOW`.
+  Parameters a truth source lacks are skipped with a warning.
+- `DD_10M` is scored on the shortest angular error (e.g. 350° vs 10° is 20°).
+- `PTYPE` only gets categorical scores, from `eq` thresholds on its codes
+  (e.g. `PTYPE: {eq: [0, 1, 3, 5, 7]}`); its continuous scores are NaN, and it has
+  no score maps.
+- All participants are scored on the same points: where a forecast is missing at a
+  point with valid truth, the scores of that region and time step are NaN. Fields that
+  are undefined in places (CIN without a level of free convection, `HZEROCL`/`SNOWLMT`
+  where ICON leaves them undefined) can therefore get NaN scores.
 
 ### Holdout stations
 
@@ -190,7 +259,7 @@ Every model and baseline is then verified separately on three station groups:
 gets a station-group selector; scorecards and the standard plots use `all`.
 
 - Holdout stations missing from the truth are ignored; if none are present, or the truth
-  is gridded (`.zarr`), only `all` is computed and a warning is logged.
+  is gridded (an anemoi dataset or INCA), only `all` is computed and a warning is logged.
 - The list is written to a CSV file that the workflow tracks, so changing it reruns the
   affected verification and inference.
 - An inference config can read the same list from `holdout_stations.csv` in its working

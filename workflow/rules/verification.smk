@@ -184,7 +184,7 @@ rule verification_metrics_plot:
     resources:
         cpus_per_task=balfrin_cpus(50_000, actual_cpus=16),
         mem_mb=50_000,
-        runtime="20m",
+        runtime="1h",
     params:
         label_map=",".join(
             "{}:{}".format(
@@ -214,7 +214,7 @@ rule verification_scoremaps:
             init_time=_restrict_reftimes_to_hours(REFTIMES),
             allow_missing=True,
         ),
-        truth=config["truth"]["root"],
+        truth_dep=truth_file_dep,
     output:
         OUT_ROOT
         / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
@@ -231,6 +231,7 @@ rule verification_scoremaps:
     params:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
+        truth=config["truth"]["root"],
         truth_label=config["truth"]["label"],
         reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
         run_root=lambda wc: (Path(OUT_ROOT) / f"data/runs/{wc.run_id}").resolve(),
@@ -240,7 +241,7 @@ rule verification_scoremaps:
         uv run {input.script} \
             --run_root {params.run_root} \
             --reftimes {params.reftimes} \
-            --truth "{input.truth}" \
+            --truth "{params.truth}" \
             --step {wildcards.leadtime} \
             --steps "{params.fcst_steps}" \
             --param {wildcards.param} \
@@ -254,7 +255,7 @@ rule verification_scoremaps_baseline:
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_scoremaps.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
-        truth=config["truth"]["root"],
+        truth_dep=truth_file_dep,
     output:
         OUT_ROOT
         / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
@@ -269,13 +270,14 @@ rule verification_scoremaps_baseline:
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
         reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
+        truth=config["truth"]["root"],
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --baseline_root {input.forecast} \
             --reftimes {params.reftimes} \
-            --truth "{input.truth}" \
+            --truth "{params.truth}" \
             --step {wildcards.leadtime} \
             --steps "{params.baseline_steps}" \
             --param {wildcards.param} \
