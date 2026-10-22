@@ -85,7 +85,7 @@ ZERO_KELVIN = -273.15  # °C
 _ACCUMULATABLE_PARAMS: frozenset[str] = frozenset({"TOT_PREC", "TOT_SNOW"})
 
 # Spatial/multi-field derivations: output param → required input params.
-# A source that provides the param natively (e.g. the surface-diagnostics
+# A source that provides the param natively (e.g. the derive-diagnostic
 # post-processor of anemoi-plugins-meteoswiss) is used as is; otherwise
 # (e.g. ICON baselines) it is derived with the same formulas (earthkit-meteo).
 DERIVED_PARAMS: dict[str, tuple[str, ...]] = {
@@ -1547,7 +1547,7 @@ def load_forecast_data(
 
     Handles derived and aggregated params transparently:
     - ``SP_10M``, ``DD_10M``, ``RELHUM_2M``, ``TW_2M`` and ``TOT_SNOW`` are read
-      from the GRIB files when present (e.g. written by the surface-diagnostics
+      from the GRIB files when present (e.g. written by the derive-diagnostic
       post-processor), otherwise derived from their components (DERIVED_PARAMS)
     - ``TOT_PREC6`` is disaggregated from the cumulative ``TOT_PREC`` field
     - Plain ``TOT_PREC`` is returned as cumulative-from-start without disaggregation

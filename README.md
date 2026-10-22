@@ -217,9 +217,9 @@ The `truth.root` value selects how the ground truth is loaded:
   - Meteograms need station truth; with a gridded truth they show a placeholder.
   - Scorecard rows for variables a run or baseline lacks are left empty.
 
-### Fields of the surface-diagnostics post-processor
+### Fields of the derive-diagnostic post-processor
 
-The `surface-diagnostics` post-processor of
+The `derive-diagnostic` post-processor of
 [anemoi-plugins-meteoswiss](https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss) adds
 `SP_10M`, `DD_10M`, `RELHUM_2M`, `TW_2M`, `HZEROCL`, `SNOWLMT`, `CAPE_ML`, `CIN_ML`,
 `CAPE_MU`, `CIN_MU`, `PTYPE` and `TOT_SNOW` to the output of an ML run

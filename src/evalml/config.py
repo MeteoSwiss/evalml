@@ -240,7 +240,7 @@ class ScoreMapsConfig(BaseModel):
             "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
             "PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 "
             "(period-accumulated precipitation, period encoded in the name), and the "
-            "surface-diagnostics fields DD_10M, RELHUM_2M, TW_2M (derived from their "
+            "derive-diagnostic fields DD_10M, RELHUM_2M, TW_2M (derived from their "
             "components when a source lacks them), HZEROCL, SNOWLMT, CAPE_ML, CIN_ML, "
             "CAPE_MU, CIN_MU, TOT_SNOW1/6/24."
         ),

@@ -171,7 +171,7 @@ def test_compute_derived_dd10m_meteorological_convention():
 
 
 def test_compute_derived_relhum_and_wet_bulb_match_earthkit():
-    """Same formulas as the surface-diagnostics post-processor (earthkit-meteo)."""
+    """Same formulas as the derive-diagnostic post-processor (earthkit-meteo)."""
     t, td, ps = np.array([290.0, 275.0]), np.array([285.0, 270.0]), np.array([1e5, 9e4])
     # 2-D (step, values) and dask-backed, like the loaded data
     ds = xr.Dataset(

@@ -21,7 +21,7 @@ dataset:
     # variables_metadata is necessary due to missing variables_metadata section in temporal downscaler patch_metdata
     # else mapping with grib templates fails
     variables_metadata:
-      # Fields added by the surface-diagnostics post-processor: not predicted by the
+      # Fields added by the derive-diagnostic post-processor: not predicted by the
       # checkpoint, but anemoi-inference's TransformFilter.process() wraps the state
       # with these metadata before every filter, which fails (KeyError) for a field
       # missing here. See typed_variables in the inference config.

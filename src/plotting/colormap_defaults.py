@@ -12,7 +12,7 @@ def _fallback():
     return {"cmap": plt.get_cmap("viridis"), "norm": None, "units": ""}
 
 
-# Field colormaps shared by surface-diagnostics fields of the same kind.
+# Field colormaps shared by derive-diagnostic fields of the same kind.
 _HEIGHT_M = {
     "cmap": plt.get_cmap("viridis", 12),
     "vmin": 0,
@@ -109,7 +109,7 @@ _CMAP_DEFAULTS = {
     | {"units": "m/s", "extend": "both"},
     "SP_10M": load_ncl_colormap("modified_uv_17lev.ct")
     | {"units": "m/s", "extend": "max"},
-    # Fields of the surface-diagnostics post-processor (anemoi-plugins-meteoswiss)
+    # Fields of the derive-diagnostic post-processor (anemoi-plugins-meteoswiss)
     "DD_10M": {
         "cmap": plt.get_cmap("twilight", 8),
         "vmin": 0,
