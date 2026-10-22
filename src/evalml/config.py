@@ -555,6 +555,16 @@ class ExperimentConfig(BaseModel):
         ...,
         description="Settings for the experiment dashboard.",
     )
+    station_holdout: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "List of holdout station nat_abbr. When set, adds a 'station_group' "
+            "dimension (all/holdout/holdin) to verification metrics for all models "
+            "and baselines. The workflow writes the list to a CSV file and stages it "
+            "as holdout_stations.csv in the working directory of every inference run "
+            "whose config references that file."
+        ),
+    )
     scorecards: Optional[ExperimentScorecardConfig] = Field(
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
@@ -567,6 +577,18 @@ class ExperimentConfig(BaseModel):
         default=None,
         description="SAL precipitation verification. Omit or set enabled: false to disable.",
     )
+
+    @field_validator("station_holdout")
+    @classmethod
+    def validate_station_holdout(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return v
+        if not v:
+            raise ValueError("station_holdout must not be empty; omit it instead.")
+        duplicates = sorted({s for s in v if v.count(s) > 1})
+        if duplicates:
+            raise ValueError(f"station_holdout has duplicate stations: {duplicates}")
+        return v
 
     @field_validator("thresholds")
     @classmethod
@@ -758,9 +780,9 @@ class ConfigModel(BaseModel):
         default=True,
         description="Apply lapse-rate correction to T_2M (0.0065 K/m) and PS (11.5 Pa/m).",
     )
-    experiment: ExperimentConfig = Field(
-        ...,
-        description="Settings for the experiment workflow outputs.",
+    experiment: ExperimentConfig | None = Field(
+        None,
+        description="Settings for the experiment workflow outputs. Required when running `evalml experiment`.",
     )
     locations: Locations
     profile: Profile
@@ -780,6 +802,8 @@ class ConfigModel(BaseModel):
     @model_validator(mode="after")
     def validate_leadtimes_producible(self) -> "ConfigModel":
         """Reject scoremaps/sal lead times not produced by every participant."""
+        if self.experiment is None:
+            return self
         for label, cfg in (
             ("scoremaps", self.experiment.scoremaps),
             ("sal", self.experiment.sal),

@@ -28,6 +28,9 @@ _IFS_TO_ICON = {
     "lsm": "FR_LAND",
     "tcc": "CLCT",
     "lcc": "CLCL",
+    "mcc": "CLCM",
+    "hcc": "CLCH",
+    "skt": "SKT",
     # TODO: ssrd is treated as a plain per-step field (no de-accumulation),
     # which only holds because it's not currently listed in any
     # accumulate_from_start_of_forecast.accumulations in the inference
@@ -38,6 +41,31 @@ _IFS_TO_ICON = {
     "z": "FIS",
 }
 _ICON_TO_IFS = {v: k for k, v in _IFS_TO_ICON.items()}
+# Cloud cover is in percent in ICON/MeteoSwiss data, but a fraction (0-1) in
+# ECMWF data (IFS shortNames in GRIB, aifs-* zarrs). evalml works in percent.
+_CLOUD_PARAMS = {"CLCT", "CLCL", "CLCM", "CLCH"}
+
+
+def _check_cloud_percent(param: str, vmax: float, source: str) -> None:
+    if not 1 < vmax <= 100.5:
+        LOG.warning(
+            "%s from %s has maximum %.3g, expected percent (0-100): wrong unit?",
+            param,
+            source,
+            vmax,
+        )
+
+
+def rename_ifs_to_icon(ds: xr.Dataset, mapping: dict[str, str]) -> xr.Dataset:
+    """Rename IFS shortNames to ICON names, converting cloud cover to percent."""
+    rename = {ifs: icon for ifs, icon in mapping.items() if ifs in ds.data_vars}
+    ds = ds.rename(rename)
+    for p in _CLOUD_PARAMS & set(ds.data_vars):
+        if p in rename.values():
+            ds[p] = ds[p] * 100
+        _check_cloud_percent(p, float(ds[p].max()), "GRIB")
+    return ds
+
 
 XARRAY_ENGINE_PROFILE = {
     "ensure_dims": ["z", "number", "step", "forecast_reference_time"],
@@ -311,6 +339,10 @@ def _open_analysis_zarr(root: Path, params: list[str]) -> xr.Dataset:
         ds = ds.rename({"latitudes": "latitude", "longitudes": "longitude"})
     if "latitude" in ds and "longitude" in ds:
         ds = ds.set_coords(["latitude", "longitude"])
+    cloud_max = {
+        p: float(ds["maximum"].sel(variable=zarr_names[p]))
+        for p in _CLOUD_PARAMS & set(params_with_altitude)
+    }
     ds = (
         ds["data"]
         .to_dataset("variable")
@@ -320,6 +352,12 @@ def _open_analysis_zarr(root: Path, params: list[str]) -> xr.Dataset:
     # Unit conversion: m -> mm for TOT_PREC (zarr stores in m)
     if "TOT_PREC" in ds:
         ds["TOT_PREC"] = ds["TOT_PREC"] * 1000
+
+    is_ecmwf = root.name.startswith("aifs-")
+    for p, vmax in cloud_max.items():
+        if is_ecmwf:
+            ds[p] = ds[p] * 100
+        _check_cloud_percent(p, vmax * (100 if is_ecmwf else 1), root.name)
 
     # rename 'cell' dimension to 'values' (it's earthkit-data default for flattened spatial dim)
     if "cell" in ds.dims:
@@ -493,6 +531,7 @@ def variable_name_profile(
         "surface",
         "pressure",
         "entire_atmosphere",
+        "pressure_layer",
     ],
 ) -> dict[str, Any]:
     """Resolve variable name profile based on the level type."""
@@ -501,6 +540,7 @@ def variable_name_profile(
         "mean_sea",
         "surface",
         "entire_atmosphere",
+        "pressure_layer",
     ]:
         return {}
     elif level_type == "pressure":
@@ -522,7 +562,7 @@ def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
         profile = XARRAY_ENGINE_PROFILE | variable_name_profile(level_type)
         _ds = level_type_group.to_xarray(**profile, allow_holes=True)
         ds = ds.merge(
-            _ds, compat="no_conflicts", combine_attrs="no_conflicts", join="outer"
+            _ds, compat="no_conflicts", combine_attrs="drop_conflicts", join="outer"
         )
     return ds
 
@@ -637,14 +677,7 @@ def _load_forecast_data_from_grib(files: list[Path], params: list[str]) -> xr.Da
     )
     ds = load_from_grib_file(files, {"parameter.variable": params_extended})
 
-    # Rename any IFS shortNames back to ICON names
-    ifs_rename = {
-        ifs: icon for ifs, icon in _IFS_TO_ICON.items() if ifs in ds.data_vars
-    }
-    if ifs_rename:
-        ds = ds.rename(ifs_rename)
-
-    return ds
+    return rename_ifs_to_icon(ds, _IFS_TO_ICON)
 
 
 def _jretrieve_df_to_xarray(df, short_names, catalog) -> xr.Dataset:
@@ -721,7 +754,7 @@ def load_obs_data_from_jretrieve(
 
     from data_input import jretrieve as jr
 
-    stations, stage, seq_type = jr.parse_selection(root)
+    stations, stage, seq_type, use_limitation = jr.parse_selection(root)
     jr.check_prerequisites(stage)
 
     want_uv = "U_10M" in params or "V_10M" in params
@@ -751,6 +784,7 @@ def load_obs_data_from_jretrieve(
         increment_minutes=step_hours * 60,
         seq_type=seq_type,
         stage=stage,
+        use_limitation=use_limitation,
     )
     raw = _jretrieve_df_to_xarray(df, short_names, catalog)
 
@@ -773,7 +807,16 @@ def load_obs_data_from_jretrieve(
 
     out = out.dropna("values", how="all")
     times = np.datetime64(reftime) + np.asarray(steps, dtype="timedelta64[h]")
-    return _select_valid_times(out, times, strict=True)
+    result = _select_valid_times(out, times, strict=True)
+
+    # Per-variable station-coverage log, so ground-truth coverage can be compared
+    # against what was actually available to nudge.
+    n_total = result.sizes["values"]
+    for name in result.data_vars:
+        n_valid = int(result[name].notnull().any("time").sum())
+        LOG.info("Stations with valid %s: %d / %d stations", name, n_valid, n_total)
+
+    return result
 
 
 def load_truth_data(

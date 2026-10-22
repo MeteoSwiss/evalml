@@ -186,12 +186,15 @@ def experiment(
     rulegraph,
     extra_smk_args,
 ):
-    if mec or ffv2:
-        raw = load_yaml(configfile)
-        if mec and raw.get("mec") is None:
-            raise click.UsageError("--mec requires a 'mec' block in the config file.")
-        if ffv2 and raw.get("ffv2") is None:
-            raise click.UsageError("--ffv2 requires a 'ffv2' block in the config file.")
+    raw = load_yaml(configfile)
+    if not (mec or ffv2) and raw.get("experiment") is None:
+        raise click.UsageError(
+            "evalml experiment requires an 'experiment' block in the config file."
+        )
+    if mec and raw.get("mec") is None:
+        raise click.UsageError("--mec requires a 'mec' block in the config file.")
+    if ffv2 and raw.get("ffv2") is None:
+        raise click.UsageError("--ffv2 requires a 'ffv2' block in the config file.")
 
     targets = []
     if mec or ffv2:

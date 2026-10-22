@@ -134,8 +134,8 @@ onerror:
 # -----------------------------------------------------
 
 
-SCOREMAPS_CONFIGS = config.get("experiment", {}).get("scoremaps") or {}
-SAL_CONFIGS = config.get("experiment", {}).get("sal") or {}
+SCOREMAPS_CONFIGS = EXPERIMENT_CONFIG.get("scoremaps") or {}
+SAL_CONFIGS = EXPERIMENT_CONFIG.get("sal") or {}
 
 
 rule experiment_all:
@@ -161,9 +161,7 @@ rule experiment_all:
                     scorecard_name=list(SCORECARD_CONFIGS),
                 )
             ]
-            if (config.get("experiment", {}).get("scorecards") or {}).get(
-                "enabled", True
-            )
+            if (EXPERIMENT_CONFIG.get("scorecards") or {}).get("enabled", True)
             else []
         ),
         (
