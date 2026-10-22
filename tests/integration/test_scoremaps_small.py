@@ -57,21 +57,21 @@ MIN_COLOURED_FRACTION = 0.01  # a real map has well above this; a placeholder ~0
 # the fixture inputs or the science deliberately change. Until a param is
 # blessed (value is None) the reference comparison is skipped with a warning —
 # the N_total>0 guard and the PNG not-grey check still run.
-# Blessed 2026-07-24 from a balfrin CSCS run (EVALML_UPDATE_REFERENCE=1).
+# Blessed 2026-10-22 from a linard run (EVALML_UPDATE_REFERENCE=1).
 REFERENCE: dict[str, dict | None] = {
     "T_2M": {
-        "N_total": 2295960,
-        "BIAS": {"mean": -0.162372, "min": -9.21579, "max": 6.83401},
-        "RMSE": {"mean": 0.902101, "min": 0.0011017, "max": 14.4667},
-        "MAE": {"mean": 0.798512, "min": 0.000946045, "max": 11.878},
-        "STDE": {"mean": 0.584206, "min": 7.62939e-05, "max": 11.878},
+        "N_total": 2284728,
+        "BIAS": {"mean": -0.155762, "min": -9.21579, "max": 6.83401},
+        "RMSE": {"mean": 0.890688, "min": 0.0011017, "max": 14.4667},
+        "MAE": {"mean": 0.788741, "min": 0.000946045, "max": 11.878},
+        "STDE": {"mean": 0.574585, "min": 7.62939e-05, "max": 11.878},
     },
     "TOT_PREC6": {
-        "N_total": 2295960,
-        "BIAS": {"mean": -0.0399991, "min": -50.6713, "max": 10.1969},
-        "RMSE": {"mean": 0.112297, "min": 0.0, "max": 51.1054},
-        "MAE": {"mean": 0.0966864, "min": 0.0, "max": 50.6713},
-        "STDE": {"mean": 0.0617382, "min": 0.0, "max": 11.3508},
+        "N_total": 2284728,
+        "BIAS": {"mean": -0.0401958, "min": -50.6713, "max": 10.1969},
+        "RMSE": {"mean": 0.112849, "min": 0.0, "max": 51.1054},
+        "MAE": {"mean": 0.0971617, "min": 0.0, "max": 50.6713},
+        "STDE": {"mean": 0.0620417, "min": 0.0, "max": 11.3508},
     },
 }
 RTOL = 1e-3
