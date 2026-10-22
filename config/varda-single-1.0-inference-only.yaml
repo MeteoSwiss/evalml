@@ -30,9 +30,6 @@ locations:
   output_root: output/
 
 profile:
-  fdb:
-    srun_uenv: "fdb/5.19:v2"
-    srun_view: "realtime"
   executor: slurm
   global_resources:
     gpus: 16

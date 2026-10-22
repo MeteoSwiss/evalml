@@ -85,10 +85,10 @@ rule inference_extract_requirements:
 # Prepare the inference environment for a specific checkpoint. The venv is built
 # in /dev/shm (RAM) to avoid heavy IO on the parallel filesystem, then squashed
 # to a .squashfs image tracked directly as the rule output. FDB native libraries
-# are NOT bundled into this image: the FDB uenv's own squashfs is mounted
-# alongside the venv squashfs at run time instead (see inference_execute /
-# inference_check_fdb), since squashfs-mount can mount several images at once.
-# See https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
+# are bundled straight into this image via pip (pyfdb pulls in fdb5lib/
+# eccodeslib/eckitlib/metkitlib, all manylinux wheels with vendored .so's) --
+# no separate FDB uenv squashfs needs mounting at run time, matching how the
+# main evalml venv already reads FDB in verification.smk/plot.smk.
 rule inference_prepare_env:
     input:
         metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
@@ -99,7 +99,7 @@ rule inference_prepare_env:
         OUT_ROOT / "logs/inference_prepare_env/{env_id}.log",
     localrule: True
     params:
-        fdb_uenv=lambda wc: _get_fdb_uenv_for_env(wc.env_id)[0],
+        needs_fdb=lambda wc: _env_needs_fdb(wc.env_id),
     shell:
         """
         (
@@ -115,10 +115,9 @@ rule inference_prepare_env:
             echo "[$(date)] Installing requirements from {input.requirements}..."
             uv pip install -r {input.requirements}
 
-            # Only the pure-Python / non-uenv pieces are prepared here. Native FDB
-            # libraries, its view symlinks and its config/schema files stay in the FDB
-            # uenv's own squashfs, mounted alongside this venv at run time.
-            if [ -n "{params.fdb_uenv}" ]; then
+            # pyfdb's own wheel dependencies (fdb5lib etc.) bundle the native FDB
+            # stack, so this is just another pip install -- no uenv involved.
+            if [ "{params.needs_fdb}" = "True" ]; then
                 echo "[$(date)] Installing pyfdb (pure-Python FDB binding)..."
                 uv pip install pyfdb
 
@@ -199,16 +198,16 @@ def get_resource(wc, field: str, default):
         return getattr(fdb, field, default) or default
 
 
-def _get_fdb_uenv_for_env(env_id):
-    """Return (fdb_uenv, fdb_view) from profile.fdb."""
-    fdb = (config.get("profile") or {}).get("fdb") or {}
-    if isinstance(fdb, dict):
-        uenv = fdb.get("srun_uenv", "") or ""
-        view = fdb.get("srun_view", "") or "realtime"
-    else:
-        uenv = getattr(fdb, "srun_uenv", "") or ""
-        view = getattr(fdb, "srun_view", "") or "realtime"
-    return uenv, view
+def _env_needs_fdb(env_id):
+    """Whether any run sharing this env_id declares output: fdb -- i.e. whether
+    this shared venv needs the FDB native stack installed. pyfdb bundles its own
+    native libraries (fdb5lib/eccodeslib/eckitlib/metkitlib wheels), so this is
+    a plain pip install -- no uenv/squashfs mount of a separate native image
+    needed."""
+    return any(
+        run_cfg["env_id"] == env_id and run_cfg.get("output") == "fdb"
+        for run_cfg in RUN_CONFIGS.values()
+    )
 
 
 def _count_fdb_blocks(run_id):
@@ -251,10 +250,9 @@ checkpoint inference_check_fdb:
     directory). A 'hit' requires every requested lead time to be present in
     that root -- see inference_check_fdb.py for why no further MARS-key
     disambiguation (class/expver/model) is needed. Writes 'hit\\t<root>' or
-    'miss\\t' to the status file. Runs inside the squashfs venv so that pyfdb and the
-    native FDB C library are available. Skipped entirely (writes 'miss') unless this
-    run's own config declares `output: fdb` (see the fail-fast validation below this
-    rule, which rejects output: fdb runs whose environment has no FDB uenv bundled).
+    'miss\\t' to the status file. Runs inside the squashfs venv so that pyfdb (and
+    the native FDB C library it bundles) is available. Skipped entirely (writes
+    'miss') unless this run's own config declares `output: fdb`.
     """
     input:
         image=lambda wc: OUT_ROOT
@@ -268,10 +266,8 @@ checkpoint inference_check_fdb:
     params:
         image_path=lambda wc, input: str(Path(input.image).resolve()),
         fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
-        fdb_uenv=lambda wc: _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0],
         fdb_root=lambda wc: _resolve_fdb_root_for_run(wc.run_id),
         fdb_schema=str(Path("resources/fdb/realtime-varda.schema").resolve()),
-        fdb_view=lambda wc: get_resource(wc, "srun_view", "realtime") or "realtime",
         date=lambda wc: datetime.strptime(wc.init_time, "%Y%m%d%H%M").strftime("%Y%m%d"),
         time=lambda wc: datetime.strptime(wc.init_time, "%Y%m%d%H%M").strftime("%H%M"),
         steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
@@ -284,17 +280,12 @@ checkpoint inference_check_fdb:
                 printf 'miss\t' > {output.status}
                 echo "FDB check skipped: FDB not configured for this environment"
             else
-                # Mount the venv (pyfdb, python) and the FDB uenv (native libs, config,
-                # at its required /user-environment path) side by side in one call.
-                # squashfs-mount needs the mountpoint dir to already exist -- /user-environment
-                # is a pre-provisioned system directory, but there's no such slot for a second
-                # image, so the venv gets a job-local directory we create ourselves.
+                # Mount just the venv -- pyfdb bundles its own native FDB libraries
+                # (fdb5lib etc.), no separate uenv image needed.
                 VENV_MOUNT=$(mktemp -d)
                 trap "rmdir '$VENV_MOUNT' 2>/dev/null || true" EXIT
-                FDB_SQUASHFS=$(uenv image inspect --format='{{sqfs}}' {params.fdb_uenv})
-                squashfs-mount -s "{params.image_path}:$VENV_MOUNT,$FDB_SQUASHFS:/user-environment" -- bash -c '
+                squashfs-mount -s "{params.image_path}:$VENV_MOUNT" -- bash -c '
                     source '"$VENV_MOUNT"'/bin/activate
-                    export LD_LIBRARY_PATH=/user-environment/env/{params.fdb_view}/lib64:/user-environment/env/{params.fdb_view}/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}
                     python {input.script} \
                         --fdb-root {params.fdb_root} \
                         --fdb-schema {params.fdb_schema} \
@@ -332,8 +323,7 @@ def _get_inference_status(wc):
     local-grib output), in which case downstream code reads local grib as
     before.
     """
-    env_id = RUN_CONFIGS[wc.run_id]["env_id"]
-    if _get_fdb_uenv_for_env(env_id)[0]:
+    if RUN_CONFIGS[wc.run_id]["output"] == "fdb":
         status_file = checkpoints.inference_check_fdb.get(
             run_id=wc.run_id, init_time=wc.init_time
         ).output.status
@@ -504,8 +494,6 @@ rule inference_execute:
             "disable_local_eccodes_definitions", False
         ),
         srun_prefix=lambda wc: get_resource(wc, "srun_prefix", "") or "",
-        fdb_view=lambda wc: get_resource(wc, "srun_view", "realtime") or "realtime",
-        fdb_uenv=lambda wc: _get_fdb_uenv_for_env(RUN_CONFIGS[wc.run_id]["env_id"])[0],
         fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
         fdb_root=lambda wc: _resolve_fdb_root_for_run(wc.run_id),
         fdb_schema=str(Path("resources/fdb/realtime-varda.schema").resolve()),
@@ -545,24 +533,16 @@ FDBEOF
 
             _run_inference() {{
                 local VENV=$1
-                local FDB_MOUNT=${{2:-}}
                 source "$VENV/bin/activate"
 
                 if [ "{params.disable_local_definitions}" = "False" ]; then
                     export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
                 fi
 
-                # Set up FDB env vars when the FDB uenv is mounted alongside this venv
-                # (as a second image at $FDB_MOUNT -- see the squashfs-mount call below).
-                if [ -n "$FDB_MOUNT" ]; then
-                    export LD_LIBRARY_PATH="$FDB_MOUNT/env/{params.fdb_view}/lib64:$FDB_MOUNT/env/{params.fdb_view}/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
-                    # FDB5_CONFIG_OVERRIDE is set whenever FDB is configured for this env
-                    # (see fdb_configured above); the uenv's own config is only a fallback.
-                    if [ -n "$FDB5_CONFIG_OVERRIDE" ]; then
-                        export FDB5_CONFIG_FILE="$FDB5_CONFIG_OVERRIDE"
-                    else
-                        export FDB5_CONFIG_FILE="$FDB_MOUNT/meta/recipe/meta/private/fdb_config/{params.fdb_view}.yaml"
-                    fi
+                # pyfdb bundles its own native FDB libraries -- no uenv mount, no
+                # LD_LIBRARY_PATH needed. Just point it at this run's FDB config/schema.
+                if [ "{params.fdb_configured}" = "True" ]; then
+                    export FDB5_CONFIG_FILE="$FDB5_CONFIG_OVERRIDE"
                     # Prepend eccodes-cosmo-mars definitions so MARS namespace concepts
                     # (marsModel, marsStream, marsClass, etc.) resolve correctly for MeteoSwiss GRIBs.
                     # Must be set in ECCODES_DEFINITION_PATH (not just GRIB_DEFINITION_PATH) because
@@ -620,26 +600,10 @@ FDBEOF
 
             # squashfs-mount needs the mountpoint dir to already exist, and -- since srun
             # may dispatch to a different physical node -- it must be on the shared
-            # filesystem, not /tmp (node-local). /user-environment is a pre-provisioned
-            # system directory present on every node for the FDB uenv's own absolute
-            # internal symlinks; the venv gets a job-local dir here instead.
-            #
-            # srun must be the OUTER call, dispatching a (dual) squashfs-mount as its
-            # task, not the other way around: wrapping srun inside a dual-image
-            # squashfs-mount breaks Slurm's plugin initialization on this system
-            # ("Plugin initialization failed") -- verified empirically. A single-image
-            # mount around srun is fine; two images at once are not.
+            # filesystem, not /tmp (node-local).
             VENV_MOUNT="{params.workdir}/.venv-mount"
             mkdir -p "$VENV_MOUNT"
             trap "rmdir '$VENV_MOUNT' 2>/dev/null || true" EXIT
-
-            MOUNT_ARGS=("{params.env_path}:$VENV_MOUNT")
-            INNER_CMD="_run_inference $VENV_MOUNT"
-            if [ "{params.fdb_configured}" = "True" ]; then
-                FDB_SQUASHFS=$(uenv image inspect --format='{{sqfs}}' {params.fdb_uenv})
-                MOUNT_ARGS+=("$FDB_SQUASHFS:/user-environment")
-                INNER_CMD="$INNER_CMD /user-environment"
-            fi
 
             {params.srun_prefix} srun \
                 --job-name=anemoi-inference \
@@ -651,19 +615,16 @@ FDBEOF
                 --time={resources.runtime} \
                 --gres={resources.gres} \
                 --ntasks={resources.ntasks} \
-                squashfs-mount -s "$(IFS=,; echo "${{MOUNT_ARGS[*]}}")" -- bash -c "$INNER_CMD"
+                squashfs-mount -s "{params.env_path}:$VENV_MOUNT" -- bash -c "_run_inference $VENV_MOUNT"
         ) >{log} 2>&1 && touch {output.okfile}
         """
 # fmt: on
 
 
-# Fail fast: a run declaring `output: fdb` is relying on infrastructure and on its
-# own referenced inference config to actually deliver FDB output -- catch the two
-# ways that silently doesn't happen, at workflow-build time, before any (expensive)
+# Fail fast: a run declaring `output: fdb` is relying on its own referenced
+# inference config to actually deliver FDB output -- catch the one way that
+# silently doesn't happen, at workflow-build time, before any (expensive)
 # inference job runs:
-# - no FDB uenv configured -> inference_check_fdb/inference_execute's own
-#   fdb_configured gate would just read False and FDB would never be touched at all,
-#   despite the declared intent.
 # - the referenced inference config has zero `fdb:` output.tee blocks ->
 #   inference_check_fdb.py's completeness check is vacuously true when
 #   expected_blocks == 0 (0 complete blocks found >= 0 expected), reporting a false
@@ -672,12 +633,6 @@ FDBEOF
 for _run_id, _run_cfg in RUN_CONFIGS.items():
     if _run_cfg.get("output") != "fdb":
         continue
-    if not _get_fdb_uenv_for_env(_run_cfg["env_id"])[0]:
-        raise ValueError(
-            f"Run '{_run_id}' declares output: fdb but profile.fdb.srun_uenv is not "
-            "set -- FDB archival/reads need a mounted FDB uenv to supply the native "
-            "libfdb5 library. Set profile.fdb.srun_uenv (e.g. 'fdb/5.21:v2')."
-        )
     if _count_fdb_blocks(_run_id) == 0:
         raise ValueError(
             f"Run '{_run_id}' declares output: fdb but its inference config "

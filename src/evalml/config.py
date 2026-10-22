@@ -70,15 +70,6 @@ class InferenceResources(BaseModel):
         None,
         description="Optional command to prepend to the srun invocation, e.g. 'uenv run --view=realtime fdb/5.19:v2 --'.",
     )
-    srun_uenv: str | None = Field(
-        None,
-        description="FDB uenv image to bundle into the venv squashfs, e.g. 'fdb/5.19:v2'. "
-        "When set, native FDB libraries are extracted from this uenv during venv creation.",
-    )
-    srun_view: str | None = Field(
-        None,
-        description="FDB uenv view name to use when bundling FDB libraries, e.g. 'realtime'.",
-    )
 
 
 class RunConfig(BaseModel):

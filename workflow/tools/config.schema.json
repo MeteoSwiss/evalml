@@ -649,32 +649,6 @@
           "default": null,
           "description": "Optional command to prepend to the srun invocation, e.g. 'uenv run --view=realtime fdb/5.19:v2 --'.",
           "title": "Srun Prefix"
-        },
-        "srun_uenv": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "FDB uenv image to bundle into the venv squashfs, e.g. 'fdb/5.19:v2'. When set, native FDB libraries are extracted from this uenv during venv creation.",
-          "title": "Srun Uenv"
-        },
-        "srun_view": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "FDB uenv view name to use when bundling FDB libraries, e.g. 'realtime'.",
-          "title": "Srun View"
         }
       },
       "title": "InferenceResources",
