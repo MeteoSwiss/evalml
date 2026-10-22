@@ -1071,7 +1071,7 @@
             }
           ],
           "default": null,
-          "description": "Configuration for the forecaster run that this temporal downscaler is based on."
+          "description": "Configuration for the forecaster run that this temporal downscaler is based on. If the forecaster declares output: fdb, the downscaler reads its output directly from FDB (inference_prepare.py's _convert_cutout_to_fdb) instead of the local grib symlink."
         }
       },
       "required": [

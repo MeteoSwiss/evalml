@@ -183,14 +183,18 @@ output:
                 offset: 0
                 param: CLCH
           # here, the trimedge mask can be specified when available
-          # at overlap steps (multiples of the forecaster stride) replace the
-          # re-predicted prognostics with the forecaster's boundary values
-          - forward_transform_filter:
-              copy-prognostic-from-forecaster:
-                forecaster_path: forecaster/20*
-                common_leadtime: 6h
-                params_to_keep: [tp] # NOTE, if more diagnostics are added, update accordingly.
-                namer: *namer
+          # DISABLED: copy-prognostic-from-forecaster is incompatible with an
+          # FDB-backed forecaster (it globs the local forecaster/ dir). Waiting
+          # on the design decision in ecmwf/anemoi-inference#468 for a native,
+          # backend-agnostic replacement before re-enabling. Until then,
+          # overlap steps (multiples of the forecaster stride) carry the
+          # downscaler's own re-predicted prognostics, not the forecaster's.
+          # - forward_transform_filter:
+          #     copy-prognostic-from-forecaster:
+          #       forecaster_path: forecaster/20*
+          #       common_leadtime: 6h
+          #       params_to_keep: [tp] # NOTE, if more diagnostics are added, update accordingly.
+          #       namer: *namer
 
     - grib:
         path: grib/ifs-{dateTime}_{step:03}.grib
@@ -215,12 +219,13 @@ output:
               inverse: true
           - assign_mask: # fill local/global overlapping points with nan
               mask: "global/cutout_mask"
-          - forward_transform_filter:
-              copy-prognostic-from-forecaster:
-                forecaster_path: forecaster/ifs*
-                common_leadtime: 6h
-                params_to_keep: [tp] # NOTE, if more diagnostics are added, update accordingly.
-                namer: *namer
+          # DISABLED: see note above the lam_0 tee's copy-prognostic-from-forecaster block.
+          # - forward_transform_filter:
+          #     copy-prognostic-from-forecaster:
+          #       forecaster_path: forecaster/ifs*
+          #       common_leadtime: 6h
+          #       params_to_keep: [tp] # NOTE, if more diagnostics are added, update accordingly.
+          #       namer: *namer
         modifiers:
           - patches:
             - variable:

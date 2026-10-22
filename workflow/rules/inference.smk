@@ -5,6 +5,7 @@
 import os
 from pathlib import Path
 from datetime import datetime
+from types import SimpleNamespace
 
 
 rule inference_get_checkpoint:
@@ -386,6 +387,7 @@ rule inference_prepare_forecaster:
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
+        output_backend=lambda wc: RUN_CONFIGS[wc.run_id]["output"],
     script:
         "../scripts/inference_prepare.py"
 
@@ -393,6 +395,22 @@ rule inference_prepare_forecaster:
 def _get_forecaster_run_id(run_id):
     """Get the forecaster run ID from the RUN_CONFIGS."""
     return RUN_CONFIGS[run_id]["forecaster"]["run_id"]
+
+
+def _resolve_forecaster_fdb_root(run_id):
+    """FDB root to read this run's forecaster output from, or None.
+
+    None whenever there's no forecaster, or the forecaster writes local grib
+    (the default) -- in which case the existing local-grib-symlink input
+    chaining applies instead. inference_prepare.py's _convert_cutout_to_fdb
+    only runs when this is non-None.
+    """
+    if RUN_CONFIGS[run_id].get("forecaster") is None:
+        return None
+    fct_run_id = _get_forecaster_run_id(run_id)
+    if RUN_CONFIGS[fct_run_id]["output"] != "fdb":
+        return None
+    return _resolve_fdb_root_for_run(fct_run_id)
 
 
 # Prepare temporal downscaler for a specific run ID
@@ -404,8 +422,11 @@ rule inference_prepare_temporal_downscaler:
         holdout=lambda wc: holdout_dep(wc) if run_uses_holdout(wc.run_id) else [],
         forecasts=lambda wc: (
             [
-                OUT_ROOT
-                / f"logs/inference_execute/{_get_forecaster_run_id(wc.run_id)}-{wc.init_time}.ok"
+                _get_inference_okfile(
+                    SimpleNamespace(
+                        run_id=_get_forecaster_run_id(wc.run_id), init_time=wc.init_time
+                    )
+                )
             ]
             if RUN_CONFIGS[wc.run_id].get("forecaster") is not None
             else []
@@ -434,6 +455,7 @@ rule inference_prepare_temporal_downscaler:
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None
             else _get_forecaster_run_id(wc.run_id)
         ),
+        forecaster_fdb_root=lambda wc: _resolve_forecaster_fdb_root(wc.run_id),
         output_backend=lambda wc: RUN_CONFIGS[wc.run_id]["output"],
     script:
         "../scripts/inference_prepare.py"

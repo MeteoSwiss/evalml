@@ -197,23 +197,10 @@ class TemporalDownscalerConfig(RunConfig):
 
     forecaster: ForecasterConfig | None = Field(
         None,
-        description="Configuration for the forecaster run that this temporal downscaler is based on.",
+        description="Configuration for the forecaster run that this temporal downscaler is based on. "
+        "If the forecaster declares output: fdb, the downscaler reads its output directly from FDB "
+        "(inference_prepare.py's _convert_cutout_to_fdb) instead of the local grib symlink.",
     )
-
-    @model_validator(mode="after")
-    def _forecaster_output_must_be_grib(self) -> "TemporalDownscalerConfig":
-        # inference_prepare.py's prepare_temporal_downscaler() hardcodes a symlink to
-        # the forecaster's local grib directory to chain its output into the downscaler
-        # as input -- an FDB-backed forecaster would make that symlink point at an empty
-        # directory, failing confusingly deep inside anemoi-inference rather than here.
-        if self.forecaster is not None and self.forecaster.output == "fdb":
-            raise ValueError(
-                "temporal_downscaler.forecaster.output: fdb' is not supported -- the "
-                "downscaler reads its forecaster's prognostic state via a local grib "
-                "symlink (inference_prepare.py), so the forecaster must use output: grib "
-                "(the default). Only the temporal_downscaler's own output may be fdb."
-            )
-        return self
 
 
 class BaselineConfig(BaseModel):

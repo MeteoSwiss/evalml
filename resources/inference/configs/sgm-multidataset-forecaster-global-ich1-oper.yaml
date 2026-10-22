@@ -87,6 +87,15 @@ output:
           typeOfGeneratingProcess: 2
           generatingProcessIdentifier: 180
           centre: ecmf
+          # localNumberOfExperiment is not available in IFS/ECMWF GRIB templates;
+          # omitting it means marsClass=od (GPI=180 fallback) for the global grid
+          # Set native marsStream/marsType codetable keys so g2_mars_labeling returns
+          # stream=enfo and type=fc.  Cannot use a concept override in local.98.def
+          # for marsStream because it conflicts with the codetable key that
+          # g2_mars_labeling expects as input.  Setting them natively is portable
+          # across eccodes builds.
+          marsStream: enfo
+          marsType: fc
         templates:
           samples: resources/templates_index_ifs.yaml
         post_processors:

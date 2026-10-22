@@ -126,8 +126,12 @@ _FDB_PARAM_TIMESPAN: dict[str, str] = {
 # the `modifiers.patches` block in
 # resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml,
 # which explicitly pairs each ICON name with its archived (param, shortName).
-# No pressure-level params mapped here: nothing in this codebase currently
-# requests one from the global grid.
+# Pressure-level ids (T/U/V/QV/FI/OMEGA) match that same file's regex patches
+# (e.g. "^t_(\\d+)$" -> param 130) -- needed when the downscaler's own model
+# input reads the global grid's pressure levels directly from FDB (see
+# inference_prepare.py's _convert_cutout_to_fdb), not just this module's own
+# _fetch_fdb_fieldlist reads (which so far have only ever requested surface
+# params from the global grid).
 _FDB_GLOBAL_PARAM_IDS: dict[str, str] = {
     "PS": "134",
     "PMSL": "151",
@@ -137,10 +141,37 @@ _FDB_GLOBAL_PARAM_IDS: dict[str, str] = {
     "V_10M": "166",
     "TOT_PREC": "228",
     "FR_LAND": "172",
+    "T": "130",
+    "U": "131",
+    "V": "132",
+    "QV": "133",
+    "FI": "129",
+    "OMEGA": "135",
 }
 _FDB_GLOBAL_PL_PARAMS: set[str] = set()
 _FDB_GLOBAL_PARAM_TIMESPAN: dict[str, str] = {
     "TOT_PREC": "fs",
+}
+
+# MARS identity (class/stream/type/expver) that a GPI=180 archive resolves to for
+# each model -- confirmed empirically by decoding a real archived message's `mars`
+# namespace under the correct ECCODES_DEFINITION_PATH (eccodes-cosmo-mars's
+# local.215.def maps GPI=180 to class=ai for the local/ICON table; local.98.def has
+# no such concept for the ECMWF/IFS table, so the global grid stays class=od and
+# needs marsStream/marsType set natively in its own output encoding -- see
+# resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml).
+# Used both when archiving (inference.smk's fdb5_config.yaml) and when a
+# downstream run reads another run's FDB output directly as its own model input
+# (inference_prepare.py's _convert_cutout_to_fdb).
+_FDB_IDENTITY: dict[str, dict[str, str]] = {
+    _FDB_MODEL: {"class": "ai", "stream": "oper", "type": "fc", "expver": "0001", "model": _FDB_MODEL},
+    _FDB_GLOBAL_MODEL: {
+        "class": "od",
+        "stream": "enfo",
+        "type": "fc",
+        "expver": "0001",
+        "model": _FDB_GLOBAL_MODEL,
+    },
 }
 
 # Per-model (param_ids, pl_params, param_timespan) registries, keyed by the
