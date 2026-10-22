@@ -348,5 +348,3 @@ fgt:
     basic: true
     tpostneg: [5.5, 4.5]
 
-# Set to true to write one PNG per parameter alongside the output parquet (requires cartopy)
-plot_maps: false
