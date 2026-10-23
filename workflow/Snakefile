@@ -28,7 +28,11 @@ include: "rules/verif_obs.smk"
 CANDIDATES = collect_all_candidates()
 BASELINES = collect_all_baselines()
 
-RUN_CMD = Path(".evalml_snakemake_cmd.txt").read_text().strip()
+# Written by the `evalml` CLI before it launches snakemake; absent when the
+# workflow is invoked directly (e.g. `snakemake -n` in the replay dry-run tests).
+# It is only shown in the startup banner, so fall back to an empty string.
+_run_cmd_file = Path(".evalml_snakemake_cmd.txt")
+RUN_CMD = _run_cmd_file.read_text().strip() if _run_cmd_file.exists() else ""
 CONFIG_HASH = master_hash()
 WHEN = datetime.now().strftime("%Y%m%d")
 CONFIG_FILE = workflow.config_settings.configfiles[0]
