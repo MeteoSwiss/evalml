@@ -6,16 +6,20 @@ import numpy as np
 import pytest
 
 from evalml.config import ConfigModel, SalConfig
-from verification.sal import (
-    DEFAULT_GRID_EXTENT,
-    DEFAULT_GRID_STEP_LAT,
-    DEFAULT_GRID_STEP_LON,
-    compute_sal,
-    remap_field,
-    sal_raster,
-)
 
 SCRIPT = Path(__file__).resolve().parents[2] / "workflow/scripts/verification_sal.py"
+# verification_sal.py loaded by path (workflow/scripts is not a package).
+_spec = importlib.util.spec_from_file_location("verification_sal", SCRIPT)
+_script = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_script)
+DEFAULT_GRID_EXTENT = _script.DEFAULT_GRID_EXTENT
+DEFAULT_GRID_STEP_LAT = _script.DEFAULT_GRID_STEP_LAT
+DEFAULT_GRID_STEP_LON = _script.DEFAULT_GRID_STEP_LON
+compute_sal, remap_field, sal_raster = (
+    _script.compute_sal,
+    _script.remap_field,
+    _script.sal_raster,
+)
 
 
 def _blob(shape, cy, cx, amp, sigma):
@@ -83,7 +87,7 @@ def test_compute_sal_dry_window_returns_nan():
 
 
 def test_sal_config_grid_defaults_match_the_module_constants():
-    # The config carries its own literals (importing verification.sal would pull
+    # The config carries its own literals (importing verification_sal.py would pull
     # pysteps into every config validation), so pin the two together.
     s = SalConfig()
     assert tuple(s.grid_extent) == DEFAULT_GRID_EXTENT
@@ -130,11 +134,7 @@ def test_sal_leadtime_validator_rejects_unproducible(example_config):
 
 @pytest.fixture(scope="module")
 def sal_script():
-    """verification_sal.py loaded by path (workflow/scripts is not a package)."""
-    spec = importlib.util.spec_from_file_location("verification_sal", SCRIPT)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return _script
 
 
 def test_script_rejects_step_below_accumulation(sal_script):

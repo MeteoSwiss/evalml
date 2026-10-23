@@ -2,9 +2,8 @@
 description: |
   Integration-test fixture: minimal experiment exercising the SAL
   (Structure-Amplitude-Location; Wernli et al. 2008) precipitation
-  verification pipeline -- workflow/scripts/verification_sal.py on top of
-  src/verification/sal.py -- end to end. Baseline data only (no inference, so
-  no GPU and no MLflow) against the gridded KENDA-CH1 analysis zarr.
+  verification pipeline (workflow/scripts/verification_sal.py) end to end.
+  Baseline data only (no inference, so no GPU and no MLflow) against the gridded KENDA-CH1 analysis zarr.
   Everything outside the `sal` block is kept to a single cheap value so the
   fixture stays small. Driven by tests/integration/test_sal_small.py.
 config_label: sal-test

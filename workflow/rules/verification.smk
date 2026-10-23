@@ -302,7 +302,6 @@ rule verification_sal:
     input:
         "src/verification/__init__.py",
         "src/verification/spatial.py",
-        "src/verification/sal.py",
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_sal.py",
         inference_okfiles=lambda wc: expand(
@@ -342,7 +341,6 @@ rule verification_sal_baseline:
     input:
         "src/verification/__init__.py",
         "src/verification/spatial.py",
-        "src/verification/sal.py",
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_sal.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
