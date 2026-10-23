@@ -26,6 +26,12 @@ def _base_snakemake_command(
     command += config.profile.parsable()
     command += ["--configfile", str(configfile)]
     command += ["--cores", str(cores)]
+    # Lustre (and other network filesystems on Balfrin) can have significant
+    # latency between a job writing an output file and it becoming visible to
+    # the Snakemake process on the login node. This flag overwrites the default 
+    # of 5s in an attempt to make the workflow more resilient to the underlying
+    # filesystem
+    command += ["--latency-wait", "20"]
     return command
 
 
