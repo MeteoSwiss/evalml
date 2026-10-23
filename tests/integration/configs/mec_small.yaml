@@ -11,7 +11,7 @@ config_label: mec-test
 # build). To (re)capture the fixture you must run real inference, so temporarily
 # comment this line out, run `evalml experiment <this config> --mec`, then
 # `evalml capture-fixture <this config> <path>`, and restore it (see
-# tests/integration/README.md).
+# the main README (Testing documentation)).
 fixture_root: /store_new/mch/msopr/ml/evalml/test_fixtures/mec-small/v_20250801_9f46
 
 dates:

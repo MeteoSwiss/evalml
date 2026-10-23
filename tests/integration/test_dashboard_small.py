@@ -32,7 +32,7 @@ def test_experiment_dashboard():
         pytest.skip(
             f"inference fixture not populated at {FIXTURE_ROOT}; create it once with "
             f"`evalml capture-fixture {CONFIG} {FIXTURE_ROOT}` after a real GPU run "
-            "(see tests/integration/README.md)."
+            "(see the main README (Testing documentation))."
         )
 
     result = subprocess.run(
