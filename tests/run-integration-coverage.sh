@@ -18,7 +18,7 @@ MARKER="$1"
 shift
 
 cd "$(dirname "$0")/.."
-CONFIG="ci/coverage-integration.cfg"
+CONFIG="tests/coverage-integration.cfg"
 
 # Point every child process (spawned by evalml/snakemake, including SLURM jobs,
 # which inherit the environment via sbatch --export=ALL) at the parallel-mode

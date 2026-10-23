@@ -25,9 +25,9 @@ Adding another test suite is relatively simple; just make a new job that extends
 
 ### Coverage
 
-Both integration jobs run under `ci/run-integration-coverage.sh <marker>`, which
+Both integration jobs run under `tests/run-integration-coverage.sh <marker>`, which
 measures coverage across the full snakemake subprocess chain (including SLURM
-jobs) using the subprocess-aware `ci/coverage-integration.cfg`. See the header of
+jobs) using the subprocess-aware `tests/coverage-integration.cfg`. See the header of
 each file for details.
 
 ## Using CI/CD from Github
