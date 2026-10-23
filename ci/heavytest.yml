@@ -11,7 +11,7 @@ heavytest:
     - bash ci/run-integration-coverage.sh heavytest tests/integration
   after_script:
     - mkdir -p tests/log
-    - python3 tools/summarize_logs.py || true
+    - python3 ci/summarize_logs.py || true
   artifacts:
     paths:
       - tests/log/**/*
