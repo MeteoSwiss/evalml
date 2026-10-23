@@ -69,6 +69,8 @@ experiment:
       - season
   scoremaps:
     enabled: false
+  sal:
+    enabled: false
 
 locations:
   output_root: output/
