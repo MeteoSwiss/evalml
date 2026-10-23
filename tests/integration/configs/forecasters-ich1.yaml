@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../../workflow/tools/config.schema.json
 description: |
-  Evaluate skill of ICON-CH1 single.
+  Evaluate skill of Varda-single forecaster.
 
 # Explicit list, not start/end/frequency:
 # covers two seasons and init times, and has two inits in each bucket,
