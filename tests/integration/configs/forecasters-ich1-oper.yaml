@@ -2,7 +2,7 @@
 
 # # yaml-language-server: $schema=../../../workflow/tools/config.schema.json
 # description: |
-#   Evaluate skill of ICON-CH1 single.
+#   Evaluate skill of Varda-single forecaster.
 
 # dates:
 #   # start: 2025-01-01T00:00
