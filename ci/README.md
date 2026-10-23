@@ -15,7 +15,7 @@ The runner and the generic setup fragments (preamble, CI-context logging,
 workdir/HOME/uv paths, uv install + sync) come from the shared MeteoSwiss blocks
 in [varda-cscs-ci-workflows](https://github.com/MeteoSwiss/varda-cscs-ci-workflows),
 pulled in via a remote `include`. Which cluster the jobs land on is decided there
-(`cluster.yml`, currently linard), not in this repo.
+(`cluster.yml`), not in this repo.
 
 `cscs.yml` includes those blocks and defines `.evalml-job`: the common runner
 config, the `before_script` that references the shared `.mch-*` fragments, and the

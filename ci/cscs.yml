@@ -3,8 +3,7 @@
 # The runner and the generic setup fragments (strict-mode preamble, CI-context
 # logging, workdir/HOME/uv paths, uv install + sync) are the shared MeteoSwiss
 # blocks — see https://github.com/MeteoSwiss/varda-cscs-ci-workflows. Which
-# cluster the jobs land on is decided there (cluster.yml, currently linard), not
-# here.
+# cluster the jobs land on is decided there (cluster.yml), not here.
 #
 # On top of those blocks this file defines `.evalml-job`: the common runner
 # config plus the evalml-specific log-summary artifact that both the longtest
