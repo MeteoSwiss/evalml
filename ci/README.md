@@ -11,9 +11,16 @@ These users should be able to see `mch-evalml` in their [CSCS CI overview page](
 
 ## Tests run using CI/CD
 
-`cscs.yml` holds the shared pieces — the bare-metal Balfrin runner definition and
-the `.sh_preamble` / `.install_uv` / `.install_evalml` setup fragments. The actual
-test suites live in their own files, each `include`-ing `cscs.yml`:
+The runner and the generic setup fragments (preamble, CI-context logging,
+workdir/HOME/uv paths, uv install + sync) come from the shared MeteoSwiss blocks
+in [varda-cscs-ci-workflows](https://github.com/MeteoSwiss/varda-cscs-ci-workflows),
+pulled in via a remote `include`. Which cluster the jobs land on is decided there
+(`cluster.yml`, currently linard), not in this repo.
+
+`cscs.yml` includes those blocks and defines `.evalml-job`: the common runner
+config, the `before_script` that references the shared `.mch-*` fragments, and the
+evalml-specific log-summary artifact. The actual test suites live in their own
+files, each `include`-ing `cscs.yml`:
 
 - `longtest.yml` — the `longtest` job: the integration suite marked `longtest`
   (4h Slurm limit).
@@ -21,7 +28,7 @@ test suites live in their own files, each `include`-ing `cscs.yml`:
   (10h Slurm limit).
 
 Adding another test suite is relatively simple; just make a new job that extends
-`.baremetal-runner-balfrin` and runs the tests you want.
+`.evalml-job` and runs the tests you want.
 
 ### Coverage
 
