@@ -76,7 +76,7 @@ for ax in axes[:, 0]:
 legend(fig, axes[0, 0], len(MODELS) + 2)
 fig.suptitle(f"{TITLE}\n{SUB}", fontsize=11)
 fig.tight_layout(rect=(0, 0.05, 1, 1))
-fig.savefig(D / "timing_vs_variance.png", dpi=150)
+fig.savefig(D / "timing_vs_variance.png", dpi=150, bbox_inches="tight")
 plt.close(fig)
 print(f"wrote {D}/timing_vs_variance.png")
 

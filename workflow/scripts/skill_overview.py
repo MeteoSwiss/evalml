@@ -131,7 +131,10 @@ def main() -> None:
     ax.set_ylim(-1.5, 1)  # same scale as the per-class figures
     ax.set_ylabel(f"SS = 1 - MSE({'model' if multi else CANDIDATE}) / MSE({BASELINE})")
     ax.set_xlabel("variable")
-    ax.legend(fontsize=8 if multi else 9, loc="lower left", ncol=len(cands) if multi else 1)
+    if multi:  # below the axes: inside it would cover the low boxes
+        ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.17), ncol=len(cands))
+    else:
+        ax.legend(fontsize=9, loc="lower left")
     ax.grid(alpha=0.3, axis="y")
     who = "Models" if multi else "Multistep"
     fig.suptitle(f"{who} vs Varda-single, truth {TRUTH_LABEL}, station "
@@ -141,7 +144,7 @@ def main() -> None:
                  fontsize=10)
     fig.tight_layout(rect=(0, 0, 1, 0.92 if not args.note else 0.88))
     out = args.out_dir / f"skill_overview{args.suffix}.png"
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, **({"bbox_inches": "tight"} if multi else {}))
     print(f"\nwrote {out} and the matching .csv")
 
 
