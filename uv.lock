@@ -1278,6 +1278,7 @@ dependencies = [
     { name = "shapely" },
     { name = "snakemake" },
     { name = "snakemake-executor-plugin-slurm" },
+    { name = "titanlib" },
     { name = "toml" },
 ]
 
@@ -1310,6 +1311,7 @@ requires-dist = [
     { name = "shapely", specifier = ">=2.1.2" },
     { name = "snakemake", specifier = "<9.10" },
     { name = "snakemake-executor-plugin-slurm" },
+    { name = "titanlib", specifier = "==0.3.4.dev4" },
     { name = "toml", specifier = ">=0.10.2" },
 ]
 
@@ -1781,7 +1783,7 @@ name = "gunicorn"
 version = "25.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "packaging", marker = "platform_machine != 'ARM64' or sys_platform != 'win32'" },
+    { name = "packaging" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c4/f4/e78fa054248fab913e2eab0332c6c2cb07421fca1ce56d8fe43b6aef57a4/gunicorn-25.3.0.tar.gz", hash = "sha256:f74e1b2f9f76f6cd1ca01198968bd2dd65830edc24b6e8e4d78de8320e2fe889", size = 634883, upload-time = "2026-03-27T00:00:26.092Z" }
 wheels = [
@@ -4740,6 +4742,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ce/3f/47baf510c31e0e52ac0d80d9071e5e166ca069167fee4a6c13841f9d5f5f/throttler-1.2.3.tar.gz", hash = "sha256:d2f5b0b499d62f1fc984dcac8043450b606549b0097753a9c8a707f7427c27e1", size = 11792, upload-time = "2026-01-27T00:48:11.552Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/66/70/42d8796acc57c8bcd9ae395b1a6a0bbc833f738492a8ed192a44ccd58035/throttler-1.2.3-py3-none-any.whl", hash = "sha256:241ea3e97438dec4dc2f31ddc56dbd96262787a9b1d0598adfcc0bada1134b66", size = 9704, upload-time = "2026-01-27T00:48:09.544Z" },
+]
+
+[[package]]
+name = "titanlib"
+version = "0.3.4.dev4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b2/4c/960cc065a98d0b2c5f2d68f3eb26dbc837044bfa74a10dfbac5ef502ddad/titanlib-0.3.4.dev4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:633fac01e9c2a4426be80278c65f2ff94b27b3596f9f1f6953d6903973f83c27", size = 13026126, upload-time = "2026-03-04T09:36:18.302Z" },
+    { url = "https://files.pythonhosted.org/packages/96/f2/b15fd377c971066ba04376bf2c5183d8b0080abae4536e2dcbaf417ec7d8/titanlib-0.3.4.dev4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:9da1f681493b117a18360941313bd292085dfcb0d561ae83f07bf3a83f76da1f", size = 13030424, upload-time = "2026-03-03T09:00:30.017Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/14/dcdcd22a32c4302a9752efae7cc0825d8487bf1b740aa133a9648e0cdf2b/titanlib-0.3.4.dev4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:a993b79cb1cd10df406baca547c78a87ceb7fec32f2946b5a1f8745cd4bf1e89", size = 13029834, upload-time = "2026-03-04T09:36:21.282Z" },
+    { url = "https://files.pythonhosted.org/packages/b4/45/9f6c3b53b8e17aec5ec981c54b221ff5581f944305d757fbe54d3421f88a/titanlib-0.3.4.dev4-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:70231e0b0ea35fb9db88ffe666319b1d8a44158c10afad5da5e98326cd9d9e59", size = 13024877, upload-time = "2026-03-04T09:36:24.23Z" },
 ]
 
 [[package]]
