@@ -454,6 +454,19 @@ if "jretrieve" in str(config["truth"]["root"]):
     check_prerequisites(_jretrieve_stage)
 
 
+def meteogram_prerequisites(_wildcards):
+    """Input function of the showcase target: meteograms with gridded truth look
+    up station coordinates in the DWH, so check its prerequisites when the
+    showcase DAG is built (input functions only run for requested rules)."""
+    if config["showcase"]["meteograms"]["enabled"] and "jretrieve" not in str(
+        config["truth"]["root"]
+    ):
+        from data_input.jretrieve import check_prerequisites
+
+        check_prerequisites("prod")
+    return []
+
+
 TRUTH_HASH = truth_hash(config["truth"])
 HOLDOUT_STATIONS = sorted(EXPERIMENT_CONFIG.get("station_holdout") or [])
 HOLDOUT_FILE = (

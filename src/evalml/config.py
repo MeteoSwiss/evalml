@@ -310,7 +310,10 @@ class MeteogramConfig(BaseModel):
     )
     stations: List[str] = Field(
         default=["GVE", "KLO", "LUG"],
-        description="List of PeakWeather station IDs to generate meteograms for.",
+        description=(
+            "SwissMetNet station abbreviations (nat_abbr) to generate meteograms for. "
+            "With gridded truth, station coordinates are looked up in the DWH."
+        ),
     )
 
 
