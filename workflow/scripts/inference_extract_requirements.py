@@ -227,7 +227,7 @@ def parse_overrides(overrides: list[str]) -> dict[str, str | None]:
         if "==" in item:
             name, version = item.split("==", 1)
             result[name.strip()] = version.strip()
-        elif any(item.startswith(prefix) for prefix in ("git+", "http://", "https://")):
+        elif any(item.startswith(prefix) for prefix in ("git+", "http://", "https://", "/")):
             name = _parse_url_package_name(item)
             result[name] = item
         else:
@@ -285,7 +285,7 @@ def format_requirements(
         pypi_requirements.pop(name, None)
         git_requirements.pop(name, None)
 
-        if isinstance(value, str) and value.startswith(("http://", "https://", "git+")):
+        if isinstance(value, str) and value.startswith(("http://", "https://", "git+", "/")):
             git_requirements[name] = value
         else:
             pypi_requirements[name] = value  # type: ignore[assignment]  # may be None
