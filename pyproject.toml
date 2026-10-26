@@ -44,14 +44,16 @@ build-backend = "hatchling.build"
 dev = [
     "pre-commit>=4.2.0",
     "snakefmt>=2.0",
+    "pytest-cov>=5.0",
 ]
 
 [tool.pytest.ini_options]
-# Skip longtests (GPU/credential/data-dependent integration tests) by default,
-# in CI and locally. Run them explicitly with `pytest -m longtest`.
-addopts = "-m 'not longtest'"
+# Skip tests marked longtest and heavytest by default,
+# Run them explicitly with `pytest -m longtest`.
+addopts = "-m 'not longtest and not heavytest' --cov=evalml --cov=verification --cov=data_input --cov=plotting --cov-report=term-missing"
 markers = [
-    "longtest: mark tests that take a long time to run, e.g. integration tests",
+    "longtest: mark tests that take a longer to run but are run on PRs",
+    "heavytest: mark tests that take a long time to run, and are run in a weekly plan",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -60,6 +62,13 @@ packages = [
   "src/verification",
   "src/data_input"
 ]
+
+[tool.uv]
+# Always use a uv-managed (python-build-standalone) interpreter. System Pythons
+# on the CI runners are built without the sqlite3 C extension, which breaks
+# coverage.py (pytest-cov imports sqlite3 at startup). The standalone builds
+# bundle sqlite3, so this guarantees a working interpreter everywhere.
+python-preference = "only-managed"
 
 [tool.uv.sources]
 eccodes-cosmo-resources-python = { git = "https://github.com/MeteoSwiss/eccodes-cosmo-resources-python" }

@@ -11,6 +11,11 @@ OUT_ROOT = Path(config["locations"]["output_root"])
 # the experiment block is optional (e.g. for showcase/sandbox configs)
 EXPERIMENT_CONFIG = config.get("experiment") or {}
 
+# Opt-in inference replay: when set, inference_execute stages frozen GRIB from
+# here instead of running anemoi-inference (the import + staging live in
+# inference.smk, the only user).
+FIXTURE_ROOT = config.get("fixture_root")
+
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
 HASH_LENGTH = 4
 
