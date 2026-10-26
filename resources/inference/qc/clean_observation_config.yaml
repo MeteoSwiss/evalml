@@ -11,12 +11,12 @@ par2check:
 # Stations permanently set to NaN for the listed parameters (loaded from external file), applied first
 hard_blacklist_file: clean_observation_blacklist_bdp_all.yaml
 
-# Optional: suppress flags during measured moderate-strong inversions at stations with low representativeness 
+# Optional: suppress flags during measured moderate-strong inversions at stations with low representativeness
 # in the station networks used for buddy checks (e.g. isolated sink-holes stations).
 # Station/reference pairs are loaded from a YAML file; leave file empty to disable (null).
 # Active seasons are configurable; protection also requires spatial confirmation from neighbouring stations.
 # Protection requires: at least one buddy test (buddy_obs or buddy_diff) positive AND none of
-# the blocking_tests also positive. 
+# the blocking_tests also positive.
 inversion_protection:
   file: clean_observation_inversion_stations.yaml
   parameters: [T_2M, TD_2M, T_G]   # QC parameters to which inversion protection applies
@@ -174,7 +174,7 @@ buddy:
   PMSL:
     radius: 100000
     num_min: 2
-    threshold: [5.5, 4.5]    
+    threshold: [5.5, 4.5]
     max_elev_diff: 500
     elev_gradient: 0
     min_std: 100
@@ -347,4 +347,3 @@ fgt:
     debug: false
     basic: true
     tpostneg: [5.5, 4.5]
-
