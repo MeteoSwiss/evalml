@@ -301,20 +301,26 @@ def collect_all_baselines():
     return baselines
 
 
-def resolve_baseline_id(label: str) -> str:
-    """Resolve a baseline label to its hash-based ID.
+def resolve_reference_id(label: str) -> str:
+    """Resolve a scorecard reference label to its participant ID.
 
-    Scorecard configs reference baselines by human-readable label (e.g. 'IFS').
-    This finds the matching baseline_id in BASELINE_CONFIGS.
-    Raises ValueError if the label doesn't match any registered baseline.
+    The reference can be a baseline (hash-based ID) or a candidate run
+    ('env_id/config_hash'). Labels are unique across `runs` (config validation).
     """
     for baseline_id, cfg in BASELINE_CONFIGS.items():
         if cfg.get("label") == label:
             return baseline_id
-    available = [cfg.get("label") for cfg in BASELINE_CONFIGS.values()]
+    for run_id, cfg in RUN_CONFIGS.items():
+        if cfg.get("_is_candidate", False) and cfg.get("label") == label:
+            return run_id
+    available = [cfg.get("label") for cfg in BASELINE_CONFIGS.values()] + [
+        cfg.get("label")
+        for cfg in RUN_CONFIGS.values()
+        if cfg.get("_is_candidate", False)
+    ]
     raise ValueError(
-        f"No baseline with label {label!r} found. "
-        f"Available baseline labels: {available}"
+        f"No baseline or candidate run with label {label!r} found. "
+        f"Available labels: {available}"
     )
 
 
@@ -555,3 +561,17 @@ def resolve_leadtimes(steps_spec, requested="all", param=None):
     if param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
         valid = {lt for lt in valid if lt >= step}
     return sorted(valid)
+
+
+def scoremap_runtime(wc):
+    """SLURM runtime (minutes) for a scoremap job, which loops over all reference
+    times. Accumulated parameters (TOT_PREC*) re-accumulate hourly analysis
+    fields up to the lead time, so they scale with it. Per-reftime costs measured
+    on Balfrin (MRB-980, REA-L-CH1 truth): ~4 s, plus ~0.3 s per lead hour for
+    accumulated parameters; 1.5x headroom, at least 60 min."""
+    import math
+
+    seconds = 4.0
+    if wc.param.startswith("TOT_PREC"):
+        seconds += 0.3 * int(wc.leadtime)
+    return max(60, math.ceil(1.5 * len(REFTIMES) * seconds / 60))
