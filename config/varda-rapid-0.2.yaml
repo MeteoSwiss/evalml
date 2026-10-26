@@ -63,7 +63,8 @@ runs:
 
 truth:
   label: SwissMetNet
-  root: jretrievedwh:bbox=45.7,48.0,5.8,10.8;use_limitation=40
+  root: jretrievedwh:bbox=45.7,48.0,5.8,10.8;use_limitation=40;quality_info=4
+
 
 experiment:
   params:

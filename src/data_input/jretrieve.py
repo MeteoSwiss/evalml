@@ -170,8 +170,8 @@ def _stations_to_argv(stations: dict[str, Any]) -> list[str]:
 
 def parse_selection(
     root: Any,
-) -> tuple[dict[str, Any], str, str, int | None]:
-    """Parse a truth-root marker into (stations, stage, seq_type, use_limitation).
+) -> tuple[dict[str, Any], str, str, int | None, int | None]:
+    """Parse a truth-root marker into (stations, stage, seq_type, use_limitation, quality_info).
 
     Examples (slash-free so they survive ``Path()`` normalisation):
       ``jretrievedwh:SwissMetNet``                       -> group
@@ -179,8 +179,9 @@ def parse_selection(
       ``jretrievedwh:locations=ARO,KLO``
       ``jretrievedwh:bbox=45.8,47.8,5.9,10.5``
       ``jretrievedwh:bbox=45.7,48.0,5.8,10.8;use_limitation=40``
+      ``jretrievedwh:SwissMetNet;quality_info=4``
 
-    Defaults when not given: use_limitation=40.
+    Defaults when not given: use_limitation=40, quality_info=None.
     """
     _, _, rest = str(root).partition(":")
     rest = rest.strip()
@@ -188,6 +189,7 @@ def parse_selection(
     stage = "prod"
     seq_type = "surface"
     use_limitation: int | None = 40
+    quality_info: int | None = None
     for i, part in enumerate([p for p in rest.split(";") if p]):
         if "=" not in part:
             if i == 0:
@@ -204,11 +206,13 @@ def parse_selection(
             seq_type = value
         elif key == "use_limitation":
             use_limitation = int(value)
+        elif key == "quality_info":
+            quality_info = int(value)
         else:
             raise ValueError(f"Unknown jretrieve selector key: {key!r}")
     if not stations:
         stations = {"group": DEFAULT_GROUP}
-    return stations, stage, seq_type, use_limitation
+    return stations, stage, seq_type, use_limitation, quality_info
 
 
 def _run(argv: list[str], env: dict[str, str], timeout_s: int) -> str:
