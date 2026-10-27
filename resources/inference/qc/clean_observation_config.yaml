@@ -1,3 +1,7 @@
+# Verbose logging: when true, logs every flagged station individually (as well as summaries).
+# When false (default), only per-variable and hard-blacklist summaries are logged.
+verbose: false
+
 # QC parameter list to check
 par2check:
   - T_2M

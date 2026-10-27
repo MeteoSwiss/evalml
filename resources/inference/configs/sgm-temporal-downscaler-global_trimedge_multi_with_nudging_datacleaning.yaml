@@ -33,6 +33,7 @@ input:
                   obs_path_in: observation/nudging_station_obs_raw.parquet
                   obs_path_out: observation/nudging_station_obs.parquet
                   config_file: resources/qc/clean_observation_config.yaml
+                  icon_orog_file: /scratch/mch/icontest/testing-input-data/c2sm/icon-1/external_parameter_icon_grid_0001_R19B08_mch.nc
             - forward_transform_filter:
                 nudge_toward_observation:
                   obs_path: observation/nudging_station_obs.parquet
