@@ -557,6 +557,9 @@ def resolve_leadtimes(steps_spec, requested="all", param=None):
     # (e.g. "TOT_PREC1", "TOT_PREC6"); strip it before checking membership so
     # those aggregated variants are recognized the same as their base param.
     base_param = re.sub(r"\d+$", "", param) if param else param
-    if param in PARAMS_WITHOUT_STEP_ZERO_VALUE or base_param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
+    if (
+        param in PARAMS_WITHOUT_STEP_ZERO_VALUE
+        or base_param in PARAMS_WITHOUT_STEP_ZERO_VALUE
+    ):
         valid = {lt for lt in valid if lt >= step}
     return sorted(valid)
