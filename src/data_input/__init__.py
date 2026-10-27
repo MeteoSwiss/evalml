@@ -754,7 +754,7 @@ def load_obs_data_from_jretrieve(
 
     from data_input import jretrieve as jr
 
-    stations, stage, seq_type, use_limitation = jr.parse_selection(root)
+    stations, stage, seq_type, use_limitation, quality_info = jr.parse_selection(root)
     jr.check_prerequisites(stage)
 
     want_uv = "U_10M" in params or "V_10M" in params
@@ -785,6 +785,7 @@ def load_obs_data_from_jretrieve(
         seq_type=seq_type,
         stage=stage,
         use_limitation=use_limitation,
+        quality_info=quality_info,
     )
     raw = _jretrieve_df_to_xarray(df, short_names, catalog)
 

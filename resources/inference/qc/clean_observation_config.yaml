@@ -1,0 +1,353 @@
+# Verbose logging: when true, logs every flagged station individually (as well as summaries).
+# When false (default), only per-variable and hard-blacklist summaries are logged.
+verbose: false
+
+# QC parameter list to check
+par2check:
+  - T_2M
+  - TD_2M
+  - SP_10M
+  - VMAX10M
+  - T_G
+  - PS
+  - PMSL
+
+# Stations permanently set to NaN for the listed parameters (loaded from external file), applied first
+hard_blacklist_file: clean_observation_blacklist_bdp_all.yaml
+
+# Optional: suppress flags during measured moderate-strong inversions at stations with low representativeness
+# in the station networks used for buddy checks (e.g. isolated sink-holes stations).
+# Station/reference pairs are loaded from a YAML file; leave file empty to disable (null).
+# Active seasons are configurable; protection also requires spatial confirmation from neighbouring stations.
+# Protection requires: at least one buddy test (buddy_obs or buddy_diff) positive AND none of
+# the blocking_tests also positive.
+inversion_protection:
+  file: clean_observation_inversion_stations.yaml
+  parameters: [T_2M, TD_2M, T_G]   # QC parameters to which inversion protection applies
+  seasons: [summer, winter, spring, fall]   # active seasons: winter=Dec–Feb, spring=Mar–May, fall=Sep–Nov, summer=Jun-Aug
+  lapse_rate_min: 0.002             # K/m — minimum lapse rate to qualify as inversion
+  lapse_rate_max: 0.06              # K/m — upper bound (above this likely a data error)
+  min_confirming_stations: 1        # other stations within radius that must also show inversion
+  confirming_radius_km: 150.0       # search radius for spatial confirmation [km]
+  blocking_tests: [hard, isolation_check, plateau_test, DWH_flag]  # if any of these is positive, protection is suppressed
+  report: true                      # write inversion_protection_YYYYmmDDHHMM.json alongside _flagged.json
+
+# Trusted stations — never blacklisted by automated QC regardless of score, suited for SMN stations only
+stations_excluded:
+  T_2M:    {stations: []}
+  TD_2M:   {stations: []}
+  T_G:     {stations: []}
+  SP_10M:  {stations: []}
+  VMAX10M: {stations: []}
+  PS:      {stations: ['CEV','COV','TIT','GOS']}
+  PMSL:    {stations: []}
+
+# Stations excluded from FGT only — other tests still apply
+# Useful for isolated high-altitude stations where FGT is unreliable
+# but buddy/isolation checks should still run
+fgt_excluded:
+  T_2M:    {stations: [OSSOK, OSBRU, IYSIG, SIKRE, IYULW, SIKAN]}
+  TD_2M:   {stations: []}
+  T_G:     {stations: []}
+  SP_10M:  {stations: [OSSOK, MMKLM]}
+  VMAX10M: {stations: []}
+  PS:      {stations: []}
+  PMSL:    {stations: []}
+
+# Test selection and scoring per parameter — tests_QC: {test_name: weight}
+# with 0.15 threshold need 2 points test for flagging  (value=(weight of positive tests)/sum(all test weights))
+titan_ntests_threshold:
+  T_2M:
+    threshold_summary: 0.15
+    tests_QC: {hard: 2, isolation_check: 2, buddy_obs: 2, buddy_diff: 2, fgt: 1, plateau_test: 2, DWH_flag: 1}
+  TD_2M:
+    threshold_summary: 0.15
+    tests_QC: {hard: 2, isolation_check: 2, buddy_obs: 2, buddy_diff: 2, fgt: 1, plateau_test: 2, DWH_flag: 1}
+  T_G:
+    threshold_summary: 0.15
+    tests_QC: {hard: 2, isolation_check: 2, buddy_obs: 1, buddy_diff: 2, fgt: 1, plateau_test: 2, DWH_flag: 1}
+  SP_10M:
+    threshold_summary: 0.15
+    tests_QC: {hard: 2, isolation_check: 2, buddy_obs: 2, buddy_diff: 2, fgt: 1, plateau_test: 2, DWH_flag: 1}
+  VMAX10M:
+    threshold_summary: 0.15
+    tests_QC: {hard: 2, isolation_check: 2, buddy_obs: 2, buddy_diff: 2, fgt: 1, plateau_test: 2, DWH_flag: 1}
+  PS:
+    threshold_summary: 0.15
+    tests_QC: {hard: 2, isolation_check: 2, buddy_obs: 2, buddy_diff: 2, fgt: 1, plateau_test: 2, DWH_flag: 1}
+  PMSL:
+    threshold_summary: 0.15
+    tests_QC: {hard: 2, isolation_check: 2, buddy_obs: 2, buddy_diff: 2, fgt: 1, plateau_test: 2, DWH_flag: 1}
+
+# Hard test: plausibility range per parameter
+# For T_2M, TD_2M, T_G: values are sea-level anchors (pch_min = January lower bound, pch_max = July upper bound).
+# A cosine seasonal evolution and altitude lapse correction are applied at runtime by _seasonal_pch_min/_seasonal_pch_max
+# in clean_observation.py (lapse: −8.3 K/km for min, −6.5 K/km for max; floors: −50°C for T_2M/T_G, −60°C for TD_2M / +25°C).
+# SP_10M, VMAX10M, PS, PMSL use static thresholds (no seasonal/altitude correction).
+plausibility_thresholds:
+  T_2M:    {pch_min: 230, pch_max: 330}  # K  →  Jan sea-level −43°C / Jul sea-level +57°C
+  TD_2M:   {pch_min: 215, pch_max: 330}  # K  →  Jan sea-level −58°C / Jul sea-level +57°C
+  SP_10M:  {pch_min:   0, pch_max:  80}  # m/s
+  VMAX10M: {pch_min:   0, pch_max:  80}  # m/s
+  T_G:     {pch_min: 225, pch_max: 345}  # K  →  Jan sea-level −48°C / Jul sea-level +72°C
+  PS:      {pch_min:  50000, pch_max: 108500}  # Pa
+  PMSL:    {pch_min:  87000, pch_max: 108500}  # Pa
+
+# Isolation check (flags stations with too few neighbours)
+isolation_check:
+  T_2M:    {radius: 75000, num_min: 3}
+  TD_2M:   {radius: 75000, num_min: 3}
+  T_G:     {radius: 75000, num_min: 2}
+  SP_10M:  {radius: 75000, num_min: 3}
+  VMAX10M: {radius: 75000, num_min: 3}
+  PS:      {radius: 75000, num_min: 3}
+  PMSL:    {radius: 75000, num_min: 2}
+
+# DWH plausibility test
+dwh_force: true
+DWH_flag:
+  T_2M:    {dwh_plausibility_thr: 0.75}
+  TD_2M:   {dwh_plausibility_thr: 0.75}
+  T_G:     {dwh_plausibility_thr: 0.75}
+  SP_10M:  {dwh_plausibility_thr: 0.75}
+  VMAX10M: {dwh_plausibility_thr: 0.75}
+  PS:      {dwh_plausibility_thr: 0.75}
+  PMSL:    {dwh_plausibility_thr: 0.75}
+
+# Plateau test (detects frozen / stuck instruments)
+plateau_test:
+  T_2M:    {window: 24, gran: 360, sd: 0}
+  TD_2M:   {window: 24, gran: 360, sd: 0}
+  T_G:     {window: 24, gran: 360, sd: 0}
+  SP_10M:  {window: 24, gran:  60, sd: 0}
+  VMAX10M: {window: 24, gran:  60, sd: 0}
+  PS:      {window: 24, gran: 360, sd: 0}
+  PMSL:    {window: 24, gran: 360, sd: 0}
+
+# Buddy check on raw observations
+# threshold: [SMN stations, other stations]
+buddy:
+  T_2M:
+    radius: 100000
+    num_min: 2
+    threshold: [4.5, 3.0]
+    max_elev_diff: 500
+    elev_gradient: -0.0065
+    min_std: 2
+    num_iterations: 6
+  TD_2M:
+    radius: 100000
+    num_min: 2
+    threshold: [6.0, 4.0]
+    max_elev_diff: 700
+    elev_gradient: -0.0065
+    min_std: 2
+    num_iterations: 6
+  T_G:
+    radius: 100000
+    num_min: 2
+    threshold: [6.5, 5.0]
+    max_elev_diff: 500
+    elev_gradient: -0.0065
+    min_std: 2
+    num_iterations: 6
+  SP_10M:
+    radius: 100000
+    num_min: 2
+    threshold: [9.5, 8.5]
+    max_elev_diff: 500
+    elev_gradient: 0.0015
+    min_std: 2
+    num_iterations: 6
+  VMAX10M:
+    radius: 100000
+    num_min: 2
+    threshold: [9.5, 8.5]
+    max_elev_diff: 500
+    elev_gradient: 0.0015
+    min_std: 2
+    num_iterations: 6
+  PS:
+    radius: 100000
+    num_min: 2
+    threshold: [5.5, 4.5]
+    max_elev_diff: 500
+    elev_gradient: -12.0     # Pa/m standard atmosphere
+    min_std: 200
+    num_iterations: 6
+  PMSL:
+    radius: 100000
+    num_min: 2
+    threshold: [5.5, 4.5]
+    max_elev_diff: 500
+    elev_gradient: 0
+    min_std: 100
+    num_iterations: 6
+
+# Buddy check on obs-minus-model innovations
+buddy_diff:
+  T_2M:
+    radius: 100000
+    num_min: 2
+    threshold: [4.5, 3.0]
+    max_elev_diff: 500
+    elev_gradient: 0
+    min_std: 2
+    num_iterations: 6
+  TD_2M:
+    radius: 100000
+    num_min: 2
+    threshold: [6.0, 4.0]
+    max_elev_diff: 700
+    elev_gradient: 0
+    min_std: 2
+    num_iterations: 6
+  T_G:
+    radius: 100000
+    num_min: 2
+    threshold: [6.5, 5.0]
+    max_elev_diff: 500
+    elev_gradient: 0
+    min_std: 2
+    num_iterations: 6
+  SP_10M:
+    radius: 100000
+    num_min: 2
+    threshold: [9.5, 8.5]
+    max_elev_diff: 500
+    elev_gradient: 0
+    min_std: 2
+    num_iterations: 6
+  VMAX10M:
+    radius: 100000
+    num_min: 2
+    threshold: [9.5, 8.5]
+    max_elev_diff: 500
+    elev_gradient: 0
+    min_std: 2
+    num_iterations: 6
+  PS:
+    radius: 100000
+    num_min: 2
+    threshold: [5.5, 4.5]
+    max_elev_diff: 500
+    elev_gradient: 0
+    min_std: 200
+    num_iterations: 6
+  PMSL:
+    radius: 100000
+    num_min: 2
+    threshold: [5.5, 4.5]
+    max_elev_diff: 500
+    elev_gradient: 0
+    min_std: 100
+    num_iterations: 6
+
+# First-guess test (background_elab_type 3 = external NWP data)
+# tpostneg: [SMN stations, other stations]
+fgt:
+  T_2M:
+    background_elab_type: 3
+    num_min_outer: 3
+    num_max_outer: 20
+    inner_radius: 150000
+    outer_radius: 250000
+    num_iterations: 10
+    num_min_prof: 0
+    min_elev_diff: 750
+    min_horizontal_scale: 250
+    max_horizontal_scale: 300000
+    kth_closest_obs_horizontal_scale: 2
+    debug: false
+    basic: true
+    tpostneg: [4.5, 3.0]
+  TD_2M:
+    background_elab_type: 3
+    num_min_outer: 3
+    num_max_outer: 20
+    inner_radius: 150000
+    outer_radius: 250000
+    num_iterations: 10
+    num_min_prof: 0
+    min_elev_diff: 750
+    min_horizontal_scale: 250
+    max_horizontal_scale: 300000
+    kth_closest_obs_horizontal_scale: 2
+    debug: false
+    basic: true
+    tpostneg: [6.0, 4.5]
+  T_G:
+    background_elab_type: 3
+    num_min_outer: 3
+    num_max_outer: 20
+    inner_radius: 150000
+    outer_radius: 250000
+    num_iterations: 10
+    num_min_prof: 0
+    min_elev_diff: 750
+    min_horizontal_scale: 250
+    max_horizontal_scale: 300000
+    kth_closest_obs_horizontal_scale: 2
+    debug: false
+    basic: true
+    tpostneg: [6.5, 5.0]
+  SP_10M:
+    background_elab_type: 3
+    num_min_outer: 3
+    num_max_outer: 20
+    inner_radius: 150000
+    outer_radius: 250000
+    num_iterations: 10
+    num_min_prof: 0
+    min_elev_diff: 750
+    min_horizontal_scale: 400
+    max_horizontal_scale: 300000
+    kth_closest_obs_horizontal_scale: 2
+    debug: false
+    basic: true
+    tpostneg: [9.5, 8.0]
+  VMAX10M:
+    background_elab_type: 3
+    num_min_outer: 3
+    num_max_outer: 20
+    inner_radius: 150000
+    outer_radius: 250000
+    num_iterations: 10
+    num_min_prof: 0
+    min_elev_diff: 750
+    min_horizontal_scale: 400
+    max_horizontal_scale: 300000
+    kth_closest_obs_horizontal_scale: 2
+    debug: false
+    basic: true
+    tpostneg: [9.5, 8.0]
+  PS:
+    background_elab_type: 3
+    num_min_outer: 3
+    num_max_outer: 20
+    inner_radius: 150000
+    outer_radius: 250000
+    num_iterations: 10
+    num_min_prof: 0
+    min_elev_diff: 750
+    min_horizontal_scale: 250
+    max_horizontal_scale: 300000
+    kth_closest_obs_horizontal_scale: 2
+    debug: false
+    basic: true
+    tpostneg: [5.5, 4.5]
+  PMSL:
+    background_elab_type: 3
+    num_min_outer: 3
+    num_max_outer: 20
+    inner_radius: 150000
+    outer_radius: 250000
+    num_iterations: 10
+    num_min_prof: 0
+    min_elev_diff: 750
+    min_horizontal_scale: 250
+    max_horizontal_scale: 300000
+    kth_closest_obs_horizontal_scale: 2
+    debug: false
+    basic: true
+    tpostneg: [5.5, 4.5]
