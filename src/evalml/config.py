@@ -498,6 +498,16 @@ class ExperimentConfig(BaseModel):
             "whose config references that file."
         ),
     )
+    score_on_common_points: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Parameters scored only at the points where every participant has a "
+            "value, per reference time and lead time (e.g. HZEROCL, SNOWLMT and "
+            "CIN_MU, which ICON leaves undefined at part of the domain). All "
+            "participants and the truth are then scored on the same points. The "
+            "scores of these parameters depend on the set of participants."
+        ),
+    )
     scorecards: Optional[ExperimentScorecardConfig] = Field(
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
@@ -518,6 +528,15 @@ class ExperimentConfig(BaseModel):
         if duplicates:
             raise ValueError(f"station_holdout has duplicate stations: {duplicates}")
         return v
+
+    @model_validator(mode="after")
+    def validate_score_on_common_points(self) -> "ExperimentConfig":
+        unknown = sorted(set(self.score_on_common_points) - set(self.params))
+        if unknown:
+            raise ValueError(
+                f"score_on_common_points parameters {unknown} are not in experiment.params."
+            )
+        return self
 
     @field_validator("thresholds")
     @classmethod

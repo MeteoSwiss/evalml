@@ -242,7 +242,34 @@ in kg m-2, like `TOT_PREC`.
 - All participants are scored on the same points: where a forecast is missing at a
   point with valid truth, the scores of that region and time step are NaN. Fields that
   are undefined in places (CIN without a level of free convection, `HZEROCL`/`SNOWLMT`
-  where ICON leaves them undefined) can therefore get NaN scores.
+  where ICON leaves them undefined) therefore get NaN scores, unless they are listed in
+  `score_on_common_points` (see below).
+
+### Scoring on common points
+
+Some fields are undefined in parts of the domain: for instance, ICON leaves `HZEROCL`/`SNOWLMT`
+undefined where the level is below the ground and CIN where there is no level of free
+convection. A single undefined point makes the scores of that region and time step NaN.
+List such fields to score them only where every participant has a value:
+
+```yaml
+experiment:
+  score_on_common_points:
+    - HZEROCL
+    - SNOWLMT
+    - CIN_MU
+```
+
+For each reference time and lead time, the workflow builds a mask per participant
+(baselines and candidate runs) of the points where its forecast has a value, and keeps
+only the points valid in all masks. Every participant and the truth are then scored on
+these points only.
+
+- The points change with each reference time and lead time; where every participant has
+  a value, the scores are the same as without the setting.
+- The scores of the listed fields depend on the set of participants: adding or removing
+  a run or baseline changes them, and reruns the verification.
+- Fields not listed are not affected. The listed fields must be in `experiment.params`.
 
 ### Holdout stations
 

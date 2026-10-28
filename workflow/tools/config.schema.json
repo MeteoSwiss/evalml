@@ -312,6 +312,14 @@
           "description": "List of holdout station nat_abbr. When set, adds a 'station_group' dimension (all/holdout/holdin) to verification metrics for all models and baselines. The workflow writes the list to a CSV file and stages it as holdout_stations.csv in the working directory of every inference run whose config references that file.",
           "title": "Station Holdout"
         },
+        "score_on_common_points": {
+          "description": "Parameters scored only at the points where every participant has a value, per reference time and lead time (e.g. HZEROCL, SNOWLMT and CIN_MU, which ICON leaves undefined at part of the domain). All participants and the truth are then scored on the same points. The scores of these parameters depend on the set of participants.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Score On Common Points",
+          "type": "array"
+        },
         "scorecards": {
           "anyOf": [
             {
