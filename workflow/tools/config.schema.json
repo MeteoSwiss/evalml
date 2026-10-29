@@ -271,7 +271,7 @@
             "PMSL",
             "TOT_PREC6"
           ],
-          "description": "List of parameters to compute verification metrics for.",
+          "description": "List of parameters to compute verification metrics for. With INCA truth, parameters INCA does not provide are skipped.",
           "items": {
             "type": "string"
           },
@@ -311,6 +311,14 @@
           "default": null,
           "description": "List of holdout station nat_abbr. When set, adds a 'station_group' dimension (all/holdout/holdin) to verification metrics for all models and baselines. The workflow writes the list to a CSV file and stages it as holdout_stations.csv in the working directory of every inference run whose config references that file.",
           "title": "Station Holdout"
+        },
+        "score_on_common_points": {
+          "description": "Parameters scored only at the points where every participant has a value, per reference time and lead time (e.g. HZEROCL, SNOWLMT and CIN_MU, which ICON leaves undefined at part of the domain). All participants and the truth are then scored on the same points. The scores of these parameters depend on the set of participants.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Score On Common Points",
+          "type": "array"
         },
         "scorecards": {
           "anyOf": [
@@ -752,7 +760,7 @@
           "default": [
             "T_2M"
           ],
-          "description": "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 (period-accumulated precipitation, period encoded in the name).",
+          "description": "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 (period-accumulated precipitation, period encoded in the name), and the derive-diagnostic fields DD_10M, RELHUM_2M, TW_2M (derived from their components when a source lacks them), HZEROCL, SNOWLMT, CAPE_ML, CIN_ML, CAPE_MU, CIN_MU, TOT_SNOW1/6/24.",
           "items": {
             "type": "string"
           },
@@ -839,7 +847,7 @@
           "type": "string"
         },
         "variables": {
-          "description": "Variables and metrics as scorecard rows (VAR:M1,M2 format). An empty list [] is accepted by the schema but falls back to a hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). Omit ':...' after a variable name to include all available metrics for it.",
+          "description": "Variables and metrics as scorecard rows (VAR:M1,M2 format). An empty list [] is accepted by the schema but falls back to a hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). Omit ':...' after a variable name to include all available metrics for it. Variables without data are shown as empty rows.",
           "items": {
             "type": "string"
           },
@@ -1030,7 +1038,7 @@
           "type": "string"
         },
         "root": {
-          "description": "Path to the root of the dataset.",
+          "description": "Truth source: an anemoi '.zarr' analysis (e.g. KENDA), the INCA-CH archive (a path with an 'INCA' directory), or 'jretrievedwh:<selector>' for DWH station observations.",
           "minLength": 1,
           "title": "Root",
           "type": "string"

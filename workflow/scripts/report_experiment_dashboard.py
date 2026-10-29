@@ -9,7 +9,11 @@ import jinja2
 import xarray as xr
 
 _sys.path.append(str(Path(__file__).parent))
-from verification_plot_metrics import _ensure_unique_lead_time, _select_best_sources
+from verification_plot_metrics import (
+    _concat_sources,
+    _ensure_unique_lead_time,
+    _select_best_sources,
+)
 from verification import decode_metric
 
 LOG = logging.getLogger(__name__)
@@ -64,7 +68,7 @@ def main(args):
     _check_n_samples_consistency(dfs, args.verif_files)
     dfs = [_ensure_unique_lead_time(d) for d in dfs]
     dfs = _select_best_sources(dfs)
-    ds = xr.concat(dfs, dim="source", join="outer", coords="minimal")
+    ds = _concat_sources(dfs)
     LOG.info("Loaded verification netcdf: \n%s", ds)
 
     # extract only  non-spatial variables to pd.DataFrame

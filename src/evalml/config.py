@@ -207,7 +207,11 @@ class TruthConfig(BaseModel):
     root: str = Field(
         ...,
         min_length=1,
-        description="Path to the root of the dataset.",
+        description=(
+            "Truth source: an anemoi '.zarr' analysis (e.g. KENDA), the INCA-CH "
+            "archive (a path with an 'INCA' directory), or 'jretrievedwh:<selector>' "
+            "for DWH station observations."
+        ),
     )
 
 
@@ -235,7 +239,10 @@ class ScoreMapsConfig(BaseModel):
         description=(
             "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
             "PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 "
-            "(period-accumulated precipitation, period encoded in the name)."
+            "(period-accumulated precipitation, period encoded in the name), and the "
+            "derive-diagnostic fields DD_10M, RELHUM_2M, TW_2M (derived from their "
+            "components when a source lacks them), HZEROCL, SNOWLMT, CAPE_ML, CIN_ML, "
+            "CAPE_MU, CIN_MU, TOT_SNOW1/6/24."
         ),
     )
     leadtimes: List[int] = Field(
@@ -361,7 +368,8 @@ class ScorecardConfig(BaseModel):
             "Variables and metrics as scorecard rows (VAR:M1,M2 format). "
             "An empty list [] is accepted by the schema but falls back to a "
             "hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). "
-            "Omit ':...' after a variable name to include all available metrics for it."
+            "Omit ':...' after a variable name to include all available metrics for it. "
+            "Variables without data are shown as empty rows."
         ),
     )
 
@@ -467,7 +475,10 @@ class ExperimentConfig(BaseModel):
     )
     params: List[str] = Field(
         default=["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"],
-        description="List of parameters to compute verification metrics for.",
+        description=(
+            "List of parameters to compute verification metrics for. With INCA truth, "
+            "parameters INCA does not provide are skipped."
+        ),
     )
     thresholds: Dict[str, Dict[str, List[float]]] = Field(
         default_factory=dict,
@@ -490,6 +501,16 @@ class ExperimentConfig(BaseModel):
             "whose config references that file."
         ),
     )
+    score_on_common_points: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Parameters scored only at the points where every participant has a "
+            "value, per reference time and lead time (e.g. HZEROCL, SNOWLMT and "
+            "CIN_MU, which ICON leaves undefined at part of the domain). All "
+            "participants and the truth are then scored on the same points. The "
+            "scores of these parameters depend on the set of participants."
+        ),
+    )
     scorecards: Optional[ExperimentScorecardConfig] = Field(
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
@@ -510,6 +531,15 @@ class ExperimentConfig(BaseModel):
         if duplicates:
             raise ValueError(f"station_holdout has duplicate stations: {duplicates}")
         return v
+
+    @model_validator(mode="after")
+    def validate_score_on_common_points(self) -> "ExperimentConfig":
+        unknown = sorted(set(self.score_on_common_points) - set(self.params))
+        if unknown:
+            raise ValueError(
+                f"score_on_common_points parameters {unknown} are not in experiment.params."
+            )
+        return self
 
     @field_validator("thresholds")
     @classmethod

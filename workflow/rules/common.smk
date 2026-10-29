@@ -6,10 +6,14 @@ import hashlib
 import json
 from urllib.parse import urlparse
 
+from data_input import inca, truth_type
+
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
 # the experiment block is optional (e.g. for showcase/sandbox configs)
 EXPERIMENT_CONFIG = config.get("experiment") or {}
+# "anemoi_dataset", "jretrieve" or "inca"
+TRUTH_TYPE = truth_type(config["truth"]["root"])
 
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
 HASH_LENGTH = 4
@@ -324,18 +328,39 @@ def resolve_reference_id(label: str) -> str:
     )
 
 
+def experiment_participant_ids() -> list[str]:
+    """Baseline ids and candidate run ids: the forecasts compared in the experiment."""
+    return list(BASELINE_CONFIGS) + [
+        run_id
+        for run_id, run_config in RUN_CONFIGS.items()
+        if run_config.get("_is_candidate", False)
+    ]
+
+
+def participant_data_dir(participant_id: str) -> Path:
+    if participant_id in BASELINE_CONFIGS:
+        return OUT_ROOT / f"data/baselines/{participant_id}"
+    return OUT_ROOT / f"data/runs/{participant_id}"
+
+
 def collect_experiment_participants():
-    participants = {}
-    for base in BASELINE_CONFIGS.keys():
-        participants[base] = (
-            OUT_ROOT / f"data/baselines/{base}/verif_aggregated_{VERIF_HASH}.nc"
-        )
-    for exp in RUN_CONFIGS.keys():
-        if RUN_CONFIGS[exp].get("_is_candidate", False):
-            participants[exp] = (
-                OUT_ROOT / f"data/runs/{exp}/verif_aggregated_{VERIF_HASH}.nc"
-            )
-    return participants
+    return {
+        pid: participant_data_dir(pid) / f"verif_aggregated_{VERIF_HASH}.nc"
+        for pid in experiment_participant_ids()
+    }
+
+
+def participant_valid_mask_files(wildcards) -> list[Path]:
+    """Valid masks of all participants for one reference time (rule
+    verification_valid_mask*), or none when experiment.score_on_common_points is
+    unset."""
+    if not COMMON_POINTS_PARAMS:
+        return []
+    return [
+        participant_data_dir(pid)
+        / f"{wildcards.init_time}/valid_mask_{VALID_MASK_HASH}.nc"
+        for pid in experiment_participant_ids()
+    ]
 
 
 # -----------------------------------------------
@@ -417,7 +442,25 @@ def verif_hash(full_config: dict) -> str:
         "lapse_rate_correction": full_config.get("lapse_rate_correction", True),
         "station_holdout": HOLDOUT_STATIONS,
     }
+    # Scoring on common points makes the scores depend on the other participants.
+    # Added only when set, so that existing outputs keep their paths.
+    if COMMON_POINTS_PARAMS:
+        experiment_verif_cfg["score_on_common_points"] = {
+            "params": sorted(COMMON_POINTS_PARAMS),
+            "participants": sorted(experiment_participant_ids()),
+        }
     return generate_json_hash({"truth": truth_cfg, "verif": experiment_verif_cfg})
+
+
+def valid_mask_hash(full_config: dict) -> str:
+    """Hash of the settings that determine a participant's valid mask: the truth
+    points it is mapped to and the masked parameters."""
+    truth_cfg = {
+        k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE
+    }
+    return generate_json_hash(
+        {"truth": truth_cfg, "params": sorted(COMMON_POINTS_PARAMS)}
+    )
 
 
 def holdout_dep(_):
@@ -438,20 +481,31 @@ def run_uses_holdout(run_id: str) -> bool:
 
 
 def truth_file_dep(_):
-    """Truth file dependency: a real path for zarr, but a live-query
-    marker (no input file) for jretrieve."""
+    """Truth file dependency tracked by Snakemake.
+
+    - anemoi dataset: the dataset itself
+    - INCA: the static topography file; the archive directory is not tracked
+      because its modification time changes whenever new runs are archived
+    - jretrieve: none (live query)
+    """
     root = config["truth"]["root"]
-    return [] if "jretrieve" in str(root) else [root]
+    if TRUTH_TYPE == "anemoi_dataset":
+        return [root]
+    if TRUTH_TYPE == "inca":
+        return [str(inca.topography_file(root))]
+    return []
 
 
-# Fail fast: when the truth source is the live DWH (jretrievedwh), verify its
-# prerequisites at workflow-build time so a misconfigured environment is caught
-# at launch, before any (expensive) inference job runs.
-if "jretrieve" in str(config["truth"]["root"]):
+# Fail fast: verify the prerequisites of the truth source at workflow-build time
+# so a misconfigured environment is caught at launch, before any (expensive)
+# inference job runs.
+if TRUTH_TYPE == "jretrieve":
     from data_input.jretrieve import check_prerequisites, parse_selection
 
     _, _jretrieve_stage, _, _ = parse_selection(config["truth"]["root"])
     check_prerequisites(_jretrieve_stage)
+elif TRUTH_TYPE == "inca":
+    inca.check_prerequisites(config["truth"]["root"])
 
 
 TRUTH_HASH = truth_hash(config["truth"])
@@ -461,7 +515,6 @@ HOLDOUT_FILE = (
 )
 HOLDOUT_WORKDIR_NAME = "holdout_stations.csv"
 REGIONS = parse_regions()
-VERIF_HASH = verif_hash(config)
 _showcase = config.get("showcase", {})
 SHOWCASE_CONFIG = {
     "regions": parse_showcase_regions(),
@@ -475,6 +528,11 @@ REFTIMES = parse_reference_times()
 RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
 BASELINE_CONFIGS = collect_all_baselines()
+COMMON_POINTS_PARAMS = EXPERIMENT_CONFIG.get("score_on_common_points") or []
+# After RUN_CONFIGS and BASELINE_CONFIGS: the hash includes the participants
+# when experiment.score_on_common_points is set.
+VERIF_HASH = verif_hash(config)
+VALID_MASK_HASH = valid_mask_hash(config)
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
 # Fail fast: an inference config that consumes the holdout station file needs
 # experiment.station_holdout to be set.
