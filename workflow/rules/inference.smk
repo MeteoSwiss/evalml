@@ -322,6 +322,13 @@ def _get_inference_status(wc):
     It's None only when this run's config has no FDB targets at all (plain
     local-grib output), in which case downstream code reads local grib as
     before.
+
+    For output: fdb runs that actually execute (a 'miss'), the returned okfile
+    is inference_check_fdb_duplicates's own -- not inference_execute's --
+    so nothing downstream (verification, plotting, a chained downscaler's
+    forecaster input) consumes this run's FDB data until it's confirmed free
+    of MARS-key collisions. A cache 'hit' skips this: that data was already
+    checked when it was first produced.
     """
     if RUN_CONFIGS[wc.run_id]["output"] == "fdb":
         status_file = checkpoints.inference_check_fdb.get(
@@ -330,7 +337,11 @@ def _get_inference_status(wc):
         status, _, root = Path(status_file).read_text().strip().partition("\t")
         if status == "hit":
             return str(status_file), root
-    okfile = str(OUT_ROOT / f"logs/inference_execute/{wc.run_id}-{wc.init_time}.ok")
+        okfile = str(
+            OUT_ROOT / f"logs/inference_check_fdb_duplicates/{wc.run_id}-{wc.init_time}.ok"
+        )
+    else:
+        okfile = str(OUT_ROOT / f"logs/inference_execute/{wc.run_id}-{wc.init_time}.ok")
     fdb_root = (
         _resolve_fdb_root_for_run(wc.run_id) if _count_fdb_blocks(wc.run_id) > 0 else None
     )
@@ -619,6 +630,51 @@ FDBEOF
         ) >{log} 2>&1 && touch {output.okfile}
         """
 # fmt: on
+
+
+rule inference_check_fdb_duplicates:
+    """Fail if this run's own FDB archival collided with an already-present
+    record -- i.e. a MARS key with more than one entry (live + masked) in
+    FDB's toc index for this init time (see inference_check_fdb_duplicates.py
+    for why this can only be caught by inspecting the archive after the fact,
+    not at write time). Only runs for output: fdb runs, right after
+    inference_execute actually writes -- not on a cache hit (status == "hit"
+    in _get_inference_status), whose data was already checked when it was
+    first produced.
+    """
+    input:
+        image=lambda wc: OUT_ROOT
+        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
+        okfile=OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok",
+        script="workflow/scripts/inference_check_fdb_duplicates.py",
+    output:
+        okfile=OUT_ROOT / "logs/inference_check_fdb_duplicates/{run_id}-{init_time}.ok",
+    log:
+        OUT_ROOT / "logs/inference_check_fdb_duplicates/{run_id}-{init_time}.log",
+    localrule: True
+    params:
+        image_path=lambda wc, input: str(Path(input.image).resolve()),
+        fdb_root=lambda wc: _resolve_fdb_root_for_run(wc.run_id),
+        fdb_schema=str(Path("resources/fdb/realtime-varda.schema").resolve()),
+        date=lambda wc: datetime.strptime(wc.init_time, "%Y%m%d%H%M").strftime("%Y%m%d"),
+        time=lambda wc: datetime.strptime(wc.init_time, "%Y%m%d%H%M").strftime("%H%M"),
+    shell:
+        """
+        (
+            set -euo pipefail
+            VENV_MOUNT=$(mktemp -d)
+            trap "rmdir '$VENV_MOUNT' 2>/dev/null || true" EXIT
+            squashfs-mount -s "{params.image_path}:$VENV_MOUNT" -- bash -c '
+                source '"$VENV_MOUNT"'/bin/activate
+                python {input.script} \
+                    --fdb-root {params.fdb_root} \
+                    --fdb-schema {params.fdb_schema} \
+                    --date {params.date} \
+                    --time {params.time} \
+                    --output {output.okfile}
+            '
+        ) >{log} 2>&1
+        """
 
 
 # Fail fast: a run declaring `output: fdb` is relying on its own referenced
