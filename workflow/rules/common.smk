@@ -1,5 +1,6 @@
 import logging
 import copy
+import re
 from datetime import datetime, timedelta
 import yaml
 import hashlib
@@ -558,8 +559,21 @@ def resolve_leadtimes(steps_spec, requested="all", param=None):
         )
 
     valid = wanted & supported
-    if param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
-        valid = {lt for lt in valid if lt >= step}
+    # Showcase-facing names encode an accumulation window as a numeric suffix
+    # (e.g. "TOT_PREC1", "TOT_PREC6"); strip it before checking membership so
+    # those aggregated variants are recognized the same as their base param.
+    base_param = re.sub(r"\d+$", "", param) if param else param
+    if (
+        param in PARAMS_WITHOUT_STEP_ZERO_VALUE
+        or base_param in PARAMS_WITHOUT_STEP_ZERO_VALUE
+    ):
+        # For aggregated params (e.g. TOT_PREC6), the accumulation window encoded
+        # in the suffix is the minimum valid lead time — not the run's step spacing.
+        # At shorter leads the de-accumulation window doesn't fit (prev_lt < 0),
+        # so the frame would fall back to showing a raw cumulative total.
+        agg_match = re.search(r"\d+$", param) if param and base_param != param else None
+        min_lt = int(agg_match.group()) if agg_match else step
+        valid = {lt for lt in valid if lt >= min_lt}
     return sorted(valid)
 
 
