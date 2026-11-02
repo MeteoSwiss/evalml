@@ -41,7 +41,9 @@ if config["mec"] is not None:
         input:
             inference_ok=lambda wc: [
                 _get_inference_okfile(
-                    SimpleNamespace(run_id=wc.run_id, init_time=t.strftime("%Y%m%d%H%M"))
+                    SimpleNamespace(
+                        run_id=wc.run_id, init_time=t.strftime("%Y%m%d%H%M")
+                    )
                 )
                 for t in REFTIMES
             ],

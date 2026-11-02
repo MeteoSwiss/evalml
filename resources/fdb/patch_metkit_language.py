@@ -55,11 +55,15 @@ def patch(language_yaml: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "venv", type=Path, help="Path to the venv root (contains lib/python*/site-packages)"
+        "venv",
+        type=Path,
+        help="Path to the venv root (contains lib/python*/site-packages)",
     )
     args = parser.parse_args()
 
-    matches = list(args.venv.glob("lib/python*/site-packages/metkitlib/share/metkit/language.yaml"))
+    matches = list(
+        args.venv.glob("lib/python*/site-packages/metkitlib/share/metkit/language.yaml")
+    )
     if not matches:
         raise RuntimeError(f"metkitlib language.yaml not found under {args.venv}")
     for language_yaml in matches:

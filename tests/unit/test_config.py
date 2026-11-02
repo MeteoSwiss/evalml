@@ -37,3 +37,37 @@ def test_experiment_optional(example_config):
     del example_config["experiment"]
     cfg = ConfigModel.model_validate(example_config)
     assert cfg.experiment is None
+
+
+def _with_scorecard_reference(config, reference):
+    config["experiment"]["scorecards"] = {
+        "enabled": True,
+        "sections": {
+            "test": {
+                "baseline": reference,
+                "lead_times": "6/24/6",
+                "stratification": "region",
+                "variables": ["T_2M:RMSE"],
+            }
+        },
+    }
+    return config
+
+
+def test_scorecard_reference_can_be_a_run(example_config):
+    forecaster_label = next(
+        item[k]["label"]
+        for item in example_config["runs"]
+        for k in item
+        if k in ("forecaster", "temporal_downscaler")
+    )
+    ConfigModel.model_validate(
+        _with_scorecard_reference(example_config, forecaster_label)
+    )
+
+
+def test_scorecard_reference_must_exist(example_config):
+    with pytest.raises(ValueError, match="does not match the label"):
+        ConfigModel.model_validate(
+            _with_scorecard_reference(example_config, "no-such-label")
+        )

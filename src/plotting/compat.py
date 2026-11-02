@@ -137,7 +137,9 @@ def load_state_from_grib(
             global_file, {"parameter.variable": _paramlist_ecmwf}
         )
 
-    return _decode_state(regional_fieldlist, global_fieldlist, paramlist, source=str(file))
+    return _decode_state(
+        regional_fieldlist, global_fieldlist, paramlist, source=str(file)
+    )
 
 
 def load_state_from_fdb(
@@ -172,7 +174,10 @@ def load_state_from_fdb(
         global_fieldlist = None
 
     return _decode_state(
-        regional_fieldlist, global_fieldlist, paramlist, source=f"{fdb_root} (step={step})"
+        regional_fieldlist,
+        global_fieldlist,
+        paramlist,
+        source=f"{fdb_root} (step={step})",
     )
 
 

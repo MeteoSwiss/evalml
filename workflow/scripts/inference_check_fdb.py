@@ -31,6 +31,7 @@ Intended to run inside a squashfs-mounted venv that provides pyfdb and the
 native FDB C library (libfdb5.so). The squashfs is the same one built by
 inference_create_venv / inference_make_squashfs_image.
 """
+
 import argparse
 import sys
 from pathlib import Path
@@ -158,11 +159,15 @@ def main() -> int:
         help="Root path of an FDB store to check. Repeatable; checked in order, "
         "first complete match wins.",
     )
-    parser.add_argument("--fdb-schema", required=True, help="Path to the FDB5 schema file.")
+    parser.add_argument(
+        "--fdb-schema", required=True, help="Path to the FDB5 schema file."
+    )
     parser.add_argument("--date", required=True, help="Initialisation date (YYYYMMDD).")
     parser.add_argument("--time", required=True, help="Initialisation time (HHMM).")
     parser.add_argument(
-        "--steps", required=True, help="Expected lead times as 'start/end/step' (hours)."
+        "--steps",
+        required=True,
+        help="Expected lead times as 'start/end/step' (hours).",
     )
     parser.add_argument(
         "--expected-blocks",
@@ -176,7 +181,12 @@ def main() -> int:
     hit_root = ""
     for root in args.fdb_roots:
         if check_fdb(
-            root, args.fdb_schema, args.date, args.time, args.steps, args.expected_blocks
+            root,
+            args.fdb_schema,
+            args.date,
+            args.time,
+            args.steps,
+            args.expected_blocks,
         ):
             hit_root = root
             break

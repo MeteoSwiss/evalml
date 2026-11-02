@@ -6,7 +6,14 @@ import shutil
 from pathlib import Path
 
 from evalml.helpers import setup_logger
-from data_input import _FDB_MODEL, _FDB_GLOBAL_MODEL, _FDB_PARAM_IDS, _FDB_GLOBAL_PARAM_IDS, _FDB_IDENTITY, _FDB_SCHEMA
+from data_input import (
+    _FDB_MODEL,
+    _FDB_GLOBAL_MODEL,
+    _FDB_PARAM_IDS,
+    _FDB_GLOBAL_PARAM_IDS,
+    _FDB_IDENTITY,
+    _FDB_SCHEMA,
+)
 
 
 def prepare_config(
@@ -122,7 +129,8 @@ def prepare_temporal_downscaler(smk):
             )
             (workdir / "forecaster").symlink_to(fct_workdir / "grib")
             LOG.info(
-                "Created symlink to forecaster grib directory at %s", workdir / "forecaster"
+                "Created symlink to forecaster grib directory at %s",
+                workdir / "forecaster",
             )
         else:
             # Still an output directory of this rule (see inference.smk's
@@ -291,8 +299,10 @@ def _convert_cutout_to_fdb(config: dict, fdb_root: str) -> dict:
     new_cutout = []
     for entry in cutout:
         if len(entry) != 1:
-            raise ValueError(f"Expected a single-key cutout entry, got {sorted(entry.keys())}")
-        (grid_name, block), = entry.items()
+            raise ValueError(
+                f"Expected a single-key cutout entry, got {sorted(entry.keys())}"
+            )
+        ((grid_name, block),) = entry.items()
         if grid_name not in _CUTOUT_FDB_PARAM_IDS:
             raise ValueError(
                 f"Unknown cutout grid '{grid_name}' -- add its FDB identity to "

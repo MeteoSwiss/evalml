@@ -161,7 +161,9 @@ def main():
         reftime = datetime.strptime(init_time, "%Y%m%d%H%M")
         LOG.info("Loading forecast state from FDB %s", fdb_root)
         try:
-            state = load_state_from_fdb(fdb_root, reftime, lead_time, paramlist=paramlist)
+            state = load_state_from_fdb(
+                fdb_root, reftime, lead_time, paramlist=paramlist
+            )
         except FileNotFoundError:
             LOG.warning(
                 "No FDB data for lead_time=%s in %s (model may not write initial state)."
@@ -234,10 +236,14 @@ def main():
                     else None
                 )
             if prev_state is not None:
-                LOG.info("De-accumulating TOT_PREC using previous lead_time=%s", prev_lt)
+                LOG.info(
+                    "De-accumulating TOT_PREC using previous lead_time=%s", prev_lt
+                )
                 state["fields"]["TOT_PREC"] = (
                     state["fields"]["TOT_PREC"]
-                    - prev_state["fields"]["TOT_PREC"][: len(state["fields"]["TOT_PREC"])]
+                    - prev_state["fields"]["TOT_PREC"][
+                        : len(state["fields"]["TOT_PREC"])
+                    ]
                 )
 
     # Preprocess field once — shared across all region plots

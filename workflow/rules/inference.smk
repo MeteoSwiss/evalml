@@ -245,15 +245,15 @@ def _count_fdb_blocks(run_id):
 checkpoint inference_check_fdb:
     """Check whether (run_id, init_time) output already exists, complete, in FDB.
 
-    Checks this run's one configured FDB root (see _resolve_fdb_root_for_run --
-    the run's own `root:` field if set, otherwise its local per-checkpoint
-    directory). A 'hit' requires every requested lead time to be present in
-    that root -- see inference_check_fdb.py for why no further MARS-key
-    disambiguation (class/expver/model) is needed. Writes 'hit\\t<root>' or
-    'miss\\t' to the status file. Runs inside the squashfs venv so that pyfdb (and
-    the native FDB C library it bundles) is available. Skipped entirely (writes
-    'miss') unless this run's own config declares `output: fdb`.
-    """
+Checks this run's one configured FDB root (see _resolve_fdb_root_for_run --
+the run's own `root:` field if set, otherwise its local per-checkpoint
+directory). A 'hit' requires every requested lead time to be present in
+that root -- see inference_check_fdb.py for why no further MARS-key
+disambiguation (class/expver/model) is needed. Writes 'hit\\t<root>' or
+'miss\\t' to the status file. Runs inside the squashfs venv so that pyfdb (and
+the native FDB C library it bundles) is available. Skipped entirely (writes
+'miss') unless this run's own config declares `output: fdb`.
+"""
     input:
         image=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
@@ -272,12 +272,13 @@ checkpoint inference_check_fdb:
         time=lambda wc: datetime.strptime(wc.init_time, "%Y%m%d%H%M").strftime("%H%M"),
         steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         expected_blocks=lambda wc: _count_fdb_blocks(wc.run_id),
+    # fmt: off
     shell:
         """
         (
             set -euo pipefail
             if [ "{params.fdb_configured}" != "True" ]; then
-                printf 'miss\t' > {output.status}
+                printf 'miss\t' >{output.status}
                 echo "FDB check skipped: FDB not configured for this environment"
             else
                 # Mount just the venv -- pyfdb bundles its own native FDB libraries
@@ -298,6 +299,7 @@ checkpoint inference_check_fdb:
             fi
         ) >{log} 2>&1
         """
+# fmt: on
 
 
 def _resolve_fdb_root_for_run(run_id):
@@ -338,12 +340,15 @@ def _get_inference_status(wc):
         if status == "hit":
             return str(status_file), root
         okfile = str(
-            OUT_ROOT / f"logs/inference_check_fdb_duplicates/{wc.run_id}-{wc.init_time}.ok"
+            OUT_ROOT
+            / f"logs/inference_check_fdb_duplicates/{wc.run_id}-{wc.init_time}.ok"
         )
     else:
         okfile = str(OUT_ROOT / f"logs/inference_execute/{wc.run_id}-{wc.init_time}.ok")
     fdb_root = (
-        _resolve_fdb_root_for_run(wc.run_id) if _count_fdb_blocks(wc.run_id) > 0 else None
+        _resolve_fdb_root_for_run(wc.run_id)
+        if _count_fdb_blocks(wc.run_id) > 0
+        else None
     )
     return okfile, fdb_root
 
@@ -425,7 +430,8 @@ rule inference_prepare_temporal_downscaler:
             [
                 _get_inference_okfile(
                     SimpleNamespace(
-                        run_id=_get_forecaster_run_id(wc.run_id), init_time=wc.init_time
+                        run_id=_get_forecaster_run_id(wc.run_id),
+                        init_time=wc.init_time,
                     )
                 )
             ]
@@ -550,6 +556,12 @@ FDBEOF
                     export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
                 fi
 
+                # earthkit-data (>=1.0) sets ECCODES_ECKIT_GEO=1 on import, which leaks from the
+                # Snakemake process into this job. With recent eccodeslib wheels it makes ecCodes
+                # compute coordinates with eckit.geo, whose Gaussian latitudes differ in the last
+                # bits from the datasets, so anemoi-inference fails to combine the input states.
+                unset ECCODES_ECKIT_GEO
+
                 # pyfdb bundles its own native FDB libraries -- no uenv mount, no
                 # LD_LIBRARY_PATH needed. Just point it at this run's FDB config/schema.
                 if [ "{params.fdb_configured}" = "True" ]; then
@@ -658,6 +670,7 @@ rule inference_check_fdb_duplicates:
         fdb_schema=str(Path("resources/fdb/realtime-varda.schema").resolve()),
         date=lambda wc: datetime.strptime(wc.init_time, "%Y%m%d%H%M").strftime("%Y%m%d"),
         time=lambda wc: datetime.strptime(wc.init_time, "%Y%m%d%H%M").strftime("%H%M"),
+    # fmt: off
     shell:
         """
         (
@@ -675,6 +688,7 @@ rule inference_check_fdb_duplicates:
             '
         ) >{log} 2>&1
         """
+# fmt: on
 
 
 # Fail fast: a run declaring `output: fdb` is relying on its own referenced

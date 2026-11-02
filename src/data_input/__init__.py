@@ -71,7 +71,9 @@ def rename_ifs_to_icon(ds: xr.Dataset, mapping: dict[str, str]) -> xr.Dataset:
 # Root marker prefix: load_forecast_data(root=...) treats an "fdb:<path>" string the
 # same way it already treats "jretrievedwh:..." for truth data -- a marker selecting a
 # non-filesystem source, here an FDB root, rather than a real local directory.
-_FDB_SCHEMA = Path(__file__).resolve().parents[2] / "resources/fdb/realtime-varda.schema"
+_FDB_SCHEMA = (
+    Path(__file__).resolve().parents[2] / "resources/fdb/realtime-varda.schema"
+)
 _FDB_ROOT_MARKER = "fdb:"
 # VARDA-SINGLE archives two grids under distinct `model` values: "varda-single"
 # (ICON-origin, regional/LAM domain) and "varda-single-g" (IFS-origin, global
@@ -164,7 +166,13 @@ _FDB_GLOBAL_PARAM_TIMESPAN: dict[str, str] = {
 # downstream run reads another run's FDB output directly as its own model input
 # (inference_prepare.py's _convert_cutout_to_fdb).
 _FDB_IDENTITY: dict[str, dict[str, str]] = {
-    _FDB_MODEL: {"class": "ai", "stream": "oper", "type": "fc", "expver": "0001", "model": _FDB_MODEL},
+    _FDB_MODEL: {
+        "class": "ai",
+        "stream": "oper",
+        "type": "fc",
+        "expver": "0001",
+        "model": _FDB_MODEL,
+    },
     _FDB_GLOBAL_MODEL: {
         "class": "od",
         "stream": "enfo",
@@ -178,7 +186,11 @@ _FDB_IDENTITY: dict[str, dict[str, str]] = {
 # `model` value used in _fetch_fdb_fieldlist's requests.
 _FDB_MODEL_REGISTRY: dict[str, tuple[dict[str, str], set[str], dict[str, str]]] = {
     _FDB_MODEL: (_FDB_PARAM_IDS, _FDB_PL_PARAMS, _FDB_PARAM_TIMESPAN),
-    _FDB_GLOBAL_MODEL: (_FDB_GLOBAL_PARAM_IDS, _FDB_GLOBAL_PL_PARAMS, _FDB_GLOBAL_PARAM_TIMESPAN),
+    _FDB_GLOBAL_MODEL: (
+        _FDB_GLOBAL_PARAM_IDS,
+        _FDB_GLOBAL_PL_PARAMS,
+        _FDB_GLOBAL_PARAM_TIMESPAN,
+    ),
 }
 
 XARRAY_ENGINE_PROFILE = {
@@ -845,7 +857,9 @@ def _fdb_config(fdb_root: str) -> dict:
 _fdb_identity_cache: dict[tuple, dict[str, tuple]] = {}
 
 
-def _discover_fdb_identity(fdb_root: str, model: str, date: str, time_: str) -> dict[str, tuple]:
+def _discover_fdb_identity(
+    fdb_root: str, model: str, date: str, time_: str
+) -> dict[str, tuple]:
     """Return ``{levtype: (class, stream, type, expver)}`` actually archived
     for this date/time/model -- these four keys vary by experiment/deployment
     (e.g. class=od for a real operational archive vs ai/rd here), unlike
@@ -866,13 +880,22 @@ def _discover_fdb_identity(fdb_root: str, model: str, date: str, time_: str) -> 
     identities = {}
     for entry in entries:
         key = entry.combined_key()
-        identities[key["levtype"]] = (key["class"], key["stream"], key["type"], key["expver"])
+        identities[key["levtype"]] = (
+            key["class"],
+            key["stream"],
+            key["type"],
+            key["expver"],
+        )
     _fdb_identity_cache[cache_key] = identities
     return identities
 
 
 def _fetch_fdb_fieldlist(
-    fdb_root: str, reftime: datetime, steps: list[int], params: list[str], model: str = _FDB_MODEL,
+    fdb_root: str,
+    reftime: datetime,
+    steps: list[int],
+    params: list[str],
+    model: str = _FDB_MODEL,
 ):
     """Fetch exactly the requested fields from FDB -- one `retrieve()` per
     (levtype, timespan) group, each requesting exactly the caller's params via
@@ -894,7 +917,9 @@ def _fetch_fdb_fieldlist(
     see `_FDB_MODEL_REGISTRY`.
     """
     if model not in _FDB_MODEL_REGISTRY:
-        raise ValueError(f"No FDB param registry for model={model!r} -- add one to _FDB_MODEL_REGISTRY.")
+        raise ValueError(
+            f"No FDB param registry for model={model!r} -- add one to _FDB_MODEL_REGISTRY."
+        )
     param_ids_table, pl_params, timespan_table = _FDB_MODEL_REGISTRY[model]
 
     unknown = [p for p in params if p not in param_ids_table]
@@ -923,9 +948,16 @@ def _fetch_fdb_fieldlist(
             continue
         cls_, stream, type_, expver = identities[levtype]
         request = {
-            "class": cls_, "stream": stream, "type": type_, "expver": expver,
-            "model": model, "date": date, "time": time_, "levtype": levtype,
-            "step": [str(s) for s in steps], "param": sorted(set(param_ids)),
+            "class": cls_,
+            "stream": stream,
+            "type": type_,
+            "expver": expver,
+            "model": model,
+            "date": date,
+            "time": time_,
+            "levtype": levtype,
+            "step": [str(s) for s in steps],
+            "param": sorted(set(param_ids)),
             "timespan": timespan,
         }
         src = ekd.from_source("fdb", request, config=config, stream=False)

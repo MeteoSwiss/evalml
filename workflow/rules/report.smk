@@ -53,7 +53,9 @@ rule report_experiment_dashboard:
             )
             for sid in EXPERIMENT_PARTICIPANTS
         )
-        + ",truth-{}:{}".format(TRUTH_HASH, (config.get("truth") or {}).get("label", "")),
+        + ",truth-{}:{}".format(
+            TRUTH_HASH, (config.get("truth") or {}).get("label", "")
+        ),
     shell:
         """
         python {input.script} \
@@ -74,7 +76,7 @@ rule report_scorecard:
         script="workflow/scripts/report_scorecard.py",
         verif_run=lambda wc: EXPERIMENT_PARTICIPANTS[f"{wc.env_id}/{wc.config_hash}"],
         verif_baseline=lambda wc: EXPERIMENT_PARTICIPANTS[
-            resolve_baseline_id(SCORECARD_CONFIGS[wc.scorecard_name]["baseline"])
+            resolve_reference_id(SCORECARD_CONFIGS[wc.scorecard_name]["baseline"])
         ],
     output:
         report(
@@ -97,7 +99,7 @@ rule report_scorecard:
         run_label=lambda wc: RUN_CONFIGS[f"{wc.env_id}/{wc.config_hash}"].get(
             "label", f"{wc.env_id}/{wc.config_hash}"
         ),
-        baseline_source=lambda wc: resolve_baseline_id(
+        baseline_source=lambda wc: resolve_reference_id(
             SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]
         ),
         baseline_label=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["baseline"],
