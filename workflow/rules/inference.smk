@@ -319,7 +319,7 @@ rule inference_execute:
             }}
             export -f _run_inference
 
-            squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
+            squashfs-mount -s {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
         ) >{log} 2>&1
         touch {output.okfile}
         """
