@@ -48,7 +48,8 @@ class IncaVariable:
         Directory between year and month ("analysis" for CAPE/CIN).
     rate_interval_min
         For precipitation rates (mm/h): minutes between runs. The rates are
-        summed into amounts (kg m-2). ``None`` for all other variables.
+        turned into hourly amounts (kg m-2), see ``_hourly_amounts``. ``None``
+        for all other variables.
     class_codes
         For class fields: (INCA code, ICON code) pairs to recode the values;
         other values become NaN. ``None`` for all other variables.
