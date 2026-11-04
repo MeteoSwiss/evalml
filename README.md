@@ -186,7 +186,7 @@ The `truth.root` value selects how the ground truth is loaded:
 
   ```yaml
   truth:
-    label: INCA
+    label: INCA analysis
     root: /store_new/mch/msclim/INCA
   ```
 
@@ -204,6 +204,8 @@ The `truth.root` value selects how the ground truth is loaded:
   | Convection (J/kg) | `CAPE_MU` ← CP, `CIN_MU` ← CN (from `{YYYY}/analysis/{MM}/`) |
 
   Notes:
+  - Use a label different from the INCA nowcast baseline (labelled `INCA` in the
+    examples), otherwise both appear as "INCA" in the reports.
   - Precipitation rates (mm/h) are turned into hourly amounts: the rate stamped `t`
     is taken as the mean over `(t − 10 min, t]`, and
     the hourly amount is the mean of the available rates in the hour. An hour

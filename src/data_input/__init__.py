@@ -980,7 +980,7 @@ def load_truth_data(
         # INCA provides some derived params natively (e.g. DD_10M, TW_2M, TOT_SNOW).
         load_params = get_base_params(params, native=inca.SUPPORTED_PARAMS)
         load_steps = get_steps(steps, params)
-        ds = inca.load_analysis(root, reftime, load_steps, load_params)
+        ds = inca.load_inca_analysis(root, reftime, load_steps, load_params)
         truth = _analysis_to_truth(ds, reftime, steps, params)
     return truth
 

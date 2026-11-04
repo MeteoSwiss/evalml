@@ -7,7 +7,7 @@ Only step 0 (the analysis) of each INCA run is used: the truth at valid time
     {root}/{YYYY}/analysis/{MM}/{PREFIX}_INCA_{YYYYmmddHHMM}.nc  # CAPE and CIN
     {root}/INCA1km_topography_parameters.nc                      # elevation (DEM)
 
-Variables get ICON names (see ``INCA_VARIABLES``). ``load_analysis`` returns the
+Variables get ICON names (see ``INCA_VARIABLES``). ``load_inca_analysis`` returns the
 same structure as the KENDA zarr loader (``step`` dimension, accumulations
 cumulative from the reference time), so the shared post-processing in
 ``data_input`` applies unchanged. Missing files become NaN and are logged.
@@ -288,7 +288,7 @@ def _grid_coords(root: Path, x: np.ndarray, y: np.ndarray) -> dict:
     }
 
 
-def load_analysis(
+def load_inca_analysis(
     root: Path | str, reftime: datetime, steps: list[int], params: list[str]
 ) -> xr.Dataset:
     """Load INCA analyses valid at ``reftime + steps`` (hours).
