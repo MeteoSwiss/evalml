@@ -12,6 +12,33 @@ def _fallback():
     return {"cmap": plt.get_cmap("viridis"), "norm": None, "units": ""}
 
 
+# Field colormaps shared by derive-diagnostic fields of the same kind.
+_HEIGHT_M = {
+    "cmap": plt.get_cmap("viridis", 12),
+    "vmin": 0,
+    "vmax": 6000,
+    "extend": "both",
+    "units": "m",
+    "levels": list(np.linspace(0, 6000, 13)),
+}
+_CAPE = {
+    "cmap": plt.get_cmap("YlOrRd", 10),
+    "vmin": 0,
+    "vmax": 2000,
+    "extend": "max",
+    "units": "J/kg",
+    "levels": [0, 10, 50, 100, 250, 500, 750, 1000, 1500, 2000],
+}
+_CIN = {
+    "cmap": plt.get_cmap("Blues", 8),
+    "vmin": 0,
+    "vmax": 300,
+    "extend": "max",
+    "units": "J/kg",
+    "levels": [0, 5, 10, 25, 50, 100, 200, 300],
+}
+
+
 # Sequential Reds shared by the error-magnitude scores (RMSE, MAE, STDE), which
 # are all non-negative. Defined once per parameter under the generic
 # "{param}.score.map" key; the score-map lookup falls back to it for any score
@@ -82,6 +109,32 @@ _CMAP_DEFAULTS = {
     | {"units": "m/s", "extend": "both"},
     "SP_10M": load_ncl_colormap("modified_uv_17lev.ct")
     | {"units": "m/s", "extend": "max"},
+    # Fields of the derive-diagnostic post-processor (anemoi-plugins-meteoswiss)
+    "DD_10M": {
+        "cmap": plt.get_cmap("twilight", 8),
+        "vmin": 0,
+        "vmax": 360,
+        "extend": "neither",
+        "units": "degrees",
+        "levels": list(np.linspace(0, 360, 9)),
+    },
+    "RELHUM_2M": load_ncl_colormap("RH_6lev.ct")
+    | {"units": "%", "extend": "neither", "levels": list(np.linspace(0, 100, 11))},
+    "TW_2M": load_ncl_colormap("t2m_29lev.ct") | {"units": "degC", "extend": "both"},
+    "HZEROCL": _HEIGHT_M,
+    "SNOWLMT": _HEIGHT_M,
+    "CAPE_ML": _CAPE,
+    "CAPE_MU": _CAPE,
+    "CIN_ML": _CIN,
+    "CIN_MU": _CIN,
+    # ICON PTYPE, WMO code table 4.201: 0 none, 1 rain, 3 freezing rain,
+    # 5 snow, 7 mixture of rain and snow, 10 hail (bounds between the codes).
+    "PTYPE": {
+        "extend": "neither",
+        "units": "",
+        "levels": [-0.5, 0.5, 2, 4, 6, 8.5, 10.5],
+        "colors": ["#ffffff", "#3cbc3d", "#d62728", "#1f77b4", "#9467bd", "#ff7f0e"],
+    },
     "T_850": {
         "cmap": plt.get_cmap("inferno", 11),
         "vmin": 220,
