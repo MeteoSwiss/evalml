@@ -105,6 +105,9 @@ if config["mec"] is not None:
             OUT_ROOT / "logs/link_mec_input/{run_id}-{init_time}.log",
         params:
             # generate a space-separated list of lead hours from the run config
+            grib_subdir=lambda wc: (
+                "grib/001" if RUN_CONFIGS[wc.run_id].get("ensemble") else "grib"
+            ),
             leads=lambda wc: " ".join(
                 str(l) for l in _parse_steps(RUN_CONFIGS[wc.run_id]["steps"])
             ),
@@ -128,7 +131,7 @@ if config["mec"] is not None:
                     # time_int is HHMM stripped of leading zeros (e.g. "0000" -> "0", "1800" -> "1800")
                     src_date="${{source_init:0:8}}"
                     src_time_int=$((10#${{source_init:8:4}}))
-                    src_rel="$source_init/grib/${{src_date}}${{src_time_int}}_${{lead}}.grib"
+                    src_rel="$source_init/{params.grib_subdir}/${{src_date}}${{src_time_int}}_${{lead}}.grib"
 
                     if [[ -e "$src_rel" ]]; then
                         dest="mec/{wildcards.init_time}/input_mod/${{source_init}}.grib"
@@ -137,7 +140,7 @@ if config["mec"] is not None:
                             cp "$src_rel" "$dest"
                         else
                             prev_lead=$((lead - 6))
-                            prev_rel="$source_init/grib/${{src_date}}${{src_time_int}}_${{prev_lead}}.grib"
+                            prev_rel="$source_init/{params.grib_subdir}/${{src_date}}${{src_time_int}}_${{prev_lead}}.grib"
                             if [[ -e "$prev_rel" ]]; then
                                 echo "Merging $prev_rel + $src_rel -> $dest"
                                 cat "$prev_rel" "$src_rel" >"$dest"

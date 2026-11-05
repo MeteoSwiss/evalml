@@ -45,9 +45,7 @@ rule plot_meteogram:
     params:
         ana_label=lambda wc: config["truth"]["label"],
         truth_root=config["truth"]["root"],
-        fcst_grib=lambda wc: (
-            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
-        ).resolve(),
+        fcst_grib=lambda wc: run_grib_dir(wc.run_id, wc.init_time).resolve(),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id]["label"],
         baseline_roots=lambda wc: [x["root"] for x in _get_available_baselines(wc)],
@@ -116,9 +114,7 @@ rule plot_forecast_frame:
         cpus_per_task=4,
         runtime="20m",
     params:
-        grib_out_dir=lambda wc: str(
-            (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib").resolve()
-        ),
+        grib_out_dir=lambda wc: str(run_grib_dir(wc.run_id, wc.init_time).resolve()),
         regions_json=json.dumps(SHOWCASE_CONFIG["regions"]),
         outdir=lambda wc: str(
             (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/frames").resolve()

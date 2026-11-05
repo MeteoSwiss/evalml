@@ -184,6 +184,9 @@ def main(args: Namespace) -> None:
             # then fails in load_forecast_data).
             src_root = args.run_root / reftime.strftime(DATETIME_FMT)
             src_root = src_root / "grib" if (src_root / "grib").is_dir() else src_root
+            # Ensemble runs hold one directory per member: use member 001 for now.
+            if (src_root / "001").is_dir():
+                src_root = src_root / "001"
 
         fcst = load_forecast_data(
             src_root, reftime, [args.step], [args.param], member=args.member
