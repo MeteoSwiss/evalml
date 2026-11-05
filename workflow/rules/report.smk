@@ -22,6 +22,7 @@ def make_header_text():
 rule report_experiment_dashboard:
     input:
         "src/verification/__init__.py",
+        "src/verification/ensemble_report.py",
         script="workflow/scripts/report_experiment_dashboard.py",
         verif=EXPERIMENT_PARTICIPANTS.values(),
         template="resources/report/dashboard/template.html.jinja2",

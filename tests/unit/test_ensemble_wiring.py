@@ -21,9 +21,10 @@ from verification import verify  # noqa: E402
 
 COMMON = ROOT / "workflow/rules/common.smk"
 FUNCTIONS = {
+    "run_grib_root",
     "run_grib_dir",
     "ensemble_members",
-    "verification_forecast_arg",
+    "members_flag",
     "ensemble_scaled",
 }
 
@@ -52,22 +53,21 @@ RUN_CONFIGS = {
 DET, ENS = RUN_CONFIGS
 
 
-def test_verification_forecast_arg_deterministic_unchanged(tmp_path):
-    """Deterministic runs: the same Path as before the ensemble wiring. Snakemake
-    does not record Path params, so the param never triggers a rerun."""
+def test_verification_reads_grib_root_deterministic_unchanged(tmp_path):
+    """Deterministic runs: the same grib/ directory as before, and no members flag."""
     ns = _common_namespace(RUN_CONFIGS, tmp_path)
-    arg = ns["verification_forecast_arg"](DET, "202406150000")
-    assert isinstance(arg, Path)
-    assert arg == (tmp_path / f"data/runs/{DET}/202406150000/grib").resolve()
-    assert arg == ns["run_grib_dir"](DET, "202406150000").resolve()
+    grib = ns["run_grib_root"](DET, "202406150000")
+    assert grib == tmp_path / f"data/runs/{DET}/202406150000/grib"
+    assert grib == ns["run_grib_dir"](DET, "202406150000")
+    assert ns["members_flag"](Namespace(run_id=DET)) == ""
 
 
-def test_verification_forecast_arg_ensemble(tmp_path):
+def test_verification_reads_all_members_of_an_ensemble(tmp_path):
     ns = _common_namespace(RUN_CONFIGS, tmp_path)
-    grib = (tmp_path / f"data/runs/{ENS}/202406150000/grib").resolve()
-    assert ns["verification_forecast_arg"](ENS, "202406150000") == (
-        f"{grib} --members 4"
+    assert ns["run_grib_root"](ENS, "202406150000") == (
+        tmp_path / f"data/runs/{ENS}/202406150000/grib"
     )
+    assert ns["members_flag"](Namespace(run_id=ENS)) == "--members 4"
     # plots, SAL, score maps and MEC keep member 001
     assert ns["run_grib_dir"](ENS, "202406150000") == (
         tmp_path / f"data/runs/{ENS}/202406150000/grib/001"
@@ -76,11 +76,11 @@ def test_verification_forecast_arg_ensemble(tmp_path):
 
 def test_ensemble_scaled_resources(tmp_path):
     ns = _common_namespace(RUN_CONFIGS, tmp_path)
-    mem = ns["ensemble_scaled"](80_000, 6_000)
+    mem = ns["ensemble_scaled"](80_000, 2_000)
     runtime = ns["ensemble_scaled"](60, 6, unit="m")
     assert mem(Namespace(run_id=DET)) == 80_000
     assert runtime(Namespace(run_id=DET)) == "60m"
-    assert mem(Namespace(run_id=ENS)) == 104_000
+    assert mem(Namespace(run_id=ENS)) == 88_000
     assert runtime(Namespace(run_id=ENS)) == "84m"
 
 
@@ -286,3 +286,125 @@ def test_valid_mask_of_an_ensemble_is_the_and_over_members(tmp_path, monkeypatch
     mask = xr.open_dataset(args.output)
     assert "member" not in mask.dims
     assert mask["T_2M"].values.ravel().tolist() == [True, True, False, True]
+
+
+def test_verify_ensemble_run_categorical_has_no_ensemble_mean_scores():
+    """PTYPE: the mean of class codes is no class (rain 1 + snow 5 -> 3, freezing
+    rain), so the run's deterministic scores are NaN; prob_table scores the ensemble."""
+    members = _stations([[[1.0, 5.0, 0.0, 1.0]], [[5.0, 1.0, 0.0, 1.0]]])
+    members = members.rename({"T_2M": "PTYPE"})
+    truth = _stations([[3.0, 1.0, 0.0, 1.0]]).rename({"T_2M": "PTYPE"})
+    out = verification_metrics.verify_ensemble_run(
+        members,
+        truth,
+        "ens",
+        "truth",
+        regions=_REGION,
+        threshold_dict={"PTYPE": {"eq": [1, 3, 5]}},
+        holdout_stations=None,
+    )
+    sel = dict(source="ens", region="all", station_group="all")
+    for name in ("PTYPE.BIAS", "PTYPE.MSE", "PTYPE.MAE", "PTYPE.CORR"):
+        assert np.isnan(out[name].sel(**sel)).all(), name
+    table = out["PTYPE.contingency_table"]
+    assert "source" in table.dims
+    assert np.isnan(table.sel(**sel)).all()
+    # the ensemble's categorical score: 2 members, eq_3 never forecast but observed once
+    prob = out["PTYPE.prob_table"].sel(**sel)
+    assert prob.sel({"PTYPE.threshold": "eq_3", "n_members_yes": 0, "obs": 1}) == 1
+    assert int(prob.sum()) == 3 * 4
+    # forecast statistics (averaged over members) and truth statistics are kept
+    assert out["PTYPE.mean"].sel(**sel).item() == pytest.approx(14 / 8)
+    assert np.isfinite(out["PTYPE.mean"].sel(source="truth", region="all").item())
+
+
+def test_verify_ensemble_run_keeps_continuous_contingency_tables():
+    out = _run(MEMBERS)
+    sel = dict(source="ens", region="all", station_group="all")
+    assert np.isfinite(out["T_2M.contingency_table"].sel(**sel)).all()
+
+
+def _reference_member_mean_statistics(fcst, truth, regions, holdout_stations, params):
+    """member_mean_statistics before the memory fix (all params in one compute)."""
+    from verification import (
+        CIRCULAR_PARAMS,
+        _apply_masks,
+        _compute_statistics,
+        _region_and_station_masks,
+        _too_many_missing,
+    )
+
+    dim = ["values"]
+    fcst, truth = xr.align(fcst, truth, join="inner", copy=False)
+    masks, station_masks = _region_and_station_masks(truth, regions, holdout_stations)
+    stats = []
+    for param in params:
+        members = fcst[param].where(fcst[param].notnull().all("member"))
+        too_many_missing = _too_many_missing(
+            members.isnull().any("member"),
+            _apply_masks(truth[param], masks, station_masks),
+            dim,
+            0.0,
+        )
+        member_stats = _compute_statistics(
+            _apply_masks(members, masks, station_masks),
+            prefix=param + ".",
+            dim=dim,
+            circular=param in CIRCULAR_PARAMS,
+        )
+        stats.append(
+            member_stats.mean("member")
+            .squeeze("source", drop=True)
+            .where(~too_many_missing)
+        )
+    return xr.merge(stats).compute()
+
+
+def test_member_mean_statistics_unchanged_by_chunking():
+    """Members chunked one by one, one param at a time: same statistics as before."""
+    rng = np.random.default_rng(1)
+    n_members, n_steps, n = 4, 3, 50
+    values = rng.normal(280.0, 5.0, (n_members, n_steps, n))
+    values[2, 1, 7] = np.nan  # one member missing at one point and step
+    coords = {
+        "member": np.arange(1, n_members + 1),
+        "step": pd.to_timedelta(np.arange(n_steps) * 6, unit="h"),
+        "values": [f"S{i:02d}" for i in range(n)],
+        "longitude": ("values", np.linspace(5.0, 10.0, n)),
+        "latitude": ("values", np.linspace(45.9, 47.5, n)),
+    }
+    fcst = xr.Dataset(
+        {
+            "T_2M": (("member", "step", "values"), values),
+            "TD_2M": (("member", "step", "values"), values - 5.0),
+        },
+        coords=coords,
+    ).chunk({"step": 1})
+    truth = fcst.isel(member=0, drop=True).compute() + 0.5
+    regions = _REGION + [{"type": "bbox", "name": "west", "bbox": [5.0, 7.5, 43, 49.5]}]
+    holdout = ["S00", "S03", "S10"]
+    params = ["T_2M", "TD_2M"]
+    new = verification_metrics.member_mean_statistics(
+        fcst, truth, regions, holdout, params=params, num_workers=2
+    )
+    ref = _reference_member_mean_statistics(fcst, truth, regions, holdout, params)
+    xr.testing.assert_allclose(new, ref, rtol=1e-12)
+    # S07 is missing in one member at step 1: NaN where it counts, not in holdout
+    assert np.isnan(new["T_2M.mean"].isel(step=1).sel(station_group="all")).all()
+    assert np.isfinite(new["T_2M.mean"].isel(step=1).sel(station_group="holdout")).all()
+    assert np.isfinite(new["T_2M.mean"].isel(step=0)).all()
+
+
+def test_verification_rules_pass_members_flag():
+    """verification_metrics and verification_valid_mask read grib/ and pass the members
+    flag as a plain param (empty for deterministic runs)."""
+    text = (ROOT / "workflow/rules/verification.smk").read_text()
+    for rule in ("verification_valid_mask", "verification_metrics"):
+        body = text.split(f"rule {rule}:", 1)[1].split("\nrule ", 1)[0]
+        assert (
+            "grib_out_dir=lambda wc: run_grib_root(wc.run_id, wc.init_time).resolve()"
+            in body
+        )
+        assert "members_flag=members_flag" in body
+        assert "--forecast {params.grib_out_dir}" in body
+        assert "{params.members_flag}" in body

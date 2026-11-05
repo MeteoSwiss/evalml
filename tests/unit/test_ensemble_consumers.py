@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "workflow" / "scripts"))
 import report_experiment_dashboard as dash  # noqa: E402
 import report_scorecard as sc  # noqa: E402
 import verification_plot_metrics as vpm  # noqa: E402
-from ensemble_scores import (  # noqa: E402
+from verification.ensemble_report import (  # noqa: E402
     add_deterministic_crps,
     drop_non_score_vars,
     ensemble_sources,
@@ -47,7 +47,7 @@ def _var(val, extra=None):
     return dims, arr
 
 
-def make_file(source, ensemble=False):
+def make_file(source, ensemble=False, n=N):
     ds = xr.Dataset(coords=_coords(source))
     for name, val in [("T_2M.RMSE", 1.0), ("T_2M.MAE", 0.8), ("T_2M.BIAS", 0.1)]:
         ds[name] = _var(val)
@@ -61,8 +61,10 @@ def make_file(source, ensemble=False):
             ("T_2M.BS_gt_0p1", 0.2),
         ]:
             ds[name] = _var(val)
-        ds["T_2M.rank_hist"] = _var(0, {"rank": N + 1})
-        ds["T_2M.prob_table_gt_0p1"] = _var(0, {"n_members_yes": N + 1, "obs": 2})
+        ds["T_2M.rank_hist"] = _var(0, {"rank": n + 1})
+        ds["T_2M.prob_table_gt_0p1"] = _var(0, {"n_members_yes": n + 1, "obs": 2})
+        ds = ds.assign_coords(rank=np.arange(n + 1), n_members_yes=np.arange(n + 1))
+        ds.attrs["n_members"] = n
     return ds
 
 
@@ -158,3 +160,77 @@ def test_plot_ensemble_diagnostics(tmp_path):
     vpm.plot_ensemble_diagnostics(ds, args)
     names = {p.name for p in tmp_path.iterdir()}
     assert names == {"rank_hist_T_2M.png", "reliability_T_2M_gt_0p1.png"}
+
+
+def test_plot_ensemble_diagnostics_per_source_members(tmp_path, monkeypatch):
+    """Two ensembles of 3 and 5 members: each keeps its own N + 1 ranks, 1/(N+1)
+    reference line and probabilities k/N (the outer join pads the smaller one)."""
+    ds = vpm._concat_sources(
+        [make_file("small", True, n=3), make_file("big", True, n=5)]
+    )
+    ds = ds.sel(station_group="all", drop=True)
+    assert ds.sizes["rank"] == 6
+    figures, close = [], vpm.plt.close
+    monkeypatch.setattr(vpm.plt, "close", figures.append)
+    vpm.plot_ensemble_diagnostics(ds, Namespace(output_dir=tmp_path, label_map={}))
+    rank_fig, rel_fig = figures
+    lines = rank_fig.axes[0].get_lines()
+    curves = {ln.get_label(): ln for ln in lines if not ln.get_label().startswith("_")}
+    assert set(curves) == {"small (N=3)", "big (N=5)"}
+    assert curves["small (N=3)"].get_xdata().tolist() == [0, 1, 2, 3]
+    assert curves["big (N=5)"].get_xdata().tolist() == [0, 1, 2, 3, 4, 5]
+    assert sum(curves["small (N=3)"].get_ydata()) == pytest.approx(1.0)
+    references = sorted(
+        ln.get_ydata()[0] for ln in lines if ln.get_label().startswith("_")
+    )
+    assert references == pytest.approx([1 / 6, 1 / 4])
+    rel = {
+        ln.get_label(): ln.get_xdata().tolist()
+        for ln in rel_fig.axes[0].get_lines()
+        if not ln.get_label().startswith("_")
+    }
+    assert rel["small (N=3)"] == pytest.approx([0, 1 / 3, 2 / 3, 1])
+    assert rel["big (N=5)"] == pytest.approx([0, 0.2, 0.4, 0.6, 0.8, 1])
+    for fig in figures:
+        close(fig)
+
+
+def make_truth(source="truth-c305"):
+    """The truth source of an aggregated file: statistics only, no scores."""
+    ds = xr.Dataset(coords=_coords(source))
+    ds["T_2M.mean"] = _var(285.0)
+    return ds
+
+
+def test_ensemble_detected_by_ensemble_variables_not_spread():
+    """An ensemble without a finite SPREAD (e.g. only PTYPE, or step 0) is an ensemble."""
+    ens = make_file("ens", True)
+    ens["T_2M.SPREAD"][:] = np.nan
+    ds = vpm._concat_sources([ens, make_file("det")])
+    assert ensemble_sources(ds) == ["ens"]
+    single, filled = fill_crps_from_mae(ens)
+    assert not filled and float(single["T_2M.CRPS"].max()) == 0.5
+
+
+def test_truth_never_gets_crps():
+    """Ensemble-only experiment: the truth source is not a deterministic forecast."""
+    ds = vpm._concat_sources([make_file("ens", True), make_truth()])
+    out, filled = add_deterministic_crps(ds)
+    assert not filled
+    assert np.isnan(out["T_2M.CRPS"].sel(source="truth-c305")).all()
+    # with a deterministic participant, only that one is filled
+    ds = vpm._concat_sources([make_file("ens", True), make_file("det"), make_truth()])
+    out, filled = add_deterministic_crps(ds)
+    assert filled
+    assert out["T_2M.CRPS"].sel(source="det").isel(step=0).item() == 0.8
+    assert np.isnan(out["T_2M.CRPS"].sel(source="truth-c305")).all()
+
+
+def test_dashboard_ensemble_only_has_no_crps_note(tmp_path):
+    ens = make_file("ens", True)
+    truth = make_truth()
+    truth["n_samples"] = ens["n_samples"]
+    both = xr.concat([ens, truth], "source", join="outer", data_vars="minimal")
+    html = _run_dashboard(tmp_path, [both])
+    assert 'data-metric="CRPS"' in html
+    assert "deterministic forecasts" not in html

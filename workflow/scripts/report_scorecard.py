@@ -20,7 +20,11 @@ import xarray as xr
 import matplotlib.pyplot as plt
 from matplotlib.transforms import ScaledTranslation
 
-from ensemble_scores import CRPS_NOTE, drop_non_score_vars, fill_crps_from_mae
+from verification.ensemble_report import (
+    CRPS_NOTE,
+    drop_non_score_vars,
+    fill_crps_from_mae,
+)
 from verification import decode_metric
 
 LOG = logging.getLogger(__name__)

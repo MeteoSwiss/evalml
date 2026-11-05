@@ -351,6 +351,14 @@ def _compute_statistics(
     return stats
 
 
+def default_num_workers() -> int:
+    """Threads for the dask computations: the CPUs this process may run on."""
+    try:
+        return len(os.sched_getaffinity(0))
+    except AttributeError:
+        return max((os.cpu_count() or 6) - 2, 1)
+
+
 def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
     out = xr.merge(ds, compat="no_conflicts")
     if "forecast_reference_time" not in out.dims:
@@ -560,10 +568,7 @@ def verify(
     start = time.time()
 
     if num_workers is None:
-        try:
-            num_workers = len(os.sched_getaffinity(0))
-        except AttributeError:
-            num_workers = max((os.cpu_count() or 6) - 2, 1)
+        num_workers = default_num_workers()
 
     if dim is None:
         if "x" in fcst.dims and "y" in fcst.dims:
@@ -854,10 +859,7 @@ def verify_ensemble(
         raise ValueError(f"Ensemble verification needs >= 2 members, got {n_members}.")
 
     if num_workers is None:
-        try:
-            num_workers = len(os.sched_getaffinity(0))
-        except AttributeError:
-            num_workers = max((os.cpu_count() or 6) - 2, 1)
+        num_workers = default_num_workers()
 
     if dim is None:
         dim = ["x", "y"] if "x" in fcst.dims and "y" in fcst.dims else ["values"]
