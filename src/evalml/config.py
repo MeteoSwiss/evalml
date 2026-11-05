@@ -489,7 +489,8 @@ class SpectraConfig(BaseModel):
         description=(
             "Spectra variables: any parameter the forecast and truth loaders provide "
             "(e.g. T_2M, SP_10M, TOT_PREC1), plus WIND_KE, the kinetic energy from "
-            "U_10M and V_10M."
+            "U_10M and V_10M. TOT_PREC1 needs hourly output steps: runs with coarser "
+            "steps (e.g. 6h) must use TOT_PREC6 instead."
         ),
     )
     init_hours: Optional[List[int]] = Field(
