@@ -359,8 +359,9 @@ runs:
 - One `inference_execute` job per init time runs all members on one node,
   `inference_resources.gpu` members at a time (default: `min(N, 4)`), one GPU each.
   Unless set in `inference_resources`, the job requests 24 CPUs per GPU, memory capped
-  to fit one node, 40 minutes per wave of members, and the `normal-shared` partition
-  when there is more than one wave (`short-shared` has a 1 h limit). `tasks` must stay 1.
+  to fit one node, 20 minutes plus 10 per wave of members, and the `normal-shared`
+  partition when that exceeds the 1 h limit of `short-shared` (more than 4 waves).
+  Raise `runtime` for long lead times or hourly steps. `tasks` must stay 1.
 - A member that finished keeps a `.ok` file under
   `logs/inference_execute/{run_id}-{init_time}/`, so a rerun after a failure only runs
   the missing members.
