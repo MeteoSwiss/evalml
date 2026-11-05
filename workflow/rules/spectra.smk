@@ -58,13 +58,16 @@ rule spectra_compute:
         ).resolve(),
         steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         label=lambda wc: RUN_CONFIGS[wc.run_id].get("label", wc.run_id),
+        lead_times=SPECTRA_LEAD_TIMES,
+        variables=SPECTRA_VARIABLES,
+        method=SPECTRA_METHOD,
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {params.grib} --reftime {wildcards.init_time} \
-            --steps "{params.steps}" --lead_times "{SPECTRA_LEAD_TIMES}" \
-            --variables "{SPECTRA_VARIABLES}" --method "{SPECTRA_METHOD}" \
+            --steps "{params.steps}" --lead_times "{params.lead_times}" \
+            --variables "{params.variables}" --method "{params.method}" \
             --label "{params.label}" --output {output} >{log} 2>&1
         """
 
@@ -86,13 +89,16 @@ rule spectra_compute_baseline:
     params:
         steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label", wc.baseline_id),
+        lead_times=SPECTRA_LEAD_TIMES,
+        variables=SPECTRA_VARIABLES,
+        method=SPECTRA_METHOD,
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {input.forecast} --reftime {wildcards.init_time} \
-            --steps "{params.steps}" --lead_times "{SPECTRA_LEAD_TIMES}" \
-            --variables "{SPECTRA_VARIABLES}" --method "{SPECTRA_METHOD}" \
+            --steps "{params.steps}" --lead_times "{params.lead_times}" \
+            --variables "{params.variables}" --method "{params.method}" \
             --label "{params.label}" --output {output} >{log} 2>&1
         """
 
@@ -114,13 +120,16 @@ rule spectra_compute_truth:
     params:
         steps=_spectra_truth_steps(),
         label=config["truth"]["label"],
+        lead_times=SPECTRA_LEAD_TIMES,
+        variables=SPECTRA_VARIABLES,
+        method=SPECTRA_METHOD,
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --truth {input.truth} --reftime {wildcards.init_time} \
-            --steps "{params.steps}" --lead_times "{SPECTRA_LEAD_TIMES}" \
-            --variables "{SPECTRA_VARIABLES}" --method "{SPECTRA_METHOD}" \
+            --steps "{params.steps}" --lead_times "{params.lead_times}" \
+            --variables "{params.variables}" --method "{params.method}" \
             --label "{params.label}" --output {output} >{log} 2>&1
         """
 
