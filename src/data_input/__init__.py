@@ -1038,8 +1038,8 @@ def _load_INCA_baseline_from_netcdf(
                    --------  ------------------------  -------  ---------  --------  -------  --------  -------
                    T_2M      2 m temperature           K        1h/10min   TT        1h       °C        2022
                    TD_2M     2 m dewpoint temperature  K        1h/10min   TD        1h       °C        2022
-                   TOT_PREC  total precipitation rate  kg m-2   1h/10min   RR        10min    mm/h      2022
-                   TOT_PREC  total precipitation rate  kg m-2   5min       RP        5min     mm/h      2025-05
+                   TOT_PREC  total precipitation       kg m-2   1h/10min   RR        10min    mm/h      2022
+                   TOT_PREC  total precipitation       kg m-2   5min       RP        5min     mm/h      2025-05
                    FF_10M    10 m wind speed           m/s      1h         FF        1h       m/s       2022
                    FF_10M    10 m wind speed           m/s      10min      FF_10min  10min    m/s       2025-05
                    DD_10M    10 m wind direction       °        1h         DD        1h       °         2022
@@ -1267,12 +1267,13 @@ def _load_INCA_baseline_from_netcdf(
         nan_array: Callable,
         param_unit: str,
     ) -> xr.DataArray:
-        """Load a period-accumulated INCA field and return cumulative-from-start totals.
+        """Load an INCA precipitation rate and return cumulative-from-start amounts.
 
-        Always loads at native resolution (10 min for RR, 5 min for RP) so that all
-        sub-frequency slots are summed. This is critical when freq='1h': a plain
-        reindex to hourly marks would pick only the last 10-min slot of each hour,
-        underestimating by ×6.
+        The files hold rates (mm/h) at native resolution (10 min for RR, 5 min for
+        RP). Each rate is turned into the amount (kg m-2) of its slot by multiplying
+        it by the slot length in hours, and the amounts are summed. All native slots
+        are used, so with freq='1h' an hourly amount covers the whole hour and not
+        only its last slot.
         """
         native_td = (
             np.timedelta64(5, "m") if prefix == "RP" else np.timedelta64(10, "m")
@@ -1292,7 +1293,9 @@ def _load_INCA_baseline_from_netcdf(
             LOG.warning("INCA file not found, filling %s with NaN: %s", param, fp)
             return nan_array(param_unit).rename(param)
 
-        da_native = da.reindex(valid_time=native_vtimes)
+        # rate (mm/h) x slot length (h) = amount of the slot (kg m-2)
+        slot_hours = native_td / np.timedelta64(1, "h")
+        da_native = da.reindex(valid_time=native_vtimes) * slot_hours
         cumul = da_native.cumsum(dim="valid_time", skipna=True)
         # expand_dims ensures valid_time is the leading dimension in step0 before
         # concat; without it xarray appends the new dim at the end, producing

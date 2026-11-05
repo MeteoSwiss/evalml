@@ -1,4 +1,5 @@
-"""Unit tests for the INCA ground truth (data_input.inca) on a tiny synthetic archive."""
+"""Unit tests for INCA as ground truth (data_input.inca) and as a nowcast baseline
+(load_forecast_data), on a tiny synthetic archive."""
 
 import logging
 from datetime import datetime, timedelta
@@ -9,7 +10,13 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from data_input import accumulate_from_hourly, inca, load_truth_data, truth_type
+from data_input import (
+    accumulate_from_hourly,
+    inca,
+    load_forecast_data,
+    load_truth_data,
+    truth_type,
+)
 
 REFTIME = datetime(2025, 11, 1, 0, 0)
 # LV03 grid around Bern; (600000, 200000) is the LV03 reference point.
@@ -282,3 +289,67 @@ def test_accumulate_from_hourly_default_still_skips_nan():
     )
     np.testing.assert_allclose(accumulate_from_hourly(hourly, [3]).values, [3.0])
     assert np.isnan(accumulate_from_hourly(hourly, [3], skipna=False).values).all()
+
+
+# ---------------------------------------------------------------------------
+# INCA nowcast as a baseline (load_forecast_data)
+# ---------------------------------------------------------------------------
+
+
+def write_nowcast_rates(root: Path, rates: np.ndarray):
+    """Write the RR nowcast run started at REFTIME: one rate (mm/h) per 10-min step,
+    ``rates[0]`` at step 0 and ``rates[k]`` at REFTIME + 10k min."""
+    data = np.broadcast_to(
+        np.asarray(rates, dtype=np.float32)[:, None, None], (len(rates), Y.size, X.size)
+    )
+    ds = xr.Dataset(
+        {
+            "RR": (("time", "chy", "chx"), data, {"units": "mm/h"}),
+            "grid_mapping": ((), 0.0),
+        },
+        coords={
+            "time": (
+                "time",
+                600.0 * np.arange(len(rates)),
+                {"units": f"seconds since {REFTIME}"},
+            ),
+            "chx": X,
+            "chy": Y,
+        },
+    )
+    path = inca.analysis_file(root, inca.INCA_VARIABLES["TOT_PREC"], REFTIME)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ds.to_netcdf(path)
+
+
+def baseline_at(ds: xr.Dataset, param: str, step_h: int) -> np.ndarray:
+    return ds[param].sel(step=np.timedelta64(step_h, "h")).values
+
+
+def test_baseline_precipitation_rates_become_amounts(inca_root):
+    # 6 mm/h for 6 h: 6 mm per hour, 36 mm in 6 h (summing the 10-min rates
+    # instead would give 36 mm per hour).
+    write_nowcast_rates(inca_root, np.full(37, 6.0))
+
+    fcst = load_forecast_data(
+        inca_root, REFTIME, list(range(7)), ["TOT_PREC1", "TOT_PREC6"]
+    )
+
+    for h in range(1, 7):
+        np.testing.assert_allclose(baseline_at(fcst, "TOT_PREC1", h), 6.0, rtol=1e-6)
+    np.testing.assert_allclose(baseline_at(fcst, "TOT_PREC6", 6), 36.0, rtol=1e-6)
+
+
+def test_baseline_hourly_amount_uses_the_slots_of_that_hour(inca_root):
+    # Step 0 covers (REFTIME - 10 min, REFTIME]: it is not part of hour 1.
+    rates = np.zeros(37)
+    rates[0] = 600.0
+    rates[1:7] = 6.0  # hour 1
+    rates[7:13] = 12.0  # hour 2
+    write_nowcast_rates(inca_root, rates)
+
+    fcst = load_forecast_data(inca_root, REFTIME, [0, 1, 2, 3], ["TOT_PREC1"])
+
+    np.testing.assert_allclose(baseline_at(fcst, "TOT_PREC1", 1), 6.0, rtol=1e-6)
+    np.testing.assert_allclose(baseline_at(fcst, "TOT_PREC1", 2), 12.0, rtol=1e-6)
+    np.testing.assert_allclose(baseline_at(fcst, "TOT_PREC1", 3), 0.0, atol=1e-6)
