@@ -684,14 +684,20 @@ def scoremap_runtime(wc):
     return max(60, math.ceil(1.5 * len(REFTIMES) * seconds / 60))
 
 
+def run_grib_root(run_id, init_time):
+    """``grib/`` directory of a run's inference output (one sub-directory per member
+    for an ensemble). Verification reads it, with ``members_flag`` for an ensemble."""
+    return Path(OUT_ROOT) / f"data/runs/{run_id}/{init_time}/grib"
+
+
 def run_grib_dir(run_id, init_time):
     """GRIB directory of a run's inference output, as read by downstream rules.
 
     Deterministic runs write ``grib/``; ensemble runs write ``grib/{NNN}/`` per member.
     Plots, SAL, score maps and MEC read member 001 only; verification reads all
-    members (see ``verification_forecast_arg``).
+    members (``run_grib_root`` and ``members_flag``).
     """
-    base = Path(OUT_ROOT) / f"data/runs/{run_id}/{init_time}/grib"
+    base = run_grib_root(run_id, init_time)
     if RUN_CONFIGS[run_id].get("ensemble") is not None:
         return base / "001"
     return base
@@ -703,20 +709,12 @@ def ensemble_members(run_id) -> int | None:
     return None if ensemble is None else ensemble["members"]
 
 
-def verification_forecast_arg(run_id, init_time):
-    """``--forecast`` argument of verification_metrics and verification_valid_mask.
-
-    Deterministic runs: the ``grib/`` directory, as a Path. Snakemake does not
-    record Path params, so this param never triggers a rerun.
-    Ensemble runs: ``grib/`` followed by ``--members N``; the scripts read every
-    ``grib/{NNN}/`` and fail on a missing member. Passing the flag in this param
-    keeps the rules' shell text, and so the deterministic outputs, unchanged.
+def members_flag(wildcards):
+    """``--members N`` for an ensemble run (``{run_id}`` wildcard), else empty: the
+    verification scripts then read every ``grib/{NNN}/`` and fail on a missing member.
     """
-    base = (Path(OUT_ROOT) / f"data/runs/{run_id}/{init_time}/grib").resolve()
-    members = ensemble_members(run_id)
-    if members is None:
-        return base
-    return f"{base} --members {members}"
+    members = ensemble_members(wildcards.run_id)
+    return "" if members is None else f"--members {members}"
 
 
 def ensemble_scaled(base, per_member, unit=None):

@@ -10,12 +10,14 @@ import pandas as pd
 import xarray as xr
 
 from verification import (  # noqa: E402
+    CATEGORICAL_PARAMS,
     CIRCULAR_PARAMS,
     _apply_masks,
     _compute_statistics,
     _region_and_station_masks,
     _too_many_missing,
     apply_lapse_rate_correction_inplace,
+    default_num_workers,
     verify,
     verify_ensemble,
 )
@@ -188,6 +190,7 @@ def member_mean_statistics(
     regions: list[dict],
     holdout_stations: list[str] | None = None,
     params: list[str] | None = None,
+    num_workers: int | None = None,
 ) -> xr.Dataset:
     """Forecast statistics ``{p}.{mean,var,min,max}`` of an ensemble, averaged over
     the members (without a ``source`` dim).
@@ -196,7 +199,12 @@ def member_mean_statistics(
     NaN where too many forecast values are missing; a point is missing if any member
     is). The ensemble mean is smoother than any member, so its own variance and
     extremes would not describe the forecast fields.
+
+    Memory: the masked members have region x station_group x points values per member
+    and step. Each member is its own dask chunk and the parameters are computed one
+    at a time with *num_workers* threads, so a chunk is no larger than in ``verify``.
     """
+    num_workers = num_workers or default_num_workers()
     dim = ["x", "y"] if "x" in fcst.dims and "y" in fcst.dims else ["values"]
     fcst, truth = xr.align(fcst, truth, join="inner", copy=False)
     masks, station_masks = _region_and_station_masks(truth, regions, holdout_stations)
@@ -204,25 +212,59 @@ def member_mean_statistics(
     for param in params or list(fcst.data_vars):
         if param not in truth.data_vars:
             continue
-        members = fcst[param].where(fcst[param].notnull().all("member"))
+        members = fcst[param]
+        members = members.where(members.notnull().all("member"))
         too_many_missing = _too_many_missing(
             members.isnull().any("member"),
             _apply_masks(truth[param], masks, station_masks),
             dim,
             0.0,
         )
+        if members.chunks:
+            members = members.chunk({"member": 1})
         member_stats = _compute_statistics(
             _apply_masks(members, masks, station_masks),
             prefix=param + ".",
             dim=dim,
             circular=param in CIRCULAR_PARAMS,
         )
+        member_stats = member_stats.assign(too_many_missing=too_many_missing).compute(
+            num_workers=num_workers, scheduler="threads"
+        )
+        too_many_missing = member_stats["too_many_missing"]
         stats.append(
-            member_stats.mean("member")
+            member_stats.drop_vars("too_many_missing")
+            .mean("member")
             .squeeze("source", drop=True)
             .where(~too_many_missing)
         )
-    return xr.merge(stats).compute()
+    return xr.merge(stats)
+
+
+def _nan_categorical_scores(results: xr.Dataset, params, source_id: str) -> xr.Dataset:
+    """NaN for the scores of the categorical params (class codes) under *source_id*.
+
+    The ensemble mean of class codes is no class (rain 1 and snow 5 average to 3,
+    freezing rain), so the contingency tables of the ensemble mean are meaningless.
+    The forecast statistics (averaged over the members) and the truth are kept.
+    """
+    statistics = ("mean", "var", "min", "max")
+    is_source = results["source"] == source_id
+    for param in CATEGORICAL_PARAMS.intersection(params):
+        for name in list(results.data_vars):
+            if not name.startswith(param + "."):
+                continue
+            if name.split(".", 1)[1] in statistics:
+                continue
+            current = results[name]
+            if "source" not in current.dims:
+                continue
+            results[name] = (
+                current.where(~is_source)
+                .transpose(*current.dims)
+                .assign_attrs(current.attrs)
+            )
+    return results
 
 
 def verify_ensemble_run(
@@ -237,6 +279,9 @@ def verify_ensemble_run(
     parameter (wind direction) is the direction of the mean unit vector. The run's forecast statistics
     are averaged over the members (``member_mean_statistics``), except for circular
     parameters (wind direction), which keep those of the ensemble mean.
+    Categorical parameters (precipitation type) have no ensemble mean: their
+    deterministic scores (contingency tables) are NaN; their ``prob_table`` is the
+    ensemble's categorical score.
     """
     n_members = fcst.sizes["member"]
     LOG.info("Verifying an ensemble of %d members", n_members)
@@ -254,6 +299,7 @@ def verify_ensemble_run(
             360.0,
         ).assign_attrs(fcst[param].attrs)
     results = verify(ens_mean, truth, source_id, truth_source_id, **kwargs)
+    results = _nan_categorical_scores(results, fcst.data_vars, source_id)
 
     stat_params = [p for p in fcst.data_vars if p not in CIRCULAR_PARAMS]
     member_stats = member_mean_statistics(
@@ -262,6 +308,7 @@ def verify_ensemble_run(
         kwargs["regions"],
         kwargs.get("holdout_stations"),
         params=stat_params,
+        num_workers=kwargs.get("num_workers"),
     )
     for name, value in member_stats.data_vars.items():
         current = results[name]

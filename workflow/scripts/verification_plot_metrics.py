@@ -7,7 +7,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import xarray as xr
-from ensemble_scores import (
+from verification.ensemble_report import (
     add_deterministic_crps,
     ensemble_sources,
     is_score_var,
@@ -198,19 +198,28 @@ def main(args: Namespace) -> None:
     plot_ensemble_diagnostics(ds, args)
 
 
-def _counts_for_plot(da: xr.DataArray, source, region, keep: list[str]) -> xr.DataArray:
-    """Counts of one source at the default stratum, summed over everything but *keep*."""
+def _counts_for_plot(
+    da: xr.DataArray, source, region, keep: list[str], bins: str
+) -> xr.DataArray:
+    """Counts of one source at the default stratum, summed over everything but *keep*.
+
+    The participants are concatenated with an outer join, so an ensemble of N members
+    has NaN in the *bins* (``rank`` or ``n_members_yes``) above N when another ensemble
+    has more members: those bins are dropped, and the counts keep the source's N + 1 bins.
+    """
     da = da.sel(source=source)
     for dim, val in (("region", region), ("season", "all"), ("init_hour", -999)):
         if dim in da.dims:
             da = da.sel({dim: val}, drop=True)
-    return da.sum([d for d in da.dims if d not in keep], skipna=True)
+    da = da.sum([d for d in da.dims if d not in keep], skipna=True, min_count=1)
+    return da.dropna(bins, how="all")
 
 
 def plot_ensemble_diagnostics(ds: xr.Dataset, args: Namespace) -> None:
     """Rank histograms and reliability diagrams, for ensemble participants only.
 
     Counts are summed over lead times, at the default region, all seasons and init hours.
+    Each ensemble has its own number of members N (N + 1 ranks, probabilities k/N).
     """
     ens_sources = ensemble_sources(ds)
     if not ens_sources:
@@ -224,20 +233,21 @@ def plot_ensemble_diagnostics(ds: xr.Dataset, args: Namespace) -> None:
         fig, ax = plt.subplots(figsize=(10, 6))
         n_plotted = 0
         for source in ens_sources:
-            counts = _counts_for_plot(ds[name], source, region, ["rank"])
+            counts = _counts_for_plot(ds[name], source, region, ["rank"], "rank")
             total = float(counts.sum())
             if not total > 0:
                 continue
-            ax.plot(
+            n_ranks = counts.sizes["rank"]
+            (line,) = ax.plot(
                 counts["rank"].values,
-                counts.values / total,
+                counts.fillna(0).values / total,
                 marker="o",
-                label=label(source),
+                label=f"{label(source)} (N={n_ranks - 1})",
             )
+            # flat histogram of this ensemble: 1 / (N + 1)
+            ax.axhline(1 / n_ranks, color=line.get_color(), ls="--", lw=1)
             n_plotted += 1
         if n_plotted:
-            n_ranks = ds.sizes["rank"]
-            ax.axhline(1 / n_ranks, color="grey", ls="--", lw=1)
             ax.set(
                 title=f"Rank histogram - {param} - {region}",
                 xlabel="Rank of observation among members",
@@ -254,15 +264,16 @@ def plot_ensemble_diagnostics(ds: xr.Dataset, args: Namespace) -> None:
         )
         n_plotted = 0
         for source in ens_sources:
-            tab = _counts_for_plot(ds[name], source, region, ["n_members_yes", "obs"])
-            n_yes = tab["n_members_yes"].values
-            n_mem = int(n_yes.max())
+            tab = _counts_for_plot(
+                ds[name], source, region, ["n_members_yes", "obs"], "n_members_yes"
+            ).fillna(0)
             n_bin = tab.sum("obs")
-            freq = tab.sel(obs=1) / n_bin.where(n_bin > 0)
             if not bool(n_bin.sum() > 0):
                 continue
-            prob = n_yes / n_mem
-            ax.plot(prob, freq.values, marker="o", label=label(source))
+            n_mem = tab.sizes["n_members_yes"] - 1
+            freq = tab.sel(obs=1) / n_bin.where(n_bin > 0)
+            prob = tab["n_members_yes"].values / n_mem
+            ax.plot(prob, freq.values, marker="o", label=f"{label(source)} (N={n_mem})")
             axc.plot(prob, n_bin.values, marker="o")
             n_plotted += 1
         if n_plotted:
