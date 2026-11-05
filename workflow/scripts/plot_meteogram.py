@@ -11,6 +11,7 @@ from data_input import (
     load_forecast_data,
     load_station_coords,
     load_truth_data,
+    truth_type,
 )
 from verification import apply_lapse_rate_correction_inplace
 from verification.spatial import map_forecast_to_truth
@@ -135,11 +136,8 @@ def main():
         analysis_root, init_time, forecast_steps, [variable]
     ).squeeze()
 
-    # Station coordinates: station truth carries them, so take them from the loaded
-    # observations (any station with data for the plotted parameter is found; a
-    # fixed parameter like rre150h0 would exclude stations like JUN). Gridded truth
-    # has none, so look the stations up in the DWH metadata.
-    if "jretrieve" in str(analysis_root):
+    # Station truth carries coordinates; gridded truth requires a DWH lookup.
+    if truth_type(analysis_root) == "jretrieve":
         coords_ds = analysis_ds
     else:
         LOG.info("Looking up station coordinates for gridded truth")

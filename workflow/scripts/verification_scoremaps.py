@@ -39,11 +39,13 @@ import numpy as np
 import xarray as xr
 
 from data_input import (
+    is_inca_archive,
     load_forecast_data,
     load_truth_data,
     open_truth_zarr,
     parse_aggregated_param,
 )
+from verification import CATEGORICAL_PARAMS, CIRCULAR_PARAMS, angular_difference
 from verification.spatial import map_forecast_to_truth
 
 LOG = logging.getLogger(__name__)
@@ -111,6 +113,12 @@ def main(args: Namespace) -> None:
     LOG.info("Output   : %s", args.output)
     LOG.info("=" * 60)
 
+    if args.param in CATEGORICAL_PARAMS:
+        raise ValueError(
+            f"'{args.param}' holds class codes: its error maps (BIAS, RMSE, MAE) are "
+            "meaningless. Remove it from experiment.scoremaps.params."
+        )
+
     # The accumulation period is encoded in the param name (e.g. TOT_PREC6 → 6h).
     _, accum_h = parse_aggregated_param(args.param)
     if accum_h is not None:
@@ -119,7 +127,7 @@ def main(args: Namespace) -> None:
                 f"Lead time {args.step}h is smaller than the {accum_h}h "
                 f"accumulation period encoded in '{args.param}'."
             )
-        if args.baseline_root and "INCA" in args.baseline_root.parts and accum_h != 1:
+        if args.baseline_root and is_inca_archive(args.baseline_root) and accum_h != 1:
             raise ValueError(
                 f"INCA provides native 1h accumulations only; '{args.param}' "
                 f"requires a {accum_h}h accumulation period. Use TOT_PREC1 for "
@@ -298,7 +306,11 @@ def main(args: Namespace) -> None:
                 fcst_param = fcst_param.squeeze(dim, drop=True)
         fcst_vals = fcst_param.values
         truth_vals = truth_slice.values
-        error = fcst_vals - truth_vals  # shape: spatial dims of truth
+        # shape: spatial dims of truth
+        if args.param in CIRCULAR_PARAMS:
+            error = angular_difference(fcst_vals, truth_vals)
+        else:
+            error = fcst_vals - truth_vals
 
         if first_iter:
             n_nan_mapped = int(np.isnan(fcst_vals).sum())
