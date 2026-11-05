@@ -16,11 +16,17 @@ post_processors:
         - tp
  # We use `backward_transform_filter` instead of `forward_transform_filter`
  # as this is not supported in the pinned anemoi-inference version used for aifs-single's evalml config (anemoi-inference=0.11.1)
+  # filters see the model name (tp) with anemoi-inference <= 0.11.1 and the GRIB name (TOT_PREC) from 0.11.2
   - backward_transform_filter:
       filter: rescale
       scale: 0.001 # convert units from m to kg m-2 (backward: x/scale = x*1000)
       offset: 0
       param: tp
+  - backward_transform_filter:
+      filter: rescale
+      scale: 0.001 # convert units from m to kg m-2 (backward: x/scale = x*1000)
+      offset: 0
+      param: TOT_PREC
 
 output:
   grib:

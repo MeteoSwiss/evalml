@@ -79,7 +79,7 @@ def main():
         "--lapse_rate_correction",
         action="store_true",
         default=False,
-        help="Apply standard-atmosphere lapse-rate correction to T_2M.",
+        help="Apply lapse-rate correction to T_2M and PS.",
     )
 
     args = parser.parse_args()
@@ -123,15 +123,23 @@ def main():
     # Build station coordinate lookup from the loaded analysis dataset so that
     # any station with data for the plotted parameter is found (a fixed
     # parameter like rre150h0 would exclude stations like JUN).
-    catalog_lookup = {
-        str(sta): (float(lat), float(lon), float(elev))
-        for sta, lat, lon, elev in zip(
-            analysis_ds["values"].values,
-            analysis_ds["latitude"].values,
-            analysis_ds["longitude"].values,
-            analysis_ds["elevation"].values,
+    # A gridded truth on a (y, x) grid (e.g. INCA) has no station axis.
+    if "values" in analysis_ds.dims:
+        catalog_lookup = {
+            str(sta): (float(lat), float(lon), float(elev))
+            for sta, lat, lon, elev in zip(
+                analysis_ds["values"].values,
+                analysis_ds["latitude"].values,
+                analysis_ds["longitude"].values,
+                analysis_ds["elevation"].values,
+            )
+        }
+    else:
+        LOG.warning(
+            "Truth %s has no station axis; meteograms require station observations.",
+            analysis_root,
         )
-    }
+        catalog_lookup = {}
 
     # Load gridded data once — shared across all station plots
     LOG.info("Loading forecast data from %s", forecast_grib_dir)
@@ -197,9 +205,11 @@ def main():
         ]
 
         if args.lapse_rate_correction:
-            apply_lapse_rate_correction_inplace(forecast_station_ds, station_ds, param)
+            apply_lapse_rate_correction_inplace(
+                forecast_station_ds, station_ds, [param]
+            )
             for ds in baseline_station_ds_list:
-                apply_lapse_rate_correction_inplace(ds, station_ds, param)
+                apply_lapse_rate_correction_inplace(ds, station_ds, [param])
 
         fig, ax = plt.subplots()
 

@@ -176,6 +176,7 @@ rule inference_prepare_forecaster:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
+        holdout=lambda wc: holdout_dep(wc) if run_uses_holdout(wc.run_id) else [],
     output:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
@@ -188,6 +189,7 @@ rule inference_prepare_forecaster:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
+        holdout_workdir_name=HOLDOUT_WORKDIR_NAME,
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
@@ -206,6 +208,7 @@ rule inference_prepare_temporal_downscaler:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
+        holdout=lambda wc: holdout_dep(wc) if run_uses_holdout(wc.run_id) else [],
         forecasts=lambda wc: (
             [
                 OUT_ROOT
@@ -230,6 +233,7 @@ rule inference_prepare_temporal_downscaler:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
+        holdout_workdir_name=HOLDOUT_WORKDIR_NAME,
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
@@ -284,6 +288,11 @@ rule inference_execute:
         disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
             "disable_local_eccodes_definitions", False
         ),
+        account_flag=lambda wc: (
+            f"--account={config['profile']['default_resources']['slurm_account']}"
+            if config["profile"]["default_resources"].get("slurm_account")
+            else ""
+        ),
     # fmt: off
     shell:
         """
@@ -293,12 +302,18 @@ rule inference_execute:
             cd {params.workdir}
 
             _run_inference() {{
-                local VENV=$1
+                local VENV=/user-environment
                 source "$VENV/bin/activate"
 
                 if [ "{params.disable_local_definitions}" = "False" ]; then
                     export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
                 fi
+
+                # earthkit-data (>=1.0) sets ECCODES_ECKIT_GEO=1 on import, which leaks from the
+                # Snakemake process into this job. With recent eccodeslib wheels it makes ecCodes
+                # compute coordinates with eckit.geo, whose Gaussian latitudes differ in the last
+                # bits from the datasets, so anemoi-inference fails to combine the input states.
+                unset ECCODES_ECKIT_GEO
 
                 CMD_ARGS=()
 
@@ -307,19 +322,26 @@ rule inference_execute:
                     CMD_ARGS+=(runner.parallel.cluster=slurm)
                 fi
 
-                srun \
-                    --unbuffered \
-                    --partition={resources.slurm_partition} \
-                    --cpus-per-task={resources.cpus_per_task} \
-                    --mem-per-cpu={resources.mem_mb_per_cpu} \
-                    --time={resources.runtime} \
-                    --gres={resources.gres} \
-                    --ntasks={resources.ntasks} \
-                    anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
+                # Equivalent to `anemoi-inference run`, but imports pyproj before eccodes:
+                # the eckitlib wheel bundles its own PROJ, which aborts at exit (double free)
+                # if loaded before pyproj. See https://github.com/ecmwf/eckit/issues/354
+                python -c 'import sys, importlib.util; importlib.util.find_spec("pyproj") and __import__("pyproj"); from anemoi.inference.__main__ import main; sys.argv[0] = "anemoi-inference"; sys.exit(main())' \
+                    run config.yaml "${{CMD_ARGS[@]}}"
             }}
             export -f _run_inference
 
-            squashfs-mount {params.env_path}:/user-environment -- bash -c '_run_inference /user-environment'
+            srun \
+                --job-name=anemoi-inference \
+                --uenv={params.env_path}:/user-environment \
+                --unbuffered \
+                {params.account_flag} \
+                --partition={resources.slurm_partition} \
+                --cpus-per-task={resources.cpus_per_task} \
+                --mem-per-cpu={resources.mem_mb_per_cpu} \
+                --time={resources.runtime} \
+                --gres={resources.gres} \
+                --ntasks={resources.ntasks} \
+                bash -c '_run_inference'
         ) >{log} 2>&1
         touch {output.okfile}
         """

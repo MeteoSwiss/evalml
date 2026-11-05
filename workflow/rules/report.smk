@@ -38,7 +38,10 @@ rule report_experiment_dashboard:
     params:
         sources=",".join(list(EXPERIMENT_PARTICIPANTS.keys())),
         header_text=make_header_text(),
-        stratification=" ".join(config["experiment"]["dashboard"]["stratification"]),
+        stratification=" ".join(
+            EXPERIMENT_CONFIG.get("dashboard", {}).get("stratification", [])
+        ),
+        station_holdout_flag="--station_holdout" if HOLDOUT_STATIONS else "",
         label_map=",".join(
             "{}:{}".format(
                 sid,
@@ -60,6 +63,7 @@ rule report_experiment_dashboard:
             --header_text "{params.header_text}" \
             --configfile "{input.configfile}" \
             --stratification {params.stratification} \
+            {params.station_holdout_flag} \
             --labels "{params.label_map}" \
             --output {output} >{log} 2>&1
         """
@@ -70,7 +74,7 @@ rule report_scorecard:
         script="workflow/scripts/report_scorecard.py",
         verif_run=lambda wc: EXPERIMENT_PARTICIPANTS[f"{wc.env_id}/{wc.config_hash}"],
         verif_baseline=lambda wc: EXPERIMENT_PARTICIPANTS[
-            resolve_baseline_id(SCORECARD_CONFIGS[wc.scorecard_name]["baseline"])
+            resolve_reference_id(SCORECARD_CONFIGS[wc.scorecard_name]["baseline"])
         ],
     output:
         report(
@@ -93,7 +97,7 @@ rule report_scorecard:
         run_label=lambda wc: RUN_CONFIGS[f"{wc.env_id}/{wc.config_hash}"].get(
             "label", f"{wc.env_id}/{wc.config_hash}"
         ),
-        baseline_source=lambda wc: resolve_baseline_id(
+        baseline_source=lambda wc: resolve_reference_id(
             SCORECARD_CONFIGS[wc.scorecard_name]["baseline"]
         ),
         baseline_label=lambda wc: SCORECARD_CONFIGS[wc.scorecard_name]["baseline"],

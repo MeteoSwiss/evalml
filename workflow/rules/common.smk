@@ -1,13 +1,20 @@
 import logging
 import copy
+import re
 from datetime import datetime, timedelta
 import yaml
 import hashlib
 import json
 from urllib.parse import urlparse
 
+from data_input import inca, truth_type
+
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
+# the experiment block is optional (e.g. for showcase/sandbox configs)
+EXPERIMENT_CONFIG = config.get("experiment") or {}
+# "anemoi_dataset", "jretrieve" or "inca"
+TRUTH_TYPE = truth_type(config["truth"]["root"])
 
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
 HASH_LENGTH = 4
@@ -88,7 +95,7 @@ def parse_regions():
     """
     from evalml.config import PREDEFINED_REGIONS
 
-    cfg = config["experiment"]["stratification"]
+    cfg = EXPERIMENT_CONFIG.get("stratification", {})
     root = cfg.get("root", "")
     result = []
     for entry in cfg.get("regions", []):
@@ -299,35 +306,62 @@ def collect_all_baselines():
     return baselines
 
 
-def resolve_baseline_id(label: str) -> str:
-    """Resolve a baseline label to its hash-based ID.
+def resolve_reference_id(label: str) -> str:
+    """Resolve a scorecard reference label to its participant ID.
 
-    Scorecard configs reference baselines by human-readable label (e.g. 'IFS').
-    This finds the matching baseline_id in BASELINE_CONFIGS.
-    Raises ValueError if the label doesn't match any registered baseline.
+    The reference can be a baseline (hash-based ID) or a candidate run
+    ('env_id/config_hash'). Labels are unique across `runs` (config validation).
     """
     for baseline_id, cfg in BASELINE_CONFIGS.items():
         if cfg.get("label") == label:
             return baseline_id
-    available = [cfg.get("label") for cfg in BASELINE_CONFIGS.values()]
+    for run_id, cfg in RUN_CONFIGS.items():
+        if cfg.get("_is_candidate", False) and cfg.get("label") == label:
+            return run_id
+    available = [cfg.get("label") for cfg in BASELINE_CONFIGS.values()] + [
+        cfg.get("label")
+        for cfg in RUN_CONFIGS.values()
+        if cfg.get("_is_candidate", False)
+    ]
     raise ValueError(
-        f"No baseline with label {label!r} found. "
-        f"Available baseline labels: {available}"
+        f"No baseline or candidate run with label {label!r} found. "
+        f"Available labels: {available}"
     )
 
 
+def experiment_participant_ids() -> list[str]:
+    """Baseline ids and candidate run ids: the forecasts compared in the experiment."""
+    return list(BASELINE_CONFIGS) + [
+        run_id
+        for run_id, run_config in RUN_CONFIGS.items()
+        if run_config.get("_is_candidate", False)
+    ]
+
+
+def participant_data_dir(participant_id: str) -> Path:
+    if participant_id in BASELINE_CONFIGS:
+        return OUT_ROOT / f"data/baselines/{participant_id}"
+    return OUT_ROOT / f"data/runs/{participant_id}"
+
+
 def collect_experiment_participants():
-    participants = {}
-    for base in BASELINE_CONFIGS.keys():
-        participants[base] = (
-            OUT_ROOT / f"data/baselines/{base}/verif_aggregated_{VERIF_HASH}.nc"
-        )
-    for exp in RUN_CONFIGS.keys():
-        if RUN_CONFIGS[exp].get("_is_candidate", False):
-            participants[exp] = (
-                OUT_ROOT / f"data/runs/{exp}/verif_aggregated_{VERIF_HASH}.nc"
-            )
-    return participants
+    return {
+        pid: participant_data_dir(pid) / f"verif_aggregated_{VERIF_HASH}.nc"
+        for pid in experiment_participant_ids()
+    }
+
+
+def participant_valid_mask_files(wildcards) -> list[Path]:
+    """Valid masks of all participants for one reference time (rule
+    verification_valid_mask*), or none when experiment.score_on_common_points is
+    unset."""
+    if not COMMON_POINTS_PARAMS:
+        return []
+    return [
+        participant_data_dir(pid)
+        / f"{wildcards.init_time}/valid_mask_{VALID_MASK_HASH}.nc"
+        for pid in experiment_participant_ids()
+    ]
 
 
 # -----------------------------------------------
@@ -398,53 +432,120 @@ def verif_hash(full_config: dict) -> str:
     """Hash of all settings that affect verification outputs.
 
     Combines the truth source with verification-method settings so that
-    changing either (e.g. switching lapse_rate_correction on/off) produces
-    new output paths and unconditionally triggers a rerun.
+    changing any of them (e.g. switching lapse_rate_correction on/off, or
+    changing the station_holdout selection) produces new output
+    paths and unconditionally triggers a rerun.
     """
     truth_cfg = {
         k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE
     }
     experiment_verif_cfg = {
         "lapse_rate_correction": full_config.get("lapse_rate_correction", True),
+        "station_holdout": HOLDOUT_STATIONS,
     }
+    # Scoring on common points makes the scores depend on the other participants.
+    # Added only when set, so that existing outputs keep their paths.
+    if COMMON_POINTS_PARAMS:
+        experiment_verif_cfg["score_on_common_points"] = {
+            "params": sorted(COMMON_POINTS_PARAMS),
+            "participants": sorted(experiment_participant_ids()),
+        }
     return generate_json_hash({"truth": truth_cfg, "verif": experiment_verif_cfg})
 
 
+def valid_mask_hash(full_config: dict) -> str:
+    """Hash of the settings that determine a participant's valid mask: the truth
+    points it is mapped to and the masked parameters."""
+    truth_cfg = {
+        k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE
+    }
+    return generate_json_hash(
+        {"truth": truth_cfg, "params": sorted(COMMON_POINTS_PARAMS)}
+    )
+
+
+def holdout_dep(_):
+    """Holdout station file dependency: the CSV written by rule
+    station_holdout, or no input when experiment.station_holdout is unset."""
+    return [HOLDOUT_FILE] if HOLDOUT_STATIONS else []
+
+
+def run_uses_holdout(run_id: str) -> bool:
+    """Whether the run's inference config consumes the holdout station file.
+
+    The contract is the file name: an inference config that references
+    HOLDOUT_WORKDIR_NAME (e.g. as the nudge_toward_observation filter's
+    holdout_station_file) gets the file staged in its working directory.
+    """
+    with open(RUN_CONFIGS[run_id]["config"], "r") as f:
+        return HOLDOUT_WORKDIR_NAME in f.read()
+
+
 def truth_file_dep(_):
-    """Truth file dependency: a real path for zarr, but a live-query
-    marker (no input file) for jretrieve."""
+    """Truth file dependency tracked by Snakemake.
+
+    - anemoi dataset: the dataset itself
+    - INCA: the static topography file; the archive directory is not tracked
+      because its modification time changes whenever new runs are archived
+    - jretrieve: none (live query)
+    """
     root = config["truth"]["root"]
-    return [] if "jretrieve" in str(root) else [root]
+    if TRUTH_TYPE == "anemoi_dataset":
+        return [root]
+    if TRUTH_TYPE == "inca":
+        return [str(inca.topography_file(root))]
+    return []
 
 
-# Fail fast: when the truth source is the live DWH (jretrievedwh), verify its
-# prerequisites at workflow-build time so a misconfigured environment is caught
-# at launch, before any (expensive) inference job runs.
-if "jretrieve" in str(config["truth"]["root"]):
+# Fail fast: verify the prerequisites of the truth source at workflow-build time
+# so a misconfigured environment is caught at launch, before any (expensive)
+# inference job runs.
+if TRUTH_TYPE == "jretrieve":
     from data_input.jretrieve import check_prerequisites, parse_selection
 
-    _, _jretrieve_stage, _ = parse_selection(config["truth"]["root"])
+    _, _jretrieve_stage, _, _ = parse_selection(config["truth"]["root"])
     check_prerequisites(_jretrieve_stage)
+elif TRUTH_TYPE == "inca":
+    inca.check_prerequisites(config["truth"]["root"])
 
 
 TRUTH_HASH = truth_hash(config["truth"])
+HOLDOUT_STATIONS = sorted(EXPERIMENT_CONFIG.get("station_holdout") or [])
+HOLDOUT_FILE = (
+    OUT_ROOT / f"data/station_holdout/{generate_json_hash(HOLDOUT_STATIONS)}.csv"
+)
+HOLDOUT_WORKDIR_NAME = "holdout_stations.csv"
 REGIONS = parse_regions()
-VERIF_HASH = verif_hash(config)
 _showcase = config.get("showcase", {})
 SHOWCASE_CONFIG = {
     "regions": parse_showcase_regions(),
     "params": _showcase.get("params", ["T_2M", "SP_10M"]),
     "fps": _showcase.get("animations", {}).get("frames_per_second", 2.0),
 }
-EXPERIMENT_PARAMS = config.get("experiment", {}).get(
+EXPERIMENT_PARAMS = EXPERIMENT_CONFIG.get(
     "params", ["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"]
 )
 REFTIMES = parse_reference_times()
 RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
 BASELINE_CONFIGS = collect_all_baselines()
+COMMON_POINTS_PARAMS = EXPERIMENT_CONFIG.get("score_on_common_points") or []
+# After RUN_CONFIGS and BASELINE_CONFIGS: the hash includes the participants
+# when experiment.score_on_common_points is set.
+VERIF_HASH = verif_hash(config)
+VALID_MASK_HASH = valid_mask_hash(config)
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
-_scorecard = config.get("experiment", {}).get("scorecards") or {}
+# Fail fast: an inference config that consumes the holdout station file needs
+# experiment.station_holdout to be set.
+if not HOLDOUT_STATIONS:
+    for _run_id in RUN_CONFIGS:
+        if run_uses_holdout(_run_id):
+            raise ValueError(
+                f"Inference config {RUN_CONFIGS[_run_id]['config']} of run {_run_id} "
+                f"references {HOLDOUT_WORKDIR_NAME}, but experiment.station_holdout "
+                "is not set."
+            )
+_scorecard = EXPERIMENT_CONFIG.get("scorecards") or {}
 SCORECARD_CONFIGS = (
     _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
 )
@@ -454,8 +555,10 @@ SCORECARD_CONFIGS = (
 # - period-accumulated params (TOT_PREC/tp) verify a [lead - period, lead]
 #   window, so they have no value at lead times shorter than one step spacing
 #   (e.g. no 0h precip map).
-# - diagnostic params (e.g. CLCT/tcc) aren't part of the model's input state,
+# - diagnostic params (e.g. CLCT/tcc in AIFS) aren't part of the model's input state,
 #   so they're simply absent from the initial-state GRIB file written at step 0.
+#   Cloud cover is prognostic in some models (Varda-single RC); listing it here
+#   only drops their 0h animation frame.
 # Short and canonical names both appear across the workflow (showcases vs maps).
 PARAMS_WITHOUT_STEP_ZERO_VALUE = {
     "TOT_PREC",
@@ -464,6 +567,10 @@ PARAMS_WITHOUT_STEP_ZERO_VALUE = {
     "tcc",
     "CLCL",
     "lcc",
+    "CLCM",
+    "mcc",
+    "CLCH",
+    "hcc",
     "SSRD",
     "ssrd",
 }
@@ -510,6 +617,33 @@ def resolve_leadtimes(steps_spec, requested="all", param=None):
         )
 
     valid = wanted & supported
-    if param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
-        valid = {lt for lt in valid if lt >= step}
+    # Showcase-facing names encode an accumulation window as a numeric suffix
+    # (e.g. "TOT_PREC1", "TOT_PREC6"); strip it before checking membership so
+    # those aggregated variants are recognized the same as their base param.
+    base_param = re.sub(r"\d+$", "", param) if param else param
+    if (
+        param in PARAMS_WITHOUT_STEP_ZERO_VALUE
+        or base_param in PARAMS_WITHOUT_STEP_ZERO_VALUE
+    ):
+        # For aggregated params (e.g. TOT_PREC6), the accumulation window encoded
+        # in the suffix is the minimum valid lead time — not the run's step spacing.
+        # At shorter leads the de-accumulation window doesn't fit (prev_lt < 0),
+        # so the frame would fall back to showing a raw cumulative total.
+        agg_match = re.search(r"\d+$", param) if param and base_param != param else None
+        min_lt = int(agg_match.group()) if agg_match else step
+        valid = {lt for lt in valid if lt >= min_lt}
     return sorted(valid)
+
+
+def scoremap_runtime(wc):
+    """SLURM runtime (minutes) for a scoremap job, which loops over all reference
+    times. Accumulated parameters (TOT_PREC*) re-accumulate hourly analysis
+    fields up to the lead time, so they scale with it. Per-reftime costs measured
+    on Balfrin (MRB-980, REA-L-CH1 truth): ~4 s, plus ~0.3 s per lead hour for
+    accumulated parameters; 1.5x headroom, at least 60 min."""
+    import math
+
+    seconds = 4.0
+    if wc.param.startswith("TOT_PREC"):
+        seconds += 0.3 * int(wc.leadtime)
+    return max(60, math.ceil(1.5 * len(REFTIMES) * seconds / 60))
