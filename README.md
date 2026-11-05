@@ -61,6 +61,9 @@ runs:
       label: M-1 forecaster
       steps: 0/120/6
       config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
+      # Optional: variables written to the GRIB output files (all if omitted), see "Output variables".
+      # Names as the GRIB output sees them (GRIB short names with anemoi-inference >= 0.11.2).
+      # output_variables: [T_2M, TD_2M, U_10M, V_10M, PMSL, TOT_PREC, FIS]
   # A temporal_downscaler entry can optionally embed its driving forecaster config inline.
   # - temporal_downscaler:
   #     checkpoint: /path/to/temporal_downscaler.ckpt
@@ -294,6 +297,41 @@ gets a station-group selector; scorecards and the standard plots use `all`.
 - An inference config can read the same list from `holdout_stations.csv` in its working
   directory (e.g. `holdout_station_file: holdout_stations.csv` for the
   `nudge_toward_observation` filter).
+
+### Output variables
+
+By default, the inference step writes every model field to every GRIB output of the
+inference config. A `forecaster` or `temporal_downscaler` entry (including the inline
+`forecaster` of a temporal downscaler) can restrict this with `output_variables`:
+
+```yaml
+runs:
+  - forecaster:
+      checkpoint: https://...
+      steps: 0/120/6
+      output_variables: [T_2M, TD_2M, U_10M, V_10M, PS, TOT_PREC, FIS, "*_850"]
+```
+
+The list is written as `variables` to every `grib` output of the inference config
+(including those inside a `tee`), replacing any `variables` set in the template.
+
+- Names are those the GRIB output sees: GRIB short names (e.g. `TOT_PREC`) with
+  anemoi-inference 0.11.2 or later, model names (e.g. `tp`) before. Both may be listed;
+  the example above assumes 0.11.2 or later.
+- Shell-style globs, e.g. `"*_850"` for all fields on 850 hPa (quote them in YAML), need
+  anemoi-inference 0.13.0 or later. Older versions match names literally, so a pattern
+  matches nothing there.
+- Keep `FIS` (`z` before 0.11.2): the model orography is read from it for the lapse-rate
+  correction of the verification.
+- The list is not checked against `experiment.params`, nor against the parameters of a
+  showcase or of the SAL verification, which read the same files. A derived parameter
+  that is not written itself needs its components: `SP_10M` and `DD_10M` need `U_10M` and
+  `V_10M`, `RELHUM_2M` needs `T_2M` and `TD_2M`, `TW_2M` needs `T_2M`, `TD_2M` and `PS`.
+  A period such as `TOT_PREC6` needs `TOT_PREC`.
+- A forecaster that drives a temporal downscaler must keep every field the downscaler
+  reads, from both the LAM files and the `ifs-*` files.
+- Changing the list gives the run a new `run_id`, so inference reruns; the inference
+  environment is reused. The order of the list does not matter.
 
 
 ## Installation
