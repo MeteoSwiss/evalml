@@ -18,10 +18,10 @@ def _toy_dataset():
     )
 
 
-def test_variable_components_known():
-    assert io.VARIABLE_COMPONENTS["T_2M"] == (["T_2M"], 1.0)
-    assert io.VARIABLE_COMPONENTS["WIND_KE"] == (["U_10M", "V_10M"], 0.5)
-    assert io.VARIABLE_COMPONENTS["TOT_PREC"] == (["TOT_PREC"], 1.0)
+def test_variable_components():
+    assert io.variable_components("WIND_KE") == (["U_10M", "V_10M"], 0.5)
+    assert io.variable_components("T_2M") == (["T_2M"], 1.0)
+    assert io.variable_components("TOT_PREC1") == (["TOT_PREC1"], 1.0)
 
 
 def test_native_field_squeezes_singleton_reftime_dim():
@@ -56,8 +56,15 @@ def test_native_components_returns_list_and_factor():
     assert comps[0].shape == (6,)
 
 
-def test_unknown_variable_raises():
-    with pytest.raises(KeyError, match="Unknown spectra variable"):
+def test_native_components_single_param():
+    comps, factor = io.native_components(_toy_dataset(), "T_2M", step=6)
+    assert factor == 1.0
+    assert len(comps) == 1
+    np.testing.assert_array_equal(comps[0], np.arange(6, 12))
+
+
+def test_missing_variable_raises():
+    with pytest.raises(KeyError):
         io.native_components(_toy_dataset(), "NOPE", step=0)
 
 
@@ -80,8 +87,24 @@ def test_native_field_rejects_non_1d():
 
 
 def test_required_params_deduplicates():
-    assert io.required_params(["WIND_KE", "T_2M", "WIND_KE"]) == [
+    assert io.required_params(["WIND_KE", "T_2M", "WIND_KE", "TOT_PREC1"]) == [
         "U_10M",
         "V_10M",
         "T_2M",
+        "TOT_PREC1",
     ]
+
+
+def test_period_param_from_loader_disaggregation():
+    # TOT_PREC1 goes through the same disaggregation as in verification.
+    from data_input import _disaggregated_and_derived_params
+
+    cumulative = np.repeat(np.arange(4.0)[:, None], 5, axis=1)
+    ds = xr.Dataset(
+        {"TOT_PREC": (("step", "values"), cumulative)},
+        coords={"step": pd.to_timedelta(np.arange(4), unit="h")},
+    )
+    ds = _disaggregated_and_derived_params(ds, [1, 3], ["TOT_PREC1"])
+    comps, factor = io.native_components(ds, "TOT_PREC1", step=3)
+    assert factor == 1.0
+    np.testing.assert_array_equal(comps[0], np.ones(5))

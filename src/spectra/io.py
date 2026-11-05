@@ -6,25 +6,26 @@ from __future__ import annotations
 import numpy as np
 import xarray as xr
 
-# Logical spectra variable -> (component GRIB params, scale factor).
-# WIND_KE combines U/V as kinetic energy E = 0.5*(|u_hat|^2 + |v_hat|^2).
+# Spectra variables built from several GRIB params: name -> (component params,
+# scale factor). WIND_KE combines U/V as kinetic energy
+# E = 0.5*(|u_hat|^2 + |v_hat|^2). Any other variable is a single param, loaded
+# as such by the data_input loaders (including derived params such as SP_10M
+# and period params such as TOT_PREC1/TOT_PREC6).
 VARIABLE_COMPONENTS: dict[str, tuple[list[str], float]] = {
-    "T_2M": (["T_2M"], 1.0),
     "WIND_KE": (["U_10M", "V_10M"], 0.5),
-    "TOT_PREC": (["TOT_PREC"], 1.0),
 }
 
 
+def variable_components(variable: str) -> tuple[list[str], float]:
+    """Component params and scale factor of a spectra variable."""
+    return VARIABLE_COMPONENTS.get(variable, ([variable], 1.0))
+
+
 def required_params(variables: list[str]) -> list[str]:
-    """All GRIB params needed to compute the requested spectra variables."""
+    """All params to load to compute the requested spectra variables."""
     params: list[str] = []
     for var in variables:
-        if var not in VARIABLE_COMPONENTS:
-            raise KeyError(
-                f"Unknown spectra variable {var!r}. "
-                f"Known: {sorted(VARIABLE_COMPONENTS)}."
-            )
-        for p in VARIABLE_COMPONENTS[var][0]:
+        for p in variable_components(var)[0]:
             if p not in params:
                 params.append(p)
     return params
@@ -60,10 +61,5 @@ def native_components(
     ds: xr.Dataset, variable: str, step: int
 ) -> tuple[list[np.ndarray], float]:
     """Native component arrays + scale factor for a spectra variable at `step`."""
-    if variable not in VARIABLE_COMPONENTS:
-        raise KeyError(
-            f"Unknown spectra variable {variable!r}. "
-            f"Known: {sorted(VARIABLE_COMPONENTS)}."
-        )
-    params, factor = VARIABLE_COMPONENTS[variable]
+    params, factor = variable_components(variable)
     return [native_field(ds, p, step) for p in params], factor

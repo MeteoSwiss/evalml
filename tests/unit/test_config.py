@@ -20,7 +20,7 @@ def test_spectra_config_defaults():
     cfg = SpectraConfig()
     assert cfg.enabled is False
     assert cfg.method == "dct"
-    assert cfg.variables == ["T_2M", "WIND_KE", "TOT_PREC"]
+    assert cfg.variables == ["T_2M", "WIND_KE", "TOT_PREC1"]
     assert cfg.lead_times == []
 
 
@@ -41,9 +41,9 @@ def test_spectra_config_rejects_bad_method():
         SpectraConfig(method="wavelet")
 
 
-def test_spectra_config_rejects_unknown_variable():
-    with pytest.raises(ValidationError):
-        SpectraConfig(variables=["GEOPOTENTIAL"])
+def test_spectra_config_accepts_any_variable():
+    cfg = SpectraConfig(variables=["SP_10M", "TOT_PREC6", "WIND_KE"])
+    assert cfg.variables == ["SP_10M", "TOT_PREC6", "WIND_KE"]
 
 
 def test_spectra_config_rejects_empty_variables():

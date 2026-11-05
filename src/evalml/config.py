@@ -485,8 +485,12 @@ class SpectraConfig(BaseModel):
         description="Representative lead times (hours) at which to compute spectra.",
     )
     variables: List[str] = Field(
-        default=["T_2M", "WIND_KE", "TOT_PREC"],
-        description="Spectra variables. Supported: T_2M, WIND_KE (from U/V_10M), TOT_PREC.",
+        default=["T_2M", "WIND_KE", "TOT_PREC1"],
+        description=(
+            "Spectra variables: any parameter the forecast and truth loaders provide "
+            "(e.g. T_2M, SP_10M, TOT_PREC1), plus WIND_KE, the kinetic energy from "
+            "U_10M and V_10M."
+        ),
     )
     init_hours: Optional[List[int]] = Field(
         default=None,
@@ -499,12 +503,6 @@ class SpectraConfig(BaseModel):
         if not v:
             raise ValueError(
                 "`variables` must list at least one variable when spectra is configured."
-            )
-        allowed = {"T_2M", "WIND_KE", "TOT_PREC"}
-        invalid = set(v) - allowed
-        if invalid:
-            raise ValueError(
-                f"Unsupported spectra variable(s) {invalid!r}. Must be subset of {allowed}."
             )
         return v
 

@@ -1005,9 +1005,9 @@
           "default": [
             "T_2M",
             "WIND_KE",
-            "TOT_PREC"
+            "TOT_PREC1"
           ],
-          "description": "Spectra variables. Supported: T_2M, WIND_KE (from U/V_10M), TOT_PREC.",
+          "description": "Spectra variables: any parameter the forecast and truth loaders provide (e.g. T_2M, SP_10M, TOT_PREC1), plus WIND_KE, the kinetic energy from U_10M and V_10M.",
           "items": {
             "type": "string"
           },

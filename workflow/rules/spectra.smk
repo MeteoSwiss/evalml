@@ -8,7 +8,7 @@ include: "common.smk"
 
 SPECTRA = EXPERIMENT_CONFIG.get("spectra") or {}
 SPECTRA_LEAD_TIMES = ",".join(str(s) for s in SPECTRA.get("lead_times", []))
-SPECTRA_VARIABLES = ",".join(SPECTRA.get("variables", ["T_2M", "WIND_KE", "TOT_PREC"]))
+SPECTRA_VARIABLES = ",".join(SPECTRA.get("variables", ["T_2M", "WIND_KE", "TOT_PREC1"]))
 SPECTRA_METHOD = SPECTRA.get("method", "dct")
 
 
