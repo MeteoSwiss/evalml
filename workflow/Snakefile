@@ -216,7 +216,7 @@ rule experiment_all:
         ),
         (
             expand(rules.spectra_plot.output, experiment=EXPERIMENT_NAME)
-            if config.get("experiment", {}).get("spectra", {}).get("enabled", False)
+            if SPECTRA.get("enabled", False)
             else []
         ),
         # SAL precipitation scores (compute-only: the CSVs themselves are the
