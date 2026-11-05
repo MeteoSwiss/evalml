@@ -382,10 +382,30 @@ runs:
 - A member that finished keeps a `.ok` file under
   `logs/inference_execute/{run_id}-{init_time}/`, so a rerun after a failure only runs
   the missing members.
-- Verification, plots and MEC use member 001 only, with a warning.
+- Verification scores the ensemble (see below); plots, SAL, score maps and MEC use
+  member 001 only, with a warning.
 - Not allowed on the inline `forecaster` of a `temporal_downscaler`.
 - Changing `members` or `seed` gives the run a new `run_id`; the inference environment
   is reused.
+
+#### Ensemble verification
+
+An ensemble run is verified from all its members, in the usual `verif_*.nc` files of
+the run:
+
+- Its deterministic scores (`BIAS`, `RMSE`, `MAE`, contingency scores, ...) are those
+  of the ensemble mean. There is no separate score for a single member: to verify one,
+  run it as a deterministic forecaster.
+- Ensemble scores are added next to them: the fair `CRPS`, the ensemble spread
+  `SPREAD` and spread-skill ratio `SSR`, the mean score of the single members
+  `MEMBER_RMSE`, Brier scores per threshold, and the counts of the rank histogram and
+  reliability diagram.
+- The forecast statistics (`mean`, `var`, `min`, `max`) are averaged over the members.
+- A point where any member is missing counts as missing for the ensemble (and, with
+  `score_on_common_points`, is left out for every participant).
+- Each member is loaded like a deterministic run (derived and period parameters,
+  lapse-rate correction with the orography of member 001). Memory and runtime of the
+  verification jobs grow with the number of members.
 
 
 ## Installation

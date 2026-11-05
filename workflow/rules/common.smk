@@ -687,8 +687,9 @@ def scoremap_runtime(wc):
 def run_grib_dir(run_id, init_time):
     """GRIB directory of a run's inference output, as read by downstream rules.
 
-    Deterministic runs write ``grib/``; ensemble runs write ``grib/{NNN}/`` per member
-    and, until ensemble verification lands, downstream rules use member 001 only.
+    Deterministic runs write ``grib/``; ensemble runs write ``grib/{NNN}/`` per member.
+    Plots, SAL, score maps and MEC read member 001 only; verification reads all
+    members (see ``verification_forecast_arg``).
     """
     base = Path(OUT_ROOT) / f"data/runs/{run_id}/{init_time}/grib"
     if RUN_CONFIGS[run_id].get("ensemble") is not None:
@@ -696,11 +697,47 @@ def run_grib_dir(run_id, init_time):
     return base
 
 
+def ensemble_members(run_id) -> int | None:
+    """Number of members of an ensemble run, None for a deterministic run."""
+    ensemble = RUN_CONFIGS[run_id].get("ensemble")
+    return None if ensemble is None else ensemble["members"]
+
+
+def verification_forecast_arg(run_id, init_time):
+    """``--forecast`` argument of verification_metrics and verification_valid_mask.
+
+    Deterministic runs: the ``grib/`` directory, as a Path. Snakemake does not
+    record Path params, so this param never triggers a rerun.
+    Ensemble runs: ``grib/`` followed by ``--members N``; the scripts read every
+    ``grib/{NNN}/`` and fail on a missing member. Passing the flag in this param
+    keeps the rules' shell text, and so the deterministic outputs, unchanged.
+    """
+    base = (Path(OUT_ROOT) / f"data/runs/{run_id}/{init_time}/grib").resolve()
+    members = ensemble_members(run_id)
+    if members is None:
+        return base
+    return f"{base} --members {members}"
+
+
+def ensemble_scaled(base, per_member, unit=None):
+    """Resource callable: ``base`` for deterministic runs, ``base + N * per_member``
+    for an ensemble of N members (``{run_id}`` wildcard); as a string with ``unit``
+    appended (e.g. ``"m"`` for a runtime) when ``unit`` is given."""
+
+    def resource(wc):
+        members = ensemble_members(wc.run_id)
+        value = base if members is None else base + members * per_member
+        return value if unit is None else f"{value}{unit}"
+
+    return resource
+
+
 for _run_id, _rc in RUN_CONFIGS.items():
     if _rc.get("ensemble") is not None:
         logging.getLogger("snakemake").warning(
-            "Run %s is an ensemble of %d members: verification, plots and MEC use "
-            "member 001 only until ensemble verification is implemented.",
+            "Run %s is an ensemble of %d members: verification scores the ensemble "
+            "mean and the ensemble scores over all members; plots, SAL, score maps "
+            "and MEC use member 001 only.",
             _run_id,
             _rc["ensemble"]["members"],
         )
