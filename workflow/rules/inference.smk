@@ -188,6 +188,13 @@ def get_execute_resource(wc, field: str, default, ensemble_default=None):
     )
 
 
+def _ensemble_runtime_min(members: int, gpus: int) -> int:
+    """Default runtime (minutes) of an ensemble: 20 min plus 10 min per wave of
+    `gpus` members. A stormy-plateau member took ~1 min for 24 h of lead time,
+    mostly loading the model."""
+    return 20 + 10 * -(-members // gpus)
+
+
 def get_leadtime(wc):
     """Get the lead time from the run config."""
     start, end, step = RUN_CONFIGS[wc.run_id]["steps"].split("/")
@@ -301,17 +308,21 @@ rule inference_execute:
         OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
     localrule: True
     resources:
-        # ensembles running more than one wave of members exceed the 1h limit of short-shared
+        # ensembles longer than the 1h limit of short-shared go to normal-shared
         slurm_partition=lambda wc: get_execute_resource(
             wc,
             "slurm_partition",
             "short-shared",
-            lambda n, k: "short-shared" if n <= k else "normal-shared",
+            lambda n, k: (
+                "short-shared"
+                if _ensemble_runtime_min(n, k) <= 60
+                else "normal-shared"
+            ),
         ),
         cpus_per_task=lambda wc: get_execute_resource(
             wc, "cpus_per_task", 24, lambda n, k: 24 * k
         ),
-        # ensembles: keep the request within one node (~446 GB on the GH200 nodes)
+        # ensembles: keep the request within one node (~446 GB)
         mem_mb_per_cpu=lambda wc: get_execute_resource(
             wc,
             "mem_mb_per_cpu",
@@ -323,7 +334,7 @@ rule inference_execute:
             ),
         ),
         runtime=lambda wc: get_execute_resource(
-            wc, "runtime", "40m", lambda n, k: f"{40*-(- n// k)}m"
+            wc, "runtime", "40m", lambda n, k: f"{_ensemble_runtime_min(n, k)}m"
         ),
         gres=lambda wc: f"gpu:{get_execute_resource(wc, 'gpu',1, lambda n, k: k)}",
         ntasks=lambda wc: get_resource(wc, "tasks", 1),
