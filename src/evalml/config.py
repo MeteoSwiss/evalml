@@ -207,6 +207,16 @@ class ForecasterConfig(RunConfig):
         "Verification and plots use member 001 only.",
     )
 
+    @model_validator(mode="after")
+    def validate_ensemble_single_task(self):
+        res = self.inference_resources
+        if self.ensemble is not None and res is not None and (res.tasks or 1) > 1:
+            raise ValueError(
+                "An ensemble forecaster runs its members in a single task: "
+                "remove `inference_resources.tasks` or set it to 1."
+            )
+        return self
+
 
 class TemporalDownscalerConfig(RunConfig):
     """Single training run stored in MLflow."""

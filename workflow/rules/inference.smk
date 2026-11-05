@@ -301,11 +301,27 @@ rule inference_execute:
         OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
     localrule: True
     resources:
-        slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
+        # ensembles running more than one wave of members exceed the 1h limit of short-shared
+        slurm_partition=lambda wc: get_execute_resource(
+            wc,
+            "slurm_partition",
+            "short-shared",
+            lambda n, k: "short-shared" if n <= k else "normal-shared",
+        ),
         cpus_per_task=lambda wc: get_execute_resource(
             wc, "cpus_per_task", 24, lambda n, k: 24 * k
         ),
-        mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
+        # ensembles: keep the request within one node (~446 GB on the GH200 nodes)
+        mem_mb_per_cpu=lambda wc: get_execute_resource(
+            wc,
+            "mem_mb_per_cpu",
+            8000,
+            lambda n, k: min(
+                8000,
+                440000
+                // get_execute_resource(wc, "cpus_per_task", 24, lambda n, k: 24 * k),
+            ),
+        ),
         runtime=lambda wc: get_execute_resource(
             wc, "runtime", "40m", lambda n, k: f"{40*-(- n// k)}m"
         ),

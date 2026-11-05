@@ -334,6 +334,22 @@ def test_ensemble(example_config):
         _ = ConfigModel.model_validate(example_config)
 
 
+def test_ensemble_single_task(example_config):
+    """An ensemble runs its members in one task: inference_resources.tasks > 1 is rejected."""
+
+    forecaster = _forecaster_item(example_config)
+    forecaster["ensemble"] = {"members": 4}
+    forecaster["inference_resources"] = {"tasks": 1, "gpu": 2}
+    _ = ConfigModel.model_validate(example_config)
+
+    forecaster["inference_resources"] = {"tasks": 4}
+    with pytest.raises(ValueError, match="single task"):
+        _ = ConfigModel.model_validate(example_config)
+
+    del forecaster["ensemble"]
+    _ = ConfigModel.model_validate(example_config)
+
+
 def test_ensemble_not_on_temporal_downscaler(example_config):
     """ensemble is rejected on the inline forecaster of a temporal downscaler, and
     is not a field of the temporal downscaler itself."""
