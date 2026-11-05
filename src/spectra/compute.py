@@ -17,7 +17,7 @@ _PALETTE = ["#1f3b73", "#c1272d", "#1b7837", "#6a3d9a", "#e08214", "#4d4d4d"]
 def compute_source_spectra(ds: xr.Dataset, variables, lead_times, method, label):
     """Compute spectra for one source (already-loaded native dataset).
 
-    Returns an x.Dataset with dims (variable, leadtime, wavenumber) and a shared
+    Returns an xr.Dataset with dims (variable, leadtime, wavenumber) and a shared
     `wavelength` coordinate. The native grid is detected from the field length.
     """
     if not variables or not lead_times:
