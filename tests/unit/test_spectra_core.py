@@ -77,7 +77,7 @@ def test_aggregate_spectra_averages_over_init(tmp_path):
     np.testing.assert_array_equal(agg["wavelength"].values, wl)
 
 
-def test_aggregate_spectra_nanmean_ignores_missing(tmp_path):
+def test_aggregate_spectra_propagates_missing(tmp_path):
     wl = np.array([100.0, 50.0])
 
     def mk(power, init):
@@ -99,5 +99,5 @@ def test_aggregate_spectra_nanmean_ignores_missing(tmp_path):
     b = mk([4.0, 4.0], 1)
     agg = compute.aggregate_spectra([a, b])
     np.testing.assert_allclose(
-        agg["power"].sel(variable="T_2M", leadtime=6).values, [4.0, 3.0]
+        agg["power"].sel(variable="T_2M", leadtime=6).values, [np.nan, 3.0]
     )

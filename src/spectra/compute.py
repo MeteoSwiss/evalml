@@ -57,11 +57,14 @@ def compute_source_spectra(ds: xr.Dataset, variables, lead_times, method, label)
 
 
 def aggregate_spectra(spectra_files) -> xr.Dataset:
-    """Average power over init times (nanmean). All inputs share one grid."""
+    """Average power over init times. All inputs share one grid.
+
+    NaN propagates: a value missing in any input is missing in the average.
+    """
     datasets = [xr.open_dataset(f) for f in spectra_files]
     try:
         stacked = xr.concat(datasets, dim="init")
-        agg = stacked.mean(dim="init", skipna=True)
+        agg = stacked.mean(dim="init", skipna=False)
         agg.attrs = datasets[0].attrs
         agg["wavelength"] = datasets[0]["wavelength"].copy()
         agg.load()
