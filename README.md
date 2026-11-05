@@ -400,6 +400,10 @@ the run:
   `SPREAD` and spread-skill ratio `SSR`, the mean score of the single members
   `MEMBER_RMSE`, Brier scores per threshold, and the counts of the rank histogram and
   reliability diagram.
+- Categorical parameters (`PTYPE`) have no ensemble mean (rain, 1, and snow, 5,
+  would average to freezing rain, 3), so their contingency scores (`ETS`, `POD`, `FAR`,
+  ...) are NaN for an ensemble run. The Brier scores and reliability diagrams of their
+  `eq` thresholds score them instead.
 - The forecast statistics (`mean`, `var`, `min`, `max`) are averaged over the members.
 - A point where any member is missing counts as missing for the ensemble (and, with
   `score_on_common_points`, is left out for every participant).

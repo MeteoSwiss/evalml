@@ -14,7 +14,7 @@ from verification_plot_metrics import (
     _ensure_unique_lead_time,
     _select_best_sources,
 )
-from ensemble_scores import CRPS_NOTE, add_deterministic_crps, is_score_var
+from verification.ensemble_report import CRPS_NOTE, add_deterministic_crps, is_score_var
 from verification import decode_metric
 
 LOG = logging.getLogger(__name__)
