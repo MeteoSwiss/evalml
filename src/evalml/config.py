@@ -117,12 +117,12 @@ class RunConfig(BaseModel):
         None,
         min_length=1,
         description="List of variables written to the GRIB output files of the inference run. "
-        "Names are those the GRIB output sees: GRIB short names (e.g. TOT_PREC) with "
-        "anemoi-inference >= 0.11.2, model names (e.g. tp) before; both may be listed. "
+        "Use the model's variable names as in the checkpoint metadata (e.g. 2t, tp, t_850), "
+        "not the GRIB short names (T_2M): a name that matches nothing is ignored. "
         "Shell-style globs (e.g. '*_850') need anemoi-inference >= 0.13.0; older versions "
         "match names literally. The list is written to every GRIB output of the inference "
-        "config. If omitted, all variables are written. Keep FIS (z before 0.11.2): the "
-        "model orography is read from it for the lapse-rate correction.",
+        "config. If omitted, all variables are written. Keep z (written as FIS): the model "
+        "orography is read from it for the lapse-rate correction.",
     )
     config: Dict[str, Any] | str
 
