@@ -117,13 +117,11 @@ def _grib_outputs(output):
 def ensemble_encoding(member: int, members: int) -> dict:
     """GRIB keys that mark the output of one member of an ensemble of `members`.
 
-    `eps` makes anemoi-inference encode accumulated fields with an ensemble
-    template too; `dataType` (not `type`, which GRIB2 has no key for) marks a
-    perturbed forecast.
+    `dataType` (not `type`, which GRIB2 has no key for) marks a perturbed
+    forecast. `eps` is not among them: see `member_config`.
     """
     return {
         "productDefinitionTemplateNumber": 1,
-        "eps": 1,
         "number": member,
         "numberOfForecastsInEnsemble": members,
         "dataType": "pf",
@@ -138,7 +136,10 @@ def member_config(config: dict, member: int, members: int) -> dict:
     member directory `{NNN}` (NNN = zero-padded member number) inserted before
     the file name, e.g. `grib/{step:03}.grib` becomes `grib/001/{step:03}.grib`,
     and its `encoding` is merged with `ensemble_encoding` (the ensemble keys
-    win over those of the template).
+    win over those of the template). `eps: 1` goes in `grib2_keys`: anemoi-inference
+    looks for it there too, to encode accumulated fields with an ensemble template
+    (PDTN 11), but only passes `grib2_keys` entries to ecCodes per parameter. In
+    `encoding` it would reach ecCodes, and the COSMO definitions have no `eps` key.
 
     Raises
     ------
@@ -160,6 +161,7 @@ def member_config(config: dict, member: int, members: int) -> dict:
             **(spec.get("encoding") or {}),
             **ensemble_encoding(member, members),
         }
+        spec["grib2_keys"] = {**(spec.get("grib2_keys") or {}), "eps": 1}
     return config
 
 
