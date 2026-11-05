@@ -1,0 +1,27 @@
+# Physical limits for the falsification check of the release candidate, in display units.
+# min/max: limits for any single grid point value; mean: limits for the domain mean of any single forecast hour.
+# raw values are converted as display = raw * scale + offset.
+variables:
+  T_2M:      {units: "°C",  offset: -273.15, min: -50, max: 50,   mean: [-20, 35]}
+  TD_2M:     {units: "°C",  offset: -273.15, min: -60, max: 35,   mean: [-30, 25]}
+  SKT:       {units: "°C",  offset: -273.15, min: -60, max: 75,   mean: [-20, 45], source_name: T_G}
+  PMSL:      {units: "hPa", scale: 0.01,     min: 930, max: 1070, mean: [980, 1035]}
+  SP_10M:    {units: "m/s",                  min: 0,   max: 75,   mean: [0, 15]}
+  TOT_PREC1: {units: "mm",                   min: 0,   max: 150,  mean: [0, 3]}
+  TOT_PREC6: {units: "mm",                   min: 0,   max: 300,  mean: [0, 10]}
+  CLCT:      {units: "%",                    min: 0,   max: 100,  mean: [0, 100]}
+  CLCL:      {units: "%",                    min: 0,   max: 100,  mean: [0, 100]}
+  CLCM:      {units: "%",                    min: 0,   max: 100,  mean: [0, 100]}
+  CLCH:      {units: "%",                    min: 0,   max: 100,  mean: [0, 100]}
+# ICON's T_G is ground temperature, not skin temperature
+not_available: {SKT: [ICON-CH1, ICON-CH2]}
+# Flags / comments set by hand after inspecting the cases (maps: *_icon-zoom_*.png, PMSL: pmsl_spike_check.csv)
+overrides:
+  Minima:
+    SKT:
+      flag: deficient
+      comment: "Isolated single ICON cells (up to 8 per field) in the Alps fall below -60 °C at lead times > 96 h in 2 forecasts (init 2025-12-31 18 UTC and 2026-01-02 12 UTC), while neighbouring cells and KENDA are around -10 °C"
+  Maxima:
+    PMSL:
+      flag: deficient
+      comment: "Within the limit, but single-cell spikes 9 to 18 hPa above the surrounding cells in 32 of 209 forecasts, always at the same 3 Alpine spots (13.61°E 47.49°N, 11.09°E 45.70°N, 8.11°E 46.64°N); KENDA never exceeds 1040.2 hPa"

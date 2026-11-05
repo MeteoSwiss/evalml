@@ -1,0 +1,14 @@
+# Tolerances for the Verification flags (see verification_flags.py).
+# RMSE: on the ratio RC / baseline (unitless). BIAS: on |BIAS_RC| - |BIAS_base|, in the unit given.
+RMSE_ratio: 1.02
+BIAS:
+  T_2M: {tol: 0.2, unit: K}
+  TD_2M: {tol: 0.2, unit: K}
+  PMSL: {tol: 0.3, unit: hPa}
+  SP_10M: {tol: 0.2, unit: m/s}
+  TOT_PREC1: {tol: 0.01, unit: mm}
+  TOT_PREC6: {tol: 0.05, unit: mm}
+  CLCT: {tol: 2, unit: "%"}
+  CLCL: {tol: 2, unit: "%"}
+  CLCM: {tol: 2, unit: "%"}
+  CLCH: {tol: 2, unit: "%"}
