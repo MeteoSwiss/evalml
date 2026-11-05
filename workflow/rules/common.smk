@@ -659,3 +659,25 @@ def scoremap_runtime(wc):
     if wc.param.startswith("TOT_PREC"):
         seconds += 0.3 * int(wc.leadtime)
     return max(60, math.ceil(1.5 * len(REFTIMES) * seconds / 60))
+
+
+def run_grib_dir(run_id, init_time):
+    """GRIB directory of a run's inference output, as read by downstream rules.
+
+    Deterministic runs write ``grib/``; ensemble runs write ``grib/{NNN}/`` per member
+    and, until ensemble verification lands, downstream rules use member 001 only.
+    """
+    base = Path(OUT_ROOT) / f"data/runs/{run_id}/{init_time}/grib"
+    if RUN_CONFIGS[run_id].get("ensemble") is not None:
+        return base / "001"
+    return base
+
+
+for _run_id, _rc in RUN_CONFIGS.items():
+    if _rc.get("ensemble") is not None:
+        logging.getLogger("snakemake").warning(
+            "Run %s is an ensemble of %d members: verification, plots and MEC use "
+            "member 001 only until ensemble verification is implemented.",
+            _run_id,
+            _rc["ensemble"]["members"],
+        )
