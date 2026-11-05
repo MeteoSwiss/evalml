@@ -89,6 +89,7 @@ rule spectra_compute_baseline:
     params:
         steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label", wc.baseline_id),
+        member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
         lead_times=SPECTRA_LEAD_TIMES,
         variables=SPECTRA_VARIABLES,
         method=SPECTRA_METHOD,
@@ -97,6 +98,7 @@ rule spectra_compute_baseline:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {input.forecast} --reftime {wildcards.init_time} \
+            --member "{params.member}" \
             --steps "{params.steps}" --lead_times "{params.lead_times}" \
             --variables "{params.variables}" --method "{params.method}" \
             --label "{params.label}" --output {output} >{log} 2>&1

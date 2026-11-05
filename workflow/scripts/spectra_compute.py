@@ -23,6 +23,11 @@ def main():
     ap.add_argument("--forecast", help="Forecast root (grib dir or baseline archive).")
     ap.add_argument("--truth", help="Truth zarr root (use instead of --forecast).")
     ap.add_argument("--reftime", required=True)
+    ap.add_argument(
+        "--member",
+        default="000",
+        help="Baseline ensemble member: '000' for control, 'median', 'mean', or a 3-digit ID.",
+    )
     ap.add_argument("--steps", required=True, help="start/stop/step in hours.")
     ap.add_argument("--lead_times", required=True, help="comma-separated hours.")
     ap.add_argument("--variables", required=True, help="comma-separated names.")
@@ -66,7 +71,9 @@ def main():
                 )
             ds = ds.assign_coords(step=("time", steps_h)).swap_dims({"time": "step"})
     else:
-        ds = load_forecast_data(Path(args.forecast), reftime, all_steps, params)
+        ds = load_forecast_data(
+            Path(args.forecast), reftime, all_steps, params, member=args.member
+        )
 
     result = compute_source_spectra(ds, variables, lead_times, args.method, args.label)
     out = Path(args.output)
