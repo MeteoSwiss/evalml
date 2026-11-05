@@ -888,22 +888,25 @@ class ConfigModel(BaseModel):
 
     @model_validator(mode="after")
     def validate_leadtimes_producible(self) -> "ConfigModel":
-        """Reject scoremaps/sal lead times not produced by every participant."""
+        """Reject scoremaps/sal/spectra lead times not produced by every participant."""
         if self.experiment is None:
             return self
-        for label, cfg in (
-            ("scoremaps", self.experiment.scoremaps),
-            ("sal", self.experiment.sal),
+        # (section, config, name of its lead-time field)
+        for label, cfg, field in (
+            ("scoremaps", self.experiment.scoremaps, "leadtimes"),
+            ("sal", self.experiment.sal, "leadtimes"),
+            ("spectra", self.experiment.spectra, "lead_times"),
         ):
             if cfg is None or not cfg.enabled:
                 continue
             for item in self.runs:
                 steps = getattr(item, next(iter(type(item).model_fields))).steps
                 start, end, step = map(int, steps.split("/"))
-                unsupported = set(cfg.leadtimes) - set(range(start, end + 1, step))
+                leadtimes = getattr(cfg, field)
+                unsupported = set(leadtimes) - set(range(start, end + 1, step))
                 if unsupported:
                     raise ValueError(
-                        f"{label}.leadtimes contains {sorted(unsupported)} h which are not "
+                        f"{label}.{field} contains {sorted(unsupported)} h which are not "
                         f"produced by participant with steps '{steps}'."
                     )
         return self
