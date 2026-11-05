@@ -382,7 +382,7 @@ def _obs_only_statistics(
             continue
         LOG.info("Parameter %s only in obs: computing obs statistics only", param)
         obs_stats = _compute_statistics(
-            obs[param].where(masks).where(station_masks),
+            _apply_masks(obs[param], masks, station_masks),
             prefix=param + ".",
             source=obs_label,
             dim=dim,
@@ -431,6 +431,54 @@ def _create_station_group_masks(
         },
         dims=["station_group", "values"],
     )
+
+
+def _region_and_station_masks(
+    obs: xr.Dataset, regions: list[dict], holdout_stations: list[str] | None
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """Region masks (region, *spatial) and station group masks (station_group[, values])
+    on the points of *obs*, shared by verify() and verify_ensemble()."""
+    masks = ShapefileSpatialAggregationMasks(regions=regions).get_masks(
+        lon=obs["longitude"], lat=obs["latitude"]
+    )
+    station_masks = _create_station_group_masks(
+        obs["values"] if "values" in obs.dims else None, holdout_stations
+    )
+    if holdout_stations:
+        LOG.info(
+            "Station group masks created: %d holdout, %d holdin stations",
+            int(station_masks.sel(station_group="holdout").sum()),
+            int(station_masks.sel(station_group="holdin").sum()),
+        )
+    return masks, station_masks
+
+
+def _apply_masks(
+    data: xr.DataArray, masks: xr.DataArray, station_masks: xr.DataArray
+) -> xr.DataArray:
+    """NaN outside each region and station group; adds the "region" and
+    "station_group" dims (the latter always present: ["all"], or ["all",
+    "holdout", "holdin"] with holdout stations)."""
+    return data.where(masks).where(station_masks)
+
+
+def _too_many_missing(
+    fcst_missing: xr.DataArray,
+    obs_param: xr.DataArray,
+    dim: list[str],
+    max_missing_fraction: float,
+) -> xr.DataArray:
+    """True where the scores must be NaN because the forecast is missing at too many points.
+
+    *fcst_missing* flags the points without a forecast, *obs_param* is the truth after
+    _apply_masks(). Among the obs-valid in-region points, the fraction where the forecast
+    is missing is compared to *max_missing_fraction*. Normalising by obs availability
+    avoids penalising parameters with fewer stations.
+    """
+    missing_fraction = fcst_missing.where(obs_param.notnull()).mean(
+        dim=dim, skipna=True
+    )
+    return missing_fraction > max_missing_fraction
 
 
 def _bbox_polygon(lon_min, lon_max, lat_min, lat_max) -> Polygon:
@@ -532,21 +580,9 @@ def verify(
         )
 
     fcst_aligned, obs_aligned = xr.align(fcst, obs, join="inner", copy=False)
-    region_polygons = ShapefileSpatialAggregationMasks(regions=regions)
-    masks = region_polygons.get_masks(
-        lon=obs_aligned["longitude"], lat=obs_aligned["latitude"]
+    masks, station_masks = _region_and_station_masks(
+        obs_aligned, regions, holdout_stations
     )
-
-    station_masks = _create_station_group_masks(
-        obs_aligned["values"] if "values" in obs_aligned.dims else None,
-        holdout_stations,
-    )
-    if holdout_stations:
-        LOG.info(
-            "Station group masks created: %d holdout, %d holdin stations",
-            int(station_masks.sel(station_group="holdout").sum()),
-            int(station_masks.sel(station_group="holdin").sum()),
-        )
 
     scores = []
     for param in fcst_aligned.data_vars:
@@ -565,20 +601,11 @@ def verify(
             thresholds,
         )
 
-        # Apply all region masks at once via broadcast — adds "region" as leading dim
-        fcst_param = fcst_aligned[param].where(masks)
-        obs_param = obs_aligned[param].where(masks)
-
-        # Apply station group masks — adds "station_group" dim, always present
-        # (["all"], or ["all", "holdout", "holdin"] when holdout_stations is set)
-        fcst_param = fcst_param.where(station_masks)
-        obs_param = obs_param.where(station_masks)
-        # Missing fraction: among obs-valid in-region points, fraction where fcst is missing.
-        # Normalising by obs availability avoids penalising parameters with fewer stations.
-        missing_fraction = (
-            fcst_param.isnull().where(obs_param.notnull()).mean(dim=dim, skipna=True)
+        fcst_param = _apply_masks(fcst_aligned[param], masks, station_masks)
+        obs_param = _apply_masks(obs_aligned[param], masks, station_masks)
+        too_many_missing = _too_many_missing(
+            fcst_param.isnull(), obs_param, dim, max_missing_fraction
         )
-        too_many_missing = missing_fraction > max_missing_fraction
 
         score = _compute_scores(
             fcst_param,
@@ -624,4 +651,320 @@ def verify(
     out = xr.merge(scores, join="outer", compat="no_conflicts")
     LOG.info("Computed metrics in %.2f seconds", time.time() - start)
     LOG.info("Metrics dataset: \n%s", out)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Ensemble verification
+# ---------------------------------------------------------------------------
+
+
+def _np_grouped_bincount(
+    index: np.ndarray,
+    weight: np.ndarray,
+    groups: np.ndarray,
+    nbins: int,
+    n_core: int,
+) -> np.ndarray:
+    """Weighted counts of *index* per bin, summed over the points of each group.
+
+    *index* (int) and *weight* have shape (..., *spatial) with ``n_core`` spatial
+    axes; *groups* is a boolean (G, P) array over the P flattened spatial points.
+    Returns (..., G, nbins). Indices outside [0, nbins) must carry weight 0.
+    """
+    lead = index.shape[: index.ndim - n_core]
+    n_lead = int(np.prod(lead, dtype=int))
+    n_points = int(np.prod(index.shape[index.ndim - n_core :], dtype=int))
+    weight = np.broadcast_to(weight, index.shape).reshape(n_lead, n_points)
+    index = np.clip(index.reshape(n_lead, n_points), 0, nbins - 1)
+    # One bincount per group over all leading entries at once: offset each row
+    flat = index + nbins * np.arange(n_lead)[:, None]
+    out = np.empty((n_lead, groups.shape[0], nbins))
+    for g, sel in enumerate(groups):
+        out[:, g, :] = np.bincount(
+            flat[:, sel].ravel(),
+            weights=weight[:, sel].ravel(),
+            minlength=n_lead * nbins,
+        ).reshape(n_lead, nbins)
+    return out.reshape(*lead, groups.shape[0], nbins)
+
+
+def _np_rank_counts(
+    min_rank: np.ndarray,
+    max_rank: np.ndarray,
+    weight: np.ndarray,
+    groups: np.ndarray,
+    n_ranks: int,
+    n_core: int,
+) -> np.ndarray:
+    """Rank histogram counts with ties split evenly between ranks min..max.
+
+    *weight* is 1 / (max - min + 1) at valid points, 0 elsewhere. Each point adds its
+    weight to every rank in [min, max]: done as +weight at min and -weight at max + 1,
+    then a cumulative sum over the ranks, so no (rank, points) array is built.
+    """
+    nbins = n_ranks + 1
+    up = _np_grouped_bincount(min_rank, weight, groups, nbins, n_core)
+    down = _np_grouped_bincount(max_rank + 1, weight, groups, nbins, n_core)
+    return np.cumsum(up - down, axis=-1)[..., :n_ranks]
+
+
+def _group_reduce(
+    func,
+    args: list[xr.DataArray],
+    groups: xr.DataArray,
+    dim: list[str],
+    out_dims: dict[str, int],
+    **kwargs,
+) -> xr.DataArray:
+    """Apply a grouped numpy reduction over the spatial *dim* of *args*.
+
+    *groups* is the boolean (region, station_group, *dim) mask; the result has the
+    non-spatial dims of *args*, then region, station_group and *out_dims*.
+    """
+    regions = groups["region"]
+    station_groups = groups["station_group"]
+    group_np = (
+        groups.transpose("region", "station_group", *dim)
+        .values.astype(bool)
+        .reshape(regions.size * station_groups.size, -1)
+    )
+    bin_dims = list(out_dims)
+    bin_shape = tuple(out_dims.values())
+
+    def _reduce(*arrays):
+        out = func(*arrays, groups=group_np, n_core=len(dim), **kwargs)
+        return out.reshape(
+            *out.shape[:-2], regions.size, station_groups.size, *bin_shape
+        )
+
+    result = xr.apply_ufunc(
+        _reduce,
+        *args,
+        input_core_dims=[dim] * len(args),
+        output_core_dims=[["region", "station_group", *bin_dims]],
+        dask="parallelized",
+        output_dtypes=[float],
+        dask_gufunc_kwargs={
+            "output_sizes": {
+                "region": regions.size,
+                "station_group": station_groups.size,
+                **out_dims,
+            },
+            "allow_rechunk": True,
+        },
+    )
+    return result.assign_coords(
+        region=regions.values, station_group=station_groups.values
+    )
+
+
+def _spatial_means(
+    fields: dict[str, xr.DataArray],
+    valid: xr.DataArray,
+    groups: xr.DataArray,
+    dim: list[str],
+) -> dict[str, xr.DataArray]:
+    """Mean of each (member-free) field over the valid points of each group."""
+    zero = xr.zeros_like(valid, dtype=int)
+    count = _group_reduce(
+        _np_grouped_bincount,
+        [zero, valid.astype(float)],
+        groups,
+        dim,
+        {"_bin": 1},
+        nbins=1,
+    ).squeeze("_bin", drop=True)
+    count = count.where(count > 0)
+    means = {}
+    for name, field in fields.items():
+        total = _group_reduce(
+            _np_grouped_bincount,
+            [zero, field.where(valid, 0.0)],
+            groups,
+            dim,
+            {"_bin": 1},
+            nbins=1,
+        ).squeeze("_bin", drop=True)
+        means[name] = total / count
+    return means
+
+
+def _threshold_events(
+    data: xr.DataArray, thresholds: dict[str, list[float]], dim_name: str
+) -> xr.DataArray:
+    """Boolean events per threshold, with the threshold dim and labels of verify()'s
+    contingency tables (e.g. ``gt_0p1``; see _binary_confusion_matrix)."""
+    events = []
+    for op_txt, values in thresholds.items():
+        try:
+            op_fn = getattr(op, op_txt)
+        except AttributeError:
+            raise AttributeError(f"operator {op_txt} is not available")
+        labels = [f"{op_txt}_{str(v).replace('.', 'p')}" for v in values]
+        vals_da = xr.DataArray(values, dims=dim_name, coords={dim_name: labels})
+        events.append(op_fn(data, vals_da))
+    return xr.concat(events, dim=dim_name)
+
+
+def verify_ensemble(
+    fcst: xr.Dataset,
+    obs: xr.Dataset,
+    fcst_label: str,
+    obs_label: str,
+    regions: list[dict],
+    dim: list[str] | None = None,
+    threshold_dict: dict[str, dict[str, list[float]]] | None = None,
+    num_workers: int | None = None,
+    holdout_stations: list[str] | None = None,
+    max_missing_fraction: float = 0.0,
+    member_dim: str = "member",
+) -> xr.Dataset:
+    """Ensemble scores of *fcst*, which has a *member_dim* dimension (N >= 2 members).
+
+    Arguments as for verify(); the result is meant to be merged into the Dataset of
+    ``verify(fcst.mean(member_dim), ...)``, and has the same dims as its continuous
+    scores (``source`` = *fcst_label*, ``forecast_reference_time``, ``step``,
+    ``region``, ``station_group``), with, per parameter ``p``:
+
+    - ``p.CRPS``: fair CRPS (Ferro 2014), spatial mean.
+    - ``p.ENS_VAR``: member variance (ddof=1), spatial mean.
+    - ``p.MEMBER_MSE``: mean over members of the member MSE.
+    - ``p.rank_hist``: counts per ``rank`` (0..N, rank of the truth among the members).
+      Ties are split evenly between the tied ranks, so counts can be fractional.
+    - ``p.prob_table`` (only with thresholds for p): counts over the threshold dim of
+      verify()'s contingency tables (``p.threshold``, same labels), ``n_members_yes``
+      (0..N members meeting the threshold) and ``obs`` (0/1, the truth meeting it).
+
+    The Dataset attr ``n_members`` is N. Members are reduced first (one member-free
+    field per score), then the region and station-group masks are applied.
+
+    A point is missing if any member or the truth is NaN there. As in verify(), the
+    scores of a region, station group and step are NaN when the fraction of obs-valid
+    points without a (complete) forecast exceeds *max_missing_fraction*.
+    Parameters in ``CIRCULAR_PARAMS`` and ``CATEGORICAL_PARAMS`` have NaN CRPS,
+    ENS_VAR, MEMBER_MSE and rank_hist; their prob_table is computed as usual (on the
+    raw member values, as verify()'s contingency tables).
+    """
+    start = time.time()
+    if member_dim not in fcst.dims:
+        raise ValueError(f"Forecast has no '{member_dim}' dimension.")
+    n_members = fcst.sizes[member_dim]
+    if n_members < 2:
+        raise ValueError(f"Ensemble verification needs >= 2 members, got {n_members}.")
+
+    if num_workers is None:
+        try:
+            num_workers = len(os.sched_getaffinity(0))
+        except AttributeError:
+            num_workers = max((os.cpu_count() or 6) - 2, 1)
+
+    if dim is None:
+        dim = ["x", "y"] if "x" in fcst.dims and "y" in fcst.dims else ["values"]
+
+    if not regions:
+        raise ValueError(
+            "At least one region must be specified. "
+            "Provide an ordered list of region specs via the 'regions' argument."
+        )
+
+    fcst_aligned, obs_aligned = xr.align(fcst, obs, join="inner", copy=False)
+    masks, station_masks = _region_and_station_masks(
+        obs_aligned, regions, holdout_stations
+    )
+    groups = masks & station_masks  # (region, station_group, *dim)
+    if fcst_aligned.chunks:
+        # The member reductions (e.g. the sort of the CRPS) need all members in one chunk
+        fcst_aligned = fcst_aligned.chunk({member_dim: -1})
+
+    rank = xr.DataArray(np.arange(n_members + 1), dims="rank")
+    rank = rank.assign_coords(rank=rank)
+
+    results = []
+    for param in fcst_aligned.data_vars:
+        if param not in obs_aligned.data_vars:
+            LOG.warning("Parameter %s not in obs, skipping", param)
+            continue
+        thresholds = (
+            threshold_dict.get(param, None)
+            if isinstance(threshold_dict, dict)
+            else None
+        )
+        LOG.info(
+            "Verifying ensemble (%d members) parameter %s for %d regions, thresholds: %s",
+            n_members,
+            param,
+            len(masks.region),
+            thresholds,
+        )
+        prefix = param + "."
+        members = fcst_aligned[param]
+        truth = obs_aligned[param]
+
+        # Member-free point fields; a point with any member missing is missing
+        fcst_missing = members.isnull().any(member_dim)
+        valid = ~fcst_missing & truth.notnull()
+        members = members.where(valid)
+        truth = truth.where(valid)
+
+        too_many_missing = _too_many_missing(
+            fcst_missing,
+            _apply_masks(obs_aligned[param], masks, station_masks),
+            dim,
+            max_missing_fraction,
+        )
+
+        point_fields = {
+            f"{prefix}CRPS": scores.probability.crps_for_ensemble(
+                members, truth, member_dim, method="fair", preserve_dims="all"
+            ),
+            f"{prefix}ENS_VAR": members.var(member_dim, ddof=1),
+            f"{prefix}MEMBER_MSE": ((members - truth) ** 2).mean(member_dim),
+        }
+        result = xr.Dataset(_spatial_means(point_fields, valid, groups, dim))
+
+        # Rank of the truth among the members (0-based): ties span min..max
+        min_rank = (truth > members).sum(member_dim)
+        max_rank = (truth >= members).sum(member_dim)
+        tie_weight = valid / (max_rank - min_rank + 1)
+        result[f"{prefix}rank_hist"] = _group_reduce(
+            _np_rank_counts,
+            [min_rank, max_rank, tie_weight],
+            groups,
+            dim,
+            {"rank": n_members + 1},
+            n_ranks=n_members + 1,
+        ).assign_coords(rank=rank)
+
+        if param in CIRCULAR_PARAMS or param in CATEGORICAL_PARAMS:
+            # No meaningful CRPS/spread for angles or class codes. full_like keeps
+            # the shape only, so the (lazy) scores above are never computed.
+            result = xr.full_like(result, np.nan)
+
+        if thresholds is not None:
+            threshold_dim = f"{prefix}threshold"
+            n_yes = _threshold_events(
+                fcst_aligned[param], thresholds, threshold_dim
+            ).sum(member_dim)
+            obs_event = _threshold_events(obs_aligned[param], thresholds, threshold_dim)
+            joint = n_yes * 2 + obs_event.astype(int)  # n_members_yes, obs
+            table = _group_reduce(
+                _np_grouped_bincount,
+                [joint, valid.astype(float)],
+                groups,
+                dim,
+                {"n_members_yes": n_members + 1, "obs": 2},
+                nbins=2 * (n_members + 1),
+            )
+            result[f"{prefix}prob_table"] = table.transpose(
+                ..., "region", "station_group", threshold_dim, "n_members_yes", "obs"
+            ).assign_coords(n_members_yes=np.arange(n_members + 1), obs=[0, 1])
+
+        result = result.where(~too_many_missing).expand_dims({"source": [fcst_label]})
+        results.append(_merge_metrics([result], num_workers=num_workers))
+
+    out = xr.merge(results, join="outer", compat="no_conflicts")
+    out.attrs["n_members"] = n_members
+    LOG.info("Computed ensemble metrics in %.2f seconds", time.time() - start)
+    LOG.info("Ensemble metrics dataset: \n%s", out)
     return out
