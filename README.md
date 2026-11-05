@@ -364,7 +364,7 @@ runs:
       ensemble:
         members: 10   # at least 2
         seed: 0       # optional, member m runs with seed `seed + m`
-      output_variables: [T_2M, TD_2M, U_10M, V_10M, PS, PMSL, TOT_PREC, FIS]
+      output_variables: [2t, 2d, 10u, 10v, sp, msl, tp, z]
 ```
 
 - Each member is one anemoi-inference run with its own `config_{NNN}.yaml`
