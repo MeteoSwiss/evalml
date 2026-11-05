@@ -9,13 +9,43 @@ import jinja2
 import xarray as xr
 
 _sys.path.append(str(Path(__file__).parent))
-from verification_plot_metrics import _ensure_unique_lead_time, _select_best_sources
+from verification_plot_metrics import (
+    _concat_sources,
+    _ensure_unique_lead_time,
+    _select_best_sources,
+)
 from verification import decode_metric
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+
+
+def _check_n_samples_consistency(datasets: list[xr.Dataset], paths: list[Path]) -> None:
+    """Raise ValueError if n_samples differ across loaded verification datasets."""
+    for ds, p in zip(datasets, paths):
+        if "n_samples" not in ds.data_vars:
+            raise ValueError(
+                f"'n_samples' is missing from '{p}'.\n"
+                f"This file was likely produced before n_samples tracking was introduced.\n"
+                f"Fix: delete '{p}' and rerun the pipeline."
+            )
+    counts = {
+        str(p): int(ds["n_samples"].sel(season="all", init_hour=-999).item())
+        for ds, p in zip(datasets, paths)
+    }
+    if len(set(counts.values())) <= 1:
+        return
+    max_n = max(counts.values())
+    summary = "\n".join(f"  {p}: {n}" for p, n in counts.items())
+    to_delete = "\n".join(f"  {p}" for p, n in counts.items() if n < max_n)
+    raise ValueError(
+        f"Inconsistent n_samples across verification files:\n{summary}\n\n"
+        f"All runs must cover the same set of forecast dates for a valid dashboard.\n"
+        f"Fix: delete the following file(s) with fewer samples and rerun the pipeline:\n"
+        f"{to_delete}"
+    )
 
 
 def program_summary_log(args):
@@ -35,9 +65,10 @@ def main(args):
 
     # Load, de-duplicate lead_time, and keep best provider per source (same logic as verif_plot_metrics)
     dfs = [xr.open_dataset(f) for f in args.verif_files]
+    _check_n_samples_consistency(dfs, args.verif_files)
     dfs = [_ensure_unique_lead_time(d) for d in dfs]
     dfs = _select_best_sources(dfs)
-    ds = xr.concat(dfs, dim="source", join="outer")
+    ds = _concat_sources(dfs)
     LOG.info("Loaded verification netcdf: \n%s", ds)
 
     # extract only  non-spatial variables to pd.DataFrame
@@ -51,16 +82,18 @@ def main(args):
     df["init_hour"] = df["init_hour"].astype(str).str.zfill(2) + ":00 UTC"
     df["init_hour"] = df["init_hour"].where(df["init_hour"] != "-999:00 UTC", "all")
 
+    if args.label_map:
+        df["source"] = df["source"].map(lambda s: args.label_map.get(s, s))
+
     # retain only rows relevant for the active stratifications
     stratification = args.stratification
     if "region" not in stratification:
-        df = df[df["region"] == "all"]
+        df = df[df["region"] == df["region"].unique()[0]]
     if "season" not in stratification:
         df = df[df["season"] == "all"]
     if "init_hour" not in stratification:
         df = df[df["init_hour"] == "all"]
 
-    # create a new column for line styles and shapes in dashboard
     df.dropna(inplace=True)
     LOG.info("Loaded verification data frame: \n%s", df)
 
@@ -71,6 +104,10 @@ def main(args):
     regions = df["region"].unique() if "region" in stratification else []
     seasons = df["season"].unique() if "season" in stratification else []
     init_hours = df["init_hour"].unique() if "init_hour" in stratification else []
+
+    # station_group selector: auto-detect from data (shown when station_holdout is enabled)
+    station_groups = sorted(df["station_group"].unique())
+    station_holdout = args.station_holdout and station_groups != ["all"]
 
     # Columnar JSON: store columns + data array (no repeated keys per row).
     # region_season_init is a derived column — computed in JS at parse time.
@@ -92,6 +129,7 @@ def main(args):
         "region",
         "season",
         "init_hour",
+        "station_group",
     ]
     df_export = df[export_cols].copy()
     df_export["value"] = df_export["value"].apply(
@@ -134,6 +172,8 @@ def main(args):
         seasons=seasons,
         init_hours=init_hours,
         stratification=stratification,
+        station_holdout=station_holdout,
+        station_groups=station_groups,
         header_text=args.header_text,
         configfile_content=open(args.configfile, "r").read()
         if args.configfile.is_file()
@@ -182,6 +222,12 @@ if __name__ == "__main__":
         help="Stratification dimensions to include in the dashboard (any of region, season, init_hour).",
     )
     parser.add_argument(
+        "--station_holdout",
+        action="store_true",
+        default=False,
+        help="When set, shows a station-group selector (All / Holdout / Hold-in) in the dashboard.",
+    )
+    parser.add_argument(
         "--configfile",
         type=Path,
         help="Path to config file for the evalml run.",
@@ -192,7 +238,18 @@ if __name__ == "__main__":
         default=Path("dashboard.html"),
         help="Path to save the generated HTML dashboard file.",
     )
+    parser.add_argument(
+        "--labels",
+        type=str,
+        default="",
+        help="Comma-separated source_id:display_label pairs for legend text.",
+    )
     args = parser.parse_args()
+    args.label_map = {}
+    for pair in args.labels.split(","):
+        if ":" in pair:
+            sid, _, lbl = pair.partition(":")
+            args.label_map[sid.strip()] = lbl.strip()
 
     main(args)
 

@@ -14,6 +14,22 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
+plt.style.use(["classic", "seaborn-v0_8-colorblind"])
+plt.rcParams.update(
+    {
+        "axes.grid": True,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "figure.figsize": (10, 6),
+        "figure.dpi": 150,
+        "lines.linewidth": 1.5,
+        "lines.markersize": 3,
+        "lines.markeredgewidth": 0,
+        "legend.frameon": False,
+        "font.size": 12,
+    }
+)
+
 
 def _ensure_unique_lead_time(ds: xr.Dataset) -> xr.Dataset:
     """Drop duplicate lead_time entries within a Dataset (keep first occurrence)."""
@@ -62,6 +78,16 @@ def _select_best_sources(dfs: list[xr.Dataset]) -> list[xr.Dataset]:
     return out
 
 
+def _concat_sources(dfs: list[xr.Dataset]) -> xr.Dataset:
+    """Concatenate the verification datasets of all participants along 'source'.
+
+    Leftover '<param>.threshold' coordinates are dropped first: they exist only for
+    participants that provide the parameter and would make the concatenation fail.
+    """
+    dfs = [d.drop_vars([c for c in d.coords if c.endswith(".threshold")]) for d in dfs]
+    return xr.concat(dfs, dim="source", join="outer", coords="minimal")
+
+
 def subset_df(df, **kwargs):
     mask = pd.Series([True] * len(df))
     for key, value in kwargs.items():
@@ -77,12 +103,14 @@ def main(args: Namespace) -> None:
 
     # remove duplicated but not identical values from analyses (rounding errors)
     dfs = [xr.open_dataset(f) for f in args.verif_files]
+    # verify() always carries a station_group dim; select "all" for standard plots.
+    dfs = [d.sel(station_group="all", drop=True) for d in dfs]
     # 1) Ensure each dataset has unique lead_time values
     dfs = [_ensure_unique_lead_time(d) for d in dfs]
     # 2) For sources present in multiple datasets, keep the one with most lead_times
     dfs = _select_best_sources(dfs)
     # 3) Concatenate by source; outer join to keep the union of lead_times
-    ds = xr.concat(dfs, dim="source", join="outer")
+    ds = _concat_sources(dfs)
 
     # extract only  non-spatial variables to pd.DataFrame
     nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
@@ -96,7 +124,9 @@ def main(args: Namespace) -> None:
     metrics = all_df["metric"].unique()
     params = all_df["param"].unique()
     seasons = all_df["season"].unique() if args.stratify else ["all"]
-    regions = all_df["region"].unique() if args.stratify else ["all"]
+    regions = (
+        all_df["region"].unique() if args.stratify else [all_df["region"].unique()[0]]
+    )
     init_hours = (
         all_df["init_hour"].unique() if args.stratify else [-999]
     )  # numeric code to indicate all init hours
@@ -127,6 +157,7 @@ def main(args: Namespace) -> None:
         title = f"{metric} - {param} - {region}"
         title += f"- {season} - {init_hour}" if args.stratify else ""
         for source, df in sub_df.groupby("source"):
+            display_label = args.label_map.get(source, source)
             df.plot(
                 x="step",
                 y="value",
@@ -135,14 +166,19 @@ def main(args: Namespace) -> None:
                 title=title,
                 xlabel="Lead Time [h]",
                 ylabel=decode_metric(metric),
-                label=source,
+                label=display_label,
                 color="black" if "analysis" in source else None,
                 ax=ax,
             )
+        ax.legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.15),
+            ncol=sub_df["source"].nunique(),
+        )
         args.output_dir.mkdir(parents=True, exist_ok=True)
         fn = f"{metric}_{param}"
         fn += f"_{season}_{init_hour}.png" if args.stratify else ".png"
-        plt.savefig(args.output_dir / fn)
+        plt.savefig(args.output_dir / fn, bbox_inches="tight")
         plt.close(fig)
 
 
@@ -168,5 +204,16 @@ if __name__ == "__main__":
         default="plots",
         help="Path to save the aggregated results.",
     )
+    parser.add_argument(
+        "--labels",
+        type=str,
+        default="",
+        help="Comma-separated source_id:display_label pairs for legend text.",
+    )
     args = parser.parse_args()
+    args.label_map = {}
+    for pair in args.labels.split(","):
+        if ":" in pair:
+            sid, _, lbl = pair.partition(":")
+            args.label_map[sid.strip()] = lbl.strip()
     main(args)

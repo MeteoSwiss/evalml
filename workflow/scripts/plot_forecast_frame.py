@@ -10,6 +10,7 @@ import earthkit.plots as ekp
 from matplotlib.colors import Colormap
 import numpy as np
 
+from data_input import parse_aggregated_param
 from plotting import DOMAINS
 from plotting import get_projection
 from plotting import StatePlotter
@@ -80,7 +81,7 @@ def preprocess_field(param: str, state: dict):
     Returns: (field_array, units_override or None)
     """
     fields = state["fields"]
-    if param in ("T_2M", "TD_2M", "T", "TD"):
+    if param in ("T_2M", "TD_2M", "TW_2M", "SKT", "T", "TD"):
         return kelvin_to_celsius(fields[param]), "°C"
     if param == "SP_10M":
         return ekm_wind.speed(fields["U_10M"], fields["V_10M"]), "m/s"
@@ -88,6 +89,15 @@ def preprocess_field(param: str, state: dict):
         return ekm_wind.speed(fields["U"], fields["V"]), "m/s"
     if param == "TOT_PREC":
         return np.maximum(fields[param], 0), "mm"
+    if param in ("CLCT", "CLCL", "CLCM", "CLCH"):
+        # Avoid exact 0/100 plateaus breaking tricontourf on orthographic
+        # projections (tmp/reproduce_clct_bug.py). Pair with extend="neither".
+        # Any new bounded field with silent-blank or GeometryCollection-crash
+        # globe frames likely needs the same clip-away-from-boundary fix.
+        return np.clip(fields[param], 1e-4, 100 - 1e-4), None
+    if param == "SSRD":
+        # Same issue, bottom boundary only (night-side plateau).
+        return np.maximum(fields[param], 1e-6), None
     return fields[param], None
 
 
@@ -114,10 +124,15 @@ def main():
     init_time = args.date
     lead_time = args.leadtime
     param = args.param
+    # Showcase-facing param names encode the accumulation window in the suffix
+    # (e.g. "TOT_PREC1" -> base "TOT_PREC", 1h; "TOT_PREC6" -> 6h). Data loading,
+    # de-accumulation and colormap lookup all key off the base GRIB/FDB param
+    # name; `param` itself is kept only for filenames/titles.
+    base_param, agg_hours = parse_aggregated_param(param)
     regions = json.loads(args.regions_json)
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
-    accu = args.accu
+    accu = agg_hours if agg_hours is not None else args.accu
 
     LOG.info(
         "Plotting forecast frame: param=%s, init_time=%s, lead_time=%s, regions=%s",
@@ -127,24 +142,49 @@ def main():
         list(regions.keys()),
     )
 
-    if param == "SP_10M":
+    if base_param == "SP_10M":
         paramlist = ["U_10M", "V_10M"]
-    elif param == "SP":
+    elif base_param == "SP":
         paramlist = ["U", "V"]
     else:
-        paramlist = [param]
+        paramlist = [base_param]
 
     # Load grib once — shared across all region plots
     # TODO: fix file pattern & globbing
     grib_file = list(grib_dir.glob(f"2*_{lead_time}.grib"))
     if not grib_file:
         grib_file = list(grib_dir.glob(f"2*_{lead_time:03}.grib"))
+    if not grib_file:
+        LOG.warning(
+            "No GRIB file found for lead_time=%s in %s (model may not write initial state)."
+            " Creating empty placeholder frames.",
+            lead_time,
+            grib_dir,
+        )
+        for region_name in regions:
+            outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
+            outfn.touch()
+        return
     grib_file = Path(grib_file[0])
     LOG.info("Loading grib file %s", grib_file)
-    state = load_state_from_grib(grib_file, paramlist=paramlist)
+    try:
+        state = load_state_from_grib(grib_file, paramlist=paramlist)
+    except ValueError as exc:
+        # Accumulated params (e.g. TOT_PREC1/6) are undefined at lead times
+        # shorter than their accumulation window -- normally excluded
+        # upstream (resolve_leadtimes), but handled here too as a
+        # defensive fallback rather than crashing the whole rule.
+        LOG.warning(
+            "%s Creating empty placeholder frames.",
+            exc,
+        )
+        for region_name in regions:
+            outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
+            outfn.touch()
+        return
 
     # tp is accumulated from start of forecast; de-accumulate to get period [lt-accu, lt]
-    if param == "TOT_PREC":
+    if base_param == "TOT_PREC":
         prev_lt = lead_time - accu
         if prev_lt > 0:
             prev_grib_files = list(grib_dir.glob(f"2*_{prev_lt}.grib"))
@@ -162,15 +202,26 @@ def main():
             )
 
     # Preprocess field once — shared across all region plots
-    field, units_override = preprocess_field(param, state)
+    field, units_override = preprocess_field(base_param, state)
     validtime = state["valid_time"].strftime("%Y%m%d%H%M")
 
     for region_name, region_cfg in regions.items():
         LOG.info("Plotting region %s", region_name)
+        outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
         plotter = StatePlotter(state["longitudes"], state["latitudes"], outdir)
         if region_cfg.get("extent") is not None:
             projection = get_projection(region_cfg.get("projection") or "orthographic")
             extent = region_cfg["extent"]
+        elif region_cfg.get("rotate"):
+            base = DOMAINS[region_name]["projection"].proj4_params
+            central_longitude = (
+                base["lon_0"] + 360.0 * lead_time / region_cfg["hours_per_revolution"]
+            ) % 360
+            #  central_longitude=central_longitude, central_latitude=0.0 for zero-centered
+            projection = ccrs.Orthographic(
+                central_longitude=central_longitude, central_latitude=base["lat_0"]
+            )
+            extent = DOMAINS[region_name]["extent"]
         else:
             projection = DOMAINS[region_name]["projection"]
             extent = DOMAINS[region_name]["extent"]
@@ -185,18 +236,26 @@ def main():
         subplot = fig.add_map(row=0, column=0)
 
         plotter.plot_field(
-            subplot, field, **get_style(param, units_override, accu=accu)
+            subplot,
+            field,
+            title=f"{param}, time: {validtime}",
+            gridline_labels=not region_cfg.get("rotate", False),
+            **get_style(base_param, units_override, accu=accu),
         )
-        subplot.ax.add_geometries(
-            state["lam_envelope"],
-            edgecolor="black",
-            facecolor="none",
-            crs=ccrs.PlateCarree(),
-        )
-        fig.title(f"{param}, time: {validtime}")
+        if len(state["lam_envelope"]) > 0:
+            subplot.ax.add_geometries(
+                state["lam_envelope"],
+                edgecolor="black",
+                facecolor="none",
+                crs=ccrs.PlateCarree(),
+            )
 
-        outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
-        fig.save(outfn, bbox_inches="tight", dpi=200)
+        # earthkit.plots' Figure.save() defaults bbox_inches to "tight", which
+        # crops to each frame's own content extent — that extent varies with the
+        # rotating globe's gridline labels, making frames jump around when
+        # stitched into a GIF. Pass bbox_inches=None explicitly to override that
+        # default and always save the fixed full canvas.
+        fig.save(outfn, dpi=200, bbox_inches=None)
         LOG.info("saved: %s", outfn)
 
 

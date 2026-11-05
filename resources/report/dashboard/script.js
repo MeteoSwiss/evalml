@@ -34,6 +34,7 @@ function initChoices(id) {
 initChoices("region-select");
 initChoices("season-select");
 initChoices("init-select");
+initChoices("station-group-select");
 initChoices("source-select");
 initChoices("metric-select");
 initChoices("param-select");
@@ -52,8 +53,9 @@ function getSelected(id) {
   window.DATA = raw.data.map(row => {
     const obj = {};
     for (let i = 0; i < cols.length; i++) obj[cols[i]] = row[i];
+    const sgPart = obj.station_group !== "all" ? ", Group: " + obj.station_group : "";
     obj.region_season_init =
-      "Region: " + obj.region + ", Season: " + obj.season + ", Init: " + obj.init_hour;
+      "Region: " + obj.region + ", Season: " + obj.season + ", Init: " + obj.init_hour + sgPart;
     return obj;
   });
 })();
@@ -139,34 +141,47 @@ let legendView = null;
 
 async function renderLegend(filteredData) {
   const src = filteredData.length ? filteredData : DATA;
+  const tinyMark = { type: "point", filled: true, opacity: 0, size: 0 };
   const spec = {
-    data: { values: src },
-    config: { view: { stroke: null } },
-    mark: { type: "point", filled: true, opacity: 0, size: 0 },
-    width: 1,
-    height: 1,
-    encoding: {
-      color: {
-        field: "source",
-        type: "nominal",
-        scale: { domain: ALL_SOURCES },
-        legend: {
-          orient: "left", title: "Source", offset: 8,
-          symbolType: "circle", symbolSize: 120,
+    config: { view: { stroke: null }, concat: { spacing: 32 } },
+    hconcat: [
+      {
+        data: { values: src },
+        mark: tinyMark,
+        width: 1, height: 1,
+        encoding: {
+          shape: {
+            field: "region_season_init",
+            type: "nominal",
+            legend: {
+              orient: "bottom",
+              direction: "horizontal",
+              title: "Region / Season / Init / Group",
+              labelLimit: 400,
+              symbolType: "circle", symbolSize: 120,
+            },
+          },
         },
       },
-      shape: {
-        field: "region_season_init",
-        type: "nominal",
-        legend: {
-          orient: "right",
-          title: "Region / Season / Init",
-          offset: 8,
-          labelLimit: 400,
-          symbolType: "circle", symbolSize: 120,
+      {
+        data: { values: src },
+        mark: tinyMark,
+        width: 1, height: 1,
+        encoding: {
+          color: {
+            field: "source",
+            type: "nominal",
+            scale: { domain: ALL_SOURCES },
+            legend: {
+              orient: "bottom",
+              direction: "horizontal",
+              title: "Source",
+              symbolType: "circle", symbolSize: 120,
+            },
+          },
         },
       },
-    },
+    ],
   };
   try {
     if (legendView) { try { legendView.finalize(); } catch (e) {} }
@@ -203,13 +218,16 @@ async function updateChart() {
   const selMetrics = getSelected("metric-select");
   const selParams  = getSelected("param-select");
 
-  // Filter data by region / season / init / source
+  const selStationGroups = getSelected("station-group-select");
+
+  // Filter data by region / season / init / source / station_group
   // (metric and param are handled per cell)
   let filtered = DATA;
-  if (selRegions.length) filtered = filtered.filter(d => selRegions.includes(d.region));
-  if (selSeasons.length) filtered = filtered.filter(d => selSeasons.includes(d.season));
-  if (selInits.length)   filtered = filtered.filter(d => selInits.includes(d.init_hour));
-  if (selSources.length) filtered = filtered.filter(d => selSources.includes(d.source));
+  if (selRegions.length)       filtered = filtered.filter(d => selRegions.includes(d.region));
+  if (selSeasons.length)       filtered = filtered.filter(d => selSeasons.includes(d.season));
+  if (selInits.length)         filtered = filtered.filter(d => selInits.includes(d.init_hour));
+  if (selSources.length)       filtered = filtered.filter(d => selSources.includes(d.source));
+  if (selStationGroups.length) filtered = filtered.filter(d => selStationGroups.includes(d.station_group));
 
   // Show / hide table columns (params)
   document.querySelectorAll("#chart-table thead th[data-param]").forEach(th => {
@@ -314,6 +332,7 @@ function resizeChartScroll() {
       getSelected("source-select"),
       getSelected("metric-select"),
       getSelected("param-select"),
+      getSelected("station-group-select"),
     ].flatMap(v => v);
     summary.textContent = parts.join(", ");
   }
@@ -329,7 +348,7 @@ function resizeChartScroll() {
 
   // Keep summary current when selections change (guard: some selects may be absent)
   ["region-select", "season-select", "init-select",
-   "source-select", "metric-select", "param-select"].forEach(id => {
+   "source-select", "metric-select", "param-select", "station-group-select"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("change", () => {
       if (panel.classList.contains("collapsed")) updateSummary();

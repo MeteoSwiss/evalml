@@ -1,16 +1,21 @@
+import json
 import logging
 from argparse import ArgumentParser
 from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
+import xarray as xr
 
-from verification import verify  # noqa: E402
+from verification import verify, apply_lapse_rate_correction_inplace  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
+from verification.valid_mask import apply_valid_mask, combine_valid_masks  # noqa: E402
 from data_input import (
     parse_steps,
     load_forecast_data,
     load_truth_data,
+    truth_type,
 )  # noqa: E402
 
 LOG = logging.getLogger(__name__)
@@ -30,6 +35,44 @@ class ScriptConfig(Namespace):
     steps: list[int] = parse_steps("0/120/6")
 
 
+def load_holdout_stations(path: Path) -> list[str]:
+    """Read the holdout station nat_abbr from the CSV written by rule station_holdout."""
+    return pd.read_csv(path, dtype=str, keep_default_na=False)["nat_abbr"].tolist()
+
+
+def select_holdout_stations(
+    requested: list[str], truth: xr.Dataset, truth_root: Path
+) -> list[str] | None:
+    """Holdout stations for the station_group stratification, or None to skip it.
+
+    The stratification only applies to station truth (jretrieve observations),
+    whose ``values`` dimension holds the station nat_abbr. Gridded truth may
+    also have a ``values`` dimension (unstructured grids), so the truth source
+    is checked instead. Stations missing from the truth are dropped.
+    """
+    if truth_type(truth_root) != "jretrieve":
+        LOG.warning(
+            "Holdout stations given, but the truth is gridded data, not station "
+            "observations; station_group stratification skipped."
+        )
+        return None
+    truth_stations = set(truth["values"].values)  # station nat_abbr
+    holdout_stations = [s for s in requested if s in truth_stations]
+    if not holdout_stations:
+        LOG.warning(
+            "None of the %d holdout stations are in the station truth; "
+            "station_group stratification skipped.",
+            len(requested),
+        )
+        return None
+    LOG.info(
+        "Station holdout: %d / %d truth stations in holdout group",
+        len(holdout_stations),
+        len(truth_stations),
+    )
+    return holdout_stations
+
+
 def program_summary_log(args):
     """Log a welcome message with the script information."""
     LOG.info("=" * 80)
@@ -45,14 +88,15 @@ def program_summary_log(args):
     LOG.info("=" * 80)
 
 
-def main(args: ScriptConfig):
-    """Main function to verify baseline forecast data."""
+def load_aligned_data(args, params: list[str]) -> tuple[xr.Dataset, xr.Dataset]:
+    """Load forecast and truth for ``params``, with the forecast mapped to the truth
+    points and the truth selected at the forecast valid times."""
 
     # get baseline forecast data
     now = datetime.now()
 
     fcst = load_forecast_data(
-        args.forecast, args.reftime, args.steps, args.params, member=args.member
+        args.forecast, args.reftime, args.steps, params, member=args.member
     )
 
     LOG.info(
@@ -63,7 +107,7 @@ def main(args: ScriptConfig):
 
     # get truth data
     now = datetime.now()
-    truth = load_truth_data(args.truth, args.reftime, args.steps, args.params)
+    truth = load_truth_data(args.truth, args.reftime, args.steps, params)
     LOG.info(
         "Loaded truth data in %s seconds: \n%s",
         (datetime.now() - now).total_seconds(),
@@ -71,23 +115,78 @@ def main(args: ScriptConfig):
     )
 
     # align forecast and truth data spatially and temporally
+    now = datetime.now()
     fcst = map_forecast_to_truth(fcst, truth)
+    # map_forecast_to_truth uses fancy indexing which collapses the spatial
+    # dimension into one monolithic dask chunk; rechunk by step so that
+    # verify() can parallelise over time steps rather than materialising the
+    # full (regions × steps × values) array at once.
+    fcst = fcst.chunk({"step": 1})
     truth = truth.sel(time=fcst["valid_time"])
+    LOG.info(
+        "Aligned forecast and truth in %s seconds",
+        (datetime.now() - now).total_seconds(),
+    )
+    return fcst, truth
+
+
+def main(args: ScriptConfig):
+    """Main function to verify baseline forecast data."""
+
+    fcst, truth = load_aligned_data(args, args.params)
+
+    if args.valid_masks:
+        common_mask = combine_valid_masks(
+            [xr.open_dataset(f) for f in args.valid_masks]
+        )
+        fcst, truth = apply_valid_mask(fcst, truth, common_mask)
+
+    if args.lapse_rate_correction:
+        apply_lapse_rate_correction_inplace(fcst, truth, args.params)
+
+    holdout_stations = (
+        select_holdout_stations(
+            load_holdout_stations(args.holdout_stations_file), truth, args.truth
+        )
+        if args.holdout_stations_file
+        else None
+    )
 
     # compute metrics and statistics
+    now = datetime.now()
     results = verify(
         fcst,
         truth,
-        args.label,
-        args.truth_label,
-        args.regions,
+        args.source_id,
+        args.truth_source_id,
+        regions=args.regions,
         threshold_dict=args.threshold_dict,
+        holdout_stations=holdout_stations,
+    )
+    LOG.info(
+        "Computed verification metrics in %s seconds",
+        (datetime.now() - now).total_seconds(),
     )
 
     # save results to NetCDF
+    now = datetime.now()
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    # Strip any non-NetCDF-serializable attrs (e.g. dicts set by compute_derived)
+    # before writing; those attrs are only meaningful for in-memory use (e.g. plot_meteogram).
+    _netcdf_types = (str, bytes, int, float, list, tuple)
+    results.attrs = {
+        k: v for k, v in results.attrs.items() if isinstance(v, _netcdf_types)
+    }
+    for _var in results.data_vars.values():
+        _var.attrs = {
+            k: v for k, v in _var.attrs.items() if isinstance(v, _netcdf_types)
+        }
     results.earthkit.to_netcdf(args.output)
-    LOG.info("Saved verification results to %s", args.output)
+    LOG.info(
+        "Saved verification results to %s in %s seconds",
+        args.output,
+        (datetime.now() - now).total_seconds(),
+    )
 
     LOG.info("Program completed successfully.")
 
@@ -126,22 +225,26 @@ if __name__ == "__main__":
         help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
     )
     parser.add_argument(
-        "--label",
+        "--source_id",
         type=str,
-        default="COSMO-E",
-        help="Label for the forecast or baseline data (default: COSMO-E).",
+        required=True,
+        help="Stable identifier for the forecast or baseline source (e.g. run_id or baseline_id).",
     )
     parser.add_argument(
-        "--truth_label",
+        "--truth_source_id",
         type=str,
-        default="COSMO KENDA",
-        help="Label for the truth data (default: COSMO KENDA).",
+        required=True,
+        help="Stable identifier for the truth source (e.g. truth_<TRUTH_HASH>).",
     )
     parser.add_argument(
         "--regions",
-        type=lambda x: x.split(","),
-        help="Comma-separated list of shapefile paths defining regions for stratification.",
-        default="",
+        type=json.loads,
+        help=(
+            "JSON list of region specs in config order. "
+            'Each entry is {"type": "bbox", "name": ..., "bbox": [...]} '
+            'or {"type": "shp", "name": ..., "path": ...}.'
+        ),
+        default="[]",
     )
     parser.add_argument(
         "--threshold_dict",
@@ -150,16 +253,43 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
+        "--holdout_stations_file",
+        type=Path,
+        default=None,
+        help=(
+            "CSV file with a nat_abbr column listing the holdout stations. When set, adds "
+            "station_group stratification (all/holdout/holdin) to all models and "
+            "baselines using the truth dataset's station list."
+        ),
+    )
+    parser.add_argument(
         "--member",
         type=str,
         default="000",
         help="Ensemble member to load: '000' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID.",
     )
     parser.add_argument(
+        "--valid_masks",
+        type=Path,
+        nargs="*",
+        default=[],
+        help=(
+            "Valid-mask files (verification_valid_mask.py) of all experiment "
+            "participants for this reference time. The parameters they hold are "
+            "scored only where every participant has a value."
+        ),
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default="verif.nc",
         help="Output file to save the verification results (default: verif.nc).",
+    )
+    parser.add_argument(
+        "--lapse_rate_correction",
+        action="store_true",
+        default=False,
+        help="Apply lapse-rate correction to T_2M and PS.",
     )
     args = parser.parse_args()
 

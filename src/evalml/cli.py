@@ -1,4 +1,5 @@
 import base64
+import os
 import shlex
 import subprocess
 import urllib.error
@@ -13,10 +14,20 @@ import click
 from evalml.config import ConfigModel
 
 
+def workflow_env() -> dict[str, str]:
+    """Environment for the workflow. Keeps uv's package cache (inference
+    environments pull torch etc., tens of GB) off the small home quota by
+    pointing it to $SCRATCH, unless the user chose a location."""
+    env = dict(os.environ)
+    if env.get("SCRATCH") and not env.get("UV_CACHE_DIR"):
+        env["UV_CACHE_DIR"] = str(Path(env["SCRATCH"]) / ".cache" / "uv")
+    return env
+
+
 def run_command(command: list[str]) -> int:
     """Execute a shell command, optionally as dry-run."""
     Path(".evalml_snakemake_cmd.txt").write_text(shlex.join(command) + "\n")
-    return subprocess.run(command).returncode
+    return subprocess.run(command, env=workflow_env()).returncode
 
 
 def _base_snakemake_command(
@@ -146,12 +157,12 @@ def execute_workflow(
     if report and not dry_run:
         command += ["--report-after-run", "--report", str(report)]
 
-    command.append(target)
+    command += [target]
     command += list(extra_smk_args)
     if not verbose:
         command += ["--quiet", "rules"]  # reduce verobosity of snakemake output
 
-    raise SystemExit(run_command(command))
+    return run_command(command)
 
 
 @click.group(help="Evaluation workflows for ML experiments.")
@@ -163,22 +174,64 @@ def cli():
 @click.argument(
     "configfile", type=click.Path(exists=True, dir_okay=False, path_type=Path)
 )
+@click.option(
+    "--mec",
+    is_flag=True,
+    default=False,
+    help="Run MEC for Feedback file production.",
+)
+@click.option(
+    "--ffv2", is_flag=True, default=False, help="Run the FFV2 scorefile production."
+)
 @workflow_options
 def experiment(
-    configfile, cores, verbose, dry_run, unlock, report, dag, rulegraph, extra_smk_args
+    configfile,
+    mec,
+    ffv2,
+    cores,
+    verbose,
+    dry_run,
+    unlock,
+    report,
+    dag,
+    rulegraph,
+    extra_smk_args,
 ):
-    execute_workflow(
-        configfile,
-        "experiment_all",
-        cores,
-        verbose,
-        dry_run,
-        unlock,
-        report,
-        dag,
-        rulegraph,
-        extra_smk_args,
-    )
+    raw = load_yaml(configfile)
+    if not (mec or ffv2) and raw.get("experiment") is None:
+        raise click.UsageError(
+            "evalml experiment requires an 'experiment' block in the config file."
+        )
+    if mec and raw.get("mec") is None:
+        raise click.UsageError("--mec requires a 'mec' block in the config file.")
+    if ffv2 and raw.get("ffv2") is None:
+        raise click.UsageError("--ffv2 requires a 'ffv2' block in the config file.")
+
+    targets = []
+    if mec or ffv2:
+        if mec:
+            targets.append("mec_all")
+        if ffv2:
+            targets.append("ffv2_all")
+    else:
+        targets.append("experiment_all")
+
+    for target in targets:
+        rc = execute_workflow(
+            configfile,
+            target,
+            cores,
+            verbose,
+            dry_run,
+            unlock,
+            report,
+            dag,
+            rulegraph,
+            extra_smk_args,
+        )
+        if rc:
+            raise SystemExit(rc)
+    raise SystemExit(0)
 
 
 @cli.command(help="Obtain showcase material as defined by a config YAML file.")
@@ -189,17 +242,19 @@ def experiment(
 def showcase(
     configfile, cores, verbose, dry_run, unlock, report, dag, rulegraph, extra_smk_args
 ):
-    execute_workflow(
-        configfile,
-        "showcase_all",
-        cores,
-        verbose,
-        dry_run,
-        unlock,
-        report,
-        dag,
-        rulegraph,
-        extra_smk_args,
+    raise SystemExit(
+        execute_workflow(
+            configfile,
+            "showcase_all",
+            cores,
+            verbose,
+            dry_run,
+            unlock,
+            report,
+            dag,
+            rulegraph,
+            extra_smk_args,
+        )
     )
 
 
@@ -211,17 +266,19 @@ def showcase(
 def sandbox(
     configfile, cores, verbose, dry_run, unlock, report, dag, rulegraph, extra_smk_args
 ):
-    execute_workflow(
-        configfile,
-        "sandbox_all",
-        cores,
-        verbose,
-        dry_run,
-        unlock,
-        report,
-        dag,
-        rulegraph,
-        extra_smk_args,
+    raise SystemExit(
+        execute_workflow(
+            configfile,
+            "sandbox_all",
+            cores,
+            verbose,
+            dry_run,
+            unlock,
+            report,
+            dag,
+            rulegraph,
+            extra_smk_args,
+        )
     )
 
 
@@ -243,15 +300,17 @@ def make(
     rulegraph,
     extra_smk_args,
 ):
-    execute_workflow(
-        configfile,
-        target,
-        cores,
-        verbose,
-        dry_run,
-        unlock,
-        report,
-        dag,
-        rulegraph,
-        extra_smk_args,
+    raise SystemExit(
+        execute_workflow(
+            configfile,
+            target,
+            cores,
+            verbose,
+            dry_run,
+            unlock,
+            report,
+            dag,
+            rulegraph,
+            extra_smk_args,
+        )
     )

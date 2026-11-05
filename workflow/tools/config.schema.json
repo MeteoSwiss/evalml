@@ -28,6 +28,13 @@
           },
           "title": "Domains",
           "type": "array"
+        },
+        "frames_per_second": {
+          "default": 2.0,
+          "description": "Frames per second for the output GIF animation.",
+          "exclusiveMinimum": 0,
+          "title": "Frames Per Second",
+          "type": "number"
         }
       },
       "title": "AnimationsConfig",
@@ -136,7 +143,6 @@
       "type": "object"
     },
     "DefaultResources": {
-      "additionalProperties": false,
       "description": "Default resource settings for job execution.",
       "properties": {
         "slurm_partition": {
@@ -228,6 +234,19 @@
           "description": "Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
           "title": "Projection",
           "type": "string"
+        },
+        "rotate": {
+          "default": false,
+          "description": "Rotate the viewpoint across animation frames as lead time advances. Only valid for full-globe domains (extent: null).",
+          "title": "Rotate",
+          "type": "boolean"
+        },
+        "hours_per_revolution": {
+          "default": 96.0,
+          "description": "Simulated lead-time hours for one full 360\u00b0 rotation, when rotate is enabled.",
+          "exclusiveMinimum": 0,
+          "title": "Hours Per Revolution",
+          "type": "number"
         }
       },
       "required": [
@@ -247,13 +266,12 @@
           "default": [
             "T_2M",
             "TD_2M",
-            "U_10M",
-            "V_10M",
+            "SP_10M",
             "PS",
             "PMSL",
-            "TOT_PREC"
+            "TOT_PREC6"
           ],
-          "description": "List of parameters to compute verification metrics for.",
+          "description": "List of parameters to compute verification metrics for. With INCA truth, parameters INCA does not provide are skipped.",
           "items": {
             "type": "string"
           },
@@ -278,6 +296,30 @@
           "$ref": "#/$defs/Dashboard",
           "description": "Settings for the experiment dashboard."
         },
+        "station_holdout": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "List of holdout station nat_abbr. When set, adds a 'station_group' dimension (all/holdout/holdin) to verification metrics for all models and baselines. The workflow writes the list to a CSV file and stages it as holdout_stations.csv in the working directory of every inference run whose config references that file.",
+          "title": "Station Holdout"
+        },
+        "score_on_common_points": {
+          "description": "Parameters scored only at the points where every participant has a value, per reference time and lead time (e.g. HZEROCL, SNOWLMT and CIN_MU, which ICON leaves undefined at part of the domain). All participants and the truth are then scored on the same points. The scores of these parameters depend on the set of participants.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Score On Common Points",
+          "type": "array"
+        },
         "scorecards": {
           "anyOf": [
             {
@@ -289,6 +331,30 @@
           ],
           "default": null,
           "description": "Scorecard generation configuration. Omit or set enabled: false to disable."
+        },
+        "scoremaps": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScoreMapsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Score map plot configuration. Omit or set enabled: false to disable."
+        },
+        "sal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SalConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "SAL precipitation verification. Omit or set enabled: false to disable."
         }
       },
       "required": [
@@ -327,6 +393,76 @@
       },
       "title": "ExplicitDates",
       "type": "array"
+    },
+    "Ffv2Config": {
+      "additionalProperties": false,
+      "description": "Configuration for the FFV2 scoring pipeline.",
+      "properties": {
+        "experiment_ids": {
+          "description": "Comma-separated experiment IDs passed to FFV2.",
+          "title": "Experiment Ids",
+          "type": "string"
+        },
+        "veri_ens_member": {
+          "description": "Comma-separated ensemble member indices passed to FFV2, one per experiment ID (typically -1 for deterministic runs).",
+          "title": "Veri Ens Member",
+          "type": "string"
+        },
+        "catthresholds": {
+          "additionalProperties": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "description": "Per-variable categorical thresholds for FFV2, mapping FFV2 variable names to lists of threshold values.",
+          "title": "Catthresholds",
+          "type": "object"
+        },
+        "pecthresholds": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object"
+          },
+          "description": "Per-variable PEC thresholds for FFV2, mapping FFV2 variable names to a dict with exactly one 'lower' and one 'upper' value.",
+          "title": "Pecthresholds",
+          "type": "object"
+        },
+        "experiment_description": {
+          "description": "Short description of the experiment for FFV2 output files.",
+          "title": "Experiment Description",
+          "type": "string"
+        },
+        "file_description": {
+          "description": "File description string used in FFV2 output file naming.",
+          "title": "File Description",
+          "type": "string"
+        },
+        "domain_table": {
+          "description": "Path to the domain table file (polygon) used by FFV2.",
+          "title": "Domain Table",
+          "type": "string"
+        },
+        "blacklists": {
+          "description": "Path to the blacklist directory used by FFV2.",
+          "title": "Blacklists",
+          "type": "string"
+        }
+      },
+      "required": [
+        "experiment_ids",
+        "veri_ens_member",
+        "catthresholds",
+        "pecthresholds",
+        "experiment_description",
+        "file_description",
+        "domain_table",
+        "blacklists"
+      ],
+      "title": "Ffv2Config",
+      "type": "object"
     },
     "ForecasterConfig": {
       "additionalProperties": false,
@@ -530,6 +666,34 @@
       "title": "Locations",
       "type": "object"
     },
+    "MecConfig": {
+      "additionalProperties": false,
+      "description": "Paths to input observation files for the MEC verification step.",
+      "properties": {
+        "ekf_root": {
+          "description": "Root directory for EKF SYNOP files. Files are expected at {ekf_root}/{YYYYMM}/ekfSYNOP_{init}00.nc.",
+          "title": "Ekf Root",
+          "type": "string"
+        },
+        "mon_synop_root": {
+          "description": "Root directory for monSYNOP files. Files are expected at {mon_synop_root}/{YYYYMMDDH}/monSYNOP.nc.",
+          "title": "Mon Synop Root",
+          "type": "string"
+        },
+        "ver_synop_root": {
+          "description": "Root directory for reference verSYNOP files. Files are expected at {ver_synop_root}/verSYNOP_{init}00.nc.",
+          "title": "Ver Synop Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ekf_root",
+        "mon_synop_root",
+        "ver_synop_root"
+      ],
+      "title": "MecConfig",
+      "type": "object"
+    },
     "MeteogramConfig": {
       "description": "Configuration for meteogram generation.",
       "properties": {
@@ -600,12 +764,161 @@
       "title": "Profile",
       "type": "object"
     },
+    "SalConfig": {
+      "additionalProperties": false,
+      "description": "SAL (Structure\u2013Amplitude\u2013Location; Wernli et al. 2008) per-init precip\nscores, computed for every run and baseline when enabled and written to\nper-participant CSVs.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to compute SAL scores.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "params": {
+          "default": [
+            "TOT_PREC6"
+          ],
+          "description": "Accumulated precip params to score, period encoded in the name (e.g. TOT_PREC6).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "leadtimes": {
+          "default": [
+            6,
+            12,
+            18,
+            24,
+            30
+          ],
+          "description": "List of lead times (hours) to score.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Leadtimes",
+          "type": "array"
+        },
+        "grid_extent": {
+          "default": [
+            -1.0,
+            18.0,
+            42.0,
+            50.5
+          ],
+          "description": "SAL raster extent [lon_min, lon_max, lat_min, lat_max] in degrees (PlateCarree). Both forecast and truth are remapped onto this raster. The default is the ICON-CH1 analysis bounding box; keep it close to the truth's footprint, since cells outside it only repeat the nearest border value.",
+          "items": {
+            "type": "number"
+          },
+          "title": "Grid Extent",
+          "type": "array"
+        },
+        "grid_step_lat": {
+          "default": 0.01,
+          "description": "SAL raster latitude spacing in degrees.",
+          "exclusiveMinimum": 0,
+          "title": "Grid Step Lat",
+          "type": "number"
+        },
+        "grid_step_lon": {
+          "default": 0.0145,
+          "description": "SAL raster longitude spacing in degrees. Choose grid_step_lat and grid_step_lon so cells are metrically near-square at the extent's central latitude (pysteps' Location term assumes square pixels).",
+          "exclusiveMinimum": 0,
+          "title": "Grid Step Lon",
+          "type": "number"
+        }
+      },
+      "title": "SalConfig",
+      "type": "object"
+    },
+    "ScoreMapsConfig": {
+      "additionalProperties": false,
+      "description": "Parameters controlling which score map plots are produced.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to produce score maps (computationally intensive).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "params": {
+          "default": [
+            "T_2M"
+          ],
+          "description": "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 (period-accumulated precipitation, period encoded in the name), and the derive-diagnostic fields DD_10M, RELHUM_2M, TW_2M (derived from their components when a source lacks them), HZEROCL, SNOWLMT, CAPE_ML, CIN_ML, CAPE_MU, CIN_MU, TOT_SNOW1/6/24.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Params",
+          "type": "array"
+        },
+        "leadtimes": {
+          "default": [
+            6,
+            24
+          ],
+          "description": "List of lead times (hours) to plot.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Leadtimes",
+          "type": "array"
+        },
+        "scores": {
+          "default": [
+            "BIAS"
+          ],
+          "description": "List of verification scores to plot. Supported: BIAS, RMSE, MAE.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Scores",
+          "type": "array"
+        },
+        "regions": {
+          "default": [
+            "switzerland"
+          ],
+          "description": "List of regions to plot (e.g. switzerland, centraleurope).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Regions",
+          "type": "array"
+        },
+        "seasons": {
+          "default": [
+            "all"
+          ],
+          "description": "List of seasons to plot ('all', 'DJF', 'MAM', 'JJA', 'SON').",
+          "items": {
+            "type": "string"
+          },
+          "title": "Seasons",
+          "type": "array"
+        },
+        "init_hours": {
+          "default": [
+            "all"
+          ],
+          "description": "List of initialization hours to plot. Use 'all' for the unstratified view, or zero-padded hour strings like '00', '06', '12', '18'.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Init Hours",
+          "type": "array"
+        }
+      },
+      "title": "ScoreMapsConfig",
+      "type": "object"
+    },
     "ScorecardConfig": {
       "additionalProperties": false,
       "description": "Configuration for a single named scorecard.",
       "properties": {
         "baseline": {
-          "description": "Baseline label to compare against (must match the `label` field of a baseline entry in `runs`).",
+          "description": "Label of the reference to compare against: a baseline or a forecaster/temporal downscaler run in `runs`. A run is not scored against itself.",
           "title": "Baseline",
           "type": "string"
         },
@@ -620,7 +933,7 @@
           "type": "string"
         },
         "variables": {
-          "description": "Variables and metrics as scorecard rows (VAR:M1,M2 format). An empty list [] is accepted by the schema but falls back to a hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). Omit ':...' after a variable name to include all available metrics for it.",
+          "description": "Variables and metrics as scorecard rows (VAR:M1,M2 format). An empty list [] is accepted by the schema but falls back to a hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). Omit ':...' after a variable name to include all available metrics for it. Variables without data are shown as empty rows.",
           "items": {
             "type": "string"
           },
@@ -666,23 +979,40 @@
       "description": "Stratification settings for the analysis.",
       "properties": {
         "regions": {
-          "description": "List of region names for stratification.",
+          "description": "List of region specs for spatial stratification. At least one region is required. String entries are either predefined region names (['global', 'icon']) or shapefile names resolved against 'root'. Predefined names take precedence over shapefiles. Dict entries map a custom region name to a bounding box [lon_min, lon_max, lat_min, lat_max]. The first entry is the domain region used by the dashboard when region stratification is not active.",
           "items": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              }
+            ]
           },
           "title": "Regions",
           "type": "array"
         },
         "root": {
-          "description": "Root directory where the region shapefiles are stored.",
-          "title": "Root",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Root directory where the region shapefiles are stored. Required when regions contains string entries.",
+          "title": "Root"
         }
       },
-      "required": [
-        "regions",
-        "root"
-      ],
       "title": "Stratification",
       "type": "object"
     },
@@ -794,7 +1124,7 @@
           "type": "string"
         },
         "root": {
-          "description": "Path to the root of the dataset.",
+          "description": "Truth source: an anemoi '.zarr' analysis (e.g. KENDA), the INCA-CH archive (a path with an 'INCA' directory), or 'jretrievedwh:<selector>' for DWH station observations.",
           "minLength": 1,
           "title": "Root",
           "type": "string"
@@ -868,9 +1198,23 @@
         }
       ]
     },
+    "lapse_rate_correction": {
+      "default": true,
+      "description": "Apply lapse-rate correction to T_2M (0.0065 K/m) and PS (11.5 Pa/m).",
+      "title": "Lapse Rate Correction",
+      "type": "boolean"
+    },
     "experiment": {
-      "$ref": "#/$defs/ExperimentConfig",
-      "description": "Settings for the experiment workflow outputs."
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExperimentConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Settings for the experiment workflow outputs. Required when running `evalml experiment`."
     },
     "locations": {
       "$ref": "#/$defs/Locations"
@@ -881,6 +1225,30 @@
     "showcase": {
       "$ref": "#/$defs/ShowcaseConfig",
       "description": "Settings for the showcase workflow."
+    },
+    "mec": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MecConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Input observation paths for the MEC verification step. Required when running with --mec."
+    },
+    "ffv2": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Ffv2Config"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Configuration for the FFV2 scoring pipeline. Required when running with --ffv2."
     }
   },
   "required": [
@@ -888,7 +1256,6 @@
     "dates",
     "runs",
     "truth",
-    "experiment",
     "locations",
     "profile"
   ],

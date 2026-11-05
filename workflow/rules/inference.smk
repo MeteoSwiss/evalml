@@ -36,8 +36,8 @@ rule inference_get_checkpoint:
                 fi
             elif [ "{params.checkpoint_type}" = "huggingface" ]; then
                 repo_id=$(python -c "import re; print(re.search(r'huggingface\.co/([^/]+/[^/]+)', '{params.checkpoint}').group(1))")
-                file_path=$(python -c "import re; print(re.search(r'huggingface\.co/[^/]+/[^/]+/blob/[^/]+/(.*)', '{params.checkpoint}').group(1))")
-                cp $(uvx hf download $repo_id $file_path) {output.checkpoint}
+                file_path=$(python -c "import re; print(re.search(r'huggingface\.co/[^/]+/[^/]+/(?:blob|resolve)/[^/]+/(.*)', '{params.checkpoint}').group(1))")
+                cp $(uvx hf download --quiet $repo_id $file_path) {output.checkpoint}
                 echo "Copied checkpoint from HuggingFace: {output.checkpoint}"
             elif [ "{params.checkpoint_type}" = "local" ]; then
                 ln -s {params.checkpoint} {output.checkpoint}
@@ -81,58 +81,47 @@ rule inference_extract_requirements:
         """
 
 
-# Create a virtual environment for inference, using the pyproject.toml created above.
-# The virtual environment is managed with uv. The created virtual environment is relocatable,
-# so it can be squashed later. Pre-compilation to bytecode is done to speed up imports.
-rule inference_create_venv:
+# Prepare the inference environment for a specific checkpoint. The venv is built
+# in /dev/shm (RAM) to avoid heavy IO on the parallel filesystem, then squashed
+# to a .squashfs image tracked directly as the rule output.
+# See https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
+rule inference_prepare_env:
     input:
         metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
         requirements=OUT_ROOT / "data/runs/{env_id}/requirements.txt",
     output:
-        venv=temp(directory(OUT_ROOT / "data/runs/{env_id}/.venv")),
+        image=OUT_ROOT / "data/runs/{env_id}/venv.squashfs",
     log:
-        OUT_ROOT / "logs/inference_create_venv/{env_id}.log",
+        OUT_ROOT / "logs/inference_prepare_env/{env_id}.log",
     localrule: True
     shell:
         """
         (
+            VENV_DIR=$(mktemp -d /dev/shm/evalml_XXXXXXXX)
+            trap "rm -rf $VENV_DIR" EXIT
+            VENV=$VENV_DIR/.venv
 
             PYTHON_VERSION=$(cat {input.metadata} | jq -r ".provenance_training.python")
-            echo "[$(date)] Creating virtual environment with Python $PYTHON_VERSION..."
-            uv venv --managed-python --python $PYTHON_VERSION --relocatable --link-mode=copy {output.venv}
-            source {output.venv}/bin/activate
+            echo "[$(date)] Creating virtual environment with Python $PYTHON_VERSION in RAM (/dev/shm)..."
+            uv venv --managed-python --python $PYTHON_VERSION --relocatable --link-mode=copy $VENV
+            source $VENV/bin/activate
 
             echo "[$(date)] Installing requirements from {input.requirements}..."
             uv pip install -r {input.requirements}
 
             echo "[$(date)] Compiling Python bytecode..."
-            python -m compileall -j 8 -o 0 -o 1 -o 2 {output.venv}/lib/python*/site-packages
+            python -m compileall -j 8 -o 0 -o 1 -o 2 $VENV/lib/python*/site-packages
             echo "[$(date)] Testing that eccodes is working..."
             if ! python -c "import eccodes" &>/dev/null; then
                 echo "[$(date)] ERROR: eccodes is not installed correctly in the virtual environment."
-                echo "[$(date)] Please check the installation and try again."
                 exit 1
             fi
-            echo "[$(date)] Inference virtual environment successfully created at {output.venv}"
+
+            echo "[$(date)] Creating squashfs image from RAM-based venv..."
+            mksquashfs $(realpath $VENV) {output.image} -no-recovery -noappend -Xcompression-level 3
+            echo "[$(date)] Squashfs image created at {output.image}"
         ) >{log} 2>&1
         """
-
-
-# Create a squashfs image for the inference virtual environment of
-# a specific checkpoint. Find more about this at
-# https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
-rule inference_make_squashfs_image:
-    input:
-        venv=rules.inference_create_venv.output.venv,
-    output:
-        image=OUT_ROOT / "data/runs/{env_id}/venv.squashfs",
-    log:
-        OUT_ROOT / "logs/inference_make_squashfs_image/{env_id}.log",
-    localrule: True
-    shell:
-        "mksquashfs $(realpath {input.venv}) {output.image}"
-        " -no-recovery -noappend -Xcompression-level 3"
-        " > {log} 2>/dev/null"
 
 
 # Create a zipped directory that, when extracted, can be used as a sandbox
@@ -187,13 +176,12 @@ rule inference_prepare_forecaster:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
+        holdout=lambda wc: holdout_dep(wc) if run_uses_holdout(wc.run_id) else [],
     output:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
         grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
-        okfile=touch(
-            OUT_ROOT / "logs/inference_prepare_forecaster/{run_id}-{init_time}.ok"
-        ),
+        okfile=OUT_ROOT / "logs/inference_prepare_forecaster/{run_id}-{init_time}.ok",
     log:
         OUT_ROOT / "logs/inference_prepare_forecaster/{run_id}-{init_time}.log",
     localrule: True
@@ -201,6 +189,7 @@ rule inference_prepare_forecaster:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
+        holdout_workdir_name=HOLDOUT_WORKDIR_NAME,
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
@@ -219,6 +208,7 @@ rule inference_prepare_temporal_downscaler:
         checkpoint=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/inference-last.ckpt",
         config=lambda wc: Path(RUN_CONFIGS[wc.run_id]["config"]).resolve(),
+        holdout=lambda wc: holdout_dep(wc) if run_uses_holdout(wc.run_id) else [],
         forecasts=lambda wc: (
             [
                 OUT_ROOT
@@ -243,6 +233,7 @@ rule inference_prepare_temporal_downscaler:
         lead_time=lambda wc: get_leadtime(wc),
         output_root=(OUT_ROOT / "data").resolve(),
         resources_root=Path("resources/inference").resolve(),
+        holdout_workdir_name=HOLDOUT_WORKDIR_NAME,
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
@@ -277,7 +268,7 @@ rule inference_execute:
         image=lambda wc: OUT_ROOT
         / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
     output:
-        okfile=touch(OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok"),
+        okfile=OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok",
     log:
         OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
     localrule: True
@@ -290,12 +281,17 @@ rule inference_execute:
         ntasks=lambda wc: get_resource(wc, "tasks", 1),
         gpus=lambda wc: get_resource(wc, "gpu", 1),
     params:
-        image_path=lambda wc, input: f"{Path(input.image).resolve()}",
+        env_path=lambda wc, input: f"{Path(input.image).resolve()}",
         workdir=lambda wc: (
             OUT_ROOT / f"data/runs/{wc.run_id}/{wc.init_time}"
         ).resolve(),
         disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
             "disable_local_eccodes_definitions", False
+        ),
+        account_flag=lambda wc: (
+            f"--account={config['profile']['default_resources']['slurm_account']}"
+            if config["profile"]["default_resources"].get("slurm_account")
+            else ""
         ),
     # fmt: off
     shell:
@@ -305,12 +301,19 @@ rule inference_execute:
 
             cd {params.workdir}
 
-            squashfs-mount {params.image_path}:/user-environment -- bash -c '
-                source /user-environment/bin/activate
+            _run_inference() {{
+                local VENV=/user-environment
+                source "$VENV/bin/activate"
 
                 if [ "{params.disable_local_definitions}" = "False" ]; then
-                    export ECCODES_DEFINITION_PATH=/user-environment/share/eccodes-cosmo-resources/definitions
+                    export ECCODES_DEFINITION_PATH="$VENV/share/eccodes-cosmo-resources/definitions"
                 fi
+
+                # earthkit-data (>=1.0) sets ECCODES_ECKIT_GEO=1 on import, which leaks from the
+                # Snakemake process into this job. With recent eccodeslib wheels it makes ecCodes
+                # compute coordinates with eckit.geo, whose Gaussian latitudes differ in the last
+                # bits from the datasets, so anemoi-inference fails to combine the input states.
+                unset ECCODES_ECKIT_GEO
 
                 CMD_ARGS=()
 
@@ -319,16 +322,27 @@ rule inference_execute:
                     CMD_ARGS+=(runner.parallel.cluster=slurm)
                 fi
 
-                srun \
-                    --unbuffered \
-                    --partition={resources.slurm_partition} \
-                    --cpus-per-task={resources.cpus_per_task} \
-                    --mem-per-cpu={resources.mem_mb_per_cpu} \
-                    --time={resources.runtime} \
-                    --gres={resources.gres} \
-                    --ntasks={resources.ntasks} \
-                    anemoi-inference run config.yaml "${{CMD_ARGS[@]}}"
-                '
+                # Equivalent to `anemoi-inference run`, but imports pyproj before eccodes:
+                # the eckitlib wheel bundles its own PROJ, which aborts at exit (double free)
+                # if loaded before pyproj. See https://github.com/ecmwf/eckit/issues/354
+                python -c 'import sys, importlib.util; importlib.util.find_spec("pyproj") and __import__("pyproj"); from anemoi.inference.__main__ import main; sys.argv[0] = "anemoi-inference"; sys.exit(main())' \
+                    run config.yaml "${{CMD_ARGS[@]}}"
+            }}
+            export -f _run_inference
+
+            srun \
+                --job-name=anemoi-inference \
+                --uenv={params.env_path}:/user-environment \
+                --unbuffered \
+                {params.account_flag} \
+                --partition={resources.slurm_partition} \
+                --cpus-per-task={resources.cpus_per_task} \
+                --mem-per-cpu={resources.mem_mb_per_cpu} \
+                --time={resources.runtime} \
+                --gres={resources.gres} \
+                --ntasks={resources.ntasks} \
+                bash -c '_run_inference'
         ) >{log} 2>&1
+        touch {output.okfile}
         """
 # fmt: on

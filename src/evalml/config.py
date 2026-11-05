@@ -1,9 +1,15 @@
+from math import isfinite
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet, Optional
+from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
 
-from pydantic import BaseModel, Field, RootModel, field_validator
+from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
+
+PREDEFINED_REGIONS: Dict[str, List[float]] = {
+    "global": [-180, 180, -90, 90],
+    "icon": [1.5, 16, 43, 49.5],
+}
 
 
 class Dates(BaseModel):
@@ -101,7 +107,6 @@ class RunConfig(BaseModel):
         False,
         description="If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
     )
-
     config: Dict[str, Any] | str
 
     model_config = {"extra": "forbid"}
@@ -203,7 +208,11 @@ class TruthConfig(BaseModel):
     root: str = Field(
         ...,
         min_length=1,
-        description="Path to the root of the dataset.",
+        description=(
+            "Truth source: an anemoi '.zarr' analysis (e.g. KENDA), the INCA-CH "
+            "archive (a path with an 'INCA' directory), or 'jretrievedwh:<selector>' "
+            "for DWH station observations."
+        ),
     )
 
 
@@ -219,6 +228,128 @@ class BaselineItem(BaseModel):
     baseline: BaselineConfig
 
 
+class ScoreMapsConfig(BaseModel):
+    """Parameters controlling which score map plots are produced."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to produce score maps (computationally intensive).",
+    )
+    params: List[str] = Field(
+        default=["T_2M"],
+        description=(
+            "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
+            "PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 "
+            "(period-accumulated precipitation, period encoded in the name), and the "
+            "derive-diagnostic fields DD_10M, RELHUM_2M, TW_2M (derived from their "
+            "components when a source lacks them), HZEROCL, SNOWLMT, CAPE_ML, CIN_ML, "
+            "CAPE_MU, CIN_MU, TOT_SNOW1/6/24."
+        ),
+    )
+    leadtimes: List[int] = Field(
+        default=[6, 24],
+        description="List of lead times (hours) to plot.",
+    )
+    scores: List[str] = Field(
+        default=["BIAS"],
+        description="List of verification scores to plot. Supported: BIAS, RMSE, MAE.",
+    )
+    regions: List[str] = Field(
+        default=["switzerland"],
+        description="List of regions to plot (e.g. switzerland, centraleurope).",
+    )
+    seasons: List[str] = Field(
+        default=["all"],
+        description="List of seasons to plot ('all', 'DJF', 'MAM', 'JJA', 'SON').",
+    )
+    init_hours: List[str] = Field(
+        default=["all"],
+        description=(
+            "List of initialization hours to plot. Use 'all' for the unstratified "
+            "view, or zero-padded hour strings like '00', '06', '12', '18'."
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class SalConfig(BaseModel):
+    """SAL (Structure–Amplitude–Location; Wernli et al. 2008) per-init precip
+    scores, computed for every run and baseline when enabled and written to
+    per-participant CSVs."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to compute SAL scores.",
+    )
+    params: List[str] = Field(
+        default=["TOT_PREC6"],
+        description="Accumulated precip params to score, period encoded in the name (e.g. TOT_PREC6).",
+    )
+    leadtimes: List[int] = Field(
+        default=[6, 12, 18, 24, 30],
+        description="List of lead times (hours) to score.",
+    )
+    grid_extent: List[float] = Field(
+        default=[-1.0, 18.0, 42.0, 50.5],
+        description=(
+            "SAL raster extent [lon_min, lon_max, lat_min, lat_max] in degrees "
+            "(PlateCarree). Both forecast and truth are remapped onto this "
+            "raster. The default is the ICON-CH1 analysis bounding box; keep it "
+            "close to the truth's footprint, since cells outside it only repeat "
+            "the nearest border value."
+        ),
+    )
+    grid_step_lat: float = Field(
+        default=0.01,
+        gt=0,
+        description="SAL raster latitude spacing in degrees.",
+    )
+    grid_step_lon: float = Field(
+        default=0.0145,
+        gt=0,
+        description=(
+            "SAL raster longitude spacing in degrees. Choose grid_step_lat and "
+            "grid_step_lon so cells are metrically near-square at the extent's "
+            "central latitude (pysteps' Location term assumes square pixels)."
+        ),
+    )
+
+    @field_validator("grid_extent")
+    @classmethod
+    def validate_grid_extent(cls, v: List[float]) -> List[float]:
+        if len(v) != 4:
+            raise ValueError(
+                f"sal.grid_extent must be [lon_min, lon_max, lat_min, lat_max]; got {v}."
+            )
+        lon_min, lon_max, lat_min, lat_max = v
+        if not (
+            all(isfinite(x) for x in v)
+            and -180.0 <= lon_min < lon_max <= 180.0
+            and -90.0 <= lat_min < lat_max <= 90.0
+        ):
+            raise ValueError(
+                "sal.grid_extent needs finite, increasing bounds with lon in "
+                f"[-180, 180] and lat in [-90, 90]; got {v}."
+            )
+        return v
+
+    @field_validator("params")
+    @classmethod
+    def validate_params_are_precip(cls, v: List[str]) -> List[str]:
+        bad = [p for p in v if not p.startswith("TOT_PREC")]
+        if bad:
+            raise ValueError(
+                "sal.params must be precipitation parameters starting with "
+                "'TOT_PREC' (e.g. TOT_PREC1, TOT_PREC6, or bare TOT_PREC for "
+                "cumulative-from-start); SAL is defined for precipitation only. "
+                f"Invalid: {bad}."
+            )
+        return v
+
+    model_config = {"extra": "forbid"}
+
+
 class DomainConfig(BaseModel):
     """A custom map domain defined by name, extent, and projection."""
 
@@ -231,8 +362,28 @@ class DomainConfig(BaseModel):
         "orthographic",
         description="Projection name (must be a key in plotting._PROJECTIONS, e.g. 'orthographic').",
     )
+    rotate: bool = Field(
+        False,
+        description=(
+            "Rotate the viewpoint across animation frames as lead time advances. "
+            "Only valid for full-globe domains (extent: null)."
+        ),
+    )
+    hours_per_revolution: float = Field(
+        96.0,
+        gt=0,
+        description="Simulated lead-time hours for one full 360° rotation, when rotate is enabled.",
+    )
 
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _rotate_requires_globe(self):
+        if self.rotate and self.extent is not None:
+            raise ValueError(
+                "rotate: true is only valid for full-globe domains (extent: null)."
+            )
+        return self
 
 
 class MeteogramConfig(BaseModel):
@@ -268,6 +419,11 @@ class AnimationsConfig(BaseModel):
             "[lon_min, lon_max, lat_min, lat_max], and optional 'projection'."
         ),
     )
+    frames_per_second: float = Field(
+        default=2.0,
+        gt=0,
+        description="Frames per second for the output GIF animation.",
+    )
 
 
 class ScorecardConfig(BaseModel):
@@ -275,7 +431,10 @@ class ScorecardConfig(BaseModel):
 
     baseline: str = Field(
         ...,
-        description="Baseline label to compare against (must match the `label` field of a baseline entry in `runs`).",
+        description=(
+            "Label of the reference to compare against: a baseline or a forecaster/"
+            "temporal downscaler run in `runs`. A run is not scored against itself."
+        ),
     )
     lead_times: str = Field(
         ...,
@@ -291,7 +450,8 @@ class ScorecardConfig(BaseModel):
             "Variables and metrics as scorecard rows (VAR:M1,M2 format). "
             "An empty list [] is accepted by the schema but falls back to a "
             "hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). "
-            "Omit ':...' after a variable name to include all available metrics for it."
+            "Omit ':...' after a variable name to include all available metrics for it. "
+            "Variables without data are shown as empty rows."
         ),
     )
 
@@ -339,14 +499,44 @@ class Locations(BaseModel):
 class Stratification(BaseModel):
     """Stratification settings for the analysis."""
 
-    regions: List[str] = Field(
-        ...,
-        description="List of region names for stratification.",
+    regions: List[Union[str, Dict[str, List[float]]]] = Field(
+        default_factory=list,
+        description=(
+            "List of region specs for spatial stratification. At least one region is required. "
+            f"String entries are either predefined region names ({list(PREDEFINED_REGIONS)}) or "
+            "shapefile names resolved against 'root'. Predefined names take precedence over shapefiles. "
+            "Dict entries map a custom region name to a bounding box [lon_min, lon_max, lat_min, lat_max]. "
+            "The first entry is the domain region used by the dashboard when region stratification is not active."
+        ),
     )
-    root: str = Field(
-        ...,
-        description="Root directory where the region shapefiles are stored.",
+    root: Optional[str] = Field(
+        None,
+        description="Root directory where the region shapefiles are stored. Required when regions contains string entries.",
     )
+
+    @field_validator("regions")
+    @classmethod
+    def validate_regions(
+        cls, v: List[Union[str, Dict[str, List[float]]]]
+    ) -> List[Union[str, Dict[str, List[float]]]]:
+        if not v:
+            raise ValueError(
+                "At least one region must be specified. "
+                f"Add a domain region as the first entry, e.g. a predefined name "
+                f"({list(PREDEFINED_REGIONS)}), a custom bbox dict, or a shapefile name."
+            )
+        for entry in v:
+            if isinstance(entry, dict):
+                if len(entry) != 1:
+                    raise ValueError(
+                        f"Each bbox region dict must have exactly one key, got: {list(entry.keys())}"
+                    )
+                name, bbox = next(iter(entry.items()))
+                if len(bbox) != 4:
+                    raise ValueError(
+                        f"Bbox for region '{name}' must have exactly 4 values [lon_min, lon_max, lat_min, lat_max], got {len(bbox)}."
+                    )
+        return v
 
 
 class Dashboard(BaseModel):
@@ -366,8 +556,11 @@ class ExperimentConfig(BaseModel):
         description="Spatial stratification settings for the analysis.",
     )
     params: List[str] = Field(
-        default=["T_2M", "TD_2M", "U_10M", "V_10M", "PS", "PMSL", "TOT_PREC"],
-        description="List of parameters to compute verification metrics for.",
+        default=["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"],
+        description=(
+            "List of parameters to compute verification metrics for. With INCA truth, "
+            "parameters INCA does not provide are skipped."
+        ),
     )
     thresholds: Dict[str, Dict[str, List[float]]] = Field(
         default_factory=dict,
@@ -380,10 +573,59 @@ class ExperimentConfig(BaseModel):
         ...,
         description="Settings for the experiment dashboard.",
     )
+    station_holdout: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "List of holdout station nat_abbr. When set, adds a 'station_group' "
+            "dimension (all/holdout/holdin) to verification metrics for all models "
+            "and baselines. The workflow writes the list to a CSV file and stages it "
+            "as holdout_stations.csv in the working directory of every inference run "
+            "whose config references that file."
+        ),
+    )
+    score_on_common_points: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Parameters scored only at the points where every participant has a "
+            "value, per reference time and lead time (e.g. HZEROCL, SNOWLMT and "
+            "CIN_MU, which ICON leaves undefined at part of the domain). All "
+            "participants and the truth are then scored on the same points. The "
+            "scores of these parameters depend on the set of participants."
+        ),
+    )
     scorecards: Optional[ExperimentScorecardConfig] = Field(
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
     )
+    scoremaps: Optional[ScoreMapsConfig] = Field(
+        default=None,
+        description="Score map plot configuration. Omit or set enabled: false to disable.",
+    )
+    sal: Optional[SalConfig] = Field(
+        default=None,
+        description="SAL precipitation verification. Omit or set enabled: false to disable.",
+    )
+
+    @field_validator("station_holdout")
+    @classmethod
+    def validate_station_holdout(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return v
+        if not v:
+            raise ValueError("station_holdout must not be empty; omit it instead.")
+        duplicates = sorted({s for s in v if v.count(s) > 1})
+        if duplicates:
+            raise ValueError(f"station_holdout has duplicate stations: {duplicates}")
+        return v
+
+    @model_validator(mode="after")
+    def validate_score_on_common_points(self) -> "ExperimentConfig":
+        unknown = sorted(set(self.score_on_common_points) - set(self.params))
+        if unknown:
+            raise ValueError(
+                f"score_on_common_points parameters {unknown} are not in experiment.params."
+            )
+        return self
 
     @field_validator("thresholds")
     @classmethod
@@ -412,8 +654,6 @@ class DefaultResources(BaseModel):
     gpus: int | None = Field(
         None, ge=0, description="Default GPU count per job (0 for non-GPU jobs)."
     )
-
-    model_config = {"extra": "forbid"}
 
     def parsable(self) -> list[str]:
         """Convert the default resources to a string of key=value pairs."""
@@ -478,6 +718,84 @@ class Profile(BaseModel):
         return out
 
 
+class MecConfig(BaseModel):
+    """Paths to input observation files for the MEC verification step."""
+
+    ekf_root: str = Field(
+        ...,
+        description="Root directory for EKF SYNOP files. Files are expected at {ekf_root}/{YYYYMM}/ekfSYNOP_{init}00.nc.",
+    )
+    mon_synop_root: str = Field(
+        ...,
+        description="Root directory for monSYNOP files. Files are expected at {mon_synop_root}/{YYYYMMDDH}/monSYNOP.nc.",
+    )
+    ver_synop_root: str = Field(
+        ...,
+        description="Root directory for reference verSYNOP files. Files are expected at {ver_synop_root}/verSYNOP_{init}00.nc.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+class Ffv2Config(BaseModel):
+    """Configuration for the FFV2 scoring pipeline."""
+
+    experiment_ids: str = Field(
+        ...,
+        description="Comma-separated experiment IDs passed to FFV2.",
+    )
+    veri_ens_member: str = Field(
+        ...,
+        description="Comma-separated ensemble member indices passed to FFV2, one per experiment ID (typically -1 for deterministic runs).",
+    )
+    catthresholds: dict[str, list[float]] = Field(
+        ...,
+        description="Per-variable categorical thresholds for FFV2, mapping FFV2 variable names to lists of threshold values.",
+    )
+    pecthresholds: dict[str, dict[str, float]] = Field(
+        ...,
+        description="Per-variable PEC thresholds for FFV2, mapping FFV2 variable names to a dict with exactly one 'lower' and one 'upper' value.",
+    )
+    experiment_description: str = Field(
+        ...,
+        description="Short description of the experiment for FFV2 output files.",
+    )
+    file_description: str = Field(
+        ...,
+        description="File description string used in FFV2 output file naming.",
+    )
+    domain_table: str = Field(
+        ...,
+        description="Path to the domain table file (polygon) used by FFV2.",
+    )
+    blacklists: str = Field(
+        ...,
+        description="Path to the blacklist directory used by FFV2.",
+    )
+
+    @field_validator("veri_ens_member", mode="before")
+    @classmethod
+    def coerce_veri_ens_member_to_str(cls, v):
+        return str(v)
+
+    @field_validator("pecthresholds")
+    @classmethod
+    def validate_pecthresholds(cls, v):
+        for var, bounds in v.items():
+            invalid = set(bounds) - {"lower", "upper"}
+            if invalid:
+                raise ValueError(
+                    f"pecthresholds[{var!r}] contains invalid keys {invalid}; only 'lower' and 'upper' are allowed."
+                )
+            if not bounds:
+                raise ValueError(
+                    f"pecthresholds[{var!r}] must have at least one of 'lower' or 'upper'."
+                )
+        return v
+
+    model_config = {"extra": "forbid"}
+
+
 class ConfigModel(BaseModel):
     """Top-level configuration."""
 
@@ -495,9 +813,13 @@ class ConfigModel(BaseModel):
         description="List of experiment participants, including forecaster/temporal downscaler ML runs and baselines.",
     )
     truth: TruthConfig | None
-    experiment: ExperimentConfig = Field(
-        ...,
-        description="Settings for the experiment workflow outputs.",
+    lapse_rate_correction: bool = Field(
+        default=True,
+        description="Apply lapse-rate correction to T_2M (0.0065 K/m) and PS (11.5 Pa/m).",
+    )
+    experiment: ExperimentConfig | None = Field(
+        None,
+        description="Settings for the experiment workflow outputs. Required when running `evalml experiment`.",
     )
     locations: Locations
     profile: Profile
@@ -505,6 +827,58 @@ class ConfigModel(BaseModel):
         default_factory=ShowcaseConfig,
         description="Settings for the showcase workflow.",
     )
+    mec: MecConfig | None = Field(
+        None,
+        description="Input observation paths for the MEC verification step. Required when running with --mec.",
+    )
+    ffv2: Ffv2Config | None = Field(
+        None,
+        description="Configuration for the FFV2 scoring pipeline. Required when running with --ffv2.",
+    )
+
+    @model_validator(mode="after")
+    def validate_leadtimes_producible(self) -> "ConfigModel":
+        """Reject scoremaps/sal lead times not produced by every participant."""
+        if self.experiment is None:
+            return self
+        for label, cfg in (
+            ("scoremaps", self.experiment.scoremaps),
+            ("sal", self.experiment.sal),
+        ):
+            if cfg is None or not cfg.enabled:
+                continue
+            for item in self.runs:
+                steps = getattr(item, next(iter(type(item).model_fields))).steps
+                start, end, step = map(int, steps.split("/"))
+                unsupported = set(cfg.leadtimes) - set(range(start, end + 1, step))
+                if unsupported:
+                    raise ValueError(
+                        f"{label}.leadtimes contains {sorted(unsupported)} h which are not "
+                        f"produced by participant with steps '{steps}'."
+                    )
+        return self
+
+    @model_validator(mode="after")
+    def validate_scorecard_references(self) -> "ConfigModel":
+        sc = self.experiment.scorecards if self.experiment else None
+        if sc is None or not sc.enabled:
+            return self
+        labels = [
+            getattr(item, next(iter(type(item).model_fields))).label
+            for item in self.runs
+        ]
+        for name, section in sc.sections.items():
+            if section.baseline not in labels:
+                raise ValueError(
+                    f"scorecards.sections.{name}.baseline {section.baseline!r} does "
+                    f"not match the label of any entry in `runs`: {labels}"
+                )
+            if labels.count(section.baseline) > 1:
+                raise ValueError(
+                    f"scorecards.sections.{name}.baseline {section.baseline!r} is "
+                    f"ambiguous: several entries in `runs` use this label."
+                )
+        return self
 
     model_config = {
         "extra": "forbid",  # fail on misspelled keys
