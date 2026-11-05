@@ -255,6 +255,29 @@
       "title": "DomainConfig",
       "type": "object"
     },
+    "EnsembleConfig": {
+      "additionalProperties": false,
+      "description": "Run a forecaster as an ensemble of independent members.",
+      "properties": {
+        "members": {
+          "description": "Number of ensemble members per initialisation, numbered 001..N.",
+          "minimum": 2,
+          "title": "Members",
+          "type": "integer"
+        },
+        "seed": {
+          "default": 0,
+          "description": "Base random seed: member m (1..N) runs with seed `seed + m`.",
+          "title": "Seed",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "members"
+      ],
+      "title": "EnsembleConfig",
+      "type": "object"
+    },
     "ExperimentConfig": {
       "description": "Configuration for the experiment workflow outputs.",
       "properties": {
@@ -546,6 +569,18 @@
           ],
           "description": "Configuration for the forecaster run. Can be a dictionary of parameters or a path to a configuration file.By default, it will point to resources/inference/configs/forecaster.yaml in the evalml repository.",
           "title": "Config"
+        },
+        "ensemble": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnsembleConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Run the forecaster as an ensemble: `members` independent inference runs per initialisation, member m (1..N) seeded with `seed + m`. Each member is written to grib/{NNN}/ (NNN = 001..N) with the same file names as a deterministic run, and its GRIB messages carry `number` = m and `numberOfForecastsInEnsemble` = N. Storage grows with the number of members, so set `output_variables` too (a warning is logged otherwise). Not allowed on the forecaster of a temporal downscaler. Verification and plots use member 001 only."
         }
       },
       "required": [
