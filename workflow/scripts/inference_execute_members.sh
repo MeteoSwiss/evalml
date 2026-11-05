@@ -10,7 +10,8 @@
 # GPUS worker loops run concurrently, one per GPU (pinned with CUDA_VISIBLE_DEVICES),
 # and take the members round-robin: worker s runs members s+1, s+1+GPUS, ... Member m
 # is seeded with SEED+m (EVALML_SEED). Output goes to LOGDIR/<NNN>.log. A member that
-# succeeded leaves LOGDIR/<NNN>.ok and is skipped on a retry. The script exits non-zero
+# succeeded leaves LOGDIR/<NNN>.ok and is skipped on a retry, unless its config
+# was written again since. The script exits non-zero
 # if any member failed; the remaining members still run, so a retry only redoes the
 # failed ones.
 set -euo pipefail
@@ -26,7 +27,8 @@ worker() {
     local slot=$1 m nnn failed=0
     for ((m = slot + 1; m <= members; m += gpus)); do
         nnn=$(printf '%03d' "$m")
-        if [ -e "$logdir/$nnn.ok" ]; then
+        # an .ok older than the member config is from a previous prepare: rerun
+        if [ -e "$logdir/$nnn.ok" ] && ! [ "config_$nnn.yaml" -nt "$logdir/$nnn.ok" ]; then
             echo "[$(date)] member $nnn: already done, skipping"
             continue
         fi
