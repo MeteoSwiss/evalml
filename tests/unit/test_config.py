@@ -225,3 +225,39 @@ def test_spectra_init_hours_must_not_be_empty():
     with pytest.raises(ValidationError):
         SpectraConfig(init_hours=[])
     assert SpectraConfig(init_hours=[0, 12]).init_hours == [0, 12]
+
+
+def test_output_variables(example_config):
+    """output_variables is optional, takes a list of names and rejects an empty list."""
+
+    downscaler = example_config["runs"][0]["temporal_downscaler"]
+    cfg = ConfigModel.model_validate(example_config)
+    assert cfg.runs[0].temporal_downscaler.output_variables is None
+
+    downscaler["output_variables"] = ["T_2M", "TOT_PREC", "*_850"]
+    cfg = ConfigModel.model_validate(example_config)
+    assert cfg.runs[0].temporal_downscaler.output_variables == [
+        "T_2M",
+        "TOT_PREC",
+        "*_850",
+    ]
+
+    downscaler["output_variables"] = []
+    with pytest.raises(ValueError, match="at least 1 item"):
+        _ = ConfigModel.model_validate(example_config)
+
+
+def test_output_variables_on_inline_forecaster(example_config):
+    """The inline forecaster of a temporal downscaler accepts output_variables."""
+
+    forecaster = example_config["runs"][0]["temporal_downscaler"]["forecaster"]
+    forecaster["output_variables"] = ["T_2M", "tp"]
+    cfg = ConfigModel.model_validate(example_config)
+    assert cfg.runs[0].temporal_downscaler.forecaster.output_variables == [
+        "T_2M",
+        "tp",
+    ]
+
+    forecaster["output_variables"] = []
+    with pytest.raises(ValueError, match="at least 1 item"):
+        _ = ConfigModel.model_validate(example_config)
