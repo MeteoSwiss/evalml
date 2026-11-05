@@ -113,6 +113,17 @@ class RunConfig(BaseModel):
         False,
         description="If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
     )
+    output_variables: List[str] | None = Field(
+        None,
+        min_length=1,
+        description="List of variables written to the GRIB output files of the inference run. "
+        "Names are those the GRIB output sees: GRIB short names (e.g. TOT_PREC) with "
+        "anemoi-inference >= 0.11.2, model names (e.g. tp) before; both may be listed. "
+        "Shell-style globs (e.g. '*_850') need anemoi-inference >= 0.13.0; older versions "
+        "match names literally. The list is written to every GRIB output of the inference "
+        "config. If omitted, all variables are written. Keep FIS (z before 0.11.2): the "
+        "model orography is read from it for the lapse-rate correction.",
+    )
     config: Dict[str, Any] | str
 
     model_config = {"extra": "forbid"}
