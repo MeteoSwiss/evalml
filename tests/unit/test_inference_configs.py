@@ -165,7 +165,6 @@ def test_set_output_variables_one_list_per_output():
 
 ENSEMBLE_KEYS = {
     "productDefinitionTemplateNumber",
-    "eps",
     "number",
     "numberOfForecastsInEnsemble",
     "dataType",
@@ -174,11 +173,13 @@ ENSEMBLE_KEYS = {
 
 
 def _without_paths_and_encodings(config):
-    """Copy of a config with `path` and `encoding` removed from every grib output."""
+    """Copy of a config with `path`, `encoding` and `grib2_keys` removed from every
+    grib output."""
     config = copy.deepcopy(config)
     for spec in _grib_outputs(config["output"], []):
         spec.pop("path", None)
         spec.pop("encoding", None)
+        spec.pop("grib2_keys", None)
     return config
 
 
@@ -202,6 +203,9 @@ def test_member_config_on_templates(path):
         }
         assert spec["encoding"]["number"] == 7
         assert spec["encoding"]["numberOfForecastsInEnsemble"] == 10
+        # eps in encoding reaches ecCodes, where the COSMO definitions lack it
+        assert "eps" not in spec["encoding"]
+        assert spec["grib2_keys"] == {**(orig.get("grib2_keys") or {}), "eps": 1}
     assert _without_paths_and_encodings(config) == _without_paths_and_encodings(
         original
     )
@@ -240,6 +244,7 @@ def test_member_config_nested_tee_and_short_form():
                         "grib": {
                             "path": "grib/002/a_{step:03}.grib",
                             "encoding": encoding,
+                            "grib2_keys": {"eps": 1},
                         }
                     },
                     {
@@ -248,6 +253,7 @@ def test_member_config_nested_tee_and_short_form():
                                 "grib": {
                                     "path": "grib/002/b.grib",
                                     "encoding": {"centre": "lssw", **encoding},
+                                    "grib2_keys": {"eps": 1},
                                 }
                             },
                             {"netcdf": {"path": "c.nc"}},
