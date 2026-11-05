@@ -1,4 +1,5 @@
-"""verify() output must not change when its internals are refactored.
+"""verify() output must not change when its internals are refactored (up to last-bit
+floating-point differences between machines).
 
 The golden files under ``tests/unit/data/`` were written by verify() before the
 region/station-group mask construction and the missing-forecast rule were factored out
@@ -147,13 +148,20 @@ def test_verify_output_unchanged(name):
     result = verify(**cases()[name])
     expected = xr.load_dataset(DATA / f"verify_golden_{name}.nc")
 
-    xr.testing.assert_identical(result, expected)
+    # Same structure, attributes and NaN positions; values equal up to the last bits,
+    # which differ between machines for sin/cos (e.g. the circular variance of DD_10M).
+    xr.testing.assert_allclose(result, expected, rtol=1e-12, atol=0)
+    assert result.attrs == expected.attrs
+    assert set(result.variables) == set(expected.variables)
     for var in expected.variables:
         assert result[var].dims == expected[var].dims, var
+        assert result[var].attrs == expected[var].attrs, var
         if expected[var].dtype.kind in "fiub":
             assert result[var].dtype == expected[var].dtype, var
-            # Bit for bit, NaN at the same places
-            np.testing.assert_array_equal(result[var].values, expected[var].values)
+        if expected[var].dtype.kind == "f":
+            np.testing.assert_array_equal(
+                np.isnan(result[var].values), np.isnan(expected[var].values), var
+            )
 
 
 if __name__ == "__main__":
