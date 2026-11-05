@@ -7,7 +7,7 @@
 # (it holds config_001.yaml ... config_<MEMBERS>.yaml), and expects the exported
 # function `_run_inference <config file>` to be defined.
 #
-# GPUS worker loops run concurrently, one per GPU (pinned with CUDA_VISIBLE_DEVICES),
+# GPUS worker loops run concurrently, one per GPU of the step (pinned with CUDA_VISIBLE_DEVICES),
 # and take the members round-robin: worker s runs members s+1, s+1+GPUS, ... Member m
 # is seeded with SEED+m (EVALML_SEED). Output goes to LOGDIR/<NNN>.log. A member that
 # succeeded leaves LOGDIR/<NNN>.ok and is skipped on a retry, unless its config
@@ -32,9 +32,9 @@ worker() {
             echo "[$(date)] member $nnn: already done, skipping"
             continue
         fi
-        echo "[$(date)] member $nnn: start on GPU $slot (seed $((seed + m)))"
+        echo "[$(date)] member $nnn: start on GPU ${devices[slot]} (seed $((seed + m)))"
         # env -u: ANEMOI_BASE_SEED would override the member seed in some versions
-        if CUDA_VISIBLE_DEVICES=$slot EVALML_SEED=$((seed + m)) \
+        if CUDA_VISIBLE_DEVICES=${devices[slot]} EVALML_SEED=$((seed + m)) \
             env -u ANEMOI_BASE_SEED bash -c '_run_inference "$1"' _ "config_$nnn.yaml" \
             >"$logdir/$nnn.log" 2>&1; then
             touch "$logdir/$nnn.ok"
@@ -46,6 +46,14 @@ worker() {
     done
     return $failed
 }
+
+# Slurm does not confine the job to its GPUs on every partition: map the slots to the
+# devices it was given rather than to 0..GPUS-1.
+IFS=, read -ra devices <<<"${CUDA_VISIBLE_DEVICES:?srun did not set CUDA_VISIBLE_DEVICES}"
+if [ "${#devices[@]}" -lt "$gpus" ]; then
+    echo "[$(date)] expected $gpus GPUs, got CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES" >&2
+    exit 1
+fi
 
 pids=()
 for ((slot = 0; slot < gpus; slot++)); do
