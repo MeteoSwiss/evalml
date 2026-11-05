@@ -115,7 +115,8 @@ experiment:
         # Stratification dimension to use as scorecard columns (e.g. region, season).
         stratification: region
         # Variables and metrics as scorecard rows. Format: VAR:METRIC1,METRIC2,...
-        # Supported metrics: RMSE, R2, ETS, POD, FAR (categorical metrics require thresholds).
+        # Supported metrics: RMSE, R2, ETS, POD, FAR (categorical metrics require thresholds),
+        # CRPS (ensemble runs; a deterministic participant uses its MAE).
         variables:
           - "T_2M:RMSE,R2"
           - "TOT_PREC:RMSE,ETS"
