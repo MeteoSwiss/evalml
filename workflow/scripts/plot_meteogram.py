@@ -79,7 +79,7 @@ def main():
         "--lapse_rate_correction",
         action="store_true",
         default=False,
-        help="Apply standard-atmosphere lapse-rate correction to T_2M.",
+        help="Apply lapse-rate correction to T_2M and PS.",
     )
 
     args = parser.parse_args()
@@ -197,9 +197,11 @@ def main():
         ]
 
         if args.lapse_rate_correction:
-            apply_lapse_rate_correction_inplace(forecast_station_ds, station_ds, param)
+            apply_lapse_rate_correction_inplace(
+                forecast_station_ds, station_ds, [param]
+            )
             for ds in baseline_station_ds_list:
-                apply_lapse_rate_correction_inplace(ds, station_ds, param)
+                apply_lapse_rate_correction_inplace(ds, station_ds, [param])
 
         fig, ax = plt.subplots()
 

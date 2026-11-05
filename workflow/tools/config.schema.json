@@ -88,6 +88,63 @@
       "title": "BaselineItem",
       "type": "object"
     },
+    "ComparisonsConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for side-by-side map comparisons of truth, runs and baselines.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate side-by-side maps: one figure per init time, lead time, parameter and domain, with a panel for the truth (if gridded), each run and each selected baseline.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "truth": {
+          "default": true,
+          "description": "Whether to include a truth panel. Ignored for station truth (jretrievedwh), which cannot be drawn as a map.",
+          "title": "Truth",
+          "type": "boolean"
+        },
+        "baselines": {
+          "description": "Labels of the baselines to add as panels.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Baselines",
+          "type": "array"
+        },
+        "domains": {
+          "default": [
+            "alps"
+          ],
+          "description": "Domains to plot. Same format as `animations.domains`: a named domain defined in plotting.DOMAINS or a custom domain dict.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/DomainConfig"
+              }
+            ]
+          },
+          "title": "Domains",
+          "type": "array"
+        },
+        "lead_times": {
+          "default": [
+            24
+          ],
+          "description": "Lead times (hours) to plot. A run or baseline without data at a lead time is shown as an empty panel.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Lead Times",
+          "type": "array"
+        }
+      },
+      "title": "ComparisonsConfig",
+      "type": "object"
+    },
     "Dashboard": {
       "description": "Settings for the dashboard",
       "properties": {
@@ -295,6 +352,22 @@
         "dashboard": {
           "$ref": "#/$defs/Dashboard",
           "description": "Settings for the experiment dashboard."
+        },
+        "station_holdout": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "List of holdout station nat_abbr. When set, adds a 'station_group' dimension (all/holdout/holdin) to verification metrics for all models and baselines. The workflow writes the list to a CSV file and stages it as holdout_stations.csv in the working directory of every inference run whose config references that file.",
+          "title": "Station Holdout"
         },
         "scorecards": {
           "anyOf": [
@@ -909,6 +982,10 @@
         },
         "animations": {
           "$ref": "#/$defs/AnimationsConfig"
+        },
+        "comparisons": {
+          "$ref": "#/$defs/ComparisonsConfig",
+          "description": "Configuration for side-by-side map comparisons."
         }
       },
       "title": "ShowcaseConfig",
@@ -1143,13 +1220,21 @@
     },
     "lapse_rate_correction": {
       "default": true,
-      "description": "Apply standard-atmosphere lapse-rate correction to T_2M.",
+      "description": "Apply lapse-rate correction to T_2M (0.0065 K/m) and PS (11.5 Pa/m).",
       "title": "Lapse Rate Correction",
       "type": "boolean"
     },
     "experiment": {
-      "$ref": "#/$defs/ExperimentConfig",
-      "description": "Settings for the experiment workflow outputs."
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExperimentConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Settings for the experiment workflow outputs. Required when running `evalml experiment`."
     },
     "locations": {
       "$ref": "#/$defs/Locations"
@@ -1205,7 +1290,6 @@
     "dates",
     "runs",
     "truth",
-    "experiment",
     "locations",
     "profile"
   ],

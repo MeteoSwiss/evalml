@@ -161,15 +161,41 @@ The `truth.root` value selects how the ground truth is loaded:
   ```yaml
   truth:
     label: SwissMetNet
-    root: jretrievedwh:1,2                          # stn_group_id (default)
+    root: jretrievedwh:SwissMetNet                  # station group (default if none is given)
     # root: jretrievedwh:locations=ARO,KLO,LUG      # explicit nat_abbr list
     # root: jretrievedwh:bbox=45.8,47.8,5.9,10.5    # minlat,maxlat,minlon,maxlon
   ```
+
+  Optional keys are appended with `;`, e.g. `jretrievedwh:bbox=45.7,48.0,5.8,10.8;use_limitation=40`.
+  `use_limitation` is passed to jretrieve's `--use-limitation` and selects which stations
+  are returned (default: 40).
 
   **Prerequisites:** `jretrievedwh.py` must be on `$PATH` (falls back to
   `/oprusers/osm/opr.inn/bin/jretrievedwh.py`) and DWH credentials must be
   available — see [Credentials setup](#credentials-setup). No data is
   pre-downloaded — the obs are queried at verification time.
+
+### Holdout stations
+
+With station truth (`jretrievedwh:`), you can name stations to verify as a separate
+group, for example stations withheld from observation nudging, to get an independent check:
+
+```yaml
+experiment:
+  station_holdout: [CHM, FRE, RUE, BAS]   # station nat_abbr
+```
+
+Every model and baseline is then verified separately on three station groups:
+`all`, `holdout` (the listed stations) and `holdin` (all others). The dashboard
+gets a station-group selector; scorecards and the standard plots use `all`.
+
+- Holdout stations missing from the truth are ignored; if none are present, or the truth
+  is gridded (`.zarr`), only `all` is computed and a warning is logged.
+- The list is written to a CSV file that the workflow tracks, so changing it reruns the
+  affected verification and inference.
+- An inference config can read the same list from `holdout_stations.csv` in its working
+  directory (e.g. `holdout_station_file: holdout_stations.csv` for the
+  `nudge_toward_observation` filter).
 
 
 ## Installation

@@ -144,7 +144,7 @@ onerror:
 # -----------------------------------------------------
 
 
-SCOREMAPS_CONFIGS = config.get("experiment", {}).get("scoremaps") or {}
+SCOREMAPS_CONFIGS = EXPERIMENT_CONFIG.get("scoremaps") or {}
 
 
 rule experiment_all:
@@ -170,9 +170,7 @@ rule experiment_all:
                     scorecard_name=list(SCORECARD_CONFIGS),
                 )
             ]
-            if (config.get("experiment", {}).get("scorecards") or {}).get(
-                "enabled", True
-            )
+            if (EXPERIMENT_CONFIG.get("scorecards") or {}).get("enabled", True)
             else []
         ),
         (
@@ -232,6 +230,17 @@ rule showcase_all:
                 showcase=EXPERIMENT_NAME,
             )
             if config["showcase"]["meteograms"]["enabled"]
+            else []
+        ),
+        (
+            expand(
+                rules.compare_forecast_frames.output,
+                init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+                param=SHOWCASE_CONFIG["params"],
+                leadtime=COMPARISONS_CONFIG["lead_times"],
+                showcase=EXPERIMENT_NAME,
+            )
+            if COMPARISONS_CONFIG["enabled"]
             else []
         ),
 

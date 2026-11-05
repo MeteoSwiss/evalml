@@ -18,10 +18,16 @@ runs:
       config: resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml
       extra_requirements:
         - anemoi-datasets==0.5.35
+        - git+https://github.com/ecmwf/anemoi-inference.git@88c1ec13632c570f246cc2580ce324e45f36a03b
+        - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@e5f95f3eb7b8907407faa7ac2e2771c1d7fe5aa4
       forecaster:
-        checkpoint: https://service.meteoswiss.ch/mlstore#/models/sruc-m-1-forecaster/versions/4
+        checkpoint: https://service.meteoswiss.ch/mlstore#/models/varda-forecaster-det-sgm/versions/1
         config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper.yaml
         steps: 0/12/6
+        extra_requirements:
+          - anemoi-datasets==0.5.35
+          - git+https://github.com/ecmwf/anemoi-inference.git@88c1ec13632c570f246cc2580ce324e45f36a03b
+          - git+https://github.com/MeteoSwiss/anemoi-plugins-meteoswiss.git@e5f95f3eb7b8907407faa7ac2e2771c1d7fe5aa4
   - baseline:
       label: INCA
       root: /store_new/mch/msclim/INCA
@@ -105,7 +111,7 @@ showcase:
     - SP_10M
     - TOT_PREC1
   meteograms:
-    enabled: false
+    enabled: true
     stations: [JUN] #, COV, GOR, WFJ, SAE, SAM, DAV, ZER, ANT, VSBAS, BRT, LTB, GOS, CEV, BIA]
   animations:
     enabled: true
@@ -116,6 +122,13 @@ showcase:
       # - alps
       - icon-ch
       - switzerland
+  comparisons:
+    enabled: true
+    baselines:
+      - ICON-CH1-CTRL
+    domains:
+      - alps
+    lead_times: [24]
 
 locations:
   output_root: output/

@@ -4,7 +4,7 @@ from pathlib import Path
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import MultiPoint
-from data_input import load_from_grib_file
+from data_input import load_from_grib_file, rename_ifs_to_icon
 
 
 PARAMS_MAP = {
@@ -17,6 +17,9 @@ PARAMS_MAP = {
     "TOT_PREC": "tp",
     "CLCT": "tcc",
     "CLCL": "lcc",
+    "CLCM": "mcc",
+    "CLCH": "hcc",
+    "SKT": "skt",
     "SSRD": "ssrd",
 }
 
@@ -33,11 +36,7 @@ def load_state_from_grib(
     )
     ds = load_from_grib_file(file, {"parameter.variable": paramlist_extended})
     # Rename any IFS shortnames back to COSMO names
-    ifs_rename = {
-        ifs: cosmo for ifs, cosmo in PARAMS_MAP_INV.items() if ifs in ds.data_vars
-    }
-    if ifs_rename:
-        ds = ds.rename(ifs_rename)
+    ds = rename_ifs_to_icon(ds, PARAMS_MAP_INV)
     if "TOT_PREC" in ds:
         # IFS/ECMWF convention: "tp" is accumulated precip in meters.
         # Convert to kg m-2 (mm) to match the ICON-native convention.
@@ -67,10 +66,12 @@ def load_state_from_grib(
             "The GRIB file may not contain these fields at this lead time "
             "(e.g. accumulated fields like TOT_PREC are undefined at step 0)."
         )
-    state["forecast_reference_time"] = datetime.fromtimestamp(
-        ds["forecast_reference_time"].values.item() / 1e9
+    # Cast datetime64 directly: datetime.fromtimestamp() would read the epoch
+    # value in the host's local zone and relabel these UTC times (+2h on CEST).
+    state["forecast_reference_time"] = (
+        ds["forecast_reference_time"].values.astype("datetime64[s]").item()
     )
-    state["valid_time"] = datetime.fromtimestamp(ds["valid_time"].values.item() / 1e9)
+    state["valid_time"] = ds["valid_time"].values.astype("datetime64[s]").item()
     state["longitudes"] = ds["longitude"].values.flatten()
     state["latitudes"] = ds["latitude"].values.flatten()
     # Add the limited-area model envelope polygon (convex hull) before global coords are added.

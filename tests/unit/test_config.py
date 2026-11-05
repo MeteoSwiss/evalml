@@ -13,3 +13,43 @@ def test_example_config(example_config):
     del example_config["runs"]
     with pytest.raises(ValueError, match="Field required"):
         _ = ConfigModel.model_validate(example_config)
+
+
+def test_station_holdout(example_config):
+    """station_holdout accepts a list of nat_abbr and rejects empty or duplicate lists."""
+
+    example_config["experiment"]["station_holdout"] = ["CHM", "FRE"]
+    cfg = ConfigModel.model_validate(example_config)
+    assert cfg.experiment.station_holdout == ["CHM", "FRE"]
+
+    example_config["experiment"]["station_holdout"] = []
+    with pytest.raises(ValueError, match="must not be empty"):
+        _ = ConfigModel.model_validate(example_config)
+
+    example_config["experiment"]["station_holdout"] = ["CHM", "FRE", "CHM"]
+    with pytest.raises(ValueError, match="duplicate stations"):
+        _ = ConfigModel.model_validate(example_config)
+
+
+def test_experiment_optional(example_config):
+    """The experiment block can be omitted, e.g. for showcase or sandbox configs."""
+
+    del example_config["experiment"]
+    cfg = ConfigModel.model_validate(example_config)
+    assert cfg.experiment is None
+
+
+def test_comparisons_truth_only(example_config):
+    example_config["showcase"]["comparisons"] = {"enabled": True, "baselines": []}
+    cfg = ConfigModel.model_validate(example_config)
+    assert cfg.showcase.comparisons.truth is True
+
+
+def test_comparisons_need_a_reference(example_config):
+    example_config["showcase"]["comparisons"] = {
+        "enabled": True,
+        "truth": False,
+        "baselines": [],
+    }
+    with pytest.raises(ValueError, match="enable `truth` or list `baselines`"):
+        ConfigModel.model_validate(example_config)

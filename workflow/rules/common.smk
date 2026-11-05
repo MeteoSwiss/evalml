@@ -7,9 +7,12 @@ import json
 from urllib.parse import urlparse
 
 from evalml.config import THIRD_PARTY_MODEL_TYPES
+from data_input import parse_aggregated_param
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
+# the experiment block is optional (e.g. for showcase/sandbox configs)
+EXPERIMENT_CONFIG = config.get("experiment") or {}
 
 # Opt-in inference replay: when set, inference_execute stages frozen GRIB from
 # here instead of running anemoi-inference (the import + staging live in
@@ -95,7 +98,7 @@ def parse_regions():
     """
     from evalml.config import PREDEFINED_REGIONS
 
-    cfg = config["experiment"]["stratification"]
+    cfg = EXPERIMENT_CONFIG.get("stratification", {})
     root = cfg.get("root", "")
     result = []
     for entry in cfg.get("regions", []):
@@ -123,8 +126,10 @@ def parse_regions():
     return json.dumps(result)
 
 
-def parse_showcase_regions():
+def parse_showcase_regions(domains=None):
     """Parse showcase domains from config.
+
+    ``domains`` defaults to ``showcase.animations.domains``.
 
     Returns a dict mapping domain name -> {extent, projection, rotate, hours_per_revolution}.
     Named domains (strings) have extent=None and projection=None,
@@ -133,12 +138,14 @@ def parse_showcase_regions():
     rotate/hours_per_revolution only take effect when extent is None
     (full-globe domains).
     """
+    if domains is None:
+        domains = (
+            config.get("showcase", {})
+            .get("animations", {})
+            .get("domains", ["globe", "europe", "switzerland"])
+        )
     result = {}
-    for r in (
-        config.get("showcase", {})
-        .get("animations", {})
-        .get("domains", ["globe", "europe", "switzerland"])
-    ):
+    for r in domains:
         if isinstance(r, str):
             result[r] = {
                 "extent": None,
@@ -426,16 +433,38 @@ def verif_hash(full_config: dict) -> str:
     """Hash of all settings that affect verification outputs.
 
     Combines the truth source with verification-method settings so that
-    changing either (e.g. switching lapse_rate_correction on/off) produces
-    new output paths and unconditionally triggers a rerun.
+    changing any of them (e.g. switching lapse_rate_correction on/off, or
+    changing the station_holdout selection) produces new output
+    paths and unconditionally triggers a rerun.
     """
     truth_cfg = {
         k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE
     }
     experiment_verif_cfg = {
         "lapse_rate_correction": full_config.get("lapse_rate_correction", True),
+        "station_holdout": HOLDOUT_STATIONS,
     }
     return generate_json_hash({"truth": truth_cfg, "verif": experiment_verif_cfg})
+
+
+def holdout_dep(_):
+    """Holdout station file dependency: the CSV written by rule
+    station_holdout, or no input when experiment.station_holdout is unset."""
+    return [HOLDOUT_FILE] if HOLDOUT_STATIONS else []
+
+
+def run_uses_holdout(run_id: str) -> bool:
+    """Whether the run's inference config consumes the holdout station file.
+
+    The contract is the file name: an inference config that references
+    HOLDOUT_WORKDIR_NAME (e.g. as the nudge_toward_observation filter's
+    holdout_station_file) gets the file staged in its working directory.
+    Third-party runs (e.g. grib_forecaster) have no inference config.
+    """
+    if RUN_CONFIGS[run_id]["model_type"] in THIRD_PARTY_MODEL_TYPES:
+        return False
+    with open(RUN_CONFIGS[run_id]["config"], "r") as f:
+        return HOLDOUT_WORKDIR_NAME in f.read()
 
 
 def truth_file_dep(_):
@@ -451,11 +480,16 @@ def truth_file_dep(_):
 if "jretrieve" in str(config["truth"]["root"]):
     from data_input.jretrieve import check_prerequisites, parse_selection
 
-    _, _jretrieve_stage, _ = parse_selection(config["truth"]["root"])
+    _, _jretrieve_stage, _, _ = parse_selection(config["truth"]["root"])
     check_prerequisites(_jretrieve_stage)
 
 
 TRUTH_HASH = truth_hash(config["truth"])
+HOLDOUT_STATIONS = sorted(EXPERIMENT_CONFIG.get("station_holdout") or [])
+HOLDOUT_FILE = (
+    OUT_ROOT / f"data/station_holdout/{generate_json_hash(HOLDOUT_STATIONS)}.csv"
+)
+HOLDOUT_WORKDIR_NAME = "holdout_stations.csv"
 REGIONS = parse_regions()
 VERIF_HASH = verif_hash(config)
 _showcase = config.get("showcase", {})
@@ -464,7 +498,17 @@ SHOWCASE_CONFIG = {
     "params": _showcase.get("params", ["T_2M", "SP_10M"]),
     "fps": _showcase.get("animations", {}).get("frames_per_second", 2.0),
 }
-EXPERIMENT_PARAMS = config.get("experiment", {}).get(
+_comparisons = _showcase.get("comparisons", {})
+COMPARISONS_CONFIG = {
+    "enabled": _comparisons.get("enabled", False),
+    "regions": parse_showcase_regions(_comparisons.get("domains", ["alps"])),
+    "baselines": _comparisons.get("baselines", []),
+    "lead_times": _comparisons.get("lead_times", [24]),
+    # station truth (jretrievedwh) cannot be drawn as a map
+    "truth": _comparisons.get("truth", True)
+    and "jretrieve" not in str(config["truth"]["root"]),
+}
+EXPERIMENT_PARAMS = EXPERIMENT_CONFIG.get(
     "params", ["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"]
 )
 REFTIMES = parse_reference_times()
@@ -472,7 +516,17 @@ RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
 BASELINE_CONFIGS = collect_all_baselines()
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
-_scorecard = config.get("experiment", {}).get("scorecards") or {}
+# Fail fast: an inference config that consumes the holdout station file needs
+# experiment.station_holdout to be set.
+if not HOLDOUT_STATIONS:
+    for _run_id in RUN_CONFIGS:
+        if run_uses_holdout(_run_id):
+            raise ValueError(
+                f"Inference config {RUN_CONFIGS[_run_id]['config']} of run {_run_id} "
+                f"references {HOLDOUT_WORKDIR_NAME}, but experiment.station_holdout "
+                "is not set."
+            )
+_scorecard = EXPERIMENT_CONFIG.get("scorecards") or {}
 SCORECARD_CONFIGS = (
     _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
 )
@@ -482,8 +536,10 @@ SCORECARD_CONFIGS = (
 # - period-accumulated params (TOT_PREC/tp) verify a [lead - period, lead]
 #   window, so they have no value at lead times shorter than one step spacing
 #   (e.g. no 0h precip map).
-# - diagnostic params (e.g. CLCT/tcc) aren't part of the model's input state,
+# - diagnostic params (e.g. CLCT/tcc in AIFS) aren't part of the model's input state,
 #   so they're simply absent from the initial-state GRIB file written at step 0.
+#   Cloud cover is prognostic in some models (Varda-single RC); listing it here
+#   only drops their 0h animation frame.
 # Short and canonical names both appear across the workflow (showcases vs maps).
 PARAMS_WITHOUT_STEP_ZERO_VALUE = {
     "TOT_PREC",
@@ -492,9 +548,29 @@ PARAMS_WITHOUT_STEP_ZERO_VALUE = {
     "tcc",
     "CLCL",
     "lcc",
+    "CLCM",
+    "mcc",
+    "CLCH",
+    "hcc",
     "SSRD",
     "ssrd",
 }
+
+
+def balfrin_cpus(mem_mb, actual_cpus=1, node_mem_mb=512_000, node_cpus=256):
+    """Minimum cores to request on Balfrin based on memory usage.
+
+    Balfrin CPU nodes have no per-job memory control: any job can consume the
+    full node memory (512 GB / 256 cores).  To avoid starving other jobs,
+    reserve cores proportional to expected memory so the scheduler implicitly
+    limits total memory usage:
+
+        cores = max(actual_cpus, ceil(mem_mb / node_mem_mb * node_cpus))
+    """
+    import math
+
+    mem_cpus = math.ceil(mem_mb / node_mem_mb * node_cpus)
+    return max(actual_cpus, mem_cpus)
 
 
 def resolve_leadtimes(steps_spec, requested="all", param=None):
@@ -522,6 +598,12 @@ def resolve_leadtimes(steps_spec, requested="all", param=None):
         )
 
     valid = wanted & supported
-    if param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
+    base_param, agg_hours = parse_aggregated_param(param) if param else (None, None)
+    if agg_hours:
+        # Aggregated params (e.g. TOT_PREC6) need the window start [lead - agg, lead]
+        valid = {
+            lt for lt in valid if lt - agg_hours == 0 or lt - agg_hours in supported
+        }
+    elif base_param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
         valid = {lt for lt in valid if lt >= step}
     return sorted(valid)

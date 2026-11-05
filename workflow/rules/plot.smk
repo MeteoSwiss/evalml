@@ -160,13 +160,21 @@ rule make_forecast_animation:
         param="|".join(map(re.escape, SHOWCASE_CONFIG["params"])),
         region="|".join(map(re.escape, SHOWCASE_CONFIG["regions"].keys())),
     localrule: True
-    params:
-        delay=round(100 / SHOWCASE_CONFIG["fps"]),
-    shell:
-        """
-        FRAMES=$(for f in {input}; do [ -s "$f" ] && echo "$f"; done | tr '\\n' ' ')
-        convert -delay {params.delay} -loop 0 $FRAMES {output}
-        """
+    run:
+        from PIL import Image
+
+        frames = [
+            Image.open(f).convert("RGB").quantize()
+            for f in input
+            if Path(f).stat().st_size > 0
+        ]
+        frames[0].save(
+            output[0],
+            save_all=True,
+            append_images=frames[1:],
+            duration=1000 / SHOWCASE_CONFIG["fps"],
+            loop=0,
+        )
 
 
 rule plot_scoremaps:
@@ -214,3 +222,78 @@ use rule plot_scoremaps as plot_scoremaps_baseline with:
     log:
         OUT_ROOT
         / "logs/plot_scoremaps/{experiment}/{baseline_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",
+
+
+def _comparison_sources(wc):
+    """'label=root' for each panel after the truth: all candidate runs, then the
+    selected baselines."""
+    sources = [
+        f"{RUN_CONFIGS[run_id]['label']}="
+        f"{(Path(OUT_ROOT) / f'data/runs/{run_id}/{wc.init_time}/grib').resolve()}"
+        for run_id in CANDIDATES
+    ]
+    sources += [
+        f"{label}={BASELINE_CONFIGS[resolve_baseline_id(label)]['root']}"
+        for label in COMPARISONS_CONFIG["baselines"]
+    ]
+    return sources
+
+
+rule compare_forecast_frames:
+    input:
+        script="workflow/scripts/compare_forecast_frames.py",
+        inference_okfiles=lambda wc: expand(
+            rules.inference_execute.output.okfile,
+            run_id=CANDIDATES,
+            init_time=wc.init_time,
+        ),
+        truth=lambda wc: truth_file_dep(wc) if COMPARISONS_CONFIG["truth"] else [],
+    output:
+        expand(
+            OUT_ROOT
+            / "results/{{showcase}}/{{init_time}}/compare/{{init_time}}_{{leadtime}}_{{param}}_{region}.png",
+            region=list(COMPARISONS_CONFIG["regions"].keys()),
+        ),
+    log:
+        OUT_ROOT
+        / "logs/{showcase}/{init_time}/compare_forecast_frames_{leadtime}_{param}.log",
+    wildcard_constraints:
+        showcase=r"[^/]+",
+        init_time=r"\d{12}",
+        leadtime=r"\d+",
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=4,
+        mem_mb=32_000,
+        runtime="30m",
+    params:
+        sources=_comparison_sources,
+        truth=(
+            [
+                "--truth",
+                config["truth"]["root"],
+                "--truth_label",
+                config["truth"]["label"],
+            ]
+            if COMPARISONS_CONFIG["truth"]
+            else []
+        ),
+        regions_json=json.dumps(COMPARISONS_CONFIG["regions"]),
+        outdir=lambda wc: str(
+            (
+                Path(OUT_ROOT) / f"results/{wc.showcase}/{wc.init_time}/compare"
+            ).resolve()
+        ),
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        SOURCE_ARGS=()
+        for s in {params.sources:q}; do
+            SOURCE_ARGS+=(--source "$s")
+        done
+        uv run python {input.script} \
+            "${{SOURCE_ARGS[@]}}" {params.truth:q} \
+            --date {wildcards.init_time:q} --leadtime {wildcards.leadtime:q} \
+            --param {wildcards.param:q} --regions_json {params.regions_json:q} \
+            --outdir {params.outdir:q} >{log} 2>&1
+        """

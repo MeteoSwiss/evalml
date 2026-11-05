@@ -384,6 +384,55 @@ class AnimationsConfig(BaseModel):
     )
 
 
+class ComparisonsConfig(BaseModel):
+    """Configuration for side-by-side map comparisons of truth, runs and baselines."""
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Whether to generate side-by-side maps: one figure per init time, lead "
+            "time, parameter and domain, with a panel for the truth (if gridded), "
+            "each run and each selected baseline."
+        ),
+    )
+    truth: bool = Field(
+        default=True,
+        description=(
+            "Whether to include a truth panel. Ignored for station truth "
+            "(jretrievedwh), which cannot be drawn as a map."
+        ),
+    )
+    baselines: List[str] = Field(
+        default_factory=list,
+        description="Labels of the baselines to add as panels.",
+    )
+    domains: List[str | DomainConfig] = Field(
+        default=["alps"],
+        description=(
+            "Domains to plot. Same format as `animations.domains`: a named domain "
+            "defined in plotting.DOMAINS or a custom domain dict."
+        ),
+    )
+    lead_times: List[int] = Field(
+        default=[24],
+        description=(
+            "Lead times (hours) to plot. A run or baseline without data at a lead "
+            "time is shown as an empty panel."
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _enabled_requires_a_reference(self):
+        if self.enabled and not (self.truth or self.baselines):
+            raise ValueError(
+                "comparisons need something to compare the runs with: enable "
+                "`truth` or list `baselines`."
+            )
+        return self
+
+
 class ScorecardConfig(BaseModel):
     """Configuration for a single named scorecard."""
 
@@ -441,6 +490,10 @@ class ShowcaseConfig(BaseModel):
     animations: AnimationsConfig = Field(
         default_factory=AnimationsConfig,
         description="Configuration for animation generation.",
+    )
+    comparisons: ComparisonsConfig = Field(
+        default_factory=ComparisonsConfig,
+        description="Configuration for side-by-side map comparisons.",
     )
 
 
@@ -524,6 +577,16 @@ class ExperimentConfig(BaseModel):
         ...,
         description="Settings for the experiment dashboard.",
     )
+    station_holdout: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "List of holdout station nat_abbr. When set, adds a 'station_group' "
+            "dimension (all/holdout/holdin) to verification metrics for all models "
+            "and baselines. The workflow writes the list to a CSV file and stages it "
+            "as holdout_stations.csv in the working directory of every inference run "
+            "whose config references that file."
+        ),
+    )
     scorecards: Optional[ExperimentScorecardConfig] = Field(
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
@@ -532,6 +595,18 @@ class ExperimentConfig(BaseModel):
         default=None,
         description="Score map plot configuration. Omit or set enabled: false to disable.",
     )
+
+    @field_validator("station_holdout")
+    @classmethod
+    def validate_station_holdout(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return v
+        if not v:
+            raise ValueError("station_holdout must not be empty; omit it instead.")
+        duplicates = sorted({s for s in v if v.count(s) > 1})
+        if duplicates:
+            raise ValueError(f"station_holdout has duplicate stations: {duplicates}")
+        return v
 
     @field_validator("thresholds")
     @classmethod
@@ -723,11 +798,11 @@ class ConfigModel(BaseModel):
     truth: TruthConfig | None
     lapse_rate_correction: bool = Field(
         default=True,
-        description="Apply standard-atmosphere lapse-rate correction to T_2M.",
+        description="Apply lapse-rate correction to T_2M (0.0065 K/m) and PS (11.5 Pa/m).",
     )
-    experiment: ExperimentConfig = Field(
-        ...,
-        description="Settings for the experiment workflow outputs.",
+    experiment: ExperimentConfig | None = Field(
+        None,
+        description="Settings for the experiment workflow outputs. Required when running `evalml experiment`.",
     )
     locations: Locations
     fixture_root: Path | None = Field(
@@ -755,7 +830,7 @@ class ConfigModel(BaseModel):
 
     @model_validator(mode="after")
     def validate_scoremap_leadtimes(self) -> "ConfigModel":
-        sm = self.experiment.scoremaps
+        sm = self.experiment.scoremaps if self.experiment else None
         if sm is None or not sm.enabled:
             return self
         requested = set(sm.leadtimes)
