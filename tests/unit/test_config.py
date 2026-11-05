@@ -1,3 +1,5 @@
+import copy
+
 import pytest
 
 from evalml.config import ConfigModel
@@ -119,4 +121,60 @@ def test_output_variables_on_inline_forecaster(example_config):
 
     forecaster["output_variables"] = []
     with pytest.raises(ValueError, match="at least 1 item"):
+        _ = ConfigModel.model_validate(example_config)
+
+
+def _forecaster_item(example_config):
+    """A top-level forecaster entry, built from the inline one of the example."""
+    forecaster = copy.deepcopy(
+        example_config["runs"][0]["temporal_downscaler"]["forecaster"]
+    )
+    example_config["runs"].append({"forecaster": forecaster})
+    return forecaster
+
+
+def test_ensemble(example_config):
+    """ensemble is optional, needs at least 2 members and defaults the seed to 0."""
+
+    forecaster = _forecaster_item(example_config)
+    cfg = ConfigModel.model_validate(example_config)
+    assert cfg.runs[-1].forecaster.ensemble is None
+    assert cfg.model_dump(mode="json")["runs"][-1]["forecaster"]["ensemble"] is None
+
+    forecaster["ensemble"] = {"members": 4}
+    cfg = ConfigModel.model_validate(example_config)
+    assert cfg.model_dump(mode="json")["runs"][-1]["forecaster"]["ensemble"] == {
+        "members": 4,
+        "seed": 0,
+    }
+
+    forecaster["ensemble"] = {"members": 2, "seed": 42}
+    cfg = ConfigModel.model_validate(example_config)
+    assert cfg.runs[-1].forecaster.ensemble.seed == 42
+
+    forecaster["ensemble"] = {"members": 1}
+    with pytest.raises(ValueError, match="greater than or equal to 2"):
+        _ = ConfigModel.model_validate(example_config)
+
+    forecaster["ensemble"] = {"seed": 1}
+    with pytest.raises(ValueError, match="Field required"):
+        _ = ConfigModel.model_validate(example_config)
+
+    forecaster["ensemble"] = {"members": 4, "member": 3}
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        _ = ConfigModel.model_validate(example_config)
+
+
+def test_ensemble_not_on_temporal_downscaler(example_config):
+    """ensemble is rejected on the inline forecaster of a temporal downscaler, and
+    is not a field of the temporal downscaler itself."""
+
+    downscaler = example_config["runs"][0]["temporal_downscaler"]
+    downscaler["forecaster"]["ensemble"] = {"members": 4}
+    with pytest.raises(ValueError, match="cannot be an ensemble"):
+        _ = ConfigModel.model_validate(example_config)
+
+    del downscaler["forecaster"]["ensemble"]
+    downscaler["ensemble"] = {"members": 4}
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
         _ = ConfigModel.model_validate(example_config)
