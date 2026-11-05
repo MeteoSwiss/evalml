@@ -57,7 +57,7 @@ rule spectra_compute:
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
         steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
-        label=lambda wc: RUN_CONFIGS[wc.run_id].get("label", wc.run_id),
+        label=lambda wc: RUN_CONFIGS[wc.run_id].get("label") or wc.run_id,
         lead_times=SPECTRA_LEAD_TIMES,
         variables=SPECTRA_VARIABLES,
         method=SPECTRA_METHOD,
