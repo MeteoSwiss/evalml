@@ -7,6 +7,12 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import xarray as xr
+from ensemble_scores import (
+    add_deterministic_crps,
+    ensemble_sources,
+    is_score_var,
+    CRPS_NOTE,
+)
 from verification import decode_metric
 
 LOG = logging.getLogger(__name__)
@@ -111,9 +117,13 @@ def main(args: Namespace) -> None:
     dfs = _select_best_sources(dfs)
     # 3) Concatenate by source; outer join to keep the union of lead_times
     ds = _concat_sources(dfs)
+    ds, crps_filled = add_deterministic_crps(ds)
 
     # extract only  non-spatial variables to pd.DataFrame
-    nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]
+    # (rank histograms and probability tables are not scores: drawn separately)
+    nonspatial_vars = [
+        d for d in ds.data_vars if "spatial" not in d and is_score_var(ds[d])
+    ]
     all_df = (
         ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
     )
@@ -156,6 +166,10 @@ def main(args: Namespace) -> None:
 
         title = f"{metric} - {param} - {region}"
         title += f"- {season} - {init_hour}" if args.stratify else ""
+        if crps_filled and metric == "CRPS":
+            ax.annotate(
+                CRPS_NOTE, (0.0, -0.3), xycoords="axes fraction", fontsize=9, va="top"
+            )
         for source, df in sub_df.groupby("source"):
             display_label = args.label_map.get(source, source)
             df.plot(
@@ -179,6 +193,90 @@ def main(args: Namespace) -> None:
         fn = f"{metric}_{param}"
         fn += f"_{season}_{init_hour}.png" if args.stratify else ".png"
         plt.savefig(args.output_dir / fn, bbox_inches="tight")
+        plt.close(fig)
+
+    plot_ensemble_diagnostics(ds, args)
+
+
+def _counts_for_plot(da: xr.DataArray, source, region, keep: list[str]) -> xr.DataArray:
+    """Counts of one source at the default stratum, summed over everything but *keep*."""
+    da = da.sel(source=source)
+    for dim, val in (("region", region), ("season", "all"), ("init_hour", -999)):
+        if dim in da.dims:
+            da = da.sel({dim: val}, drop=True)
+    return da.sum([d for d in da.dims if d not in keep], skipna=True)
+
+
+def plot_ensemble_diagnostics(ds: xr.Dataset, args: Namespace) -> None:
+    """Rank histograms and reliability diagrams, for ensemble participants only.
+
+    Counts are summed over lead times, at the default region, all seasons and init hours.
+    """
+    ens_sources = ensemble_sources(ds)
+    if not ens_sources:
+        return
+    region = ds["region"].values[0]
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    label = lambda s: args.label_map.get(s, s)  # noqa: E731
+
+    for name in [v for v in ds.data_vars if v.endswith(".rank_hist")]:
+        param = name.rsplit(".", 1)[0]
+        fig, ax = plt.subplots(figsize=(10, 6))
+        n_plotted = 0
+        for source in ens_sources:
+            counts = _counts_for_plot(ds[name], source, region, ["rank"])
+            total = float(counts.sum())
+            if not total > 0:
+                continue
+            ax.plot(
+                counts["rank"].values,
+                counts.values / total,
+                marker="o",
+                label=label(source),
+            )
+            n_plotted += 1
+        if n_plotted:
+            n_ranks = ds.sizes["rank"]
+            ax.axhline(1 / n_ranks, color="grey", ls="--", lw=1)
+            ax.set(
+                title=f"Rank histogram - {param} - {region}",
+                xlabel="Rank of observation among members",
+                ylabel="Relative frequency",
+            )
+            ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=n_plotted)
+            fig.savefig(args.output_dir / f"rank_hist_{param}.png", bbox_inches="tight")
+        plt.close(fig)
+
+    for name in [v for v in ds.data_vars if ".prob_table_" in v]:
+        param, rest = name.split(".prob_table_", 1)
+        fig, (ax, axc) = plt.subplots(
+            2, 1, figsize=(10, 8), sharex=True, height_ratios=[3, 1]
+        )
+        n_plotted = 0
+        for source in ens_sources:
+            tab = _counts_for_plot(ds[name], source, region, ["n_members_yes", "obs"])
+            n_yes = tab["n_members_yes"].values
+            n_mem = int(n_yes.max())
+            n_bin = tab.sum("obs")
+            freq = tab.sel(obs=1) / n_bin.where(n_bin > 0)
+            if not bool(n_bin.sum() > 0):
+                continue
+            prob = n_yes / n_mem
+            ax.plot(prob, freq.values, marker="o", label=label(source))
+            axc.plot(prob, n_bin.values, marker="o")
+            n_plotted += 1
+        if n_plotted:
+            ax.plot([0, 1], [0, 1], color="grey", ls="--", lw=1)
+            ax.set(
+                title=f"Reliability - {param} {decode_metric(rest)} - {region}",
+                ylabel="Observed frequency",
+            )
+            axc.set(xlabel="Forecast probability (k/N)", ylabel="Count", yscale="log")
+            ax.legend(loc="upper left")
+            fig.savefig(
+                args.output_dir / f"reliability_{param}_{rest}.png",
+                bbox_inches="tight",
+            )
         plt.close(fig)
 
 
