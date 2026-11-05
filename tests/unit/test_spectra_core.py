@@ -49,6 +49,25 @@ def test_combined_spectrum_scales_and_sums():
     np.testing.assert_allclose(np.nan_to_num(p2), np.nan_to_num(p1), rtol=1e-6)
 
 
+def test_combined_spectrum_constant_field_is_valid_zero():
+    # An entirely dry precipitation field: zero power everywhere, not missing.
+    dry = np.zeros((64, 64))
+    wl, p = core.combined_spectrum(core.dct_power_spectrum, [dry], 1.0)
+    assert np.all(np.isfinite(p))
+    np.testing.assert_array_equal(p, 0.0)
+
+
+def test_combined_spectrum_nan_input_gives_nan():
+    field = _cosine_field(64, 8)
+    gappy = field.copy()
+    gappy[3, 5] = np.nan
+    wl, p = core.combined_spectrum(
+        core.dct_power_spectrum, [field, gappy], 1.0, factor=0.5
+    )
+    assert np.all(np.isfinite(wl))
+    assert np.all(np.isnan(p))
+
+
 def test_aggregate_spectra_averages_over_init(tmp_path):
     wl = np.array([100.0, 50.0, 25.0])
 

@@ -95,13 +95,18 @@ def combined_spectrum(
     """Sum the spectra of one or more component fields, scaled by `factor`.
 
     For wind kinetic energy pass [u, v] and factor=0.5 -> 0.5*(|u_hat|^2+|v_hat|^2).
-    NaN bins are treated as zero in the sum so the common coordinate is preserved.
+    Empty and zero-power bins count as zero, so a constant (e.g. dry) field gives a
+    valid all-zero spectrum. If any input field contains NaN (missing data), the
+    whole spectrum is NaN, so the gap carries through to the aggregation.
     """
     if not fields_2d:
         raise ValueError("combined_spectrum requires at least one field")
+    missing = any(np.isnan(f).any() for f in fields_2d)
     wl = total = None
     for f in fields_2d:
         w, p = spectrum_fn(f, dx_km, nbins, oro_coeff=oro_coeff)
         wl = w
         total = np.nan_to_num(p) if total is None else total + np.nan_to_num(p)
+    if missing:
+        return wl, np.full_like(total, np.nan)
     return wl, factor * total
