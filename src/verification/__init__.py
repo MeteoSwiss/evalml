@@ -20,27 +20,46 @@ from shapely.geometry import Polygon
 LOG = logging.getLogger(__name__)
 
 _T_LAPSE_RATE = 0.0065  # K/m — ICAO standard atmosphere
-_LAPSE_RATE_PARAMS: dict[str, float] = {"T_2M": _T_LAPSE_RATE}
+_PS_LAPSE_RATE = 11.5  # Pa/m — near-surface pressure decrease with height
+# param -> (lapse rate per metre, unit of the parameter)
+_LAPSE_RATE_PARAMS: dict[str, tuple[float, str]] = {
+    "T_2M": (_T_LAPSE_RATE, "K"),
+    "PS": (_PS_LAPSE_RATE, "Pa"),
+}
+
+# Angles in degrees: continuous scores use the shortest angular error.
+CIRCULAR_PARAMS: frozenset[str] = frozenset({"DD_10M"})
+# Class codes (WMO code table 4.201 for PTYPE): only the contingency tables of
+# the thresholds are meaningful, the continuous scores are NaN.
+CATEGORICAL_PARAMS: frozenset[str] = frozenset({"PTYPE"})
+
+
+def angular_difference(fcst, obs):
+    """Shortest angular difference fcst - obs in degrees, in [-180, 180).
+
+    E.g. a forecast of 350 deg against an obs of 10 deg is -20 deg, not 340 deg.
+    Works on numpy arrays and xarray objects.
+    """
+    return (fcst - obs + 180.0) % 360.0 - 180.0
 
 
 def apply_lapse_rate_correction_inplace(
     fcst: xr.Dataset,
     obs: xr.Dataset,
     params: list[str],
-) -> xr.Dataset:
-    """Correct T_2M and TD_2M in *fcst* to the elevation of *obs*.
+) -> None:
+    """Correct T_2M and PS in *fcst* to the elevation of *obs*.
 
     Requires both *fcst* and *obs* to carry an ``elevation`` coordinate (metres).
     For forecasts this is the model orography from the ICON external parameter
     file; for observations it comes from station metadata or FIS geopotential.
-    The function silently returns *fcst* unchanged when either coordinate is
-    absent so that pipelines without elevation data are not broken.
+    Raises ``ValueError`` when either coordinate is absent.
 
     Formula applied per parameter:
-        T_corrected = T_forecast − Γ × (elevation_obs − elevation_fcst)
+        X_corrected = X_forecast − Γ_X × (elevation_obs − elevation_fcst)
 
-    A positive height difference (obs higher than forecast grid cell) lowers the
-    corrected value, consistent with the standard atmospheric lapse rate.
+    with Γ_T_2M = 0.0065 K/m and Γ_PS = 11.5 Pa/m. A positive height difference
+    (obs higher than forecast grid cell) lowers the corrected value.
     """
     missing = [
         name
@@ -57,12 +76,14 @@ def apply_lapse_rate_correction_inplace(
     dz_vals = np.asarray(dz).ravel()
     n_missing = int(np.sum(~np.isfinite(dz_vals)))
     if n_missing > 0:
-        raise ValueError(
-            f"Lapse-rate correction: {n_missing} missing elevation value(s) in dz; "
-            "both forecast and observation elevation coordinates must be fully defined."
+        LOG.warning(
+            "Lapse-rate correction: %d missing elevation value(s) in dz; "
+            "statistics and corrections are computed over the remaining %d point(s).",
+            n_missing,
+            dz_vals.size - n_missing,
         )
 
-    max_abs_dz = float(np.abs(dz_vals).max())
+    max_abs_dz = float(np.nanmax(np.abs(dz_vals)))
     if max_abs_dz < 1.0:
         LOG.info(
             "Lapse-rate correction: forecast and truth altitudes agree within rounding "
@@ -72,24 +93,27 @@ def apply_lapse_rate_correction_inplace(
     else:
         LOG.info(
             "Lapse-rate correction: Δz range [%.1f, %.1f] m, mean %.1f m.",
-            float(dz_vals.min()),
-            float(dz_vals.max()),
-            float(dz_vals.mean()),
+            float(np.nanmin(dz_vals)),
+            float(np.nanmax(dz_vals)),
+            float(np.nanmean(dz_vals)),
         )
 
-    for param, rate in _LAPSE_RATE_PARAMS.items():
+    for param, (rate, unit) in _LAPSE_RATE_PARAMS.items():
         if param in params and param in fcst.data_vars:
             correction = rate * dz
             if max_abs_dz >= 1.0:
                 c_vals = np.asarray(correction).ravel()
                 LOG.info(
-                    "Lapse-rate correction for %s (Γ=%.4f K/m): "
-                    "correction range [%.3f, %.3f] K, mean %.3f K.",
+                    "Lapse-rate correction for %s (Γ=%g %s/m): "
+                    "correction range [%.3f, %.3f] %s, mean %.3f %s.",
                     param,
                     rate,
-                    float(c_vals.min()),
-                    float(c_vals.max()),
-                    float(c_vals.mean()),
+                    unit,
+                    float(np.nanmin(c_vals)),
+                    float(np.nanmax(c_vals)),
+                    unit,
+                    float(np.nanmean(c_vals)),
+                    unit,
                 )
             fcst[param] = fcst[param] - correction
 
@@ -226,6 +250,8 @@ def _compute_scores(
     suffix="",
     source="",
     thresholds: dict[str, list[float]] | None = None,
+    circular: bool = False,
+    categorical: bool = False,
 ) -> xr.Dataset:
     """
     Compute basic verification metrics between two xarray DataArrays (fcst and obs).
@@ -233,22 +259,34 @@ def _compute_scores(
     Computation of scores for continuous and categorical forecasts are supported.
     Categorical forecasts are specified via a dict mapping operator keys (gt, ge, lt, le, eq, ne)
     to lists of threshold values (e.g. {"gt": [10.0], "lt": [0.0]}).
+    With ``circular`` (angles in degrees) the continuous scores use the shortest
+    angular error; with ``categorical`` (class codes) they are NaN.
     """
     LOG.info(f"Compute scores for {prefix} {suffix}")
+    # Forecast shifted by whole turns to within 180 deg of the obs
+    fcst_unwrapped = obs + angular_difference(fcst, obs) if circular else fcst
     result = xr.Dataset(
         {
             f"{prefix}BIAS{suffix}": scores.continuous.additive_bias(
-                fcst, obs, reduce_dims=dim
+                fcst_unwrapped, obs, reduce_dims=dim
             ),
-            f"{prefix}MSE{suffix}": scores.continuous.mse(fcst, obs, reduce_dims=dim),
-            f"{prefix}MAE{suffix}": scores.continuous.mae(fcst, obs, reduce_dims=dim),
+            f"{prefix}MSE{suffix}": scores.continuous.mse(
+                fcst_unwrapped, obs, reduce_dims=dim
+            ),
+            f"{prefix}MAE{suffix}": scores.continuous.mae(
+                fcst_unwrapped, obs, reduce_dims=dim
+            ),
             f"{prefix}CORR{suffix}": scores.continuous.correlation.pearsonr(
-                fcst,
+                fcst_unwrapped,
                 obs,
                 reduce_dims=dim,
             ),
         }
     )
+    if categorical:
+        # Class codes: only the contingency tables below are meaningful. full_like
+        # keeps the shape only, so the (lazy) continuous scores are never computed.
+        result = xr.full_like(result, np.nan)
     if thresholds is not None:
         LOG.info(f"compute thresholds for {thresholds}")
         threshold_pairs = [
@@ -265,25 +303,50 @@ def _compute_scores(
     return result
 
 
+def _circular_mean_var(
+    data: xr.DataArray, dim: list[str]
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """Circular mean and variance of angles in degrees.
+
+    The mean is the direction of the average unit vector, so the mean of 359 and
+    1 deg is 0 deg, not 180 deg. The variance is 1 - (length of the average unit
+    vector): 0 when all angles are equal, 1 when they are spread evenly.
+    """
+    rad = np.deg2rad(data)
+    sin_mean = np.sin(rad).mean(dim=dim, skipna=True)
+    cos_mean = np.cos(rad).mean(dim=dim, skipna=True)
+    mean = np.mod(np.degrees(np.arctan2(sin_mean, cos_mean)), 360.0)
+    var = 1 - np.hypot(sin_mean, cos_mean)
+    return mean, var
+
+
 def _compute_statistics(
     data: xr.DataArray,
     dim: list[str],
     prefix="",
     suffix="",
     source="",
+    circular: bool = False,
 ) -> xr.Dataset:
     """
     Compute basic statistics of a xarray DataArray (data).
     Returns a xarray Dataset with the computed statistics.
+    With ``circular`` (angles in degrees) the mean and variance are circular
+    (see _circular_mean_var), and min and max are left out: they have no meaning
+    on a circle.
     """
-    stats = xr.Dataset(
-        {
-            f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),
-            f"{prefix}var{suffix}": data.var(dim=dim, skipna=True),
-            f"{prefix}min{suffix}": data.min(dim=dim, skipna=True),
-            f"{prefix}max{suffix}": data.max(dim=dim, skipna=True),
-        }
-    )
+    if circular:
+        mean, var = _circular_mean_var(data, dim=dim)
+        stats = xr.Dataset({f"{prefix}mean{suffix}": mean, f"{prefix}var{suffix}": var})
+    else:
+        stats = xr.Dataset(
+            {
+                f"{prefix}mean{suffix}": data.mean(dim=dim, skipna=True),
+                f"{prefix}var{suffix}": data.var(dim=dim, skipna=True),
+                f"{prefix}min{suffix}": data.min(dim=dim, skipna=True),
+                f"{prefix}max{suffix}": data.max(dim=dim, skipna=True),
+            }
+        )
     stats = stats.expand_dims({"source": [source]})
     return stats
 
@@ -296,6 +359,78 @@ def _merge_metrics(ds: xr.Dataset, num_workers: int = 4) -> xr.Dataset:
         )
     out = out.compute(num_workers=num_workers, scheduler="threads")
     return out
+
+
+def _obs_only_statistics(
+    fcst: xr.Dataset,
+    obs: xr.Dataset,
+    masks: xr.DataArray,
+    station_masks: xr.DataArray,
+    obs_label: str,
+    dim: list[str],
+    num_workers: int,
+) -> list[xr.Dataset]:
+    """Statistics of the parameters that only the truth provides (no forecast yet).
+
+    No scores can be computed for them, but their truth statistics are kept so
+    that they still appear in the reports. Like the other parameters, they carry
+    the region and station_group dimensions.
+    """
+    stats = []
+    for param in obs.data_vars:
+        if param in fcst.data_vars:
+            continue
+        LOG.info("Parameter %s only in obs: computing obs statistics only", param)
+        obs_stats = _compute_statistics(
+            obs[param].where(masks).where(station_masks),
+            prefix=param + ".",
+            source=obs_label,
+            dim=dim,
+            circular=param in CIRCULAR_PARAMS,
+        )
+        if "forecast_reference_time" in fcst.coords:
+            obs_stats = obs_stats.assign_coords(
+                forecast_reference_time=fcst["forecast_reference_time"]
+            )
+        stats.append(_merge_metrics([obs_stats], num_workers=num_workers))
+    return stats
+
+
+def _create_station_group_masks(
+    values_coord: xr.DataArray | None, holdout_stations: list[str] | None
+) -> xr.DataArray:
+    """Boolean masks over the values dimension for station groups.
+
+    Always includes "all" (every verify() output carries a station_group dimension,
+    so downstream consumers never need to check whether it's present). When
+    holdout_stations is empty/None, "all" is the only group — the holdout/holdin
+    split is only meaningful, and only added, when stations are actually held out.
+
+    values_coord is None for truth on a regular (y, x) grid, e.g. INCA. Such data has
+    no stations, so only the "all" group exists, as a mask without spatial dims.
+    """
+    if values_coord is None:
+        if holdout_stations:
+            raise ValueError("Holdout stations require station truth on 'values'.")
+        return xr.DataArray(
+            [True], coords={"station_group": ["all"]}, dims=["station_group"]
+        )
+    all_nat_abbr = values_coord.values
+    if not holdout_stations:
+        return xr.DataArray(
+            np.ones((1, len(all_nat_abbr)), dtype=bool),
+            coords={"station_group": ["all"], "values": all_nat_abbr},
+            dims=["station_group", "values"],
+        )
+    is_holdout = np.isin(all_nat_abbr, holdout_stations)
+    return xr.DataArray(
+        np.stack([np.ones_like(is_holdout), is_holdout, ~is_holdout]),
+        coords={
+            "station_group": ["all", "holdout", "holdin"],
+            "values": all_nat_abbr,
+        },
+        dims=["station_group", "values"],
+    )
 
 
 def _bbox_polygon(lon_min, lon_max, lat_min, lat_max) -> Polygon:
@@ -315,10 +450,12 @@ def verify(
     obs: xr.Dataset,
     fcst_label: str,
     obs_label: str,
-    regions: list[dict] | None = None,
+    regions: list[dict],
     dim: list[str] | None = None,
     threshold_dict: dict[str, dict[str, list[float]]] | None = None,
     num_workers: int | None = None,
+    holdout_stations: list[str] | None = None,
+    max_missing_fraction: float = 0.0,
 ) -> xr.Dataset:
     """
     Compute verification metrics and statistics comparing forecast and observation datasets.
@@ -351,6 +488,20 @@ def verify(
         If None, no thresholds used.
     num_workers : int or None, optional
         Number of parallel workers for computation. If None, uses available CPU cores minus 2.
+    holdout_stations : list[str] or None, optional
+        Station nat_abbr forming the "holdout" station group. The output always
+        carries a station_group dimension — ["all"] when this is None/empty, or
+        ["all", "holdout", "holdin"] when stations are given — so callers never need to check
+        for its presence.
+    max_missing_fraction : float, optional
+        Maximum allowed fraction of missing forecast values among obs-valid in-region points
+        before a metric is set to NaN. Computed per region and time step over the reduction
+        dimensions. Default is 0.0 to require that competing forecasts are
+        evaluated on exactly the same set of observations.
+
+    Parameters in ``CIRCULAR_PARAMS`` (wind direction) are scored on the shortest
+    angular error. Parameters in ``CATEGORICAL_PARAMS`` (precipitation type) only get
+    the contingency tables of their thresholds; their continuous scores are NaN.
 
     Returns
     -------
@@ -386,8 +537,18 @@ def verify(
         lon=obs_aligned["longitude"], lat=obs_aligned["latitude"]
     )
 
+    station_masks = _create_station_group_masks(
+        obs_aligned["values"] if "values" in obs_aligned.dims else None,
+        holdout_stations,
+    )
+    if holdout_stations:
+        LOG.info(
+            "Station group masks created: %d holdout, %d holdin stations",
+            int(station_masks.sel(station_group="holdout").sum()),
+            int(station_masks.sel(station_group="holdin").sum()),
+        )
+
     scores = []
-    statistics = []
     for param in fcst_aligned.data_vars:
         if param not in obs_aligned.data_vars:
             LOG.warning("Parameter %s not in obs, skipping", param)
@@ -408,6 +569,17 @@ def verify(
         fcst_param = fcst_aligned[param].where(masks)
         obs_param = obs_aligned[param].where(masks)
 
+        # Apply station group masks — adds "station_group" dim, always present
+        # (["all"], or ["all", "holdout", "holdin"] when holdout_stations is set)
+        fcst_param = fcst_param.where(station_masks)
+        obs_param = obs_param.where(station_masks)
+        # Missing fraction: among obs-valid in-region points, fraction where fcst is missing.
+        # Normalising by obs availability avoids penalising parameters with fewer stations.
+        missing_fraction = (
+            fcst_param.isnull().where(obs_param.notnull()).mean(dim=dim, skipna=True)
+        )
+        too_many_missing = missing_fraction > max_missing_fraction
+
         score = _compute_scores(
             fcst_param,
             obs_param,
@@ -415,25 +587,41 @@ def verify(
             source=fcst_label,
             dim=dim,
             thresholds=thresholds,
-        )
+            circular=param in CIRCULAR_PARAMS,
+            categorical=param in CATEGORICAL_PARAMS,
+        ).where(~too_many_missing)
         fcst_stats = _compute_statistics(
             fcst_param,
             prefix=param + ".",
             source=fcst_label,
             dim=dim,
-        )
+            circular=param in CIRCULAR_PARAMS,
+        ).where(~too_many_missing)
         obs_stats = _compute_statistics(
             obs_param,
             prefix=param + ".",
             source=obs_label,
             dim=dim,
+            circular=param in CIRCULAR_PARAMS,
         )
         param_statistics = xr.concat([fcst_stats, obs_stats], dim="source")
-        # Compute eagerly per parameter to prevent dask graph bloat
-        scores.append(_merge_metrics([score], num_workers=num_workers))
-        statistics.append(_merge_metrics([param_statistics], num_workers=num_workers))
+        # Single compute per parameter: score + statistics share fcst_param/obs_param
+        # subgraphs so dask evaluates the data in one pass, preventing graph bloat.
+        scores.append(
+            _merge_metrics([score, param_statistics], num_workers=num_workers)
+        )
 
-    out = xr.merge(scores + statistics, join="outer", compat="no_conflicts")
+    scores += _obs_only_statistics(
+        fcst=fcst_aligned,
+        obs=obs_aligned,
+        masks=masks,
+        station_masks=station_masks,
+        obs_label=obs_label,
+        dim=dim,
+        num_workers=num_workers,
+    )
+
+    out = xr.merge(scores, join="outer", compat="no_conflicts")
     LOG.info("Computed metrics in %.2f seconds", time.time() - start)
     LOG.info("Metrics dataset: \n%s", out)
     return out

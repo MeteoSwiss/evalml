@@ -1,4 +1,5 @@
 import base64
+import os
 import shlex
 import subprocess
 import urllib.error
@@ -13,10 +14,20 @@ import click
 from evalml.config import ConfigModel
 
 
+def workflow_env() -> dict[str, str]:
+    """Environment for the workflow. Keeps uv's package cache (inference
+    environments pull torch etc., tens of GB) off the small home quota by
+    pointing it to $SCRATCH, unless the user chose a location."""
+    env = dict(os.environ)
+    if env.get("SCRATCH") and not env.get("UV_CACHE_DIR"):
+        env["UV_CACHE_DIR"] = str(Path(env["SCRATCH"]) / ".cache" / "uv")
+    return env
+
+
 def run_command(command: list[str]) -> int:
     """Execute a shell command, optionally as dry-run."""
     Path(".evalml_snakemake_cmd.txt").write_text(shlex.join(command) + "\n")
-    return subprocess.run(command).returncode
+    return subprocess.run(command, env=workflow_env()).returncode
 
 
 def _base_snakemake_command(
@@ -186,12 +197,15 @@ def experiment(
     rulegraph,
     extra_smk_args,
 ):
-    if mec or ffv2:
-        raw = load_yaml(configfile)
-        if mec and raw.get("mec") is None:
-            raise click.UsageError("--mec requires a 'mec' block in the config file.")
-        if ffv2 and raw.get("ffv2") is None:
-            raise click.UsageError("--ffv2 requires a 'ffv2' block in the config file.")
+    raw = load_yaml(configfile)
+    if not (mec or ffv2) and raw.get("experiment") is None:
+        raise click.UsageError(
+            "evalml experiment requires an 'experiment' block in the config file."
+        )
+    if mec and raw.get("mec") is None:
+        raise click.UsageError("--mec requires a 'mec' block in the config file.")
+    if ffv2 and raw.get("ffv2") is None:
+        raise click.UsageError("--ffv2 requires a 'ffv2' block in the config file.")
 
     targets = []
     if mec or ffv2:
