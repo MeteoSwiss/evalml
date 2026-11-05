@@ -29,18 +29,10 @@ def _spectra_truth_steps():
     return "0/120/6"
 
 
-def spectra_participants():
-    """participant key -> aggregated spectra path (runs + baselines)."""
-    out = {}
-    for base in BASELINE_CONFIGS:
-        out[base] = OUT_ROOT / f"data/baselines/{base}/spectra_aggregated.nc"
-    for run_id, cfg in RUN_CONFIGS.items():
-        if cfg.get("_is_candidate", False):
-            out[run_id] = OUT_ROOT / f"data/runs/{run_id}/spectra_aggregated.nc"
-    return out
-
-
-SPECTRA_PARTICIPANTS = spectra_participants()
+SPECTRA_PARTICIPANTS = {
+    pid: participant_data_dir(pid) / "spectra_aggregated.nc"
+    for pid in experiment_participant_ids()
+}
 
 
 rule spectra_compute:
