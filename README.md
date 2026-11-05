@@ -62,8 +62,8 @@ runs:
       steps: 0/120/6
       config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
       # Optional: variables written to the GRIB output files (all if omitted), see "Output variables".
-      # Names as the GRIB output sees them (GRIB short names with anemoi-inference >= 0.11.2).
-      # output_variables: [T_2M, TD_2M, U_10M, V_10M, PMSL, TOT_PREC, FIS]
+      # Use the model's variable names (as in the checkpoint), not the GRIB short names.
+      # output_variables: [2t, 2d, 10u, 10v, msl, tp, z]
   # A temporal_downscaler entry can optionally embed its driving forecaster config inline.
   # - temporal_downscaler:
   #     checkpoint: /path/to/temporal_downscaler.ckpt
@@ -309,25 +309,26 @@ runs:
   - forecaster:
       checkpoint: https://...
       steps: 0/120/6
-      output_variables: [T_2M, TD_2M, U_10M, V_10M, PS, TOT_PREC, FIS, "*_850"]
+      output_variables: [2t, 2d, 10u, 10v, sp, tp, z, "*_850"]
 ```
 
 The list is written as `variables` to every `grib` output of the inference config
 (including those inside a `tee`), replacing any `variables` set in the template.
 
-- Names are those the GRIB output sees: GRIB short names (e.g. `TOT_PREC`) with
-  anemoi-inference 0.11.2 or later, model names (e.g. `tp`) before. Both may be listed;
-  the example above assumes 0.11.2 or later.
+- Names are the model's variable names, as listed in the checkpoint metadata
+  (`anemoi-inference metadata`): `2t`, `tp`, `t_850` and so on, not the GRIB short names
+  (`T_2M`, `TOT_PREC`) the files end up with. A name that matches nothing is ignored, so a
+  list of GRIB short names silently writes empty output (seen with anemoi-inference 0.12.0).
 - Shell-style globs, e.g. `"*_850"` for all fields on 850 hPa (quote them in YAML), need
   anemoi-inference 0.13.0 or later. Older versions match names literally, so a pattern
   matches nothing there.
-- Keep `FIS` (`z` before 0.11.2): the model orography is read from it for the lapse-rate
-  correction of the verification.
+- Keep `z` (the surface geopotential, written as `FIS`): the model orography is read from
+  it for the lapse-rate correction of the verification.
 - The list is not checked against `experiment.params`, nor against the parameters of a
   showcase or of the SAL verification, which read the same files. A derived parameter
-  that is not written itself needs its components: `SP_10M` and `DD_10M` need `U_10M` and
-  `V_10M`, `RELHUM_2M` needs `T_2M` and `TD_2M`, `TW_2M` needs `T_2M`, `TD_2M` and `PS`.
-  A period such as `TOT_PREC6` needs `TOT_PREC`.
+  that is not written itself needs its components: `SP_10M` and `DD_10M` need `10u` and
+  `10v`, `RELHUM_2M` needs `2t` and `2d`, `TW_2M` needs `2t`, `2d` and `sp`. A period such
+  as `TOT_PREC6` needs `tp`.
 - A forecaster that drives a temporal downscaler must keep every field the downscaler
   reads, from both the LAM files and the `ifs-*` files.
 - Changing the list gives the run a new `run_id`, so inference reruns; the inference
