@@ -1,9 +1,10 @@
 """Script to prepare configuration and working directory for inference runs."""
 
+import copy
 import logging
 import yaml
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from evalml.helpers import setup_logger
 from evalml.variable_checks import (
@@ -88,21 +89,105 @@ def set_output_variables(
 
 def _set_grib_variables(output, variables: list[str]) -> int:
     """Set `variables` on every grib output in an output block; return how many."""
-    if not isinstance(output, dict):
-        return 0
     n = 0
+    for spec in _grib_outputs(output):
+        # one list per output, so that yaml does not write anchors and aliases
+        spec["variables"] = list(variables)
+        n += 1
+    return n
+
+
+def _grib_outputs(output):
+    """Yield the spec of every grib output in an output block, bare or in any
+    depth of `tee` outputs. A short-form spec (the path only) is replaced in
+    place by `{"path": ...}`, so that the yielded dicts can be modified."""
+    if not isinstance(output, dict):
+        return
     for kind, spec in output.items():
         if kind == "grib":
             if isinstance(spec, str):  # short form: the output path only
                 spec = output[kind] = {"path": spec}
-            # one list per output, so that yaml does not write anchors and aliases
-            spec["variables"] = list(variables)
-            n += 1
+            yield spec
         elif kind == "tee":
             outputs = spec.get("outputs", []) if isinstance(spec, dict) else spec
             for sub in outputs or []:
-                n += _set_grib_variables(sub, variables)
-    return n
+                yield from _grib_outputs(sub)
+
+
+def ensemble_encoding(member: int, members: int) -> dict:
+    """GRIB keys that mark the output of one member of an ensemble of `members`.
+
+    `eps` makes anemoi-inference encode accumulated fields with an ensemble
+    template too; `dataType` (not `type`, which GRIB2 has no key for) marks a
+    perturbed forecast.
+    """
+    return {
+        "productDefinitionTemplateNumber": 1,
+        "eps": 1,
+        "number": member,
+        "numberOfForecastsInEnsemble": members,
+        "dataType": "pf",
+        "typeOfGeneratingProcess": 4,
+    }
+
+
+def member_config(config: dict, member: int, members: int) -> dict:
+    """Return the anemoi-inference config of one ensemble member.
+
+    In a copy of `config`, every grib output (bare or under `tee`) writes to a
+    member directory `{NNN}` (NNN = zero-padded member number) inserted before
+    the file name, e.g. `grib/{step:03}.grib` becomes `grib/001/{step:03}.grib`,
+    and its `encoding` is merged with `ensemble_encoding` (the ensemble keys
+    win over those of the template).
+
+    Raises
+    ------
+    ValueError
+        If the config has no grib output: the members would overwrite each
+        other's output.
+    """
+    config = copy.deepcopy(config)
+    specs = list(_grib_outputs(config.get("output")))
+    if not specs:
+        raise ValueError(
+            "An ensemble run needs a GRIB output in its inference config, "
+            "but the config has none."
+        )
+    for spec in specs:
+        path = PurePosixPath(spec["path"])
+        spec["path"] = str(path.parent / f"{member:03d}" / path.name)
+        spec["encoding"] = {
+            **(spec.get("encoding") or {}),
+            **ensemble_encoding(member, members),
+        }
+    return config
+
+
+def write_member_configs(config_path: Path, workdir: Path, members: int) -> list[Path]:
+    """Write `config_{NNN}.yaml` next to `config_path` for every member 1..members.
+
+    Each member config is `member_config` of the config at `config_path`. The
+    directories its grib outputs write to are created, relative to `workdir`.
+
+    Returns
+    -------
+    list of Path
+        The member config files, in member order.
+    """
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+    paths = []
+    for member in range(1, members + 1):
+        mconfig = member_config(config, member, members)
+        for spec in _grib_outputs(mconfig["output"]):
+            (workdir / PurePosixPath(spec["path"]).parent).mkdir(
+                parents=True, exist_ok=True
+            )
+        path = config_path.with_name(f"config_{member:03d}.yaml")
+        with open(path, "w") as f:
+            yaml.safe_dump(mconfig, f, sort_keys=False)
+        paths.append(path)
+    return paths
 
 
 def check_run_output_variables(smk, LOG: logging.Logger):
@@ -259,6 +344,19 @@ def prepare_forecaster(smk):
     with open(smk.output.config, "r") as f:
         config_content = f.read()
     LOG.info("Config: \n%s", config_content)
+
+    ensemble = smk.params.get("ensemble")
+    if ensemble:
+        member_paths = write_member_configs(
+            Path(smk.output.config), workdir, ensemble["members"]
+        )
+        LOG.info(
+            "Wrote %d ensemble member configs: %s",
+            len(member_paths),
+            ", ".join(p.name for p in member_paths),
+        )
+        with open(member_paths[0], "r") as f:
+            LOG.info("Config of member 001: \n%s", f.read())
 
     okfile = Path(smk.output.okfile)
     okfile.parent.mkdir(parents=True, exist_ok=True)

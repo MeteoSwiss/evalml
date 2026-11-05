@@ -351,6 +351,35 @@ The list is written as `variables` to every `grib` output of the inference confi
 - Changing the list gives the run a new `run_id`, so inference reruns; the inference
   environment is reused. The order of the list does not matter.
 
+### Ensemble forecasters
+
+A `forecaster` entry can run as an ensemble of independent members with an
+`ensemble` block:
+
+```yaml
+runs:
+  - forecaster:
+      checkpoint: https://...
+      steps: 0/120/6
+      ensemble:
+        members: 10   # at least 2
+        seed: 0       # optional, member m runs with seed `seed + m`
+      output_variables: [T_2M, TD_2M, U_10M, V_10M, PS, PMSL, TOT_PREC, FIS]
+```
+
+- Each member is one anemoi-inference run with its own `config_{NNN}.yaml`
+  (NNN = 001..N). It writes to `grib/{NNN}/`, with the file names of a deterministic
+  run, and its GRIB messages carry `number` = m, `numberOfForecastsInEnsemble` = N
+  and `dataType` = `pf`. There is no control member.
+- Storage grows with the number of members: set `output_variables` (a warning is
+  logged otherwise).
+- One `inference_execute` job per init time runs all members on one node,
+  `inference_resources.gpu` members at a time (default: `min(N, 4)`), one GPU each.
+- Verification, plots and MEC use member 001 only, with a warning.
+- Not allowed on the inline `forecaster` of a `temporal_downscaler`.
+- Changing `members` or `seed` gives the run a new `run_id`; the inference environment
+  is reused.
+
 
 ## Installation
 
