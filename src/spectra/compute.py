@@ -1,17 +1,12 @@
-"""Orchestration: per-source spectra computation, over-init aggregation, and the
-experiment overlay plot. Defines the spectra.nc schema."""
+"""Orchestration: per-source spectra computation and over-init aggregation.
+Defines the spectra.nc schema."""
 
 from __future__ import annotations
-
-from itertools import cycle
-from pathlib import Path
 
 import numpy as np
 import xarray as xr
 
 from spectra import core, io, regrid
-
-_PALETTE = ["#1f3b73", "#c1272d", "#1b7837", "#6a3d9a", "#e08214", "#4d4d4d"]
 
 
 def compute_source_spectra(ds: xr.Dataset, variables, lead_times, method, label):
@@ -74,46 +69,3 @@ def aggregate_spectra(spectra_files) -> xr.Dataset:
         for ds in datasets:
             ds.close()
     return agg
-
-
-def plot_experiment_spectra(
-    truth_file, participant_files, out_dir, variables, lead_times
-):
-    """One overlay figure per (variable, lead time): truth + all participants."""
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    participants = [xr.open_dataset(f) for f in participant_files]
-    try:
-        with xr.open_dataset(truth_file) as truth:
-            for var in variables:
-                for step in lead_times:
-                    spectra = {}
-                    t_wl = truth["wavelength"].values
-                    t_p = truth["power"].sel(variable=var, leadtime=step).values
-                    spectra[f"{truth.attrs['label']} (truth)"] = (
-                        t_wl,
-                        t_p,
-                        "k",
-                        "-",
-                        1.0,
-                        2.0,
-                    )
-                    color = cycle(_PALETTE)
-                    for ds in participants:
-                        wl = ds["wavelength"].values
-                        p = ds["power"].sel(variable=var, leadtime=step).values
-                        spectra[ds.attrs["label"]] = (wl, p, next(color), "-", 0.9, 1.6)
-                    out = out_dir / f"spectrum_{var}_{step:03d}.png"
-                    # Reference grid/eff-res/Nyquist lines use the TRUTH grid's dx (labelled
-                    # "truth"); each participant curve keeps its own wavelength axis.
-                    core.plot_power_spectra(
-                        spectra,
-                        out,
-                        f"Power spectrum — {var} @ +{step}h",
-                        grid_dx_km=float(truth.attrs["dx_km"]),
-                        model_short="truth",
-                        model_color="k",
-                    )
-    finally:
-        for ds in participants:
-            ds.close()

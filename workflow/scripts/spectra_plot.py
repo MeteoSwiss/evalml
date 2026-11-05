@@ -3,7 +3,7 @@
 import logging
 from argparse import ArgumentParser
 
-from spectra.compute import plot_experiment_spectra
+from spectra.plot import plot_experiment_spectra
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
