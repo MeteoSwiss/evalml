@@ -57,3 +57,8 @@ def test_member_is_passed_to_loader(monkeypatch, tmp_path):
 def test_member_defaults_to_control(monkeypatch, tmp_path):
     calls = _run(monkeypatch, tmp_path, [])
     assert calls["member"] == "000"
+
+
+def test_loads_only_requested_lead_times(monkeypatch, tmp_path):
+    calls = _run(monkeypatch, tmp_path, [])
+    assert calls["steps"] == [6, 24]

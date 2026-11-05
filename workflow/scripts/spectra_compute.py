@@ -55,8 +55,10 @@ def main():
     variables = args.variables.split(",")
     params = io.required_params(variables)
 
+    # Load only the requested lead times: the loaders add the preceding steps
+    # that accumulation periods (e.g. TOT_PREC6) need.
     if args.truth:
-        ds = load_truth_data(Path(args.truth), reftime, all_steps, params)
+        ds = load_truth_data(Path(args.truth), reftime, lead_times, params)
         if "time" in ds.dims and "step" not in ds.dims:
             valid = pd.to_datetime(ds["time"].values)
             steps_h = (
@@ -72,7 +74,7 @@ def main():
             ds = ds.assign_coords(step=("time", steps_h)).swap_dims({"time": "step"})
     else:
         ds = load_forecast_data(
-            Path(args.forecast), reftime, all_steps, params, member=args.member
+            Path(args.forecast), reftime, lead_times, params, member=args.member
         )
 
     result = compute_source_spectra(ds, variables, lead_times, args.method, args.label)
