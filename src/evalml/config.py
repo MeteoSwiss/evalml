@@ -912,6 +912,38 @@ class ConfigModel(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def validate_unique_labels(self) -> "ConfigModel":
+        """Reject a label shared by different runs or baselines.
+
+        Results are keyed by label, so a repeated label would merge or overwrite
+        participants. The inline forecaster of a temporal downscaler is included;
+        an entry repeated with the same configuration is the same run and is
+        allowed.
+        """
+        configs_by_label: dict[str, list[dict]] = {}
+        for item in self.runs:
+            cfg = getattr(item, next(iter(type(item).model_fields)))
+            entries = [cfg]
+            if isinstance(cfg, TemporalDownscalerConfig) and cfg.forecaster:
+                entries.append(cfg.forecaster)
+            for entry in entries:
+                if entry.label is None:
+                    continue
+                configs = configs_by_label.setdefault(entry.label, [])
+                dump = entry.model_dump()
+                if dump not in configs:
+                    configs.append(dump)
+        duplicates = sorted(
+            label for label, configs in configs_by_label.items() if len(configs) > 1
+        )
+        if duplicates:
+            raise ValueError(
+                f"Labels must be unique across `runs`; used by several runs or "
+                f"baselines: {duplicates}"
+            )
+        return self
+
+    @model_validator(mode="after")
     def validate_scorecard_references(self) -> "ConfigModel":
         sc = self.experiment.scorecards if self.experiment else None
         if sc is None or not sc.enabled:

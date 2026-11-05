@@ -150,3 +150,24 @@ def test_spectra_lead_times_must_be_produced_by_every_participant(example_config
 def test_spectra_lead_times_unchecked_when_disabled(example_config):
     example_config["experiment"]["spectra"] = {"enabled": False, "lead_times": [999]}
     ConfigModel.model_validate(example_config)
+
+
+def test_labels_must_be_unique(example_config):
+    example_config["runs"][2]["baseline"]["label"] = "INCA"  # same as runs[1]
+    with pytest.raises(ValueError, match=r"Labels must be unique.*\['INCA'\]"):
+        ConfigModel.model_validate(example_config)
+
+
+def test_inline_forecaster_label_must_be_unique(example_config):
+    td = example_config["runs"][0]["temporal_downscaler"]
+    td["forecaster"]["label"] = td["label"]
+    with pytest.raises(ValueError, match="Labels must be unique"):
+        ConfigModel.model_validate(example_config)
+
+
+def test_inline_forecaster_may_repeat_a_listed_forecaster(example_config):
+    """The same forecaster listed and used inline is one run: its label may repeat."""
+    td = example_config["runs"][0]["temporal_downscaler"]
+    td["forecaster"]["label"] = "Varda forecaster"
+    example_config["runs"].append({"forecaster": dict(td["forecaster"])})
+    ConfigModel.model_validate(example_config)
