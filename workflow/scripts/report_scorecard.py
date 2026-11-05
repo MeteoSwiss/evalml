@@ -6,7 +6,7 @@ and whose area encodes the magnitude of the relative difference:
     diff = (model − baseline) / |baseline| × 100  [%]
 
 Positive diff is better for higher-is-better metrics (R², ETS, POD) and worse
-for lower-is-better metrics (RMSE, MAE, STDE, FAR).
+for lower-is-better metrics (RMSE, MAE, STDE, FAR, CRPS).
 """
 
 import logging
@@ -20,6 +20,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 from matplotlib.transforms import ScaledTranslation
 
+from ensemble_scores import CRPS_NOTE, drop_non_score_vars, fill_crps_from_mae
 from verification import decode_metric
 
 LOG = logging.getLogger(__name__)
@@ -202,7 +203,7 @@ def _build_config(args) -> dict:
         # All recognised metrics — every entry must also appear in metric_directions.
         "all_metrics": ["RMSE", "MAE", "STDE", "R2", "ETS", "POD", "FAR"],
         "metric_directions": {
-            "lower_is_better": ["RMSE", "MAE", "STDE", "FAR"],
+            "lower_is_better": ["RMSE", "MAE", "STDE", "FAR", "CRPS"],
             "higher_is_better": ["R2", "ETS", "POD"],
         },
         # None value → use all_metrics for that variable; list → restrict to that subset.
@@ -259,10 +260,14 @@ def _load_relative_diff(cfg: dict) -> xr.Dataset:
             f"Fix: delete '{fewer}' and rerun the pipeline."
         )
 
-    model_ds = model_ds.sel(**sel_coords).squeeze(drop=True)
-    baseline_ds = baseline_ds.sel(**{**sel_coords, "source": baseline_source}).squeeze(
-        drop=True
+    model_ds = drop_non_score_vars(model_ds.sel(**sel_coords).squeeze(drop=True))
+    baseline_ds = drop_non_score_vars(
+        baseline_ds.sel(**{**sel_coords, "source": baseline_source}).squeeze(drop=True)
     )
+    # Deterministic participants have no CRPS: show their MAE (display only).
+    model_ds, model_filled = fill_crps_from_mae(model_ds)
+    baseline_ds, baseline_filled = fill_crps_from_mae(baseline_ds)
+    cfg["crps_filled"] = model_filled or baseline_filled
 
     common_vars = [v for v in model_ds.data_vars if v in baseline_ds.data_vars]
     common_leads = sorted(set(model_ds.step.values) & set(baseline_ds.step.values))
@@ -792,6 +797,9 @@ def _render_scorecard(diff: xr.Dataset, cfg: dict, outfn: Path):
         baseline_source,
         cfg,
     )
+
+    if cfg.get("crps_filled") and any(m == "CRPS" for _, m in rows):
+        fig.text(0.01, 0.0, CRPS_NOTE, fontsize=small_fs, va="top", ha="left")
 
     outfn.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(outfn, bbox_inches="tight")
