@@ -8,7 +8,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 @pytest.fixture
 def example_config():
-    configfile = PROJECT_ROOT / "config/varda-single-1.0.yaml"
+    configfile = PROJECT_ROOT / "tests/integration/configs/varda-single-1.0.yaml"
     with open(configfile, "r") as f:
         config = yaml.safe_load(f)
     return config

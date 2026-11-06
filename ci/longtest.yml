@@ -1,0 +1,13 @@
+# longtest — shorter integration suite, run per-PR.
+# Trigger:  PR comment `cscs-ci run longtest`  or locally via
+#           `tests/run-integration-coverage.sh longtest tests/integration`.
+include:
+  - ci/cscs.yml
+
+longtest:
+  extends: [.evalml-job]
+  script:
+    - bash tests/run-integration-coverage.sh longtest tests/integration
+  variables:
+    # Explicitly request more time from Slurm, so that the long tests can complete.
+    SLURM_TIMELIMIT: "04:00:00"
