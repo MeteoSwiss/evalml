@@ -1,7 +1,7 @@
 import re
 from math import isfinite
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
+from typing import Dict, List, Any, ClassVar, FrozenSet, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
@@ -492,6 +492,57 @@ class ExperimentScorecardConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class SpectraConfig(BaseModel):
+    """Configuration for power-spectra QC plots in the experiment pipeline."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to compute and plot power spectra.",
+    )
+    method: Literal["dct", "fft"] = Field(
+        default="dct",
+        description="Spectral method: 'dct' (default, recommended for LAM) or 'fft'.",
+    )
+    lead_times: List[int] = Field(
+        default_factory=list,
+        description="Representative lead times (hours) at which to compute spectra.",
+    )
+    variables: List[str] = Field(
+        default=["T_2M", "WIND_KE", "TOT_PREC1"],
+        description=(
+            "Spectra variables: any parameter the forecast and truth loaders provide "
+            "(e.g. T_2M, SP_10M, TOT_PREC1), plus WIND_KE, the kinetic energy from "
+            "U_10M and V_10M. TOT_PREC1 needs hourly output steps: runs with coarser "
+            "steps (e.g. 6h) must use TOT_PREC6 instead."
+        ),
+    )
+    init_hours: Optional[List[int]] = Field(
+        default=None,
+        min_length=1,
+        description="Optional subset of init hours to average over. None = all.",
+    )
+
+    @field_validator("variables")
+    @classmethod
+    def validate_variables(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError(
+                "`variables` must list at least one variable when spectra is configured."
+            )
+        return v
+
+    @model_validator(mode="after")
+    def check_enabled_requirements(self):
+        if self.enabled and not self.lead_times:
+            raise ValueError(
+                "experiment.spectra.enabled is true but `lead_times` is empty; "
+                "specify at least one lead time (hours)."
+            )
+        return self
+
+    model_config = {"extra": "forbid"}
+
+
 class ShowcaseConfig(BaseModel):
     """Configuration for the showcase workflow."""
 
@@ -619,6 +670,14 @@ class ExperimentConfig(BaseModel):
     scoremaps: Optional[ScoreMapsConfig] = Field(
         default=None,
         description="Score map plot configuration. Omit or set enabled: false to disable.",
+    )
+    spectra: SpectraConfig = Field(
+        default_factory=SpectraConfig,
+        description=(
+            "Power-spectra QC configuration. Disabled by default. Spectra need every "
+            "participant and the truth on the ICON-CH1 or ICON-CH2 native grid: INCA "
+            "baselines, INCA truth and station (jretrievedwh) truth are not supported."
+        ),
     )
     sal: Optional[SalConfig] = Field(
         default=None,
@@ -857,24 +916,94 @@ class ConfigModel(BaseModel):
 
     @model_validator(mode="after")
     def validate_leadtimes_producible(self) -> "ConfigModel":
-        """Reject scoremaps/sal lead times not produced by every participant."""
+        """Reject scoremaps/sal/spectra lead times not produced by every participant."""
         if self.experiment is None:
             return self
-        for label, cfg in (
-            ("scoremaps", self.experiment.scoremaps),
-            ("sal", self.experiment.sal),
+        # (section, config, name of its lead-time field)
+        for label, cfg, field in (
+            ("scoremaps", self.experiment.scoremaps, "leadtimes"),
+            ("sal", self.experiment.sal, "leadtimes"),
+            ("spectra", self.experiment.spectra, "lead_times"),
         ):
             if cfg is None or not cfg.enabled:
                 continue
             for item in self.runs:
                 steps = getattr(item, next(iter(type(item).model_fields))).steps
                 start, end, step = map(int, steps.split("/"))
-                unsupported = set(cfg.leadtimes) - set(range(start, end + 1, step))
+                leadtimes = getattr(cfg, field)
+                unsupported = set(leadtimes) - set(range(start, end + 1, step))
                 if unsupported:
                     raise ValueError(
-                        f"{label}.leadtimes contains {sorted(unsupported)} h which are not "
+                        f"{label}.{field} contains {sorted(unsupported)} h which are not "
                         f"produced by participant with steps '{steps}'."
                     )
+        return self
+
+    @model_validator(mode="after")
+    def validate_spectra_sources(self) -> "ConfigModel":
+        """Reject spectra participants or truth that are not on an ICON native grid.
+
+        The detection mirrors ``data_input.is_inca_archive`` and
+        ``data_input.truth_type``, which are not imported here to keep the config
+        module light.
+        """
+        if self.experiment is None or not self.experiment.spectra.enabled:
+            return self
+        unsupported = []
+        for item in self.runs:
+            if (
+                isinstance(item, BaselineItem)
+                and "INCA" in Path(item.baseline.root).parts
+            ):
+                unsupported.append(f"baseline {item.baseline.label!r} (INCA)")
+        if self.truth is not None:
+            root = self.truth.root
+            if Path(root).suffix != ".zarr":
+                if "jretrieve" in root:
+                    unsupported.append(
+                        f"truth {self.truth.label!r} (station observations)"
+                    )
+                elif "INCA" in Path(root).parts:
+                    unsupported.append(f"truth {self.truth.label!r} (INCA)")
+        if unsupported:
+            raise ValueError(
+                "experiment.spectra needs every participant and the truth on the "
+                "ICON-CH1 or ICON-CH2 native grid; not supported: "
+                + ", ".join(unsupported)
+                + ". Disable spectra or remove these sources."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_labels(self) -> "ConfigModel":
+        """Reject a label shared by different runs or baselines.
+
+        Results are keyed by label, so a repeated label would merge or overwrite
+        participants. The inline forecaster of a temporal downscaler is included;
+        an entry repeated with the same configuration is the same run and is
+        allowed.
+        """
+        configs_by_label: dict[str, list[dict]] = {}
+        for item in self.runs:
+            cfg = getattr(item, next(iter(type(item).model_fields)))
+            entries = [cfg]
+            if isinstance(cfg, TemporalDownscalerConfig) and cfg.forecaster:
+                entries.append(cfg.forecaster)
+            for entry in entries:
+                if entry.label is None:
+                    continue
+                configs = configs_by_label.setdefault(entry.label, [])
+                dump = entry.model_dump()
+                if dump not in configs:
+                    configs.append(dump)
+        duplicates = sorted(
+            label for label, configs in configs_by_label.items() if len(configs) > 1
+        )
+        if duplicates:
+            raise ValueError(
+                f"Labels must be unique across `runs`; used by several runs or "
+                f"baselines: {duplicates}"
+            )
         return self
 
     @model_validator(mode="after")
