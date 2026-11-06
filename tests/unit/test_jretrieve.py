@@ -298,6 +298,35 @@ def test_load_truth_data_forwards_root(monkeypatch):
     assert "jretrievedwh:SwissMetNet" in str(seen["root"])
 
 
+def test_load_station_coords(monkeypatch):
+    calls = {}
+
+    def fake_fetch_meta(**kw):
+        calls.update(kw)
+        return _sample_meta()
+
+    monkeypatch.setattr(jr, "check_prerequisites", lambda *a, **k: None)
+    monkeypatch.setattr(jr, "fetch_meta", fake_fetch_meta)
+
+    ds = data_input.load_station_coords(["KLO", "ARO"], "TOT_PREC6")
+
+    assert calls["stations"] == {"locations": ["KLO", "ARO"]}
+    assert calls["params"] == ["rre006i0", "tre200s0"]
+    assert list(ds["values"].values) == ["ARO", "KLO"]
+    np.testing.assert_allclose(ds["latitude"], [46.79, 47.48])
+    np.testing.assert_allclose(ds["elevation"], [1878.0, 426.0])
+
+
+def test_load_station_coords_unmapped_param_uses_temperature(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(jr, "check_prerequisites", lambda *a, **k: None)
+    monkeypatch.setattr(
+        jr, "fetch_meta", lambda **kw: calls.update(kw) or _sample_meta()
+    )
+    data_input.load_station_coords(["KLO"], "U_10M")
+    assert calls["params"] == ["tre200s0"]
+
+
 def test_load_obs_relative_humidity_and_wet_bulb(monkeypatch):
     """RELHUM_2M is read (ure200s0); TW_2M is derived from T, TD and station pressure."""
     reftime = datetime(2025, 11, 1)
