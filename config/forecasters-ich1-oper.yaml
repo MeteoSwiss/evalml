@@ -13,8 +13,8 @@ dates:
 
 runs:
   - forecaster:
-      checkpoint: https://servicedepl.meteoswiss.ch/mlstore#/experiments/409/runs/b30acf68520a4bbd8324c44666561696
-      label: stage_C_icon_1km
+      checkpoint: amber-ridge
+      label: amber-ridge
       steps: 0/120/6
       config: resources/inference/configs/sgm-forecaster-global-ich1-oper.yaml
       extra_requirements:
