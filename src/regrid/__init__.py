@@ -1,6 +1,7 @@
-# src/spectra/regrid.py
 """ICON native (unstructured) -> regular rotlatlon regridding via iconremap RBF
-weights. The weights file is selected at runtime from the native point count."""
+weights. The weights file is selected at runtime from the native point count.
+
+Shared by the spectra diagnostic and usable elsewhere (e.g. plotting)."""
 
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ import numpy as np
 import scipy.sparse
 import xarray as xr
 
-from spectra import core
+KM_PER_DEG = 111.2
 
 # Hardcoded iconremap RBF weight files on Balfrin, keyed by native cell count.
 # CH1 native count is 1,147,980 (per the icon-power-spectra skill).
@@ -68,7 +69,7 @@ def grid_geometry(iconremap_nc):
         return (
             int(ds.attrs["ny"]),
             int(ds.attrs["nx"]),
-            float(ds.attrs["dx"]) * core.KM_PER_DEG,
+            float(ds.attrs["dx"]) * KM_PER_DEG,
         )
 
 

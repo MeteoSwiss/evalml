@@ -12,8 +12,6 @@ from __future__ import annotations
 import numpy as np
 import scipy.fft
 
-KM_PER_DEG = 111.2
-
 
 def _hann2d(ny: int, nx: int) -> np.ndarray:
     win = np.hanning(ny)[:, None] * np.hanning(nx)[None, :]

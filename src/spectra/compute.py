@@ -6,7 +6,8 @@ from __future__ import annotations
 import numpy as np
 import xarray as xr
 
-from spectra import core, io, regrid
+import regrid
+from spectra import core, io
 
 
 def compute_source_spectra(ds: xr.Dataset, variables, lead_times, method, label):

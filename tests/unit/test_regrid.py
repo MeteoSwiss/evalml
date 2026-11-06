@@ -1,9 +1,8 @@
-# tests/unit/test_spectra_regrid.py
 import numpy as np
 import pytest
 import xarray as xr
 
-from spectra import regrid
+import regrid
 
 
 def _fake_weights(tmp_path, ny=4, nx=5, n_source=20, npoints=3):
@@ -38,7 +37,7 @@ def test_grid_geometry_reads_dx_in_km(tmp_path):
     path, ny, nx, _ = _fake_weights(tmp_path)
     g_ny, g_nx, dx_km = regrid.grid_geometry(path)
     assert (g_ny, g_nx) == (ny, nx)
-    assert dx_km == pytest.approx(0.01 * regrid.core.KM_PER_DEG)
+    assert dx_km == pytest.approx(0.01 * regrid.KM_PER_DEG)
 
 
 def test_weights_path_for_npoints_unknown_raises():

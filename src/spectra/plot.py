@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 
-from spectra.core import KM_PER_DEG
+from regrid import KM_PER_DEG
 
 REFERENCE_GRIDS = {
     "O96 (~104 km)": 90.0 / 96.0 * KM_PER_DEG,
