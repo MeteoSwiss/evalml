@@ -1,6 +1,5 @@
 import logging
 import copy
-import re
 from datetime import datetime, timedelta
 import yaml
 import hashlib
@@ -8,6 +7,7 @@ import json
 from urllib.parse import urlparse
 
 from data_input import inca, truth_type
+from data_input import parse_aggregated_param
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
@@ -123,8 +123,10 @@ def parse_regions():
     return json.dumps(result)
 
 
-def parse_showcase_regions():
+def parse_showcase_regions(domains=None):
     """Parse showcase domains from config.
+
+    ``domains`` defaults to ``showcase.animations.domains``.
 
     Returns a dict mapping domain name -> {extent, projection, rotate, hours_per_revolution}.
     Named domains (strings) have extent=None and projection=None,
@@ -133,12 +135,14 @@ def parse_showcase_regions():
     rotate/hours_per_revolution only take effect when extent is None
     (full-globe domains).
     """
+    if domains is None:
+        domains = (
+            config.get("showcase", {})
+            .get("animations", {})
+            .get("domains", ["globe", "europe", "switzerland"])
+        )
     result = {}
-    for r in (
-        config.get("showcase", {})
-        .get("animations", {})
-        .get("domains", ["globe", "europe", "switzerland"])
-    ):
+    for r in domains:
         if isinstance(r, str):
             result[r] = {
                 "extent": None,
@@ -522,6 +526,16 @@ SHOWCASE_CONFIG = {
     "params": _showcase.get("params", ["T_2M", "SP_10M"]),
     "fps": _showcase.get("animations", {}).get("frames_per_second", 2.0),
 }
+_comparisons = _showcase.get("comparisons", {})
+COMPARISONS_CONFIG = {
+    "enabled": _comparisons.get("enabled", False),
+    "regions": parse_showcase_regions(_comparisons.get("domains", ["alps"])),
+    "baselines": _comparisons.get("baselines", []),
+    "lead_times": _comparisons.get("lead_times", [24]),
+    # station truth (jretrievedwh) cannot be drawn as a map
+    "truth": _comparisons.get("truth", True)
+    and "jretrieve" not in str(config["truth"]["root"]),
+}
 EXPERIMENT_PARAMS = EXPERIMENT_CONFIG.get(
     "params", ["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"]
 )
@@ -617,21 +631,14 @@ def resolve_leadtimes(steps_spec, requested="all", param=None):
         )
 
     valid = wanted & supported
-    # Showcase-facing names encode an accumulation window as a numeric suffix
-    # (e.g. "TOT_PREC1", "TOT_PREC6"); strip it before checking membership so
-    # those aggregated variants are recognized the same as their base param.
-    base_param = re.sub(r"\d+$", "", param) if param else param
-    if (
-        param in PARAMS_WITHOUT_STEP_ZERO_VALUE
-        or base_param in PARAMS_WITHOUT_STEP_ZERO_VALUE
-    ):
-        # For aggregated params (e.g. TOT_PREC6), the accumulation window encoded
-        # in the suffix is the minimum valid lead time — not the run's step spacing.
-        # At shorter leads the de-accumulation window doesn't fit (prev_lt < 0),
-        # so the frame would fall back to showing a raw cumulative total.
-        agg_match = re.search(r"\d+$", param) if param and base_param != param else None
-        min_lt = int(agg_match.group()) if agg_match else step
-        valid = {lt for lt in valid if lt >= min_lt}
+    base_param, agg_hours = parse_aggregated_param(param) if param else (None, None)
+    if agg_hours:
+        # Aggregated params (e.g. TOT_PREC6) need the window start [lead - agg, lead]
+        valid = {
+            lt for lt in valid if lt - agg_hours == 0 or lt - agg_hours in supported
+        }
+    elif base_param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
+        valid = {lt for lt in valid if lt >= step}
     return sorted(valid)
 
 
