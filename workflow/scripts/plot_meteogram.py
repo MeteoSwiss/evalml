@@ -123,15 +123,23 @@ def main():
     # Build station coordinate lookup from the loaded analysis dataset so that
     # any station with data for the plotted parameter is found (a fixed
     # parameter like rre150h0 would exclude stations like JUN).
-    catalog_lookup = {
-        str(sta): (float(lat), float(lon), float(elev))
-        for sta, lat, lon, elev in zip(
-            analysis_ds["values"].values,
-            analysis_ds["latitude"].values,
-            analysis_ds["longitude"].values,
-            analysis_ds["elevation"].values,
+    # A gridded truth on a (y, x) grid (e.g. INCA) has no station axis.
+    if "values" in analysis_ds.dims:
+        catalog_lookup = {
+            str(sta): (float(lat), float(lon), float(elev))
+            for sta, lat, lon, elev in zip(
+                analysis_ds["values"].values,
+                analysis_ds["latitude"].values,
+                analysis_ds["longitude"].values,
+                analysis_ds["elevation"].values,
+            )
+        }
+    else:
+        LOG.warning(
+            "Truth %s has no station axis; meteograms require station observations.",
+            analysis_root,
         )
-    }
+        catalog_lookup = {}
 
     # Load gridded data once — shared across all station plots
     LOG.info("Loading forecast data from %s", forecast_grib_dir)

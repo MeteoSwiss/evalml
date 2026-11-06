@@ -39,6 +39,19 @@ def test_experiment_optional(example_config):
     assert cfg.experiment is None
 
 
+def test_score_on_common_points(example_config):
+    """score_on_common_points accepts a subset of experiment.params only."""
+
+    example_config["experiment"]["params"] = ["T_2M", "HZEROCL"]
+    example_config["experiment"]["score_on_common_points"] = ["HZEROCL"]
+    cfg = ConfigModel.model_validate(example_config)
+    assert cfg.experiment.score_on_common_points == ["HZEROCL"]
+
+    example_config["experiment"]["score_on_common_points"] = ["SNOWLMT"]
+    with pytest.raises(ValueError, match="not in experiment.params"):
+        _ = ConfigModel.model_validate(example_config)
+
+
 def _with_scorecard_reference(config, reference):
     config["experiment"]["scorecards"] = {
         "enabled": True,
