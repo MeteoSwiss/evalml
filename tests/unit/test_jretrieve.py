@@ -296,3 +296,51 @@ def test_load_truth_data_forwards_root(monkeypatch):
     )
     assert out == "SENTINEL"
     assert "jretrievedwh:SwissMetNet" in str(seen["root"])
+
+
+def test_load_obs_relative_humidity_and_wet_bulb(monkeypatch):
+    """RELHUM_2M is read (ure200s0); TW_2M is derived from T, TD and station pressure."""
+    reftime = datetime(2025, 11, 1)
+    times = np.array(["2025-11-01T00", "2025-11-01T01"], dtype="datetime64[ns]")
+    stations = ["BER", "KLO"]
+    fetched = {}
+
+    def fake_fetch_data(*, params, **kwargs):
+        fetched["params"] = params
+        return None
+
+    def fake_to_xarray(df, short_names, catalog):
+        def var(value):
+            return (("time", "values"), np.full((2, 2), value))
+
+        return data_input.xr.Dataset(
+            {
+                "ure200s0": var(80.0),
+                "tre200s0": var(10.0),  # degC
+                "tde200s0": var(5.0),  # degC
+                "prestas0": var(950.0),  # hPa
+            },
+            coords={"time": times, "values": stations},
+        )
+
+    monkeypatch.setattr(jr, "parse_selection", lambda root: (None, "prod", None, 40))
+    monkeypatch.setattr(jr, "check_prerequisites", lambda stage: None)
+    monkeypatch.setattr(jr, "fetch_meta", lambda **kwargs: None)
+    monkeypatch.setattr(
+        jr.StationCatalog, "from_meta", classmethod(lambda cls, m: None)
+    )
+    monkeypatch.setattr(jr, "fetch_data", fake_fetch_data)
+    monkeypatch.setattr(data_input, "_jretrieve_df_to_xarray", fake_to_xarray)
+
+    out = data_input.load_obs_data_from_jretrieve(
+        "jretrievedwh:SwissMetNet", reftime, [0, 1], ["RELHUM_2M", "TW_2M"]
+    )
+
+    assert set(fetched["params"]) == {"ure200s0", "tre200s0", "tde200s0", "prestas0"}
+    assert set(out.data_vars) == {"RELHUM_2M", "TW_2M"}
+    np.testing.assert_allclose(out["RELHUM_2M"], 80.0)
+    expected = data_input.ekmt.wet_bulb_temperature_from_dewpoint(
+        np.array([283.15]), np.array([278.15]), np.array([95000.0])
+    )[0]
+    np.testing.assert_allclose(out["TW_2M"], expected, rtol=1e-6)
+    assert 278.15 < expected < 283.15

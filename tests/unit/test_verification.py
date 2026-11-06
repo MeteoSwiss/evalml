@@ -8,7 +8,12 @@ import xarray as xr
 sys.path.insert(0, str(Path(__file__).parents[2] / "workflow" / "scripts"))
 from verification_aggregation import aggregate_results
 
-from verification import decode_metric, apply_lapse_rate_correction_inplace, verify
+from verification import (
+    _compute_statistics,
+    apply_lapse_rate_correction_inplace,
+    decode_metric,
+    verify,
+)
 
 
 @pytest.mark.parametrize(
@@ -270,26 +275,53 @@ def test_verify_missing_fraction_varies_by_lead_time():
     )
 
 
+def _half_missing_forecast():
+    """Forecast missing at half of the stations; obs complete; both equal to 1 elsewhere."""
+    n = 10
+    coords = _station_coords(n)
+    fcst_vals = np.ones(n, dtype=np.float32)
+    fcst_vals[:5] = np.nan
+    fcst = xr.Dataset({"T_2M": ("values", fcst_vals)}, coords=coords)
+    obs = xr.Dataset({"T_2M": ("values", np.ones(n, dtype=np.float32))}, coords=coords)
+    return fcst, obs
+
+
+def test_verify_tolerant_threshold_scores_available_points_despite_gaps():
+    """With max_missing_fraction=1.0, gaps are left out instead of masking."""
+    fcst, obs = _half_missing_forecast()
+
+    result = verify(
+        fcst,
+        obs,
+        "fcst",
+        "obs",
+        regions=_REGION,
+        num_workers=1,
+        max_missing_fraction=1.0,
+    )
+
+    bias = result["T_2M.BIAS"].sel(region="all", source="fcst").values.item()
+    assert bias == pytest.approx(0.0), "BIAS should use the 5 points with a forecast"
+
+
 def test_verify_obs_stats_not_masked_by_forecast_gaps():
     """Obs statistics must remain non-NaN in regions where the forecast has gaps.
 
-    Half of the forecast values are NaN (simulating extrapolation masking), so
-    the missing fraction exceeds the default threshold and scores are masked.
-    Obs statistics should still be valid because they do not depend on forecast
-    coverage.
+    Half of the forecast values are NaN (simulating extrapolation masking) and a
+    strict threshold is requested, so scores are masked. Obs statistics should
+    still be valid because they do not depend on forecast coverage.
     """
-    n = 10
-    coords = _station_coords(n)
+    fcst, obs = _half_missing_forecast()
 
-    fcst_vals = np.ones(n, dtype=np.float32)
-    fcst_vals[:5] = (
-        np.nan
-    )  # forecast missing at half the obs-valid stations → masked region
-
-    fcst = xr.Dataset({"T_2M": ("values", fcst_vals)}, coords=coords)
-    obs = xr.Dataset({"T_2M": ("values", np.ones(n, dtype=np.float32))}, coords=coords)
-
-    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+    result = verify(
+        fcst,
+        obs,
+        "fcst",
+        "obs",
+        regions=_REGION,
+        num_workers=1,
+        max_missing_fraction=0.0,
+    )
 
     # Score should be NaN (too many missing forecasts)
     bias = result["T_2M.BIAS"].sel(region="all", source="fcst").values.item()
@@ -300,6 +332,67 @@ def test_verify_obs_stats_not_masked_by_forecast_gaps():
     assert not np.isnan(obs_mean), (
         "Obs mean should not be NaN when obs data is complete"
     )
+
+
+def test_verify_keeps_obs_statistics_for_truth_only_params():
+    """A parameter only the truth provides yields obs statistics and no scores."""
+    n = 10
+    coords = _station_coords(n)
+    fcst = xr.Dataset({"T_2M": ("values", np.ones(n))}, coords=coords)
+    obs = xr.Dataset(
+        {"T_2M": ("values", np.ones(n)), "CAPE_MU": ("values", np.full(n, 300.0))},
+        coords=coords,
+    )
+
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+
+    cape_mean = result["CAPE_MU.mean"].sel(region="all", station_group="all")
+    assert cape_mean.sel(source="obs").item() == 300.0
+    assert np.isnan(cape_mean.sel(source="fcst").item())
+    assert "CAPE_MU.BIAS" not in result
+    assert "forecast_reference_time" in result["CAPE_MU.mean"].dims
+
+
+def test_verify_gridded_truth_has_only_all_station_group():
+    """Truth on a regular (y, x) grid, like INCA, has no stations: verify() works
+    and every variable carries the single "all" station group."""
+    lat, lon = np.meshgrid(
+        np.linspace(46.0, 47.0, 3), np.linspace(5.0, 10.0, 4), indexing="ij"
+    )
+    coords = {
+        "y": np.arange(3),
+        "x": np.arange(4),
+        "latitude": (("y", "x"), lat),
+        "longitude": (("y", "x"), lon),
+        "forecast_reference_time": _FRT,
+    }
+    fcst = xr.Dataset({"T_2M": (("y", "x"), np.ones((3, 4)))}, coords=coords)
+    obs = xr.Dataset(
+        {
+            "T_2M": (("y", "x"), np.zeros((3, 4))),
+            "CAPE_MU": (("y", "x"), np.full((3, 4), 300.0)),
+        },
+        coords=coords,
+    )
+
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+
+    assert list(result["station_group"].values) == ["all"]
+    for var in ("T_2M.BIAS", "CAPE_MU.mean"):
+        assert "station_group" in result[var].dims
+    bias = result["T_2M.BIAS"].sel(region="all", source="fcst", station_group="all")
+    assert bias.item() == pytest.approx(1.0)
+
+    with pytest.raises(ValueError, match="Holdout stations"):
+        verify(
+            fcst,
+            obs,
+            "fcst",
+            "obs",
+            regions=_REGION,
+            num_workers=1,
+            holdout_stations=["CHM"],
+        )
 
 
 def test_load_holdout_stations(tmp_path):
@@ -363,3 +456,93 @@ def test_verify_station_groups_split_holdout_and_holdin():
 
     result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
     assert list(result["station_group"].values) == ["all"]
+
+
+def test_verify_wind_direction_uses_shortest_angular_error():
+    """350 deg forecast vs 10 deg obs is an error of -20 deg, not 340 deg."""
+    n = 4
+    coords = _station_coords(n)
+    fcst = xr.Dataset({"DD_10M": ("values", [350.0, 10.0, 180.0, 90.0])}, coords=coords)
+    obs = xr.Dataset({"DD_10M": ("values", [10.0, 350.0, 170.0, 90.0])}, coords=coords)
+
+    result = verify(fcst, obs, "fcst", "obs", regions=_REGION, num_workers=1)
+
+    scores = result.sel(region="all", station_group="all", source="fcst")
+    errors = np.array([-20.0, 20.0, 10.0, 0.0])
+    assert scores["DD_10M.BIAS"].item() == pytest.approx(errors.mean())
+    assert scores["DD_10M.MAE"].item() == pytest.approx(np.abs(errors).mean())
+    assert scores["DD_10M.MSE"].item() == pytest.approx((errors**2).mean())
+
+    # statistics are circular: mean direction of the unit vectors, no min/max
+    rad = np.deg2rad([350.0, 10.0, 180.0, 90.0])
+    sin_mean, cos_mean = np.sin(rad).mean(), np.cos(rad).mean()
+    assert scores["DD_10M.mean"].item() == pytest.approx(
+        np.degrees(np.arctan2(sin_mean, cos_mean)) % 360
+    )
+    assert scores["DD_10M.var"].item() == pytest.approx(
+        1 - np.hypot(sin_mean, cos_mean)
+    )
+    assert "DD_10M.min" not in result and "DD_10M.max" not in result
+
+
+def test_circular_statistics_wrap_around_north():
+    """The circular mean of 359 and 1 deg is 0 deg, not 180 deg."""
+    data = xr.DataArray([359.0, 1.0], dims="values")
+
+    stats = _compute_statistics(data, dim=["values"], prefix="DD_10M.", circular=True)
+
+    mean = stats["DD_10M.mean"].item()
+    assert min(mean, 360 - mean) == pytest.approx(0.0, abs=1e-9)
+    assert stats["DD_10M.var"].item() == pytest.approx(1 - np.cos(np.deg2rad(1.0)))
+
+
+def test_verify_precipitation_type_only_gets_categorical_scores():
+    n = 4
+    coords = _station_coords(n)
+    # WMO codes: rain, snow, none, mixed
+    fcst = xr.Dataset({"PTYPE": ("values", [1.0, 5.0, 0.0, 7.0])}, coords=coords)
+    obs = xr.Dataset({"PTYPE": ("values", [1.0, 5.0, 1.0, 5.0])}, coords=coords)
+
+    result = verify(
+        fcst,
+        obs,
+        "fcst",
+        "obs",
+        regions=_REGION,
+        num_workers=1,
+        threshold_dict={"PTYPE": {"eq": [1, 5]}},
+    )
+
+    scores = result.sel(region="all", station_group="all", source="fcst")
+    for name in ("BIAS", "MSE", "MAE", "CORR"):
+        assert np.isnan(scores[f"PTYPE.{name}"]).all()
+    table = scores["PTYPE.contingency_table"]
+    rain = table.sel({"PTYPE.threshold": "eq_1"})
+    snow = table.sel({"PTYPE.threshold": "eq_5"})
+    # rain: hit at 0, miss at 2; snow: hit at 1, miss at 3
+    for t in (rain, snow):
+        assert t.sel(contingency="tp_count").item() == 1
+        assert t.sel(contingency="fn_count").item() == 1
+        assert t.sel(contingency="fp_count").item() == 0
+
+
+def test_verify_wind_direction_thresholds_use_raw_forecast():
+    """Only the continuous scores use the angular error, not the contingency tables."""
+    coords = _station_coords(1)
+    fcst = xr.Dataset({"DD_10M": ("values", [350.0])}, coords=coords)
+    obs = xr.Dataset({"DD_10M": ("values", [10.0])}, coords=coords)
+
+    result = verify(
+        fcst,
+        obs,
+        "fcst",
+        "obs",
+        regions=_REGION,
+        num_workers=1,
+        threshold_dict={"DD_10M": {"gt": [180.0]}},
+    )
+
+    table = result["DD_10M.contingency_table"].sel(
+        region="all", station_group="all", source="fcst"
+    )
+    assert table.sel(contingency="fp_count").item() == 1  # 350 > 180, 10 is not

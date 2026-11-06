@@ -42,12 +42,15 @@ def main():
     init_time = args.date
     lead_time = args.leadtime
     param = args.param
+    # Showcase-facing param names encode the accumulation window in the suffix
+    # (e.g. "TOT_PREC1" -> base "TOT_PREC", 1h; "TOT_PREC6" -> 6h). Data loading,
+    # de-accumulation and colormap lookup all key off the base GRIB/FDB param
+    # name; `param` itself is kept only for filenames/titles.
+    base_param, agg_hours = parse_aggregated_param(param)
     regions = json.loads(args.regions_json)
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
-    # Aggregated params encode their period in the name (TOT_PREC1 → TOT_PREC, 1h)
-    base_param, agg_hours = parse_aggregated_param(param)
-    accu = agg_hours or args.accu
+    accu = agg_hours if agg_hours is not None else args.accu
 
     LOG.info(
         "Plotting forecast frame: param=%s, init_time=%s, lead_time=%s, regions=%s",
@@ -82,7 +85,21 @@ def main():
         return
     grib_file = Path(grib_file[0])
     LOG.info("Loading grib file %s", grib_file)
-    state = load_state_from_grib(grib_file, paramlist=paramlist)
+    try:
+        state = load_state_from_grib(grib_file, paramlist=paramlist)
+    except ValueError as exc:
+        # Accumulated params (e.g. TOT_PREC1/6) are undefined at lead times
+        # shorter than their accumulation window -- normally excluded
+        # upstream (resolve_leadtimes), but handled here too as a
+        # defensive fallback rather than crashing the whole rule.
+        LOG.warning(
+            "%s Creating empty placeholder frames.",
+            exc,
+        )
+        for region_name in regions:
+            outfn = outdir / f"frame_{lead_time}_{param}_{region_name}.png"
+            outfn.touch()
+        return
 
     # tp is accumulated from start of forecast; de-accumulate to get period [lt-accu, lt]
     if base_param == "TOT_PREC":

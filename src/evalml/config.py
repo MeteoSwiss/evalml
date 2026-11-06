@@ -1,3 +1,4 @@
+from math import isfinite
 from pathlib import Path
 from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
 
@@ -207,7 +208,11 @@ class TruthConfig(BaseModel):
     root: str = Field(
         ...,
         min_length=1,
-        description="Path to the root of the dataset.",
+        description=(
+            "Truth source: an anemoi '.zarr' analysis (e.g. KENDA), the INCA-CH "
+            "archive (a path with an 'INCA' directory), or 'jretrievedwh:<selector>' "
+            "for DWH station observations."
+        ),
     )
 
 
@@ -235,7 +240,10 @@ class ScoreMapsConfig(BaseModel):
         description=(
             "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
             "PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 "
-            "(period-accumulated precipitation, period encoded in the name)."
+            "(period-accumulated precipitation, period encoded in the name), and the "
+            "derive-diagnostic fields DD_10M, RELHUM_2M, TW_2M (derived from their "
+            "components when a source lacks them), HZEROCL, SNOWLMT, CAPE_ML, CIN_ML, "
+            "CAPE_MU, CIN_MU, TOT_SNOW1/6/24."
         ),
     )
     leadtimes: List[int] = Field(
@@ -261,6 +269,83 @@ class ScoreMapsConfig(BaseModel):
             "view, or zero-padded hour strings like '00', '06', '12', '18'."
         ),
     )
+
+    model_config = {"extra": "forbid"}
+
+
+class SalConfig(BaseModel):
+    """SAL (Structure–Amplitude–Location; Wernli et al. 2008) per-init precip
+    scores, computed for every run and baseline when enabled and written to
+    per-participant CSVs."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to compute SAL scores.",
+    )
+    params: List[str] = Field(
+        default=["TOT_PREC6"],
+        description="Accumulated precip params to score, period encoded in the name (e.g. TOT_PREC6).",
+    )
+    leadtimes: List[int] = Field(
+        default=[6, 12, 18, 24, 30],
+        description="List of lead times (hours) to score.",
+    )
+    grid_extent: List[float] = Field(
+        default=[-1.0, 18.0, 42.0, 50.5],
+        description=(
+            "SAL raster extent [lon_min, lon_max, lat_min, lat_max] in degrees "
+            "(PlateCarree). Both forecast and truth are remapped onto this "
+            "raster. The default is the ICON-CH1 analysis bounding box; keep it "
+            "close to the truth's footprint, since cells outside it only repeat "
+            "the nearest border value."
+        ),
+    )
+    grid_step_lat: float = Field(
+        default=0.01,
+        gt=0,
+        description="SAL raster latitude spacing in degrees.",
+    )
+    grid_step_lon: float = Field(
+        default=0.0145,
+        gt=0,
+        description=(
+            "SAL raster longitude spacing in degrees. Choose grid_step_lat and "
+            "grid_step_lon so cells are metrically near-square at the extent's "
+            "central latitude (pysteps' Location term assumes square pixels)."
+        ),
+    )
+
+    @field_validator("grid_extent")
+    @classmethod
+    def validate_grid_extent(cls, v: List[float]) -> List[float]:
+        if len(v) != 4:
+            raise ValueError(
+                f"sal.grid_extent must be [lon_min, lon_max, lat_min, lat_max]; got {v}."
+            )
+        lon_min, lon_max, lat_min, lat_max = v
+        if not (
+            all(isfinite(x) for x in v)
+            and -180.0 <= lon_min < lon_max <= 180.0
+            and -90.0 <= lat_min < lat_max <= 90.0
+        ):
+            raise ValueError(
+                "sal.grid_extent needs finite, increasing bounds with lon in "
+                f"[-180, 180] and lat in [-90, 90]; got {v}."
+            )
+        return v
+
+    @field_validator("params")
+    @classmethod
+    def validate_params_are_precip(cls, v: List[str]) -> List[str]:
+        bad = [p for p in v if not p.startswith("TOT_PREC")]
+        if bad:
+            raise ValueError(
+                "sal.params must be precipitation parameters starting with "
+                "'TOT_PREC' (e.g. TOT_PREC1, TOT_PREC6, or bare TOT_PREC for "
+                "cumulative-from-start); SAL is defined for precipitation only. "
+                f"Invalid: {bad}."
+            )
+        return v
 
     model_config = {"extra": "forbid"}
 
@@ -391,7 +476,10 @@ class ScorecardConfig(BaseModel):
 
     baseline: str = Field(
         ...,
-        description="Baseline label to compare against (must match the `label` field of a baseline entry in `runs`).",
+        description=(
+            "Label of the reference to compare against: a baseline or a forecaster/"
+            "temporal downscaler run in `runs`. A run is not scored against itself."
+        ),
     )
     lead_times: str = Field(
         ...,
@@ -407,7 +495,8 @@ class ScorecardConfig(BaseModel):
             "Variables and metrics as scorecard rows (VAR:M1,M2 format). "
             "An empty list [] is accepted by the schema but falls back to a "
             "hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). "
-            "Omit ':...' after a variable name to include all available metrics for it."
+            "Omit ':...' after a variable name to include all available metrics for it. "
+            "Variables without data are shown as empty rows."
         ),
     )
 
@@ -517,7 +606,10 @@ class ExperimentConfig(BaseModel):
     )
     params: List[str] = Field(
         default=["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"],
-        description="List of parameters to compute verification metrics for.",
+        description=(
+            "List of parameters to compute verification metrics for. With INCA truth, "
+            "parameters INCA does not provide are skipped."
+        ),
     )
     thresholds: Dict[str, Dict[str, List[float]]] = Field(
         default_factory=dict,
@@ -540,6 +632,16 @@ class ExperimentConfig(BaseModel):
             "whose config references that file."
         ),
     )
+    score_on_common_points: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Parameters scored only at the points where every participant has a "
+            "value, per reference time and lead time (e.g. HZEROCL, SNOWLMT and "
+            "CIN_MU, which ICON leaves undefined at part of the domain). All "
+            "participants and the truth are then scored on the same points. The "
+            "scores of these parameters depend on the set of participants."
+        ),
+    )
     scorecards: Optional[ExperimentScorecardConfig] = Field(
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
@@ -547,6 +649,10 @@ class ExperimentConfig(BaseModel):
     scoremaps: Optional[ScoreMapsConfig] = Field(
         default=None,
         description="Score map plot configuration. Omit or set enabled: false to disable.",
+    )
+    sal: Optional[SalConfig] = Field(
+        default=None,
+        description="SAL precipitation verification. Omit or set enabled: false to disable.",
     )
 
     @field_validator("station_holdout")
@@ -560,6 +666,15 @@ class ExperimentConfig(BaseModel):
         if duplicates:
             raise ValueError(f"station_holdout has duplicate stations: {duplicates}")
         return v
+
+    @model_validator(mode="after")
+    def validate_score_on_common_points(self) -> "ExperimentConfig":
+        unknown = sorted(set(self.score_on_common_points) - set(self.params))
+        if unknown:
+            raise ValueError(
+                f"score_on_common_points parameters {unknown} are not in experiment.params."
+            )
+        return self
 
     @field_validator("thresholds")
     @classmethod
@@ -771,20 +886,46 @@ class ConfigModel(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_scoremap_leadtimes(self) -> "ConfigModel":
-        sm = self.experiment.scoremaps if self.experiment else None
-        if sm is None or not sm.enabled:
+    def validate_leadtimes_producible(self) -> "ConfigModel":
+        """Reject scoremaps/sal lead times not produced by every participant."""
+        if self.experiment is None:
             return self
-        requested = set(sm.leadtimes)
-        for item in self.runs:
-            steps = getattr(item, next(iter(item.model_fields))).steps
-            start, end, step = map(int, steps.split("/"))
-            producible = set(range(start, end + 1, step))
-            unsupported = requested - producible
-            if unsupported:
+        for label, cfg in (
+            ("scoremaps", self.experiment.scoremaps),
+            ("sal", self.experiment.sal),
+        ):
+            if cfg is None or not cfg.enabled:
+                continue
+            for item in self.runs:
+                steps = getattr(item, next(iter(type(item).model_fields))).steps
+                start, end, step = map(int, steps.split("/"))
+                unsupported = set(cfg.leadtimes) - set(range(start, end + 1, step))
+                if unsupported:
+                    raise ValueError(
+                        f"{label}.leadtimes contains {sorted(unsupported)} h which are not "
+                        f"produced by participant with steps '{steps}'."
+                    )
+        return self
+
+    @model_validator(mode="after")
+    def validate_scorecard_references(self) -> "ConfigModel":
+        sc = self.experiment.scorecards if self.experiment else None
+        if sc is None or not sc.enabled:
+            return self
+        labels = [
+            getattr(item, next(iter(type(item).model_fields))).label
+            for item in self.runs
+        ]
+        for name, section in sc.sections.items():
+            if section.baseline not in labels:
                 raise ValueError(
-                    f"scoremaps.leadtimes contains {sorted(unsupported)} h which are not "
-                    f"produced by participant with steps '{steps}'."
+                    f"scorecards.sections.{name}.baseline {section.baseline!r} does "
+                    f"not match the label of any entry in `runs`: {labels}"
+                )
+            if labels.count(section.baseline) > 1:
+                raise ValueError(
+                    f"scorecards.sections.{name}.baseline {section.baseline!r} is "
+                    f"ambiguous: several entries in `runs` use this label."
                 )
         return self
 
