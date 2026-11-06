@@ -165,6 +165,36 @@ def get_resource(wc, field: str, default):
         return getattr(rc["inference_resources"], field) or default
 
 
+def get_ensemble(wc):
+    """Ensemble settings ({"members": N, "seed": s}) of the run, or None."""
+    return RUN_CONFIGS[wc.run_id].get("ensemble")
+
+
+def get_ensemble_gpus(wc):
+    """Number of members run at the same time (one GPU each) for an ensemble run."""
+    ens = get_ensemble(wc)
+    return get_resource(wc, "gpu", min(ens["members"], 4))
+
+
+def get_execute_resource(wc, field: str, default, ensemble_default=None):
+    """Resource of inference_execute. Ensemble runs use ``ensemble_default`` (a
+    callable of the number of members, the GPU count and ``wc``) instead of the
+    deterministic default; values set in ``inference_resources`` always win."""
+    ens = get_ensemble(wc)
+    if ens is None or ensemble_default is None:
+        return get_resource(wc, field, default)
+    return get_resource(
+        wc, field, ensemble_default(ens["members"], get_ensemble_gpus(wc))
+    )
+
+
+def _ensemble_runtime_min(members: int, gpus: int) -> int:
+    """Default runtime (minutes) of an ensemble: 20 min plus 10 min per wave of
+    `gpus` members. A stormy-plateau member took ~1 min for 24 h of lead time,
+    mostly loading the model."""
+    return 20 + 10 * -(-members // gpus)
+
+
 def get_leadtime(wc):
     """Get the lead time from the run config."""
     start, end, step = RUN_CONFIGS[wc.run_id]["steps"].split("/")
@@ -194,6 +224,7 @@ rule inference_prepare_forecaster:
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
         output_variables=lambda wc: RUN_CONFIGS[wc.run_id].get("output_variables"),
+        ensemble=lambda wc: RUN_CONFIGS[wc.run_id].get("ensemble"),
     script:
         "../scripts/inference_prepare.py"
 
@@ -275,13 +306,37 @@ rule inference_execute:
         OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.log",
     localrule: True
     resources:
-        slurm_partition=lambda wc: get_resource(wc, "slurm_partition", "short-shared"),
-        cpus_per_task=lambda wc: get_resource(wc, "cpus_per_task", 24),
-        mem_mb_per_cpu=lambda wc: get_resource(wc, "mem_mb_per_cpu", 8000),
-        runtime=lambda wc: get_resource(wc, "runtime", "40m"),
-        gres=lambda wc: f"gpu:{get_resource(wc, 'gpu',1)}",
+        # ensembles longer than the 1h limit of short-shared go to normal-shared
+        slurm_partition=lambda wc: get_execute_resource(
+            wc,
+            "slurm_partition",
+            "short-shared",
+            lambda n, k: (
+                "short-shared"
+                if _ensemble_runtime_min(n, k) <= 60
+                else "normal-shared"
+            ),
+        ),
+        cpus_per_task=lambda wc: get_execute_resource(
+            wc, "cpus_per_task", 24, lambda n, k: 24 * k
+        ),
+        # ensembles: keep the request within one node (~446 GB)
+        mem_mb_per_cpu=lambda wc: get_execute_resource(
+            wc,
+            "mem_mb_per_cpu",
+            8000,
+            lambda n, k: min(
+                8000,
+                440000
+                // get_execute_resource(wc, "cpus_per_task", 24, lambda n, k: 24 * k),
+            ),
+        ),
+        runtime=lambda wc: get_execute_resource(
+            wc, "runtime", "40m", lambda n, k: f"{_ensemble_runtime_min(n, k)}m"
+        ),
+        gres=lambda wc: f"gpu:{get_execute_resource(wc, 'gpu',1, lambda n, k: k)}",
         ntasks=lambda wc: get_resource(wc, "tasks", 1),
-        gpus=lambda wc: get_resource(wc, "gpu", 1),
+        gpus=lambda wc: get_execute_resource(wc, "gpu", 1, lambda n, k: k),
     params:
         env_path=lambda wc, input: f"{Path(input.image).resolve()}",
         workdir=lambda wc: (
@@ -289,6 +344,30 @@ rule inference_execute:
         ).resolve(),
         disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
             "disable_local_eccodes_definitions", False
+        ),
+        # The pieces below render to the exact text of a deterministic run when
+        # there is no ensemble; an ensemble run swaps in its member launcher.
+        config_file=lambda wc: ("config.yaml" if get_ensemble(wc) is None else '"$1"'),
+        cluster_gpus=lambda wc, resources: (
+            resources.gpus if get_ensemble(wc) is None else 1
+        ),
+        seed_stmt=lambda wc: (
+            ""
+            if get_ensemble(wc) is None
+            else 'import os, torch; os.environ.get("EVALML_SEED") and torch.manual_seed(int(os.environ["EVALML_SEED"])); '
+        ),
+        srun_cmd=lambda wc, resources: (
+            "bash -c '_run_inference'"
+            if get_ensemble(wc) is None
+            else "bash {script} {gpus} {members} {seed} {logdir}".format(
+                script=Path("workflow/scripts/inference_execute_members.sh").resolve(),
+                gpus=resources.gpus,
+                members=get_ensemble(wc)["members"],
+                seed=get_ensemble(wc)["seed"],
+                logdir=(
+                    OUT_ROOT / f"logs/inference_execute/{wc.run_id}-{wc.init_time}"
+                ).resolve(),
+            )
         ),
         account_flag=lambda wc: (
             f"--account={config['profile']['default_resources']['slurm_account']}"
@@ -320,15 +399,15 @@ rule inference_execute:
                 CMD_ARGS=()
 
                 # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
-                if [ {resources.gpus} -gt 1 ]; then
+                if [ {params.cluster_gpus} -gt 1 ]; then
                     CMD_ARGS+=(runner.parallel.cluster=slurm)
                 fi
 
                 # Equivalent to `anemoi-inference run`, but imports pyproj before eccodes:
                 # the eckitlib wheel bundles its own PROJ, which aborts at exit (double free)
                 # if loaded before pyproj. See https://github.com/ecmwf/eckit/issues/354
-                python -c 'import sys, importlib.util; importlib.util.find_spec("pyproj") and __import__("pyproj"); from anemoi.inference.__main__ import main; sys.argv[0] = "anemoi-inference"; sys.exit(main())' \
-                    run config.yaml "${{CMD_ARGS[@]}}"
+                python -c 'import sys, importlib.util; importlib.util.find_spec("pyproj") and __import__("pyproj"); {params.seed_stmt}from anemoi.inference.__main__ import main; sys.argv[0] = "anemoi-inference"; sys.exit(main())' \
+                    run {params.config_file} "${{CMD_ARGS[@]}}"
             }}
             export -f _run_inference
 
@@ -343,7 +422,7 @@ rule inference_execute:
                 --time={resources.runtime} \
                 --gres={resources.gres} \
                 --ntasks={resources.ntasks} \
-                bash -c '_run_inference'
+                {params.srun_cmd}
         ) >{log} 2>&1
         touch {output.okfile}
         """
