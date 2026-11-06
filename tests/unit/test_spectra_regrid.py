@@ -42,7 +42,7 @@ def test_grid_geometry_reads_dx_in_km(tmp_path):
 
 
 def test_weights_path_for_npoints_unknown_raises():
-    with pytest.raises(KeyError, match="No iconremap weights"):
+    with pytest.raises(ValueError, match="No iconremap weights.*ICON-CH1"):
         regrid.weights_path_for_npoints(999_999)
 
 

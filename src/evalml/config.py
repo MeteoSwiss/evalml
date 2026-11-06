@@ -649,7 +649,11 @@ class ExperimentConfig(BaseModel):
     )
     spectra: SpectraConfig = Field(
         default_factory=SpectraConfig,
-        description="Power-spectra QC configuration. Disabled by default.",
+        description=(
+            "Power-spectra QC configuration. Disabled by default. Spectra need every "
+            "participant and the truth on the ICON-CH1 or ICON-CH2 native grid: INCA "
+            "baselines, INCA truth and station (jretrievedwh) truth are not supported."
+        ),
     )
     sal: Optional[SalConfig] = Field(
         default=None,
@@ -909,6 +913,41 @@ class ConfigModel(BaseModel):
                         f"{label}.{field} contains {sorted(unsupported)} h which are not "
                         f"produced by participant with steps '{steps}'."
                     )
+        return self
+
+    @model_validator(mode="after")
+    def validate_spectra_sources(self) -> "ConfigModel":
+        """Reject spectra participants or truth that are not on an ICON native grid.
+
+        The detection mirrors ``data_input.is_inca_archive`` and
+        ``data_input.truth_type``, which are not imported here to keep the config
+        module light.
+        """
+        if self.experiment is None or not self.experiment.spectra.enabled:
+            return self
+        unsupported = []
+        for item in self.runs:
+            if (
+                isinstance(item, BaselineItem)
+                and "INCA" in Path(item.baseline.root).parts
+            ):
+                unsupported.append(f"baseline {item.baseline.label!r} (INCA)")
+        if self.truth is not None:
+            root = self.truth.root
+            if Path(root).suffix != ".zarr":
+                if "jretrieve" in root:
+                    unsupported.append(
+                        f"truth {self.truth.label!r} (station observations)"
+                    )
+                elif "INCA" in Path(root).parts:
+                    unsupported.append(f"truth {self.truth.label!r} (INCA)")
+        if unsupported:
+            raise ValueError(
+                "experiment.spectra needs every participant and the truth on the "
+                "ICON-CH1 or ICON-CH2 native grid; not supported: "
+                + ", ".join(unsupported)
+                + ". Disable spectra or remove these sources."
+            )
         return self
 
     @model_validator(mode="after")

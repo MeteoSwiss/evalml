@@ -32,9 +32,10 @@ def weights_path_for_npoints(npoints: int) -> Path:
     try:
         return ICON_WEIGHTS[npoints]
     except KeyError as exc:
-        raise KeyError(
+        raise ValueError(
             f"No iconremap weights registered for native grid with {npoints} "
-            f"cells. Known grids: {sorted(ICON_WEIGHTS)}."
+            f"cells. Power spectra need fields on the ICON-CH1 ({CH1_NPOINTS} cells) "
+            f"or ICON-CH2 ({CH2_NPOINTS} cells) native grid."
         ) from exc
 
 

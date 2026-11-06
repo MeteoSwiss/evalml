@@ -138,13 +138,13 @@ def test_scorecard_reference_must_exist(example_config):
 
 
 def test_spectra_lead_times_must_be_produced_by_every_participant(example_config):
-    # the INCA baseline of the example config only covers 0/6/1
-    example_config["experiment"]["spectra"] = {"enabled": True, "lead_times": [3, 6]}
-    ConfigModel.model_validate(example_config)
+    # the ICON-CH1-CTRL baseline of the example config only covers 0/33/1
+    config = _spectra_ready(example_config, lead_times=[6, 24])
+    ConfigModel.model_validate(config)
 
-    example_config["experiment"]["spectra"]["lead_times"] = [6, 24]
-    with pytest.raises(ValueError, match=r"spectra.lead_times contains \[24\]"):
-        ConfigModel.model_validate(example_config)
+    config["experiment"]["spectra"]["lead_times"] = [6, 48]
+    with pytest.raises(ValueError, match=r"spectra.lead_times contains \[48\]"):
+        ConfigModel.model_validate(config)
 
 
 def test_spectra_lead_times_unchecked_when_disabled(example_config):
@@ -171,3 +171,51 @@ def test_inline_forecaster_may_repeat_a_listed_forecaster(example_config):
     td["forecaster"]["label"] = "Varda forecaster"
     example_config["runs"].append({"forecaster": dict(td["forecaster"])})
     ConfigModel.model_validate(example_config)
+
+
+def _spectra_ready(config, lead_times=(6,)):
+    """Example config with spectra on: ICON participants and a zarr truth only."""
+    config["runs"] = [
+        r for r in config["runs"] if r.get("baseline", {}).get("label") != "INCA"
+    ]
+    config["experiment"].pop("scorecards", None)  # references the INCA baseline
+    config["experiment"]["spectra"] = {"enabled": True, "lead_times": list(lead_times)}
+    config["truth"] = {"label": "REA-L-CH1", "root": "/store/realch1.zarr"}
+    return config
+
+
+def test_spectra_accepts_icon_sources_and_zarr_truth(example_config):
+    ConfigModel.model_validate(_spectra_ready(example_config))
+
+
+def test_spectra_rejects_inca_baseline(example_config):
+    config = _spectra_ready(example_config)
+    config["runs"].append(
+        {
+            "baseline": {
+                "label": "INCA",
+                "root": "/store_new/mch/msclim/INCA",
+                "steps": "0/6/1",
+            }
+        }
+    )
+    with pytest.raises(ValueError, match=r"native grid.*baseline 'INCA' \(INCA\)"):
+        ConfigModel.model_validate(config)
+
+
+@pytest.mark.parametrize(
+    "root, kind",
+    [
+        ("jretrievedwh:SwissMetNet", "station observations"),
+        ("/store_new/mch/msclim/INCA", "INCA"),
+    ],
+)
+def test_spectra_rejects_station_and_inca_truth(example_config, root, kind):
+    config = _spectra_ready(example_config)
+    config["truth"]["root"] = root
+    with pytest.raises(ValueError, match=rf"native grid.*truth 'REA-L-CH1' \({kind}\)"):
+        ConfigModel.model_validate(config)
+
+
+def test_inca_allowed_when_spectra_disabled(example_config):
+    ConfigModel.model_validate(example_config)  # INCA baseline + station truth

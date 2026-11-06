@@ -346,7 +346,7 @@
         },
         "spectra": {
           "$ref": "#/$defs/SpectraConfig",
-          "description": "Power-spectra QC configuration. Disabled by default."
+          "description": "Power-spectra QC configuration. Disabled by default. Spectra need every participant and the truth on the ICON-CH1 or ICON-CH2 native grid: INCA baselines, INCA truth and station (jretrievedwh) truth are not supported."
         },
         "sal": {
           "anyOf": [
