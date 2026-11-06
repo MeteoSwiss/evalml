@@ -57,7 +57,7 @@ rule spectra_compute:
         run_id=r"[^/]+/[^/]+",
         init_time=r"\d+",
     resources:
-        cpus_per_task=8,
+        cpus_per_task=balfrin_cpus(50_000, actual_cpus=8),
         mem_mb=50_000,
         runtime="30m",
     params:
@@ -91,7 +91,7 @@ rule spectra_compute_baseline:
     log:
         OUT_ROOT / "logs/spectra_compute_baseline/{baseline_id}-{init_time}.log",
     resources:
-        cpus_per_task=8,
+        cpus_per_task=balfrin_cpus(50_000, actual_cpus=8),
         mem_mb=50_000,
         runtime="30m",
     params:
@@ -124,7 +124,7 @@ rule spectra_compute_truth:
     log:
         OUT_ROOT / "logs/spectra_truth/{init_time}.log",
     resources:
-        cpus_per_task=8,
+        cpus_per_task=balfrin_cpus(50_000, actual_cpus=8),
         mem_mb=50_000,
         runtime="30m",
     params:
@@ -209,7 +209,7 @@ rule spectra_plot:
     log:
         OUT_ROOT / "logs/spectra_plot/{experiment}.log",
     resources:
-        cpus_per_task=2,
+        cpus_per_task=balfrin_cpus(20_000, actual_cpus=2),
         mem_mb=20_000,
         runtime="20m",
     shell:
