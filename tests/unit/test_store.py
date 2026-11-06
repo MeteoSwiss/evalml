@@ -140,3 +140,42 @@ def test_refusals(tmp_path, models_store, monkeypatch):
         store.cmd_unregister(
             name, store=exp_store, models_store=models_store, yes=True, no_publish=True
         )
+
+
+def test_relative_symlinks_are_materialized(tmp_path, models_store, monkeypatch):
+    exp_store = tmp_path / "experiments"
+    results = make_results(tmp_path / "r", models_store)
+    (results.parent / "notes.md").write_text("kept")
+    (results / "notes.md").symlink_to("../notes.md")
+    (results / "gone.md").symlink_to("../nowhere.md")
+    monkeypatch.chdir(tmp_path)  # a cwd the relative targets do not resolve from
+    name = register(results, exp_store, models_store)
+    copied = exp_store / name / store.RESULTS
+    assert (copied / "notes.md").read_text() == "kept"
+    assert not (copied / "notes.md").is_symlink()
+    assert not os.path.lexists(copied / "gone.md")
+
+
+def test_config_must_match_the_results(tmp_path, models_store):
+    exp_store = tmp_path / "experiments"
+    results = make_results(tmp_path, models_store)
+    other = tmp_path / "other.yaml"
+    other.write_text(yaml.safe_dump({"description": "Something else.", "runs": []}))
+    with pytest.raises(SystemExit, match="differs from --config"):
+        register(results, exp_store, models_store, config_path=other)
+    same = tmp_path / "same.yaml"
+    same.write_text((results / "config.yaml").read_text())
+    assert register(results, exp_store, models_store, config_path=same)
+
+
+def test_one_registration_per_evaluation_at_a_time(tmp_path, models_store):
+    exp_store = tmp_path / "experiments"
+    results = make_results(tmp_path, models_store)
+    exp_store.mkdir()
+    store.claim(exp_store, results.name).mkdir()  # a concurrent registration holds it
+    with pytest.raises(SystemExit, match="in progress"):
+        register(results, exp_store, models_store, name="second-name")
+    assert not store.staging(exp_store, "second-name").exists()
+    store.claim(exp_store, results.name).rmdir()
+    register(results, exp_store, models_store, name="second-name")
+    assert not store.claim(exp_store, results.name).exists()

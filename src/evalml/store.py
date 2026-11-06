@@ -40,6 +40,7 @@ evalml.registration.
 """
 
 import base64
+import filecmp
 import html
 import json
 import os
@@ -282,6 +283,28 @@ def staging(store, name):
     return Path(store) / (".tmp.%s" % name)
 
 
+def claim(store, identity):
+    """Held while one evaluation is being registered, whatever name it gets: two
+    registrations of the same results under different names would otherwise both pass
+    the duplicate check before either renames. `mkdir` is the atomic step."""
+    return Path(store) / (".claim.%s" % identity)
+
+
+def dangling_symlinks(directory, names):
+    """An `ignore` for copytree. Its own `ignore_dangling_symlinks` resolves a relative
+    target against the working directory rather than the link's directory, so it drops
+    valid links (`config.yaml -> ../original.yaml`) without a word."""
+    skipped = {
+        n
+        for n in names
+        if os.path.islink(os.path.join(directory, n))
+        and not os.path.exists(os.path.join(directory, n))
+    }
+    for n in sorted(skipped):
+        log("WARNING: skipping dangling symlink %s" % os.path.join(directory, n))
+    return skipped
+
+
 def orphan(store, name):
     """Where unregistering leaves the tombstone. Hidden, so it cannot be mistaken for an
     experiment, and permanent: it is what keeps the name from ever being handed out again."""
@@ -520,6 +543,18 @@ def register(
             "%s does not contain config.yaml — re-run the experiment with a current evalml, "
             "or pass --config pointing at the YAML that produced it" % results_dir
         )
+    if (
+        config_src is not None
+        and (results_dir / "config.yaml").is_file()
+        and not filecmp.cmp(
+            str(config_src), str(results_dir / "config.yaml"), shallow=False
+        )
+    ):
+        fail(
+            "%s already contains a config.yaml that differs from --config %s — the "
+            "registration would describe one and archive the other. Drop --config to use "
+            "the results' own config." % (results_dir, config_src)
+        )
     check_models(models_store, meta.get("models") or [])
     if Path(store).is_dir():
         refuse_if_registered(store, meta.get("identity"))
@@ -540,13 +575,23 @@ def register(
     except FileExistsError:
         fail("%s exists — another registration of %r is in progress" % (tmp, name))
 
+    identity = meta.get("identity")
+    claimed = None
     try:
+        if identity:
+            try:
+                claim(store, identity).mkdir()
+                claimed = claim(store, identity)
+            except FileExistsError:
+                fail(
+                    "%s exists — another registration of %s is in progress, or a crashed "
+                    "one left it behind; sweep it by hand if it is stale"
+                    % (claim(store, identity), identity)
+                )
         log("copying %s (%s) ..." % (results_dir, human(measure(results_dir))))
         # Symlinked results are materialized: the store outlives the working directory
         # they would point into. A dangling one is skipped rather than fatal.
-        shutil.copytree(
-            str(results_dir), str(tmp / RESULTS), ignore_dangling_symlinks=True
-        )
+        shutil.copytree(str(results_dir), str(tmp / RESULTS), ignore=dangling_symlinks)
         if config_src is not None and not (tmp / RESULTS / "config.yaml").is_file():
             shutil.copy2(str(config_src), str(tmp / RESULTS / "config.yaml"))
 
@@ -568,6 +613,12 @@ def register(
         # left behind blocks that name until someone sweeps it.
         shutil.rmtree(str(tmp), ignore_errors=True)
         raise
+    finally:
+        if claimed is not None:
+            try:
+                claimed.rmdir()
+            except OSError:
+                pass
     log("registered at %s" % target)
 
     # From here on everything is derived, and nothing may fail the registration.
