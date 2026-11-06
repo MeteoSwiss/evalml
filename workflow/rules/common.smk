@@ -398,9 +398,15 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
     Changes to these fields create a new run_id (new outputs) but reuse the environment:
     - steps (lead times)
     - config YAML file contents (inference parameters)
+    - output_variables (variables written to the GRIB outputs), only when set, so
+      that run_ids of configs without it are unchanged; sorted and deduplicated,
+      so that the order of the list does not matter
     - For temporal downscalers: the forecaster's run_id (which run's outputs to read)
     """
-    configs_to_hash = [{"steps": run_config["steps"]}]
+    run_fields = {"steps": run_config["steps"]}
+    if run_config.get("output_variables") is not None:
+        run_fields["output_variables"] = sorted(set(run_config["output_variables"]))
+    configs_to_hash = [run_fields]
     with open(run_config["config"], "r") as f:
         configs_to_hash.append(yaml.safe_load(f))
     if model_type == "temporal_downscaler" and run_config.get("forecaster"):
