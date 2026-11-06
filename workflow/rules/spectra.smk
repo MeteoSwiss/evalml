@@ -19,6 +19,14 @@ def _spectra_reftimes():
     return [t.strftime("%Y%m%d%H%M") for t in REFTIMES if t.hour in hours]
 
 
+if SPECTRA.get("enabled", False) and not _spectra_reftimes():
+    raise ValueError(
+        f"experiment.spectra.init_hours {SPECTRA.get('init_hours')} matches none of "
+        f"the experiment dates (init hours {sorted({t.hour for t in REFTIMES})}); "
+        "adjust init_hours or remove it to use all dates."
+    )
+
+
 def _spectra_truth_steps():
     candidates = list(collect_all_candidates())
     if candidates:

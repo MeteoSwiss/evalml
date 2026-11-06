@@ -219,3 +219,9 @@ def test_spectra_rejects_station_and_inca_truth(example_config, root, kind):
 
 def test_inca_allowed_when_spectra_disabled(example_config):
     ConfigModel.model_validate(example_config)  # INCA baseline + station truth
+
+
+def test_spectra_init_hours_must_not_be_empty():
+    with pytest.raises(ValidationError):
+        SpectraConfig(init_hours=[])
+    assert SpectraConfig(init_hours=[0, 12]).init_hours == [0, 12]

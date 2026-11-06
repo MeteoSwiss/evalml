@@ -495,6 +495,7 @@ class SpectraConfig(BaseModel):
     )
     init_hours: Optional[List[int]] = Field(
         default=None,
+        min_length=1,
         description="Optional subset of init hours to average over. None = all.",
     )
 
