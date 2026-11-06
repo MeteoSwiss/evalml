@@ -14,6 +14,7 @@ from verification_plot_metrics import (
     _ensure_unique_lead_time,
     _select_best_sources,
 )
+from verification.ensemble_report import CRPS_NOTE, add_deterministic_crps, is_score_var
 from verification import decode_metric
 
 LOG = logging.getLogger(__name__)
@@ -69,10 +70,16 @@ def main(args):
     dfs = [_ensure_unique_lead_time(d) for d in dfs]
     dfs = _select_best_sources(dfs)
     ds = _concat_sources(dfs)
+    ds, crps_filled = add_deterministic_crps(ds)
     LOG.info("Loaded verification netcdf: \n%s", ds)
 
     # extract only  non-spatial variables to pd.DataFrame
-    nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d and "." in d]
+    # (rank histograms and probability tables are counts for plots, not scores)
+    nonspatial_vars = [
+        d
+        for d in ds.data_vars
+        if "spatial" not in d and "." in d and is_score_var(ds[d])
+    ]
     df = ds[nonspatial_vars].to_array("stack").to_dataframe(name="value").reset_index()
     df[["param", "metric"]] = df["stack"].str.split(".", n=1, expand=True)
     df["metric"] = df.metric.apply(decode_metric)
@@ -175,6 +182,7 @@ def main(args):
         station_holdout=station_holdout,
         station_groups=station_groups,
         header_text=args.header_text,
+        crps_note=CRPS_NOTE if crps_filled else "",
         configfile_content=open(args.configfile, "r").read()
         if args.configfile.is_file()
         else "",

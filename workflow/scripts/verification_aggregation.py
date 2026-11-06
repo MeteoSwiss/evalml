@@ -34,6 +34,40 @@ def get_season(time):
         return "SON"
 
 
+def _brier_from_prob_table(table: xr.DataArray) -> xr.Dataset:
+    """Brier score and Murphy decomposition from a prob_table of counts.
+
+    ``table`` has dims ``n_members_yes`` (0..N) and ``obs`` (0, 1) besides the others.
+    The forecast probability of bin k is k/N. BS = REL - RES + UNC holds exactly as
+    the forecast probability takes one value per bin.
+    """
+    n_bins = table.sizes["n_members_yes"]
+    n_members = n_bins - 1
+    f = xr.DataArray(
+        np.arange(n_bins) / n_members,
+        dims="n_members_yes",
+        coords={"n_members_yes": table["n_members_yes"]},
+    )
+    n_obs1 = table.isel(obs=1, drop=True)
+    n_obs0 = table.isel(obs=0, drop=True)
+    n_k = n_obs0 + n_obs1
+    total = n_k.sum("n_members_yes", skipna=False)
+    total = total.where(total > 0)
+    o_k = (n_obs1 / n_k.where(n_k > 0)).fillna(0.0)
+    o_bar = n_obs1.sum("n_members_yes", skipna=False) / total
+    bs = (n_obs1 * (f - 1) ** 2 + n_obs0 * f**2).sum("n_members_yes", skipna=False)
+    rel = (n_k * (f - o_k) ** 2).sum("n_members_yes", skipna=False)
+    res = (n_k * (o_k - o_bar) ** 2).sum("n_members_yes", skipna=False)
+    return xr.Dataset(
+        {
+            "BS": bs / total,
+            "BS_REL": rel / total,
+            "BS_RES": res / total,
+            "BS_UNC": o_bar * (1 - o_bar),
+        }
+    )
+
+
 def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
     """Compute mean metric values aggregated by season"""
     LOG.info("Aggregation results")
@@ -74,8 +108,23 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
         ds_mean.append(ds_result)
     out = xr.merge(ds_mean, compat="no_conflicts", join="outer")
 
-    for var in out.data_vars:
-        if "contingency_table" in var:
+    n_members_attr = ds.attrs.get("n_members")
+    for var in list(out.data_vars):
+        if "rank_hist" in var:
+            # ensemble rank histogram: back to per-stratum counts
+            out[var] = out[var] * out["n_samples"]
+            if n_members_attr is None:
+                n_members_attr = out.sizes["rank"] - 1
+        elif "prob_table" in var:
+            # forecast-probability/observation counts: back to per-stratum counts,
+            # then Brier score and its decomposition per threshold
+            out[var] = out[var] * out["n_samples"]
+            brier = _brier_from_prob_table(out[var])
+            for name, da in brier.data_vars.items():
+                out[var.replace("prob_table", name)] = da
+            if n_members_attr is None:
+                n_members_attr = out.sizes["n_members_yes"] - 1
+        elif "contingency_table" in var:
             # convert contingency table means back to per-stratum counts
             out[var] = out[var] * out["n_samples"]
             contingency_manager = scores.categorical.BasicContingencyManager(
@@ -127,6 +176,24 @@ def aggregate_results(ds: xr.Dataset) -> xr.Dataset:
     for var in var_transform:
         out[var] = np.sqrt(out[var])
     out = out.rename(var_transform)
+
+    # Ensemble spread and spread-skill ratio (after the sqrt/rename above: needs RMSE)
+    for var in [v for v in out.data_vars if v.endswith(".ENS_VAR")]:
+        prefix = var[: -len("ENS_VAR")]
+        spread = np.sqrt(out[var])
+        out[f"{prefix}SPREAD"] = spread
+        rmse_var = f"{prefix}RMSE"
+        if rmse_var in out.data_vars and n_members_attr is not None:
+            n = float(n_members_attr)
+            rmse = out[rmse_var]
+            ssr = spread / rmse.where(rmse != 0) * np.sqrt((n + 1) / n)
+            out[f"{prefix}SSR"] = ssr.where(spread != 0)
+        out = out.drop_vars(var)
+    if n_members_attr is not None and any(
+        v.endswith(".SPREAD") or "rank_hist" in v or "prob_table" in v
+        for v in out.data_vars
+    ):
+        out.attrs["n_members"] = int(n_members_attr)
 
     LOG.info("Computed aggregation in %.2f seconds", time.time() - start)
     LOG.info("Aggregated results: \n %s", out)

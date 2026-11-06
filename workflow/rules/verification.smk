@@ -63,20 +63,26 @@ rule verification_valid_mask:
         OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/valid_mask_{VALID_MASK_HASH}.nc",
     log:
         OUT_ROOT / "logs/verification_valid_mask/{run_id}-{init_time}.log",
+    # Ensembles: every member is loaded, so memory and runtime grow with N.
     resources:
-        cpus_per_task=balfrin_cpus(40_000, actual_cpus=8),
-        mem_mb=40_000,
-        runtime="30m",
+        cpus_per_task=lambda wc: balfrin_cpus(
+            ensemble_scaled(40_000, 1_000)(wc), actual_cpus=8
+        ),
+        mem_mb=ensemble_scaled(40_000, 1_000),
+        runtime=ensemble_scaled(30, 3, unit="m"),
     params:
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         truth=config["truth"]["root"],
-        grib_out_dir=lambda wc: run_grib_dir(wc.run_id, wc.init_time).resolve(),
+        grib_out_dir=lambda wc: run_grib_root(wc.run_id, wc.init_time).resolve(),
+        # ensembles: all members (grib/{NNN}/) are read
+        members_flag=members_flag,
         mask_params=",".join(COMMON_POINTS_PARAMS),
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {params.grib_out_dir} \
+            {params.members_flag} \
             --truth "{params.truth}" \
             --reftime {wildcards.init_time} \
             --steps "{params.fcst_steps}" \
@@ -162,10 +168,13 @@ rule verification_metrics:
         OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/verif_{VERIF_HASH}.nc",
     log:
         OUT_ROOT / "logs/verification_metrics/{run_id}-{init_time}.log",
+    # Ensembles: every member is loaded and scored, so memory and runtime grow with N.
     resources:
-        cpus_per_task=balfrin_cpus(80_000, actual_cpus=24),
-        mem_mb=80_000,
-        runtime="60m",
+        cpus_per_task=lambda wc: balfrin_cpus(
+            ensemble_scaled(80_000, 2_000)(wc), actual_cpus=24
+        ),
+        mem_mb=ensemble_scaled(80_000, 2_000),
+        runtime=ensemble_scaled(60, 6, unit="m"),
     # wildcard_constraints:
     # run_id="^" # to avoid ambiguitiy with run_baseline_verif
     # TODO: implement logic to use experiment name instead of run_id as wildcard
@@ -174,7 +183,9 @@ rule verification_metrics:
         truth=config["truth"]["root"],
         truth_source_id=f"truth-{TRUTH_HASH}",
         regions=REGIONS,
-        grib_out_dir=lambda wc: run_grib_dir(wc.run_id, wc.init_time).resolve(),
+        grib_out_dir=lambda wc: run_grib_root(wc.run_id, wc.init_time).resolve(),
+        # ensembles: all members (grib/{NNN}/) are read
+        members_flag=members_flag,
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=EXPERIMENT_CONFIG.get("thresholds", {}),
         holdout_flag=lambda wc, input: (
@@ -191,6 +202,7 @@ rule verification_metrics:
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --forecast {params.grib_out_dir} \
+            {params.members_flag} \
             --truth "{params.truth}" \
             --reftime {wildcards.init_time} \
             --steps "{params.fcst_steps}" \
@@ -252,6 +264,7 @@ use rule verification_metrics_aggregation as verification_metrics_aggregation_ba
 rule verification_metrics_plot:
     input:
         "src/verification/__init__.py",
+        "src/verification/ensemble_report.py",
         script="workflow/scripts/verification_plot_metrics.py",
         verif=list(EXPERIMENT_PARTICIPANTS.values()),
     output:
