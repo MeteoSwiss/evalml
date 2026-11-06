@@ -15,7 +15,6 @@ from regrid import KM_PER_DEG
 REFERENCE_GRIDS = {
     "O96 (~104 km)": 90.0 / 96.0 * KM_PER_DEG,
     "N320 (~31 km)": 0.28125 * KM_PER_DEG,
-    "CERRA (~9 km)": 0.10 * KM_PER_DEG,
 }
 
 EFF_RES_FACTOR = 6.0
