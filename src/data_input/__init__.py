@@ -234,7 +234,7 @@ def get_grib_load_params(params: list[str]) -> list[str]:
     return list(dict.fromkeys(get_base_params(params) + derived))
 
 
-def get_steps(steps: list[int], params: list[str]) -> list[int]:
+def get_steps(steps: list[int] | None, params: list[str]) -> list[int] | None:
     """Compute all time steps needed to satisfy all aggregation windows.
 
     For each aggregated param (e.g. TOT_PREC6, agg_hours=6) and each requested
@@ -246,6 +246,8 @@ def get_steps(steps: list[int], params: list[str]) -> list[int]:
     'TOT_PREC6', steps=[3,6,12]   → [0, 3, 6, 12]  # step 3: 3-6<0, not added
     'T_2M',      steps=[6,12]     → [6, 12]
     """
+    if steps is None:
+        return None
     extra = set()
     for p in params:
         _, n = parse_aggregated_param(p)
