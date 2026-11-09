@@ -256,9 +256,17 @@ def _load_relative_diff(cfg: dict) -> xr.Dataset:
             f"Fix: delete '{fewer}' and rerun the pipeline."
         )
 
-    model_ds = model_ds.sel(**sel_coords).squeeze(drop=True)
-    baseline_ds = baseline_ds.sel(**{**sel_coords, "source": baseline_source}).squeeze(
-        drop=True
+    # Keep `step` and the stratification dim even when they have length 1
+    # (single lead time, single region); the scorecard plots along both.
+    def _squeeze(ds: xr.Dataset) -> xr.Dataset:
+        keep = {"step", strat_dim}
+        return ds.squeeze(
+            [d for d, n in ds.sizes.items() if n == 1 and d not in keep], drop=True
+        )
+
+    model_ds = _squeeze(model_ds.sel(**sel_coords))
+    baseline_ds = _squeeze(
+        baseline_ds.sel(**{**sel_coords, "source": baseline_source})
     )
 
     common_vars = [v for v in model_ds.data_vars if v in baseline_ds.data_vars]

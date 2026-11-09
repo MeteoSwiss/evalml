@@ -504,10 +504,21 @@ COMPARISONS_CONFIG = {
     "regions": parse_showcase_regions(_comparisons.get("domains", ["alps"])),
     "baselines": _comparisons.get("baselines", []),
     "lead_times": _comparisons.get("lead_times", [24]),
-    # station truth (jretrievedwh) cannot be drawn as a map
-    "truth": _comparisons.get("truth", True)
-    and "jretrieve" not in str(config["truth"]["root"]),
 }
+# Reference panel: an explicit gridded analysis if configured, else the
+# experiment truth -- unless that is station truth (jretrievedwh), which cannot
+# be drawn as a map.
+if _comparisons.get("analysis"):
+    COMPARISONS_CONFIG["truth"] = _comparisons["analysis"]
+elif _comparisons.get("truth", True) and "jretrieve" not in str(
+    config["truth"]["root"]
+):
+    COMPARISONS_CONFIG["truth"] = {
+        "root": config["truth"]["root"],
+        "label": config["truth"]["label"],
+    }
+else:
+    COMPARISONS_CONFIG["truth"] = None
 EXPERIMENT_PARAMS = EXPERIMENT_CONFIG.get(
     "params", ["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"]
 )

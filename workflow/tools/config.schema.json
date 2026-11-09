@@ -88,6 +88,29 @@
       "title": "BaselineItem",
       "type": "object"
     },
+    "ComparisonAnalysisConfig": {
+      "additionalProperties": false,
+      "description": "Gridded analysis drawn as the reference panel of the comparison maps.",
+      "properties": {
+        "label": {
+          "default": "Analysis",
+          "description": "Panel title for the analysis, e.g. 'KENDA-CH1'.",
+          "title": "Label",
+          "type": "string"
+        },
+        "root": {
+          "description": "Path to an anemoi analysis zarr dataset (same format as a zarr `truth.root`).",
+          "minLength": 1,
+          "title": "Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root"
+      ],
+      "title": "ComparisonAnalysisConfig",
+      "type": "object"
+    },
     "ComparisonsConfig": {
       "additionalProperties": false,
       "description": "Configuration for side-by-side map comparisons of truth, runs and baselines.",
@@ -103,6 +126,18 @@
           "description": "Whether to include a truth panel. Ignored for station truth (jretrievedwh), which cannot be drawn as a map.",
           "title": "Truth",
           "type": "boolean"
+        },
+        "analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComparisonAnalysisConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Gridded analysis for the reference panel, used instead of the experiment truth. Lets you draw an analysis map when the experiment verifies against stations (jretrievedwh)."
         },
         "baselines": {
           "description": "Labels of the baselines to add as panels.",

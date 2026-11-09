@@ -51,5 +51,5 @@ def test_comparisons_need_a_reference(example_config):
         "truth": False,
         "baselines": [],
     }
-    with pytest.raises(ValueError, match="enable `truth` or list `baselines`"):
+    with pytest.raises(ValueError, match="enable `truth`, set `analysis` or list `baselines`"):
         ConfigModel.model_validate(example_config)

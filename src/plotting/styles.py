@@ -94,7 +94,7 @@ def prepare_values(param: str, values):
     """
     if param in ("T_2M", "TD_2M", "T", "TD"):
         return kelvin_to_celsius(values), "°C"
-    if param in ("SP_10M", "SP"):
+    if param in ("SP_10M", "SP", "U_10M", "V_10M", "U", "V"):
         return values, "m/s"
     if param == "TOT_PREC":
         return np.maximum(values, 0), "mm"

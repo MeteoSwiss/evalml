@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from matplotlib import pyplot as plt
+from matplotlib.colors import BoundaryNorm, ListedColormap
 import warnings
 from .colormap_loader import load_ncl_colormap
 import numpy as np
@@ -66,6 +67,32 @@ def _precip_bias_map(accum_h: int) -> dict:
     }
 
 
+def _wind_component_style() -> dict:
+    """Diverging blue (negative) / orange (positive) scale for signed wind
+    components, with no white midpoint: most of the domain is within +-2 m/s,
+    which a white-centred palette washes out. Bins are finest near 0;
+    blue/orange stays readable for colour-blind viewers."""
+    levels = [-15, -10, -7, -5, -3, -2, -1, 0, 1, 2, 3, 5, 7, 10, 15]
+    n_side = (len(levels) - 1) // 2 + 1  # bins per side incl. the extend bin
+    colors = np.vstack(
+        [
+            plt.get_cmap("Blues")(np.linspace(1, 0.3, n_side)),
+            plt.get_cmap("Oranges")(np.linspace(0.3, 1, n_side)),
+        ]
+    )
+    cmap = ListedColormap(colors, name="wind_component")
+    return {
+        "cmap": cmap,
+        "norm": BoundaryNorm(levels, cmap.N, extend="both"),
+        "levels": levels,
+        "units": "m/s",
+        "extend": "both",
+    }
+
+
+_WIND_COMPONENT = _wind_component_style()
+
+
 _CMAP_DEFAULTS = {
     "SP": {
         "cmap": plt.get_cmap("coolwarm", 11),
@@ -76,10 +103,10 @@ _CMAP_DEFAULTS = {
     "TD_2M": load_ncl_colormap("t2m_29lev.ct") | {"extend": "both"},
     "T_2M": load_ncl_colormap("t2m_29lev.ct") | {"units": "degC", "extend": "both"},
     "SKT": load_ncl_colormap("t2m_29lev.ct") | {"units": "degC", "extend": "both"},
-    "V_10M": load_ncl_colormap("modified_uv_17lev.ct")
-    | {"units": "m/s", "extend": "both"},
-    "U_10M": load_ncl_colormap("modified_uv_17lev.ct")
-    | {"units": "m/s", "extend": "both"},
+    # Wind components are signed: a diverging scale centred on 0 (the speed
+    # colormap starts at 0 m/s and would lump all negative values together).
+    "V_10M": _WIND_COMPONENT,
+    "U_10M": _WIND_COMPONENT,
     "SP_10M": load_ncl_colormap("modified_uv_17lev.ct")
     | {"units": "m/s", "extend": "max"},
     "T_850": {

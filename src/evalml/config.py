@@ -384,6 +384,21 @@ class AnimationsConfig(BaseModel):
     )
 
 
+class ComparisonAnalysisConfig(BaseModel):
+    """Gridded analysis drawn as the reference panel of the comparison maps."""
+
+    label: str = Field(
+        "Analysis", description="Panel title for the analysis, e.g. 'KENDA-CH1'."
+    )
+    root: str = Field(
+        ...,
+        min_length=1,
+        description="Path to an anemoi analysis zarr dataset (same format as a zarr `truth.root`).",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class ComparisonsConfig(BaseModel):
     """Configuration for side-by-side map comparisons of truth, runs and baselines."""
 
@@ -400,6 +415,14 @@ class ComparisonsConfig(BaseModel):
         description=(
             "Whether to include a truth panel. Ignored for station truth "
             "(jretrievedwh), which cannot be drawn as a map."
+        ),
+    )
+    analysis: Optional[ComparisonAnalysisConfig] = Field(
+        None,
+        description=(
+            "Gridded analysis for the reference panel, used instead of the "
+            "experiment truth. Lets you draw an analysis map when the experiment "
+            "verifies against stations (jretrievedwh)."
         ),
     )
     baselines: List[str] = Field(
@@ -425,10 +448,10 @@ class ComparisonsConfig(BaseModel):
 
     @model_validator(mode="after")
     def _enabled_requires_a_reference(self):
-        if self.enabled and not (self.truth or self.baselines):
+        if self.enabled and not (self.truth or self.analysis or self.baselines):
             raise ValueError(
                 "comparisons need something to compare the runs with: enable "
-                "`truth` or list `baselines`."
+                "`truth`, set `analysis` or list `baselines`."
             )
         return self
 

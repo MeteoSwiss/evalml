@@ -1,0 +1,272 @@
+# yaml-language-server: $schema=../../../workflow/tools/config.schema.json
+description: |
+  Three-way comparison of the ML forecasting models WeatherGenerator (WG),
+  HiRAD-Gen and Varda against station observations.
+
+  Setup follows the initial design meeting (Louis Frey, Kerem Tezcan,
+  Mary McGlohon):
+    * Truth: SwissMetNet via jretrieve (recommended baseline for now; PeakWeather
+      and MEC station sets are possible later extensions).
+    * Test period aligned with Varda (Apr 2025 - Mar 2026), initialisations every
+      54 h so all four synoptic hours and all seasons are sampled while keeping
+      inference cost bounded (~162 forecasts).
+    * 5 d rollout, 6-hourly output. Hourly output (Varda temporal downscaler) is
+      deliberately left for a later, separate experiment so that here we compare
+      the forecasters themselves.
+    * Variables restricted to the ones HiRAD produces (T_2M, U_10M, V_10M,
+      precipitation); wind speed SP_10M is derived by evalml. A more
+      comprehensive WG-vs-Varda comparison comes later.
+    * All three models are on 1 km grids (WG/Varda: ICON-CH1 native, HiRAD: CO1e
+      rotated lat/lon), which is fine because station matching is nearest
+      neighbour.
+
+config_label: wg
+
+dates:
+  # All 117 inits in the WG x44nsdo5 export (2024, irregular ~54 h spacing).
+  - 2024-01-02T12:00
+  - 2024-01-05T06:00
+  - 2024-01-07T18:00
+  - 2024-01-11T18:00
+  - 2024-01-12T00:00
+  - 2024-01-17T12:00
+  - 2024-01-23T06:00
+  - 2024-01-24T00:00
+  - 2024-01-27T00:00
+  - 2024-01-29T12:00
+  - 2024-02-03T12:00
+  - 2024-02-05T18:00
+  - 2024-02-12T00:00
+  - 2024-02-13T12:00
+  - 2024-02-14T18:00
+  - 2024-02-17T12:00
+  - 2024-02-26T06:00
+  - 2024-02-27T06:00
+  - 2024-02-29T06:00
+  - 2024-03-02T06:00
+  - 2024-03-06T00:00
+  - 2024-03-07T06:00
+  - 2024-03-14T18:00
+  - 2024-03-16T06:00
+  - 2024-03-22T12:00
+  - 2024-03-25T00:00
+  - 2024-03-28T00:00
+  - 2024-03-29T06:00
+  - 2024-04-01T12:00
+  - 2024-04-02T00:00
+  - 2024-04-02T12:00
+  - 2024-04-04T06:00
+  - 2024-04-05T00:00
+  - 2024-04-05T12:00
+  - 2024-04-09T12:00
+  - 2024-04-11T18:00
+  - 2024-04-12T00:00
+  - 2024-04-15T18:00
+  - 2024-04-16T06:00
+  - 2024-04-27T12:00
+  - 2024-05-07T18:00
+  - 2024-05-11T06:00
+  - 2024-05-21T12:00
+  - 2024-05-22T06:00
+  - 2024-05-22T18:00
+  - 2024-05-27T06:00
+  - 2024-05-27T12:00
+  - 2024-05-28T06:00
+  - 2024-05-28T18:00
+  - 2024-06-01T18:00
+  - 2024-06-05T00:00
+  - 2024-06-10T12:00
+  - 2024-06-13T00:00
+  - 2024-06-15T00:00
+  - 2024-06-15T06:00
+  - 2024-06-19T00:00
+  - 2024-06-19T06:00
+  - 2024-06-24T06:00
+  - 2024-06-26T00:00
+  - 2024-07-08T06:00
+  - 2024-07-10T18:00
+  - 2024-07-12T00:00
+  - 2024-07-15T12:00
+  - 2024-07-17T06:00
+  - 2024-07-20T12:00
+  - 2024-07-24T12:00
+  - 2024-07-25T00:00
+  - 2024-07-27T00:00
+  - 2024-07-28T18:00
+  - 2024-07-29T06:00
+  - 2024-08-03T12:00
+  - 2024-08-05T06:00
+  - 2024-08-05T12:00
+  - 2024-08-16T12:00
+  - 2024-08-19T06:00
+  - 2024-08-21T12:00
+  - 2024-08-27T12:00
+  - 2024-09-01T06:00
+  - 2024-09-05T12:00
+  - 2024-09-07T00:00
+  - 2024-09-07T06:00
+  - 2024-09-10T00:00
+  - 2024-09-11T00:00
+  - 2024-09-28T12:00
+  - 2024-10-09T18:00
+  - 2024-10-15T06:00
+  - 2024-10-20T00:00
+  - 2024-10-24T12:00
+  - 2024-10-26T00:00
+  - 2024-10-27T12:00
+  - 2024-10-28T06:00
+  - 2024-10-29T18:00
+  - 2024-11-05T06:00
+  - 2024-11-07T00:00
+  - 2024-11-09T18:00
+  - 2024-11-11T18:00
+  - 2024-11-16T18:00
+  - 2024-11-18T00:00
+  - 2024-11-19T12:00
+  - 2024-11-20T06:00
+  - 2024-11-20T12:00
+  - 2024-11-27T00:00
+  - 2024-11-28T18:00
+  - 2024-12-01T18:00
+  - 2024-12-04T06:00
+  - 2024-12-05T12:00
+  - 2024-12-06T18:00
+  - 2024-12-12T00:00
+  - 2024-12-15T00:00
+  - 2024-12-15T06:00
+  - 2024-12-21T06:00
+  - 2024-12-23T18:00
+  - 2024-12-24T12:00
+  - 2024-12-25T06:00
+  - 2024-12-25T18:00
+  - 2024-12-26T00:00
+  - 2024-12-28T00:00
+
+runs:
+  # WG and HiRAD run their own inference outside evalml and hand over GRIB
+  # (converted with the evalml templates), so they enter as grib_forecaster runs:
+  # evalml never runs inference for them, it only stages their existing GRIB,
+  # which must be laid out as root/{YYYYMMDDHHMM}/grib/*.grib.
+  # TODO: point `root` at the actual WG GRIB output directory.
+  - grib_forecaster:
+      label: WeatherGenerator
+      # Regrouped from the per-rank prediction_*.grib files with
+      # workflow/tools/split_grib_by_init.py. This WG export only has the +6 h
+      # lead time (no step 0, no longer rollout).
+      root: '/scratch/mch/rradev/grib_weathergen/x44nsdo5_cosmo_all'
+      steps: 6/6/6
+  # Varda inference is run by evalml. Only the 6-hourly forecaster is used here;
+  # the temporal downscaler (1 h) is out of scope for this comparison.
+
+  # ICON-CH1 only runs out to ~33 h, so ICON-CH2 provides the reference over the
+  # full 5 d range.
+  - baseline:
+      label: ICON-CH1-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/30/6
+  - baseline:
+      label: ICON-CH2-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/30/6
+
+# HiRAD GRIB has no elevation coordinate yet, so lapse-rate correction has to
+# stay off for a consistent comparison. Turn on once HiRAD GRIB provides it.
+lapse_rate_correction: false
+
+truth:
+  label: SwissMetNet
+  root: jretrievedwh:1,2
+  # Alternatives discussed: PeakWeather (stations outside CH, but only up to
+  # 2025) and MEC station sets (needs pressure levels).
+
+experiment:
+  params:
+    - T_2M
+    - SP_10M  # derived from U_10M/V_10M
+    - U_10M
+    - V_10M
+  stratification:
+    regions:
+      # `all` = every station, no spatial mask (first entry = dashboard domain).
+      - all: [-180, 180, -90, 90]
+      # Same set as varda-single-1.0.yaml.
+      - mittelland
+      - berge
+      - alpennordseite
+      - alpensuedseite
+      - jura
+
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    T_2M:
+      lt: [273.15]
+      gt: [288.15, 298.15]
+    SP_10M:
+      gt: [2.5, 5, 10, 15]
+    U_10M:
+      gt: [2.5, 5, 10, 15]
+    V_10M:
+      gt: [2.5, 5, 10, 15]
+  dashboard:
+    stratification:
+      - region
+      - season
+      - init_hour
+  scorecards:
+    enabled: true
+    sections:
+      short_range:
+        baseline: ICON-CH1-CTRL
+        lead_times: "6/30/6"
+        stratification: region
+        variables:
+          - "T_2M:RMSE,STDE,R2,ETS"
+          - "SP_10M:RMSE,STDE,R2,ETS"
+          - "U_10M:RMSE,STDE,R2,ETS"
+          - "V_10M:RMSE,STDE,R2,ETS"
+          # No TOT_PREC6: the WG export has no precipitation.
+      short_range_ch2:
+        baseline: ICON-CH2-CTRL
+        lead_times: "6/30/6"
+        stratification: region
+        variables:
+          - "T_2M:RMSE,STDE,R2,ETS"
+          - "SP_10M:RMSE,STDE,R2,ETS"
+          - "U_10M:RMSE,STDE,R2,ETS"
+          - "V_10M:RMSE,STDE,R2,ETS"
+      # Disabled: the current WG export only has the +6 h lead time, so there
+      # is nothing to score at 24-120 h. Re-enable once a full rollout exists.
+      # medium_range:
+      #   baseline: ICON-CH2-CTRL
+      #   lead_times: "24/120/24"
+      #   stratification: region
+      #   variables:
+      #     - "T_2M:RMSE,STDE,R2,ETS"
+      #     - "SP_10M:RMSE,STDE,R2,ETS"
+      #     - "TOT_PREC6:RMSE,STDE,R2,ETS"
+  scoremaps:
+    enabled: false
+
+showcase:
+  meteograms:
+    enabled: false
+  animations:
+    enabled: false
+
+locations:
+  output_root: output/
+
+# SLURM for the full 117-init run (~470 jobs). For quick local runs set
+# `executor: local`: every run here is grib_forecaster or baseline, so the
+# inference rule (which calls srun) never fires.
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50

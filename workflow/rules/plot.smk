@@ -247,7 +247,14 @@ rule compare_forecast_frames:
             run_id=CANDIDATES,
             init_time=wc.init_time,
         ),
-        truth=lambda wc: truth_file_dep(wc) if COMPARISONS_CONFIG["truth"] else [],
+        # An explicit comparisons.analysis zarr is pre-existing data, not a
+        # workflow product, so only the experiment truth needs a dependency.
+        truth=lambda wc: (
+            truth_file_dep(wc)
+            if COMPARISONS_CONFIG["truth"]
+            and COMPARISONS_CONFIG["truth"]["root"] == config["truth"]["root"]
+            else []
+        ),
     output:
         expand(
             OUT_ROOT
@@ -271,9 +278,9 @@ rule compare_forecast_frames:
         truth=(
             [
                 "--truth",
-                config["truth"]["root"],
+                COMPARISONS_CONFIG["truth"]["root"],
                 "--truth_label",
-                config["truth"]["label"],
+                COMPARISONS_CONFIG["truth"]["label"],
             ]
             if COMPARISONS_CONFIG["truth"]
             else []

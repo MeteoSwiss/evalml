@@ -1,0 +1,146 @@
+# yaml-language-server: $schema=../../../workflow/tools/config.schema.json
+description: |
+  Showcase companion to wg.yaml: maps and station meteograms for
+  WeatherGenerator vs ICON-CH1/CH2 on one winter and one summer init.
+  The current WG export only has the +6 h lead time, so each WG animation is a
+  single frame and WG contributes one point per meteogram.
+
+config_label: wg-showcase
+
+dates:
+  - 2024-01-12T00:00
+  - 2024-06-19T06:00
+
+runs:
+  # WG and HiRAD run their own inference outside evalml and hand over GRIB
+  # (converted with the evalml templates), so they enter as grib_forecaster runs:
+  # evalml never runs inference for them, it only stages their existing GRIB,
+  # which must be laid out as root/{YYYYMMDDHHMM}/grib/*.grib.
+  # TODO: point `root` at the actual WG GRIB output directory.
+  - grib_forecaster:
+      label: WeatherGenerator
+      # Regrouped from the per-rank prediction_*.grib files with
+      # workflow/tools/split_grib_by_init.py. This WG export only has the +6 h
+      # lead time (no step 0, no longer rollout).
+      root: '/scratch/mch/rradev/grib_weathergen/x44nsdo5_cosmo_all'
+      steps: 6/6/6
+  # Varda inference is run by evalml. Only the 6-hourly forecaster is used here;
+  # the temporal downscaler (1 h) is out of scope for this comparison.
+
+  # ICON-CH1 only runs out to ~33 h, so ICON-CH2 provides the reference over the
+  # full 5 d range.
+  - baseline:
+      label: ICON-CH1-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/30/6
+  - baseline:
+      label: ICON-CH2-CTRL
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/30/6
+
+# HiRAD GRIB has no elevation coordinate yet, so lapse-rate correction has to
+# stay off for a consistent comparison. Turn on once HiRAD GRIB provides it.
+lapse_rate_correction: false
+
+truth:
+  label: SwissMetNet
+  root: jretrievedwh:1,2
+  # Alternatives discussed: PeakWeather (stations outside CH, but only up to
+  # 2025) and MEC station sets (needs pressure levels).
+
+experiment:
+  params:
+    - T_2M
+    - U_10M
+    - V_10M
+  stratification:
+    regions:
+      - mittelland
+
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    T_2M:
+      lt: [273.15]
+      gt: [288.15, 298.15]
+    U_10M:
+      gt: [2.5, 5, 10, 15]
+    V_10M:
+      gt: [2.5, 5, 10, 15]
+  dashboard:
+    stratification:
+      - region
+      - season
+      - init_hour
+  scorecards:
+    enabled: true
+    sections:
+      short_range:
+        baseline: ICON-CH1-CTRL
+        lead_times: "6/30/6"
+        stratification: region
+        variables:
+          - "T_2M:RMSE,STDE,R2,ETS"
+          - "SP_10M:RMSE,STDE,R2,ETS"
+          - "TOT_PREC6:RMSE,STDE,R2,ETS"
+      # Disabled: the current WG export only has the +6 h lead time, so there
+      # is nothing to score at 24-120 h. Re-enable once a full rollout exists.
+      # medium_range:
+      #   baseline: ICON-CH2-CTRL
+      #   lead_times: "24/120/24"
+      #   stratification: region
+      #   variables:
+      #     - "T_2M:RMSE,STDE,R2,ETS"
+      #     - "SP_10M:RMSE,STDE,R2,ETS"
+      #     - "TOT_PREC6:RMSE,STDE,R2,ETS"
+  scoremaps:
+    enabled: false
+
+showcase:
+  params:
+    - T_2M
+    - SP_10M
+    - U_10M
+    - V_10M
+  meteograms:
+    enabled: true
+    # KLO - Kloten (Mittelland), GVE - Geneva, JUN - Jungfraujoch (high alpine)
+    stations: [KLO, GVE, JUN]
+  animations:
+    enabled: true
+    frames_per_second: 2
+    domains:
+      - icon-ch
+      - switzerland
+  # Side-by-side maps (PR #272): KENDA-CH1 analysis, WG and both ICON
+  # baselines. +6 h is the only lead time the current WG export has.
+  comparisons:
+    enabled: true
+    # Gridded reference panel (the experiment truth is stations, which can't
+    # be mapped). KENDA-CH1 analysis on the same ICON-CH1 1 km grid.
+    analysis:
+      label: KENDA-CH1
+      root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2025-1h-pl13-v1.0.zarr
+    baselines: [ICON-CH1-CTRL, ICON-CH2-CTRL]
+    lead_times: [6]
+    domains:
+      - icon-ch
+      - switzerland
+
+locations:
+  output_root: output/
+
+# Runs locally (no SLURM submission): every run here is grib_forecaster or
+# baseline, so the inference rule (which hardcodes srun) never fires.
+# slurm_partition is ignored by the local executor. Use `--cores N` /
+# `-- -j N` to control local parallelism.
+profile:
+  executor: local
+  global_resources:
+    gpus: 1
+  default_resources:
+    slurm_partition: "postproc"
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 50
