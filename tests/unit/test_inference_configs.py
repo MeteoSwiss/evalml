@@ -1,6 +1,8 @@
 import copy
 import importlib.util
+import json
 import logging
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -311,11 +313,16 @@ def test_write_member_configs(tmp_path):
 FORECASTER = CONFIGS[0].parent / "sgm-forecaster-global-ich1.yaml"
 
 
-def _fake_smk(tmp_path, ensemble, **extra_params):
+def _fake_smk(tmp_path, ensemble, checkpoint_dir=None, **extra_params):
     """Minimal stand-in for the snakemake object of inference_prepare_forecaster."""
     from snakemake.io import Namedlist
 
     tmp_path.mkdir(parents=True, exist_ok=True)
+    # a checkpoint with only the metadata that the output_variables check reads
+    checkpoint = (checkpoint_dir or tmp_path) / "inference-last.ckpt"
+    metadata = {"dataset": {"variables": ["2t", "tp", "z"]}}
+    with zipfile.ZipFile(checkpoint, "w") as z:
+        z.writestr("ckpt/anemoi-metadata/anemoi.json", json.dumps(metadata))
     run_id, init_time = "forecaster-abcd-1234/ef56", "202001010000"
     workdir = tmp_path / "data" / "runs" / run_id / init_time
     params = {
@@ -325,6 +332,7 @@ def _fake_smk(tmp_path, ensemble, **extra_params):
         "holdout_workdir_name": "holdout_stations.csv",
         "reftime_to_iso": "2020-01-01T00:00",
         "output_variables": None,
+        "is_candidate": False,
         **extra_params,
     }
     if ensemble is not ...:
@@ -332,9 +340,7 @@ def _fake_smk(tmp_path, ensemble, **extra_params):
     return SimpleNamespace(
         rule="inference_prepare_forecaster",
         wildcards=SimpleNamespace(run_id=run_id, init_time=init_time),
-        input=Namedlist(
-            fromdict={"checkpoint": "/ckpt/inference-last.ckpt", "config": FORECASTER}
-        ),
+        input=Namedlist(fromdict={"checkpoint": str(checkpoint), "config": FORECASTER}),
         output=Namedlist(
             fromdict={
                 "config": str(workdir / "config.yaml"),
@@ -343,6 +349,7 @@ def _fake_smk(tmp_path, ensemble, **extra_params):
         ),
         log=[str(tmp_path / "prepare.log")],
         params=Namedlist(fromdict=params),
+        config={},
     ), workdir
 
 
@@ -358,11 +365,16 @@ def test_prepare_forecaster_deterministic(tmp_path, ensemble):
 
 def test_prepare_forecaster_ensemble(tmp_path):
     """An ensemble run writes the same base config.yaml plus one config per member."""
-    det_smk, det_workdir = _fake_smk(tmp_path / "det", None, output_variables=["T_2M"])
+    det_smk, det_workdir = _fake_smk(
+        tmp_path / "det", None, checkpoint_dir=tmp_path, output_variables=["2t"]
+    )
     _script.prepare_forecaster(det_smk)
 
     smk, workdir = _fake_smk(
-        tmp_path / "ens", {"members": 3, "seed": 0}, output_variables=["T_2M"]
+        tmp_path / "ens",
+        {"members": 3, "seed": 0},
+        checkpoint_dir=tmp_path,
+        output_variables=["2t"],
     )
     _script.prepare_forecaster(smk)
 
@@ -379,5 +391,5 @@ def test_prepare_forecaster_ensemble(tmp_path):
         member = yaml.safe_load((workdir / f"config_{m:03d}.yaml").read_text())
         assert member == _script.member_config(base, m, 3)
         for spec in _grib_outputs(member["output"], []):
-            assert spec["variables"] == ["T_2M"]
+            assert spec["variables"] == ["2t"]
         assert (workdir / "grib" / f"{m:03d}").is_dir()
