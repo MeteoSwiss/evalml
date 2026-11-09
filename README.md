@@ -62,7 +62,6 @@ runs:
       steps: 0/120/6
       config: resources/inference/configs/sgm-forecaster-global_trimedge.yaml
       # Optional: variables written to the GRIB output files (all if omitted), see "Output variables".
-      # Use the model's variable names (as in the checkpoint), not the GRIB short names.
       # output_variables: [2t, 2d, 10u, 10v, msl, tp, z]
   # A temporal_downscaler entry can optionally embed its driving forecaster config inline.
   # - temporal_downscaler:
@@ -315,22 +314,40 @@ runs:
 The list is written as `variables` to every `grib` output of the inference config
 (including those inside a `tee`), replacing any `variables` set in the template.
 
-- Names are the model's variable names, as listed in the checkpoint metadata
-  (`anemoi-inference metadata`): `2t`, `tp`, `t_850` and so on, not the GRIB short names
-  (`T_2M`, `TOT_PREC`) the files end up with. A name that matches nothing is ignored, so a
-  list of GRIB short names silently writes empty output (seen with anemoi-inference 0.12.0).
+- Names are those of the fields that reach the GRIB output: usually the checkpoint's
+  variable names, as listed by `anemoi-inference metadata`. For the checkpoints tested so
+  far these are names like `2t`, `tp` and `t_850`, not the names in the GRIB files
+  (`T_2M`, `TOT_PREC`). Post-processors can rename fields or add new ones, and this
+  depends on the anemoi-inference version: from 0.11.2, a transform filter
+  (`forward_transform_filter`) passes the fields back under a name built from their
+  GRIB param, which a metadata patch can change (e.g. `10u` → `U_10M` in
+  `sgm-multidataset-ich1-oper-patch.yaml`). anemoi-inference ignores a name that matches
+  nothing, so when in doubt, check the GRIB files of a short run.
 - Shell-style globs, e.g. `"*_850"` for all fields on 850 hPa (quote them in YAML), need
   anemoi-inference 0.13.0 or later. Older versions match names literally, so a pattern
   matches nothing there.
+- Before inference, the prepare step checks the list against the checkpoint and stops with
+  an error if
+  - an entry matches no variable of the checkpoint (the error lists them), nor a field the
+    inference config declares for a post-processor that adds it (in `typed_variables` or
+    in the `variables_metadata` of `patch_metadata`, as the derive-diagnostic fields of
+    `sgm-temporal-downscaler-global_trimedge_multi.yaml`). An entry that matches only the
+    GRIB param name of a variable is accepted with a warning;
+  - a parameter verified from the run (`experiment.params`, and the params of enabled
+    score maps and SAL) is not written, while the model has it. A derived parameter
+    needs its components: `SP_10M` and `DD_10M` need `10u` and `10v`, `RELHUM_2M` needs
+    `2t` and `2d`, `TW_2M` needs `2t`, `2d` and `sp`. A period such as `TOT_PREC6` needs
+    `tp`. Parameters the model does not have are skipped by the verification, as without
+    `output_variables`.
+
+  The verified parameters are checked when the inference config is prepared: adding a
+  parameter to an experiment whose inference has run is not checked. Showcase parameters
+  are not checked.
 - Keep `z` (the surface geopotential, written as `FIS`): the model orography is read from
-  it for the lapse-rate correction of the verification.
-- The list is not checked against `experiment.params`, nor against the parameters of a
-  showcase or of the SAL verification, which read the same files. A derived parameter
-  that is not written itself needs its components: `SP_10M` and `DD_10M` need `10u` and
-  `10v`, `RELHUM_2M` needs `2t` and `2d`, `TW_2M` needs `2t`, `2d` and `sp`. A period such
-  as `TOT_PREC6` needs `tp`.
+  it for the lapse-rate correction of the verification. With an `experiment` section and
+  `lapse_rate_correction` on (the default), a run without it is rejected.
 - A forecaster that drives a temporal downscaler must keep every field the downscaler
-  reads, from both the LAM files and the `ifs-*` files.
+  reads, from both the LAM files and the `ifs-*` files. This is not checked.
 - Changing the list gives the run a new `run_id`, so inference reruns; the inference
   environment is reused. The order of the list does not matter.
 

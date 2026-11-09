@@ -63,7 +63,7 @@ def test_rescale_has_grib_name_twin(path):
             )
 
 
-VARIABLES = ["T_2M", "TOT_PREC", "tp", "*_850"]
+VARIABLES = ["2t", "10u", "tp", "*_850"]
 
 
 def _grib_outputs(output, out):
@@ -100,18 +100,18 @@ def test_set_output_variables_on_templates(path):
 
 def test_set_output_variables_bare_grib():
     config = {"output": {"grib": {"path": "grib/{step:03}.grib"}}, "lead_time": 6}
-    set_output_variables(config, ["T_2M"])
+    set_output_variables(config, ["2t"])
     assert config == {
-        "output": {"grib": {"path": "grib/{step:03}.grib", "variables": ["T_2M"]}},
+        "output": {"grib": {"path": "grib/{step:03}.grib", "variables": ["2t"]}},
         "lead_time": 6,
     }
 
 
 def test_set_output_variables_short_form_grib():
     config = {"output": {"grib": "grib/{step:03}.grib"}}
-    set_output_variables(config, ["T_2M"])
+    set_output_variables(config, ["2t"])
     assert config == {
-        "output": {"grib": {"path": "grib/{step:03}.grib", "variables": ["T_2M"]}}
+        "output": {"grib": {"path": "grib/{step:03}.grib", "variables": ["2t"]}}
     }
 
 
@@ -124,14 +124,14 @@ def test_set_output_variables_nested_tee():
             ]
         }
     }
-    set_output_variables(config, ["T_2M"])
+    set_output_variables(config, ["2t"])
     assert config == {
         "output": {
             "tee": [
-                {"grib": {"path": "a.grib", "variables": ["T_2M"]}},
+                {"grib": {"path": "a.grib", "variables": ["2t"]}},
                 {
                     "tee": [
-                        {"grib": {"path": "b.grib", "variables": ["T_2M"]}},
+                        {"grib": {"path": "b.grib", "variables": ["2t"]}},
                         {"netcdf": {"path": "c.nc"}},
                     ]
                 },
@@ -144,19 +144,19 @@ def test_set_output_variables_no_grib_output(caplog):
     config = {"output": {"netcdf": {"path": "out.nc"}}}
     original = copy.deepcopy(config)
     with caplog.at_level(logging.WARNING):
-        set_output_variables(config, ["T_2M"])
+        set_output_variables(config, ["2t"])
     assert config == original
     assert "no GRIB output" in caplog.text
 
 
 def test_set_output_variables_overrides_template():
-    config = {"output": {"grib": {"path": "a.grib", "variables": ["PS", "PMSL"]}}}
-    set_output_variables(config, ["T_2M"])
-    assert config["output"]["grib"]["variables"] == ["T_2M"]
+    config = {"output": {"grib": {"path": "a.grib", "variables": ["sp", "msl"]}}}
+    set_output_variables(config, ["2t"])
+    assert config["output"]["grib"]["variables"] == ["2t"]
 
 
 def test_set_output_variables_one_list_per_output():
     """Each grib output gets its own list, so the yaml dump has no anchors."""
     config = {"output": {"tee": [{"grib": {"path": "a"}}, {"grib": {"path": "b"}}]}}
-    set_output_variables(config, ["T_2M"])
+    set_output_variables(config, ["2t"])
     assert "&id" not in yaml.safe_dump(config)
