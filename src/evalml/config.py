@@ -1,4 +1,5 @@
 import re
+from fnmatch import fnmatchcase
 from math import isfinite
 from pathlib import Path
 from typing import Dict, List, Any, ClassVar, FrozenSet, Literal, Optional, Union
@@ -1015,6 +1016,24 @@ class ConfigModel(BaseModel):
                 f"Labels must be unique across `runs`; used by several runs or "
                 f"baselines: {duplicates}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_output_variables_keep_orography(self) -> "ConfigModel":
+        """With the lapse-rate correction, verified runs must write the orography (z)."""
+        if self.experiment is None or not self.lapse_rate_correction:
+            return self
+        for item in self.runs:
+            run = getattr(item, next(iter(type(item).model_fields)))
+            names = getattr(run, "output_variables", None)
+            if names and not any(
+                fnmatchcase(o, n) for n in names for o in ("z", "FIS")
+            ):
+                raise ValueError(
+                    f"output_variables {names} of run '{run.label or run.checkpoint}' "
+                    "lacks z: the lapse-rate correction of the verification reads the "
+                    "model orography from it. Add z, or set lapse_rate_correction: false."
+                )
         return self
 
     @model_validator(mode="after")

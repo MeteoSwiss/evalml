@@ -6,6 +6,12 @@ import shutil
 from pathlib import Path
 
 from evalml.helpers import setup_logger
+from evalml.variable_checks import (
+    check_output_variables,
+    checkpoint_variable_names,
+    inference_config_variable_names,
+    verified_params,
+)
 
 
 def prepare_config(
@@ -99,6 +105,36 @@ def _set_grib_variables(output, variables: list[str]) -> int:
     return n
 
 
+def check_run_output_variables(smk, LOG: logging.Logger):
+    """Check the run's output_variables against its checkpoint before inference.
+
+    Raises if an entry matches no variable of the checkpoint or of the inference
+    config (fields added by post-processors) or, for a run that is verified (a
+    candidate), if a verified parameter the model provides is not written. The
+    verified parameters are read from the workflow config, not from the rule's
+    params, so that changing them does not rerun inference. Runs after
+    prepare_workdir, which stages the metadata patches the config refers to.
+    """
+    output_variables = smk.params.output_variables
+    if not output_variables:
+        return
+    variables, grib_names = checkpoint_variable_names(smk.input.checkpoint)
+    if not variables:
+        LOG.warning(
+            "No variable names found in the checkpoint metadata; "
+            "output_variables is not checked."
+        )
+        return
+    with open(smk.input.config) as f:
+        config = yaml.safe_load(f)
+    declared, declared_grib = inference_config_variable_names(config, _get_workdir(smk))
+    variables |= declared
+    grib_names = (grib_names | declared_grib) - variables
+    params = verified_params(smk.config) if smk.params.is_candidate else []
+    check_output_variables(output_variables, variables, grib_names, params, LOG)
+    LOG.info("output_variables checked against the checkpoint and %s", params)
+
+
 def prepare_workdir(workdir: Path, resources_root: Path):
     """Prepare the working directory for the inference run.
 
@@ -173,6 +209,7 @@ def prepare_temporal_downscaler(smk):
         )
 
     # prepare config
+    check_run_output_variables(smk, LOG)
     overrides = _overrides_from_params(smk)
     prepare_config(
         smk.input.config,
@@ -209,6 +246,7 @@ def prepare_forecaster(smk):
     LOG.info("Resources: \n%s", res_list)
     stage_holdout_stations(smk, workdir, LOG)
 
+    check_run_output_variables(smk, LOG)
     overrides = _overrides_from_params(smk)
     prepare_config(
         smk.input.config,

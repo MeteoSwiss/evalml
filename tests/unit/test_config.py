@@ -234,11 +234,12 @@ def test_output_variables(example_config):
     cfg = ConfigModel.model_validate(example_config)
     assert cfg.runs[0].temporal_downscaler.output_variables is None
 
-    downscaler["output_variables"] = ["T_2M", "TOT_PREC", "*_850"]
+    downscaler["output_variables"] = ["2t", "tp", "z", "*_850"]
     cfg = ConfigModel.model_validate(example_config)
     assert cfg.runs[0].temporal_downscaler.output_variables == [
-        "T_2M",
-        "TOT_PREC",
+        "2t",
+        "tp",
+        "z",
         "*_850",
     ]
 
@@ -251,13 +252,40 @@ def test_output_variables_on_inline_forecaster(example_config):
     """The inline forecaster of a temporal downscaler accepts output_variables."""
 
     forecaster = example_config["runs"][0]["temporal_downscaler"]["forecaster"]
-    forecaster["output_variables"] = ["T_2M", "tp"]
+    forecaster["output_variables"] = ["2t", "tp"]
     cfg = ConfigModel.model_validate(example_config)
-    assert cfg.runs[0].temporal_downscaler.forecaster.output_variables == [
-        "T_2M",
-        "tp",
-    ]
+    assert cfg.runs[0].temporal_downscaler.forecaster.output_variables == ["2t", "tp"]
 
     forecaster["output_variables"] = []
     with pytest.raises(ValueError, match="at least 1 item"):
         _ = ConfigModel.model_validate(example_config)
+
+
+def test_output_variables_keep_orography(example_config):
+    """With the lapse-rate correction, a verified run's output_variables needs z."""
+
+    downscaler = example_config["runs"][0]["temporal_downscaler"]
+    downscaler["output_variables"] = ["2t", "tp"]
+    with pytest.raises(ValueError, match="lacks z"):
+        _ = ConfigModel.model_validate(example_config)
+
+    for names in (["2t", "tp", "z"], ["2t", "*"], ["T_2M", "FIS"]):
+        downscaler["output_variables"] = names
+        _ = ConfigModel.model_validate(example_config)
+
+    downscaler["output_variables"] = ["2t", "tp"]
+    example_config["lapse_rate_correction"] = False
+    _ = ConfigModel.model_validate(example_config)
+
+    # without an experiment there is no verification, so no lapse-rate correction
+    example_config["lapse_rate_correction"] = True
+    del example_config["experiment"]
+    _ = ConfigModel.model_validate(example_config)
+
+
+def test_output_variables_inline_forecaster_needs_no_orography(example_config):
+    """The inline forecaster of a downscaler is not verified as such: no z needed."""
+
+    forecaster = example_config["runs"][0]["temporal_downscaler"]["forecaster"]
+    forecaster["output_variables"] = ["2t", "tp"]
+    _ = ConfigModel.model_validate(example_config)
