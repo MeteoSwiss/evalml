@@ -8,6 +8,7 @@ from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
 
+import cartopy.crs as ccrs
 import earthkit.plots as ekp
 import numpy as np
 
@@ -51,6 +52,16 @@ def load_truth(root, init_time, lead_time, param):
     ds = load_truth_data(Path(root), init_time, [lead_time], [param])
     valid_time = np.datetime64(init_time + timedelta(hours=lead_time))
     return _flat(ds.sel(time=valid_time).squeeze(), param)
+
+
+def max_in_view(subplot, lon, lat, values):
+    """Max of the values at points inside the subplot's visible map extent."""
+    xyz = subplot._crs.transform_points(ccrs.PlateCarree(), lon, lat)
+    x, y = xyz[:, 0], xyz[:, 1]
+    x0, x1, y0, y1 = subplot.ax.get_extent()
+    # Points on the far side of an orthographic globe project to non-finite x/y.
+    inside = (x >= x0) & (x <= x1) & (y >= y0) & (y <= y1) & np.isfinite(values)
+    return np.max(values[inside]) if inside.any() else np.nan
 
 
 def parse_source(text):
@@ -148,10 +159,11 @@ def main():
                 subplot.title(f"{label} (not available)")
                 continue
             plotter, values = data[label]
+            vmax = max_in_view(subplot, plotter.lon, plotter.lat, values)
             plotter.plot_field(
                 subplot,
                 values,
-                title=f"{label}  (max {np.nanmax(values):.1f} {units})",
+                title=f"{label}  (max {vmax:.1f} {units})",
                 colorbar=False,
                 **style,
             )
