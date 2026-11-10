@@ -150,7 +150,7 @@ def main():
             domain=extent,
             rows=rows,
             columns=columns,
-            size=(5 * columns, 5 * rows),
+            figsize=(5 * columns, 5 * rows),
         )
         for i, (label, *_) in enumerate(panels):
             subplot = fig.add_map(row=i // columns, column=i % columns)
@@ -170,7 +170,9 @@ def main():
         if data:
             # One colorbar shared by all panels, which use identical levels.
             fig.legend(location="bottom")
-        fig.title(
+        # Figure.title() passes an explicit y, which constrained layout ignores
+        # when reserving space, so the suptitle can overlap the panel titles.
+        fig.fig.suptitle(
             f"{param}  valid: {valid_time:%Y-%m-%d %H:%M} UTC  "
             f"(init: {init_time:%Y-%m-%d %H:%M} UTC, +{lead_time}h)"
         )
