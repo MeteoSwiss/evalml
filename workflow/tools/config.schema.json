@@ -401,6 +401,10 @@
           "default": null,
           "description": "Score map plot configuration. Omit or set enabled: false to disable."
         },
+        "spectra": {
+          "$ref": "#/$defs/SpectraConfig",
+          "description": "Power-spectra QC configuration. Disabled by default. Spectra need every participant and the truth on the ICON-CH1 or ICON-CH2 native grid: INCA baselines, INCA truth and station (jretrievedwh) truth are not supported."
+        },
         "sal": {
           "anyOf": [
             {
@@ -526,7 +530,7 @@
       "description": "Single training run stored in MLflow.",
       "properties": {
         "checkpoint": {
-          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
+          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, a local checkpoint path, or a registered model name (e.g. 'amber-ridge') resolved against /store_new/mch/msopr/ml/models.",
           "title": "Checkpoint",
           "type": "string"
         },
@@ -1030,6 +1034,68 @@
       "title": "ShowcaseConfig",
       "type": "object"
     },
+    "SpectraConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for power-spectra QC plots in the experiment pipeline.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to compute and plot power spectra.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "method": {
+          "default": "dct",
+          "description": "Spectral method: 'dct' (default, recommended for LAM) or 'fft'.",
+          "enum": [
+            "dct",
+            "fft"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "lead_times": {
+          "description": "Representative lead times (hours) at which to compute spectra.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Lead Times",
+          "type": "array"
+        },
+        "variables": {
+          "default": [
+            "T_2M",
+            "WIND_KE",
+            "TOT_PREC1"
+          ],
+          "description": "Spectra variables: any parameter the forecast and truth loaders provide (e.g. T_2M, SP_10M, TOT_PREC1), plus WIND_KE, the kinetic energy from U_10M and V_10M. TOT_PREC1 needs hourly output steps: runs with coarser steps (e.g. 6h) must use TOT_PREC6 instead.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Variables",
+          "type": "array"
+        },
+        "init_hours": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional subset of init hours to average over. None = all.",
+          "title": "Init Hours"
+        }
+      },
+      "title": "SpectraConfig",
+      "type": "object"
+    },
     "Stratification": {
       "description": "Stratification settings for the analysis.",
       "properties": {
@@ -1076,7 +1142,7 @@
       "description": "Single training run stored in MLflow.",
       "properties": {
         "checkpoint": {
-          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
+          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, a local checkpoint path, or a registered model name (e.g. 'amber-ridge') resolved against /store_new/mch/msopr/ml/models.",
           "title": "Checkpoint",
           "type": "string"
         },

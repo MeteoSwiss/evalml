@@ -374,7 +374,7 @@ rule verification_scoremaps_baseline:
 # the validated config, which fills in the SalConfig defaults. Absent when there
 # is no sal block at all, in which case these rules never fire and the script's
 # own defaults would apply anyway.
-_SAL_CONFIG = config.get("experiment", {}).get("sal") or {}
+_SAL_CONFIG = EXPERIMENT_CONFIG.get("sal") or {}
 _SAL_ARGS = (
     f"--grid-extent {' '.join(str(x) for x in _SAL_CONFIG['grid_extent'])} "
     f"--grid-step-lat {_SAL_CONFIG['grid_step_lat']} "
