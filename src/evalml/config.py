@@ -1081,6 +1081,19 @@ class ConfigModel(BaseModel):
                 )
         return self
 
+    @model_validator(mode="after")
+    def validate_comparison_baselines(self) -> "ConfigModel":
+        labels = [
+            item.baseline.label for item in self.runs if isinstance(item, BaselineItem)
+        ]
+        unknown = [b for b in self.showcase.comparisons.baselines if b not in labels]
+        if unknown:
+            raise ValueError(
+                f"showcase.comparisons.baselines {unknown} do not match the label of "
+                f"any baseline in `runs`: {labels}"
+            )
+        return self
+
     model_config = {
         "extra": "forbid",  # fail on misspelled keys
         "populate_by_name": True,

@@ -232,8 +232,10 @@ def _comparison_sources(wc):
         f"{(Path(OUT_ROOT) / f'data/runs/{run_id}/{wc.init_time}/grib').resolve()}"
         for run_id in CANDIDATES
     ]
+    # baselines only: config validation checks the labels against them
+    baselines_by_label = {cfg["label"]: cfg for cfg in BASELINE_CONFIGS.values()}
     sources += [
-        f"{label}={BASELINE_CONFIGS[resolve_baseline_id(label)]['root']}"
+        f"{label}={baselines_by_label[label]['root']}"
         for label in COMPARISONS_CONFIG["baselines"]
     ]
     return sources

@@ -106,6 +106,30 @@ def test_comparisons_need_a_reference(example_config):
         ConfigModel.model_validate(example_config)
 
 
+def test_comparison_baselines_must_be_baselines(example_config):
+    baseline_label = next(
+        item["baseline"]["label"]
+        for item in example_config["runs"]
+        if "baseline" in item
+    )
+    forecaster_label = next(
+        item[k]["label"]
+        for item in example_config["runs"]
+        for k in item
+        if k in ("forecaster", "temporal_downscaler")
+    )
+    example_config["showcase"]["comparisons"] = {
+        "enabled": True,
+        "baselines": [baseline_label],
+    }
+    ConfigModel.model_validate(example_config)
+
+    for label in ("no-such-label", forecaster_label):
+        example_config["showcase"]["comparisons"]["baselines"] = [label]
+        with pytest.raises(ValueError, match="do not match the label of any baseline"):
+            ConfigModel.model_validate(example_config)
+
+
 def test_score_on_common_points(example_config):
     """score_on_common_points accepts a subset of experiment.params only."""
 
