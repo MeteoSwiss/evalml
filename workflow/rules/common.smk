@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 from evalml.config import MODEL_REGISTRY_ROOT
 from data_input import inca, truth_type
-from data_input import parse_aggregated_param
+from evalml.leadtimes import resolve_leadtimes
 
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
@@ -137,11 +137,7 @@ def parse_showcase_regions(domains=None):
     (full-globe domains).
     """
     if domains is None:
-        domains = (
-            config.get("showcase", {})
-            .get("animations", {})
-            .get("domains", ["globe", "europe", "switzerland"])
-        )
+        domains = config["showcase"]["animations"]["domains"]
     result = {}
     for r in domains:
         if isinstance(r, str):
@@ -153,10 +149,10 @@ def parse_showcase_regions(domains=None):
             }
         else:
             result[r["name"]] = {
-                "extent": r.get("extent"),
-                "projection": r.get("projection", "orthographic"),
-                "rotate": r.get("rotate", False),
-                "hours_per_revolution": r.get("hours_per_revolution", 96.0),
+                "extent": r["extent"],
+                "projection": r["projection"],
+                "rotate": r["rotate"],
+                "hours_per_revolution": r["hours_per_revolution"],
             }
     return result
 
@@ -526,21 +522,20 @@ HOLDOUT_FILE = (
 )
 HOLDOUT_WORKDIR_NAME = "holdout_stations.csv"
 REGIONS = parse_regions()
-_showcase = config.get("showcase", {})
+_showcase = config["showcase"]
 SHOWCASE_CONFIG = {
     "regions": parse_showcase_regions(),
-    "params": _showcase.get("params", ["T_2M", "SP_10M"]),
-    "fps": _showcase.get("animations", {}).get("frames_per_second", 2.0),
+    "params": _showcase["params"],
+    "fps": _showcase["animations"]["frames_per_second"],
 }
-_comparisons = _showcase.get("comparisons", {})
+_comparisons = _showcase["comparisons"]
 COMPARISONS_CONFIG = {
-    "enabled": _comparisons.get("enabled", False),
-    "regions": parse_showcase_regions(_comparisons.get("domains", ["alps"])),
-    "baselines": _comparisons.get("baselines", []),
-    "lead_times": _comparisons.get("lead_times", [24]),
+    "enabled": _comparisons["enabled"],
+    "regions": parse_showcase_regions(_comparisons["domains"]),
+    "baselines": _comparisons["baselines"],
+    "lead_times": _comparisons["lead_times"],
     # station truth (jretrievedwh) cannot be drawn as a map
-    "truth": _comparisons.get("truth", True)
-    and "jretrieve" not in str(config["truth"]["root"]),
+    "truth": _comparisons["truth"] and TRUTH_TYPE != "jretrieve",
 }
 EXPERIMENT_PARAMS = EXPERIMENT_CONFIG.get(
     "params", ["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"]
@@ -571,31 +566,6 @@ SCORECARD_CONFIGS = (
 )
 
 
-# Params with no value at lead time 0. Two distinct reasons land here:
-# - period-accumulated params (TOT_PREC/tp) verify a [lead - period, lead]
-#   window, so they have no value at lead times shorter than one step spacing
-#   (e.g. no 0h precip map).
-# - diagnostic params (e.g. CLCT/tcc in AIFS) aren't part of the model's input state,
-#   so they're simply absent from the initial-state GRIB file written at step 0.
-#   Cloud cover is prognostic in some models (Varda-single RC); listing it here
-#   only drops their 0h animation frame.
-# Short and canonical names both appear across the workflow (showcases vs maps).
-PARAMS_WITHOUT_STEP_ZERO_VALUE = {
-    "TOT_PREC",
-    "tp",
-    "CLCT",
-    "tcc",
-    "CLCL",
-    "lcc",
-    "CLCM",
-    "mcc",
-    "CLCH",
-    "hcc",
-    "SSRD",
-    "ssrd",
-}
-
-
 def balfrin_cpus(mem_mb, actual_cpus=1, node_mem_mb=512_000, node_cpus=256):
     """Minimum cores to request on Balfrin based on memory usage.
 
@@ -610,42 +580,6 @@ def balfrin_cpus(mem_mb, actual_cpus=1, node_mem_mb=512_000, node_cpus=256):
 
     mem_cpus = math.ceil(mem_mb / node_mem_mb * node_cpus)
     return max(actual_cpus, mem_cpus)
-
-
-def resolve_leadtimes(steps_spec, requested="all", param=None):
-    """Lead times to compute for a single participant.
-
-    A run or baseline produces only the lead times in its own ``steps`` spec
-    (``start/stop/step``, hours). This returns those of the ``requested``
-    selection that the participant actually produces — the literal ``"all"``
-    (every produced lead time) or an explicit list of ints — so a 36h lead is
-    never requested of an ICON-CH1 baseline (steps ``0/33/6``), nor a >120h
-    lead of ICON-CH2. Explicitly requested lead times the participant cannot
-    produce are skipped with a warning. For accumulated ``param``s, lead times
-    shorter than one step spacing are dropped (no accumulation window).
-    """
-    start, end, step = map(int, steps_spec.split("/"))
-    supported = set(range(start, end + 1, step))
-    wanted = supported if requested == "all" else set(requested)
-
-    unsupported = sorted(wanted - supported)
-    if unsupported:
-        logging.getLogger("snakemake").warning(
-            "Skipping lead time(s) %sh: not produced by forecast steps '%s'.",
-            unsupported,
-            steps_spec,
-        )
-
-    valid = wanted & supported
-    base_param, agg_hours = parse_aggregated_param(param) if param else (None, None)
-    if agg_hours:
-        # Aggregated params (e.g. TOT_PREC6) need the window start [lead - agg, lead]
-        valid = {
-            lt for lt in valid if lt - agg_hours == 0 or lt - agg_hours in supported
-        }
-    elif base_param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
-        valid = {lt for lt in valid if lt >= step}
-    return sorted(valid)
 
 
 def scoremap_runtime(wc):

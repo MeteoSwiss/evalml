@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[2] / "workflow" / "scripts"))
-import compare_forecast_frames  # noqa: E402
-from compare_forecast_frames import parse_source  # noqa: E402
+import plot_forecast_comparison  # noqa: E402
+from plot_forecast_comparison import parse_source  # noqa: E402
 
 
 def test_parse_source():
@@ -31,17 +31,17 @@ def run_main(monkeypatch, tmp_path):
             loaded.append(root)
             return np.zeros(1), np.zeros(1), np.zeros(1)
 
-        monkeypatch.setattr(compare_forecast_frames, "load_source", loader)
-        monkeypatch.setattr(compare_forecast_frames, "load_truth", loader)
-        monkeypatch.setattr(compare_forecast_frames, "StatePlotter", lambda *_: None)
+        monkeypatch.setattr(plot_forecast_comparison, "load_source", loader)
+        monkeypatch.setattr(plot_forecast_comparison, "load_truth", loader)
+        monkeypatch.setattr(plot_forecast_comparison, "StatePlotter", lambda *_: None)
         monkeypatch.setattr(
             sys,
             "argv",
-            ["compare_forecast_frames.py", *args]
+            ["plot_forecast_comparison.py", *args]
             + ["--date", "202401010000", "--leadtime", "6", "--param", "T_2M"]
             + ["--regions_json", "{}", "--outdir", str(tmp_path)],
         )
-        compare_forecast_frames.main()
+        plot_forecast_comparison.main()
         return loaded
 
     return run

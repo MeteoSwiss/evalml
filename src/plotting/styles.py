@@ -9,9 +9,24 @@ import numpy as np
 from plotting.colormap_defaults import CMAP_DEFAULTS
 
 
+def _precip_lookup(accu):
+    """Key of the TOT_PREC palette for an accumulation window of ``accu`` hours.
+
+    Palettes exist only for some windows (1h, 6h); others use the longest
+    defined window not exceeding ``accu`` (e.g. 3h -> 1h, 24h -> 6h).
+    """
+    windows = sorted(
+        int(key[len("TOT_PREC_") : -1])
+        for key in CMAP_DEFAULTS
+        if key.startswith("TOT_PREC_") and key.endswith("H")
+    )
+    window = max((w for w in windows if w <= accu), default=windows[0])
+    return f"TOT_PREC_{window}H"
+
+
 def get_style(param, units_override=None, accu=1):
     """Get style and colormap settings for the plot."""
-    lookup = f"{param}_{accu}H" if param == "TOT_PREC" else param
+    lookup = _precip_lookup(accu) if param == "TOT_PREC" else param
     cfg = CMAP_DEFAULTS[lookup]
     units = units_override if units_override is not None else cfg.get("units", "")
 

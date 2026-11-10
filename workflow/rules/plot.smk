@@ -168,6 +168,8 @@ rule make_forecast_animation:
             for f in input
             if Path(f).stat().st_size > 0
         ]
+        if not frames:
+            raise ValueError(f"No non-empty frames to animate for {output[0]}")
         frames[0].save(
             output[0],
             save_all=True,
@@ -243,9 +245,9 @@ def _comparison_baselines(wc):
     ]
 
 
-rule compare_forecast_frames:
+rule plot_forecast_comparison:
     input:
-        script="workflow/scripts/compare_forecast_frames.py",
+        script="workflow/scripts/plot_forecast_comparison.py",
         inference_okfiles=lambda wc: expand(
             rules.inference_execute.output.okfile,
             run_id=CANDIDATES,
@@ -260,14 +262,14 @@ rule compare_forecast_frames:
         ),
     log:
         OUT_ROOT
-        / "logs/{showcase}/{init_time}/compare_forecast_frames_{leadtime}_{param}.log",
+        / "logs/plot_forecast_comparison/{showcase}-{init_time}-{leadtime}-{param}.log",
     wildcard_constraints:
         showcase=r"[^/]+",
         init_time=r"\d{12}",
         leadtime=r"\d+",
     resources:
         slurm_partition="postproc",
-        cpus_per_task=4,
+        cpus_per_task=balfrin_cpus(32_000, actual_cpus=4),
         mem_mb=32_000,
         runtime="30m",
     params:
