@@ -60,37 +60,27 @@ def get_style(param, units_override=None, accu=1):
 
 def preprocess_field(param: str, state: dict):
     """
-    - Temperatures: K -> °C
     - Wind speed: sqrt(u^2 + v^2)
-    - Precipitation: m -> mm
+    - Everything else: see :func:`prepare_values`
     Returns: (field_array, units_override or None)
     """
     fields = state["fields"]
-    if param in ("T_2M", "TD_2M", "TW_2M", "SKT", "T", "TD"):
-        return kelvin_to_celsius(fields[param]), "°C"
     if param == "SP_10M":
-        return ekm_wind.speed(fields["U_10M"], fields["V_10M"]), "m/s"
-    if param == "SP":
-        return ekm_wind.speed(fields["U"], fields["V"]), "m/s"
-    if param == "TOT_PREC":
-        return np.maximum(fields[param], 0), "mm"
-    if param in ("CLCT", "CLCL", "CLCM", "CLCH"):
-        # Avoid exact 0/100 plateaus breaking tricontourf on orthographic
-        # projections (tmp/reproduce_clct_bug.py). Pair with extend="neither".
-        # Any new bounded field with silent-blank or GeometryCollection-crash
-        # globe frames likely needs the same clip-away-from-boundary fix.
-        return np.clip(fields[param], 1e-4, 100 - 1e-4), None
-    if param == "SSRD":
-        # Same issue, bottom boundary only (night-side plateau).
-        return np.maximum(fields[param], 1e-6), None
-    return fields[param], None
+        values = ekm_wind.speed(fields["U_10M"], fields["V_10M"])
+    elif param == "SP":
+        values = ekm_wind.speed(fields["U"], fields["V"])
+    else:
+        values = fields[param]
+    return prepare_values(param, values)
 
 
 def prepare_values(param: str, values):
     """Unit conversion and clipping of an already derived ``param`` field.
 
-    Same as :func:`preprocess_field`, for callers that load derived params
-    (e.g. ``SP_10M``) directly. Returns: (field_array, units_override or None)
+    - Temperatures: K -> °C
+    - Precipitation: m -> mm
+    Used directly by callers that load derived params (e.g. ``SP_10M``).
+    Returns: (field_array, units_override or None)
     """
     if param in ("T_2M", "TD_2M", "TW_2M", "SKT", "T", "TD"):
         return kelvin_to_celsius(values), "°C"
@@ -98,12 +88,13 @@ def prepare_values(param: str, values):
         return values, "m/s"
     if param == "TOT_PREC":
         return np.maximum(values, 0), "mm"
-    if param in ("CLCT", "CLCL"):
-        # Avoid exact 0/1 plateaus breaking tricontourf on orthographic
-        # projections (tmp/reproduce_clct_bug.py). Pair with extend="neither".
-        # Any new bounded field with silent-blank or GeometryCollection-crash
-        # globe frames likely needs the same clip-away-from-boundary fix.
-        return np.clip(values, 1e-6, 1 - 1e-6), None
+    if param in ("CLCT", "CLCL", "CLCM", "CLCH"):
+        # Cloud cover is in percent. Avoid exact 0/100 plateaus breaking
+        # tricontourf on orthographic projections (tmp/reproduce_clct_bug.py).
+        # Pair with extend="neither". Any new bounded field with silent-blank
+        # or GeometryCollection-crash globe frames likely needs the same
+        # clip-away-from-boundary fix.
+        return np.clip(values, 1e-4, 100 - 1e-4), None
     if param == "SSRD":
         # Same issue, bottom boundary only (night-side plateau).
         return np.maximum(values, 1e-6), None
