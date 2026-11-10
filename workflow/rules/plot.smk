@@ -225,20 +225,22 @@ use rule plot_scoremaps as plot_scoremaps_baseline with:
 
 
 def _comparison_sources(wc):
-    """'label=root' for each panel after the truth: all candidate runs, then the
-    selected baselines."""
-    sources = [
+    """'label=root' for each candidate run panel, after the truth."""
+    return [
         f"{RUN_CONFIGS[run_id]['label']}="
         f"{(Path(OUT_ROOT) / f'data/runs/{run_id}/{wc.init_time}/grib').resolve()}"
         for run_id in CANDIDATES
     ]
+
+
+def _comparison_baselines(wc):
+    """'label=root' for each selected baseline panel, after the runs."""
     # baselines only: config validation checks the labels against them
     baselines_by_label = {cfg["label"]: cfg for cfg in BASELINE_CONFIGS.values()}
-    sources += [
+    return [
         f"{label}={baselines_by_label[label]['root']}"
         for label in COMPARISONS_CONFIG["baselines"]
     ]
-    return sources
 
 
 rule compare_forecast_frames:
@@ -270,6 +272,7 @@ rule compare_forecast_frames:
         runtime="30m",
     params:
         sources=_comparison_sources,
+        baselines=_comparison_baselines,
         truth=(
             [
                 "--truth",
@@ -292,6 +295,9 @@ rule compare_forecast_frames:
         SOURCE_ARGS=()
         for s in {params.sources:q}; do
             SOURCE_ARGS+=(--source "$s")
+        done
+        for s in {params.baselines:q}; do
+            SOURCE_ARGS+=(--baseline "$s")
         done
         uv run python {input.script} \
             "${{SOURCE_ARGS[@]}}" {params.truth:q} \

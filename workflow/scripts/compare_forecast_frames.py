@@ -26,6 +26,12 @@ logging.basicConfig(
 )
 
 
+# What the loaders raise when a baseline or the truth does not cover the lead
+# time: missing ICON archive file, INCA step outside the file, valid time
+# outside the truth zarr. Anything else is a real failure.
+NOT_AVAILABLE = (FileNotFoundError, LookupError)
+
+
 def _flat(ds, param):
     base_param, _ = parse_aggregated_param(param)
     values, _ = prepare_values(base_param, np.asarray(ds[param].values).ravel())
@@ -62,7 +68,15 @@ def main():
         action="append",
         default=[],
         type=parse_source,
-        help="Panel as 'label=root' (ML run grib dir or baseline root), repeatable.",
+        help="ML run panel as 'label=grib dir', repeatable. Must load.",
+    )
+    parser.add_argument(
+        "--baseline",
+        action="append",
+        default=[],
+        type=parse_source,
+        help="Baseline panel as 'label=root', repeatable. "
+        "Left empty if it has no data at the lead time.",
     )
     parser.add_argument("--truth", type=str, default=None, help="Truth root (zarr)")
     parser.add_argument("--truth_label", type=str, default="Truth")
@@ -85,19 +99,22 @@ def main():
     outdir.mkdir(parents=True, exist_ok=True)
     valid_time = init_time + timedelta(hours=lead_time)
 
-    panels = [(label, root, load_source) for label, root in args.source]
+    panels = [(label, root, load_source, False) for label, root in args.source]
+    panels += [(label, root, load_source, True) for label, root in args.baseline]
     if args.truth:
-        panels.insert(0, (args.truth_label, args.truth, load_truth))
+        panels.insert(0, (args.truth_label, args.truth, load_truth, True))
+    if not panels:
+        parser.error("no panels to plot")
     data = {}
-    for label, root, loader in panels:
+    for label, root, loader, optional in panels:
         LOG.info("Loading '%s' from %s", label, root)
         try:
             lon, lat, values = loader(root, init_time, lead_time, param)
-        except Exception:
-            # Loaders fail in different ways for lead times a source does not
-            # provide (outside its steps, no accumulation window, ...).
+        except NOT_AVAILABLE:
+            if not optional:
+                raise
             LOG.warning(
-                "Could not load '%s' at +%sh, plotting an empty panel",
+                "'%s' has no data at +%sh, plotting an empty panel",
                 label,
                 lead_time,
                 exc_info=True,
@@ -105,6 +122,8 @@ def main():
             continue
         # Triangulate each grid once, shared by all regions.
         data[label] = (StatePlotter(lon, lat, outdir), values)
+    if not data:
+        raise RuntimeError(f"No source has data at +{lead_time}h")
 
     base_param, accu = parse_aggregated_param(param)
     _, units = prepare_values(base_param, np.empty(0))
@@ -122,7 +141,7 @@ def main():
             columns=columns,
             size=(5 * columns, 5 * rows),
         )
-        for i, (label, _, _) in enumerate(panels):
+        for i, (label, *_) in enumerate(panels):
             subplot = fig.add_map(row=i // columns, column=i % columns)
             if label not in data:
                 subplot.standard_layers()
