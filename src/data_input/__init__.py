@@ -323,7 +323,7 @@ def _select_valid_times(ds, times: np.datetime64, strict: bool = False):
         )
         return ds.sel(time=times_np[times_included])
     else:
-        raise ValueError(
+        raise LookupError(
             "Valid times are not included in the dataset. "
             "Please check the valid times and the dataset."
         )

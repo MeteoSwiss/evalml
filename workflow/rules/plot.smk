@@ -168,6 +168,8 @@ rule make_forecast_animation:
             for f in input
             if Path(f).stat().st_size > 0
         ]
+        if not frames:
+            raise ValueError(f"No non-empty frames to animate for {output[0]}")
         frames[0].save(
             output[0],
             save_all=True,
@@ -222,3 +224,86 @@ use rule plot_scoremaps as plot_scoremaps_baseline with:
     log:
         OUT_ROOT
         / "logs/plot_scoremaps/{experiment}/{baseline_id}-{param}-{score}-{region}-{season}-{init_hour}-{leadtime}.log",
+
+
+def _comparison_sources(wc):
+    """'label=root' for each candidate run panel, after the truth."""
+    return [
+        f"{RUN_CONFIGS[run_id]['label']}="
+        f"{(Path(OUT_ROOT) / f'data/runs/{run_id}/{wc.init_time}/grib').resolve()}"
+        for run_id in CANDIDATES
+    ]
+
+
+def _comparison_baselines(wc):
+    """'label=root' for each selected baseline panel, after the runs."""
+    # baselines only: config validation checks the labels against them
+    baselines_by_label = {cfg["label"]: cfg for cfg in BASELINE_CONFIGS.values()}
+    return [
+        f"{label}={baselines_by_label[label]['root']}"
+        for label in COMPARISONS_CONFIG["baselines"]
+    ]
+
+
+rule plot_forecast_comparison:
+    input:
+        script="workflow/scripts/plot_forecast_comparison.py",
+        inference_okfiles=lambda wc: expand(
+            rules.inference_execute.output.okfile,
+            run_id=CANDIDATES,
+            init_time=wc.init_time,
+        ),
+        truth=lambda wc: truth_file_dep(wc) if COMPARISONS_CONFIG["truth"] else [],
+    output:
+        expand(
+            OUT_ROOT
+            / "results/{{showcase}}/{{init_time}}/compare/{{init_time}}_{{leadtime}}_{{param}}_{region}.png",
+            region=list(COMPARISONS_CONFIG["regions"].keys()),
+        ),
+    log:
+        OUT_ROOT
+        / "logs/plot_forecast_comparison/{showcase}-{init_time}-{leadtime}-{param}.log",
+    wildcard_constraints:
+        showcase=r"[^/]+",
+        init_time=r"\d{12}",
+        leadtime=r"\d+",
+    resources:
+        slurm_partition="postproc",
+        cpus_per_task=balfrin_cpus(32_000, actual_cpus=4),
+        mem_mb=32_000,
+        runtime="30m",
+    params:
+        sources=_comparison_sources,
+        baselines=_comparison_baselines,
+        truth=(
+            [
+                "--truth",
+                config["truth"]["root"],
+                "--truth_label",
+                config["truth"]["label"],
+            ]
+            if COMPARISONS_CONFIG["truth"]
+            else []
+        ),
+        regions_json=json.dumps(COMPARISONS_CONFIG["regions"]),
+        outdir=lambda wc: str(
+            (
+                Path(OUT_ROOT) / f"results/{wc.showcase}/{wc.init_time}/compare"
+            ).resolve()
+        ),
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        SOURCE_ARGS=()
+        for s in {params.sources:q}; do
+            SOURCE_ARGS+=(--source "$s")
+        done
+        for s in {params.baselines:q}; do
+            SOURCE_ARGS+=(--baseline "$s")
+        done
+        uv run python {input.script} \
+            "${{SOURCE_ARGS[@]}}" {params.truth:q} \
+            --date {wildcards.init_time:q} --leadtime {wildcards.leadtime:q} \
+            --param {wildcards.param:q} --regions_json {params.regions_json:q} \
+            --outdir {params.outdir:q} >{log} 2>&1
+        """
