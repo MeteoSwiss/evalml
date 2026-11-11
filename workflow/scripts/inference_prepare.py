@@ -6,12 +6,20 @@ import shutil
 from pathlib import Path
 
 from evalml.helpers import setup_logger
+from evalml.variable_checks import (
+    check_output_variables,
+    checkpoint_variable_names,
+    inference_config_variable_names,
+    verified_params,
+)
 
 
 def prepare_config(
     default_config_path: str,
     output_config_path: str,
     params: dict,
+    output_variables: list[str] | None = None,
+    logger: logging.Logger | None = None,
 ):
     """Prepare the configuration file for the inference run.
 
@@ -26,15 +34,105 @@ def prepare_config(
         Path where the updated configuration file will be written.
     params : dict
         Dictionary of parameters to override in the default configuration.
+    output_variables : list of str, optional
+        Variables to write to every GRIB output (see `set_output_variables`).
+        If None, the outputs of the default configuration are left as they are.
+    logger : logging.Logger, optional
+        Logger for warnings; defaults to a logger named after this module.
     """
 
     with open(default_config_path, "r") as f:
         config = yaml.safe_load(f)
 
     config = _override_recursive(config, params)
+    if output_variables:
+        logger = logger or logging.getLogger(__name__)
+        config = set_output_variables(config, output_variables, logger)
 
     with open(output_config_path, "w") as f:
         yaml.safe_dump(config, f, sort_keys=False)
+
+
+def set_output_variables(
+    config: dict, variables: list[str], logger: logging.Logger
+) -> dict:
+    """Set the variables written by every GRIB output of an anemoi-inference config.
+
+    Sets `variables` on each `grib` output under `config["output"]`, either a bare
+    `grib` output or any depth of `tee` outputs, overriding a `variables` already
+    set in the template. If the config has no GRIB output, a warning is logged and
+    the config is left unchanged.
+
+    Parameters
+    ----------
+    config : dict
+        The anemoi-inference configuration, modified in place.
+    variables : list of str
+        Variable names as the GRIB output sees them; shell-style globs are allowed.
+    logger : logging.Logger
+        Logger for the warning.
+
+    Returns
+    -------
+    dict
+        The updated configuration.
+    """
+    n_grib = _set_grib_variables(config.get("output"), variables)
+    if n_grib == 0:
+        logger.warning(
+            "output_variables is set, but the inference config has no GRIB output; "
+            "the config is left unchanged."
+        )
+    return config
+
+
+def _set_grib_variables(output, variables: list[str]) -> int:
+    """Set `variables` on every grib output in an output block; return how many."""
+    if not isinstance(output, dict):
+        return 0
+    n = 0
+    for kind, spec in output.items():
+        if kind == "grib":
+            if isinstance(spec, str):  # short form: the output path only
+                spec = output[kind] = {"path": spec}
+            # one list per output, so that yaml does not write anchors and aliases
+            spec["variables"] = list(variables)
+            n += 1
+        elif kind == "tee":
+            outputs = spec.get("outputs", []) if isinstance(spec, dict) else spec
+            for sub in outputs or []:
+                n += _set_grib_variables(sub, variables)
+    return n
+
+
+def check_run_output_variables(smk, LOG: logging.Logger):
+    """Check the run's output_variables against its checkpoint before inference.
+
+    Raises if an entry matches no variable of the checkpoint or of the inference
+    config (fields added by post-processors) or, for a run that is verified (a
+    candidate), if a verified parameter the model provides is not written. The
+    verified parameters are read from the workflow config, not from the rule's
+    params, so that changing them does not rerun inference. Runs after
+    prepare_workdir, which stages the metadata patches the config refers to.
+    """
+    output_variables = smk.params.output_variables
+    if not output_variables:
+        return
+    variables, grib_names = checkpoint_variable_names(smk.input.checkpoint)
+    if not variables:
+        LOG.warning(
+            "No variable names found in the checkpoint metadata; "
+            "output_variables is not checked."
+        )
+        return
+    with open(smk.input.config) as f:
+        config = yaml.safe_load(f)
+    declared, declared_grib = inference_config_variable_names(config, _get_workdir(smk))
+    variables |= declared
+    grib_names = (grib_names | declared_grib) - variables
+    params = verified_params(smk.config) if smk.params.is_candidate else []
+    check_output_variables(output_variables, variables, grib_names, params, LOG)
+    LOG.info("output_variables checked against the checkpoint and %s", params)
 
 
 def prepare_workdir(workdir: Path, resources_root: Path):
@@ -111,8 +209,15 @@ def prepare_temporal_downscaler(smk):
         )
 
     # prepare config
+    check_run_output_variables(smk, LOG)
     overrides = _overrides_from_params(smk)
-    prepare_config(smk.input.config, smk.output.config, overrides)
+    prepare_config(
+        smk.input.config,
+        smk.output.config,
+        overrides,
+        output_variables=smk.params.output_variables,
+        logger=LOG,
+    )
 
     LOG.info("Wrote config file at %s", smk.output.config)
     with open(smk.output.config, "r") as f:
@@ -141,8 +246,15 @@ def prepare_forecaster(smk):
     LOG.info("Resources: \n%s", res_list)
     stage_holdout_stations(smk, workdir, LOG)
 
+    check_run_output_variables(smk, LOG)
     overrides = _overrides_from_params(smk)
-    prepare_config(smk.input.config, smk.output.config, overrides)
+    prepare_config(
+        smk.input.config,
+        smk.output.config,
+        overrides,
+        output_variables=smk.params.output_variables,
+        logger=LOG,
+    )
     LOG.info("Wrote config file at %s", smk.output.config)
     with open(smk.output.config, "r") as f:
         config_content = f.read()

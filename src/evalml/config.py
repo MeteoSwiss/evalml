@@ -1,4 +1,5 @@
 import re
+from fnmatch import fnmatchcase
 from math import isfinite
 from pathlib import Path
 from typing import Dict, List, Any, ClassVar, FrozenSet, Literal, Optional, Union
@@ -112,6 +113,19 @@ class RunConfig(BaseModel):
     disable_local_eccodes_definitions: bool = Field(
         False,
         description="If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
+    )
+    output_variables: List[str] | None = Field(
+        None,
+        min_length=1,
+        description="List of variables written to the GRIB output files of the inference run. "
+        "Names are those of the fields that reach the GRIB output: the checkpoint's variable "
+        "names as listed by `anemoi-inference metadata` (e.g. 2t, tp, t_850), unless a "
+        "post-processor renames them. Before inference, the list is checked against the "
+        "checkpoint and the verified parameters. Shell-style globs (e.g. '*_850') need "
+        "anemoi-inference >= 0.13.0; older versions match names literally. The list is "
+        "written to every GRIB output of the inference config. If omitted, all variables "
+        "are written. Keep z (written as FIS): the model orography is read from it for the "
+        "lapse-rate correction.",
     )
     config: Dict[str, Any] | str
 
@@ -1057,6 +1071,24 @@ class ConfigModel(BaseModel):
                 f"Labels must be unique across `runs`; used by several runs or "
                 f"baselines: {duplicates}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_output_variables_keep_orography(self) -> "ConfigModel":
+        """With the lapse-rate correction, verified runs must write the orography (z)."""
+        if self.experiment is None or not self.lapse_rate_correction:
+            return self
+        for item in self.runs:
+            run = getattr(item, next(iter(type(item).model_fields)))
+            names = getattr(run, "output_variables", None)
+            if names and not any(
+                fnmatchcase(o, n) for n in names for o in ("z", "FIS")
+            ):
+                raise ValueError(
+                    f"output_variables {names} of run '{run.label or run.checkpoint}' "
+                    "lacks z: the lapse-rate correction of the verification reads the "
+                    "model orography from it. Add z, or set lapse_rate_correction: false."
+                )
         return self
 
     @model_validator(mode="after")
