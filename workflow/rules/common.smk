@@ -401,11 +401,15 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
     - output_variables (variables written to the GRIB outputs), only when set, so
       that run_ids of configs without it are unchanged; sorted and deduplicated,
       so that the order of the list does not matter
+    - ensemble (members and seed), only when set, so that run_ids of deterministic
+      runs are unchanged
     - For temporal downscalers: the forecaster's run_id (which run's outputs to read)
     """
     run_fields = {"steps": run_config["steps"]}
     if run_config.get("output_variables") is not None:
         run_fields["output_variables"] = sorted(set(run_config["output_variables"]))
+    if run_config.get("ensemble") is not None:
+        run_fields["ensemble"] = run_config["ensemble"]
     configs_to_hash = [run_fields]
     with open(run_config["config"], "r") as f:
         configs_to_hash.append(yaml.safe_load(f))
@@ -413,6 +417,24 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
         # run output depends on which forecaster RUN was used (not just the env)
         configs_to_hash.append(run_config["forecaster"].get("run_id"))
     return generate_json_hash(configs_to_hash)
+
+
+def warn_ensembles_without_output_variables(run_configs: dict) -> None:
+    """Warn about ensemble runs without output_variables.
+
+    They write every field for every member, which multiplies storage by the
+    number of members.
+    """
+    for run_id, run_config in run_configs.items():
+        ensemble = run_config.get("ensemble")
+        if ensemble is not None and run_config.get("output_variables") is None:
+            logging.getLogger("snakemake").warning(
+                "Run %s is an ensemble of %d members without output_variables: every "
+                "field is written for every member. Set output_variables to limit "
+                "storage.",
+                run_id,
+                ensemble["members"],
+            )
 
 
 def baseline_hash(baseline_config: dict) -> str:
@@ -566,6 +588,7 @@ if not HOLDOUT_STATIONS:
                 f"references {HOLDOUT_WORKDIR_NAME}, but experiment.station_holdout "
                 "is not set."
             )
+warn_ensembles_without_output_variables(RUN_CONFIGS)
 _scorecard = EXPERIMENT_CONFIG.get("scorecards") or {}
 SCORECARD_CONFIGS = (
     _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
@@ -600,3 +623,25 @@ def scoremap_runtime(wc):
     if wc.param.startswith("TOT_PREC"):
         seconds += 0.3 * int(wc.leadtime)
     return max(60, math.ceil(1.5 * len(REFTIMES) * seconds / 60))
+
+
+def run_grib_dir(run_id, init_time):
+    """GRIB directory of a run's inference output, as read by downstream rules.
+
+    Deterministic runs write ``grib/``; ensemble runs write ``grib/{NNN}/`` per member
+    and, until ensemble verification lands, downstream rules use member 001 only.
+    """
+    base = Path(OUT_ROOT) / f"data/runs/{run_id}/{init_time}/grib"
+    if RUN_CONFIGS[run_id].get("ensemble") is not None:
+        return base / "001"
+    return base
+
+
+for _run_id, _rc in RUN_CONFIGS.items():
+    if _rc.get("ensemble") is not None:
+        logging.getLogger("snakemake").warning(
+            "Run %s is an ensemble of %d members: verification, plots and MEC use "
+            "member 001 only until ensemble verification is implemented.",
+            _run_id,
+            _rc["ensemble"]["members"],
+        )

@@ -74,6 +74,22 @@ class InferenceResources(BaseModel):
     )
 
 
+class EnsembleConfig(BaseModel):
+    """Run a forecaster as an ensemble of independent members."""
+
+    members: int = Field(
+        ...,
+        ge=2,
+        description="Number of ensemble members per initialisation, numbered 001..N.",
+    )
+    seed: int = Field(
+        0,
+        description="Base random seed: member m (1..N) runs with seed `seed + m`.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class RunConfig(BaseModel):
     # Identity contract: fields that determine the inference ENVIRONMENT (venv, squashfs).
     # Changing any of these requires a new environment to be built.
@@ -180,6 +196,26 @@ class ForecasterConfig(RunConfig):
         description="Configuration for the forecaster run. Can be a dictionary of parameters or a path to a configuration file."
         "By default, it will point to resources/inference/configs/forecaster.yaml in the evalml repository.",
     )
+    ensemble: EnsembleConfig | None = Field(
+        None,
+        description="Run the forecaster as an ensemble: `members` independent inference runs "
+        "per initialisation, member m (1..N) seeded with `seed + m`. Each member is written "
+        "to grib/{NNN}/ (NNN = 001..N) with the same file names as a deterministic run, and "
+        "its GRIB messages carry `number` = m and `numberOfForecastsInEnsemble` = N. Storage "
+        "grows with the number of members, so set `output_variables` too (a warning is "
+        "logged otherwise). Not allowed on the forecaster of a temporal downscaler. "
+        "Verification and plots use member 001 only.",
+    )
+
+    @model_validator(mode="after")
+    def validate_ensemble_single_task(self):
+        res = self.inference_resources
+        if self.ensemble is not None and res is not None and (res.tasks or 1) > 1:
+            raise ValueError(
+                "An ensemble forecaster runs its members in a single task: "
+                "remove `inference_resources.tasks` or set it to 1."
+            )
+        return self
 
 
 class TemporalDownscalerConfig(RunConfig):
@@ -201,6 +237,17 @@ class TemporalDownscalerConfig(RunConfig):
         None,
         description="Configuration for the forecaster run that this temporal downscaler is based on.",
     )
+
+    @field_validator("forecaster")
+    def validate_forecaster_not_ensemble(
+        cls, v: ForecasterConfig | None
+    ) -> ForecasterConfig | None:
+        if v is not None and v.ensemble is not None:
+            raise ValueError(
+                "The forecaster of a temporal downscaler cannot be an ensemble: "
+                "remove its `ensemble` block."
+            )
+        return v
 
 
 class BaselineConfig(BaseModel):

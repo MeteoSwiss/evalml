@@ -93,6 +93,9 @@ def iter_init_dirs(run_root: Path) -> list[tuple[datetime, Path]]:
         except ValueError:
             continue
         grib_dir = d / "grib" if (d / "grib").is_dir() else d
+        # Ensemble runs hold one directory per member: use member 001 for now.
+        if (grib_dir / "001").is_dir():
+            grib_dir = grib_dir / "001"
         if not any(grib_dir.glob("*.grib")):
             LOG.debug("No GRIB files in %s, skipping", grib_dir)
             continue

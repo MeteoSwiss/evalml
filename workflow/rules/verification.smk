@@ -70,9 +70,7 @@ rule verification_valid_mask:
     params:
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
         truth=config["truth"]["root"],
-        grib_out_dir=lambda wc: (
-            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
-        ).resolve(),
+        grib_out_dir=lambda wc: run_grib_dir(wc.run_id, wc.init_time).resolve(),
         mask_params=",".join(COMMON_POINTS_PARAMS),
     shell:
         """
@@ -176,9 +174,7 @@ rule verification_metrics:
         truth=config["truth"]["root"],
         truth_source_id=f"truth-{TRUTH_HASH}",
         regions=REGIONS,
-        grib_out_dir=lambda wc: (
-            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
-        ).resolve(),
+        grib_out_dir=lambda wc: run_grib_dir(wc.run_id, wc.init_time).resolve(),
         experiment_params=",".join(EXPERIMENT_PARAMS),
         threshold_dict=EXPERIMENT_CONFIG.get("thresholds", {}),
         holdout_flag=lambda wc, input: (
