@@ -5,10 +5,22 @@ from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import xarray as xr
 
-from verification import verify, apply_lapse_rate_correction_inplace  # noqa: E402
+from verification import (  # noqa: E402
+    CATEGORICAL_PARAMS,
+    CIRCULAR_PARAMS,
+    _apply_masks,
+    _compute_statistics,
+    _region_and_station_masks,
+    _too_many_missing,
+    apply_lapse_rate_correction_inplace,
+    default_num_workers,
+    verify,
+    verify_ensemble,
+)
 from verification.spatial import map_forecast_to_truth  # noqa: E402
 from verification.valid_mask import apply_valid_mask, combine_valid_masks  # noqa: E402
 from data_input import (
@@ -88,16 +100,58 @@ def program_summary_log(args):
     LOG.info("=" * 80)
 
 
+def load_ensemble_forecast(
+    root: Path, reftime: datetime, steps: list[int], params: list[str], members: int
+) -> xr.Dataset:
+    """Load the members ``root/001 .. root/{members:03d}`` of an ensemble run.
+
+    Each member is loaded with ``load_forecast_data`` (same derived and period
+    parameters as a deterministic run) and the members are concatenated on a
+    ``member`` dimension (1..N). A missing member is an error. All members get
+    member 001's ``elevation`` (model orography, the same for every member), so
+    the lapse-rate correction uses one elevation for the whole ensemble.
+    """
+    datasets = []
+    for m in range(1, members + 1):
+        member_dir = Path(root) / f"{m:03d}"
+        if not any(member_dir.glob("*.grib")):
+            raise FileNotFoundError(
+                f"Ensemble member {m:03d} of {members}: no GRIB files in {member_dir}"
+            )
+        datasets.append(load_forecast_data(member_dir, reftime, steps, params))
+    elevation = datasets[0].coords.get("elevation")
+    datasets = [ds.drop_vars("elevation", errors="ignore") for ds in datasets]
+    fcst = xr.concat(
+        datasets,
+        dim=pd.Index(range(1, members + 1), name="member"),
+        coords="minimal",
+        compat="override",
+        join="exact",
+    )
+    if elevation is not None:
+        fcst = fcst.assign_coords(elevation=elevation)
+    return fcst
+
+
 def load_aligned_data(args, params: list[str]) -> tuple[xr.Dataset, xr.Dataset]:
     """Load forecast and truth for ``params``, with the forecast mapped to the truth
-    points and the truth selected at the forecast valid times."""
+    points and the truth selected at the forecast valid times.
+
+    With ``args.members`` set, ``args.forecast`` is the ``grib/`` directory of an
+    ensemble run and the forecast has a ``member`` dimension (load_ensemble_forecast).
+    """
 
     # get baseline forecast data
     now = datetime.now()
 
-    fcst = load_forecast_data(
-        args.forecast, args.reftime, args.steps, params, member=args.member
-    )
+    if getattr(args, "members", None):
+        fcst = load_ensemble_forecast(
+            args.forecast, args.reftime, args.steps, params, args.members
+        )
+    else:
+        fcst = load_forecast_data(
+            args.forecast, args.reftime, args.steps, params, member=args.member
+        )
 
     LOG.info(
         "Loaded forecast data in %s seconds: \n%s",
@@ -130,6 +184,146 @@ def load_aligned_data(args, params: list[str]) -> tuple[xr.Dataset, xr.Dataset]:
     return fcst, truth
 
 
+def member_mean_statistics(
+    fcst: xr.Dataset,
+    truth: xr.Dataset,
+    regions: list[dict],
+    holdout_stations: list[str] | None = None,
+    params: list[str] | None = None,
+    num_workers: int | None = None,
+) -> xr.Dataset:
+    """Forecast statistics ``{p}.{mean,var,min,max}`` of an ensemble, averaged over
+    the members (without a ``source`` dim).
+
+    Each member is masked as ``verify`` masks the forecast (regions, station groups,
+    NaN where too many forecast values are missing; a point is missing if any member
+    is). The ensemble mean is smoother than any member, so its own variance and
+    extremes would not describe the forecast fields.
+
+    Memory: the masked members have region x station_group x points values per member
+    and step. Each member is its own dask chunk and the parameters are computed one
+    at a time with *num_workers* threads, so a chunk is no larger than in ``verify``.
+    """
+    num_workers = num_workers or default_num_workers()
+    dim = ["x", "y"] if "x" in fcst.dims and "y" in fcst.dims else ["values"]
+    fcst, truth = xr.align(fcst, truth, join="inner", copy=False)
+    masks, station_masks = _region_and_station_masks(truth, regions, holdout_stations)
+    stats = []
+    for param in params or list(fcst.data_vars):
+        if param not in truth.data_vars:
+            continue
+        members = fcst[param]
+        members = members.where(members.notnull().all("member"))
+        too_many_missing = _too_many_missing(
+            members.isnull().any("member"),
+            _apply_masks(truth[param], masks, station_masks),
+            dim,
+            0.0,
+        )
+        if members.chunks:
+            members = members.chunk({"member": 1})
+        member_stats = _compute_statistics(
+            _apply_masks(members, masks, station_masks),
+            prefix=param + ".",
+            dim=dim,
+            circular=param in CIRCULAR_PARAMS,
+        )
+        member_stats = member_stats.assign(too_many_missing=too_many_missing).compute(
+            num_workers=num_workers, scheduler="threads"
+        )
+        too_many_missing = member_stats["too_many_missing"]
+        stats.append(
+            member_stats.drop_vars("too_many_missing")
+            .mean("member")
+            .squeeze("source", drop=True)
+            .where(~too_many_missing)
+        )
+    return xr.merge(stats)
+
+
+def _nan_categorical_scores(results: xr.Dataset, params, source_id: str) -> xr.Dataset:
+    """NaN for the scores of the categorical params (class codes) under *source_id*.
+
+    The ensemble mean of class codes is no class (rain 1 and snow 5 average to 3,
+    freezing rain), so the contingency tables of the ensemble mean are meaningless.
+    The forecast statistics (averaged over the members) and the truth are kept.
+    """
+    statistics = ("mean", "var", "min", "max")
+    is_source = results["source"] == source_id
+    for param in CATEGORICAL_PARAMS.intersection(params):
+        for name in list(results.data_vars):
+            if not name.startswith(param + "."):
+                continue
+            if name.split(".", 1)[1] in statistics:
+                continue
+            current = results[name]
+            if "source" not in current.dims:
+                continue
+            results[name] = (
+                current.where(~is_source)
+                .transpose(*current.dims)
+                .assign_attrs(current.attrs)
+            )
+    return results
+
+
+def verify_ensemble_run(
+    fcst: xr.Dataset, truth: xr.Dataset, source_id: str, truth_source_id: str, **kwargs
+) -> xr.Dataset:
+    """Scores of an ensemble run (``fcst`` with a ``member`` dimension).
+
+    The deterministic scores are those of the ensemble mean (``verify``), under the
+    run's own ``source``; the ensemble scores (``verify_ensemble``: CRPS, ENS_VAR,
+    MEMBER_MSE, rank_hist, prob_table) are merged next to them. A point where any
+    member is missing is missing in the ensemble mean; the ensemble mean of a circular
+    parameter (wind direction) is the direction of the mean unit vector. The run's forecast statistics
+    are averaged over the members (``member_mean_statistics``), except for circular
+    parameters (wind direction), which keep those of the ensemble mean.
+    Categorical parameters (precipitation type) have no ensemble mean: their
+    deterministic scores (contingency tables) are NaN; their ``prob_table`` is the
+    ensemble's categorical score.
+    """
+    n_members = fcst.sizes["member"]
+    LOG.info("Verifying an ensemble of %d members", n_members)
+    ens_mean = fcst.mean("member", skipna=False)
+    for param in CIRCULAR_PARAMS.intersection(fcst.data_vars):
+        # wind direction: direction of the mean unit vector (350 and 10 deg -> 0 deg)
+        rad = np.deg2rad(fcst[param])
+        ens_mean[param] = np.mod(
+            np.degrees(
+                np.arctan2(
+                    np.sin(rad).mean("member", skipna=False),
+                    np.cos(rad).mean("member", skipna=False),
+                )
+            ),
+            360.0,
+        ).assign_attrs(fcst[param].attrs)
+    results = verify(ens_mean, truth, source_id, truth_source_id, **kwargs)
+    results = _nan_categorical_scores(results, fcst.data_vars, source_id)
+
+    stat_params = [p for p in fcst.data_vars if p not in CIRCULAR_PARAMS]
+    member_stats = member_mean_statistics(
+        fcst,
+        truth,
+        kwargs["regions"],
+        kwargs.get("holdout_stations"),
+        params=stat_params,
+        num_workers=kwargs.get("num_workers"),
+    )
+    for name, value in member_stats.data_vars.items():
+        current = results[name]
+        results[name] = (
+            xr.where(current["source"] == source_id, value, current)
+            .transpose(*current.dims)
+            .assign_attrs(current.attrs)
+        )
+
+    ens_scores = verify_ensemble(fcst, truth, source_id, truth_source_id, **kwargs)
+    out = xr.merge([results, ens_scores], join="outer", compat="no_conflicts")
+    out.attrs = {**results.attrs, "n_members": n_members}
+    return out
+
+
 def main(args: ScriptConfig):
     """Main function to verify baseline forecast data."""
 
@@ -154,15 +348,19 @@ def main(args: ScriptConfig):
 
     # compute metrics and statistics
     now = datetime.now()
-    results = verify(
-        fcst,
-        truth,
-        args.source_id,
-        args.truth_source_id,
+    verify_kwargs = dict(
         regions=args.regions,
         threshold_dict=args.threshold_dict,
         holdout_stations=holdout_stations,
     )
+    if "member" in fcst.dims:
+        results = verify_ensemble_run(
+            fcst, truth, args.source_id, args.truth_source_id, **verify_kwargs
+        )
+    else:
+        results = verify(
+            fcst, truth, args.source_id, args.truth_source_id, **verify_kwargs
+        )
     LOG.info(
         "Computed verification metrics in %s seconds",
         (datetime.now() - now).total_seconds(),
@@ -267,6 +465,17 @@ if __name__ == "__main__":
         type=str,
         default="000",
         help="Ensemble member to load: '000' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID.",
+    )
+    parser.add_argument(
+        "--members",
+        type=int,
+        default=None,
+        help=(
+            "Number of members of an ensemble run. --forecast is then the run's grib/ "
+            "directory holding one sub-directory per member (001, 002, ...); the "
+            "ensemble mean is scored as the run's deterministic forecast and the "
+            "ensemble scores are added."
+        ),
     )
     parser.add_argument(
         "--valid_masks",
