@@ -152,7 +152,7 @@ def _(LOG, PROJECT_ROOT, candidate, manifest_path, output_dir):
     from evalml.publication.manifest import load_manifest
 
     mani = load_manifest(manifest_path)
-    cand = mani.get_candidate(candidate)
+    cand = mani.get_candidate(candidate or "Varda-single")
     slug = mani.truth.get("slug", "truth")
 
     cand_info = {
@@ -515,6 +515,19 @@ def _(
             return _orig_ax_text(*args, **kwargs)
 
         _ax.text = _left_text
+        # Row-group header backgrounds: drawn before dots so they stay behind all artists.
+        _HEADER_BG = "#f0f0f0"
+        for _row_idx, (_grp, _met) in enumerate(_lay["rows"]):
+            if _met is None:
+                _hy = -_row_idx
+                _ax.fill_between(
+                    [_lay["xlim_left"], _lay["plot_width"]],
+                    [_hy - 0.5, _hy - 0.5],
+                    [_hy + 0.5, _hy + 0.5],
+                    color=_HEADER_BG,
+                    zorder=0,
+                    linewidth=0,
+                )
         _sep_ys = draw_data_rows(
             _ax,
             _diff,
@@ -535,6 +548,13 @@ def _(
             _lay["y_bottom"],
             _strat_dim,
             _cfg,
+        )
+        # Vertical separator making the metric-name column visually distinct from the dot grid.
+        _ax.plot(
+            [-0.5, -0.5],
+            [_lay["y_bottom"], layout_cfg["slice_y"] - plot_cfg["vline"]["label_gap"]],
+            color=plot_cfg["colors"]["vline"],
+            lw=plot_cfg["vline"]["linewidth"],
         )
         _axes_info.append((_ax, _lay, _sep_ys, _cfg, _model_source, _baseline_source))
 
@@ -574,7 +594,7 @@ def _(
         for _sy in _sep_ys:
             _ax.axhline(
                 y=_sy,
-                xmin=_hline_x0,
+                xmin=0.0,
                 xmax=hline_cfg["x_end"],
                 color=_colors["hline"],
                 lw=hline_cfg["linewidth"],
