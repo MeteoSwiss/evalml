@@ -9,6 +9,7 @@ Positive diff is better for higher-is-better metrics (R², ETS, POD) and worse
 for lower-is-better metrics (RMSE, MAE, STDE, FAR).
 """
 
+import logging
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -20,6 +21,8 @@ import matplotlib.pyplot as plt
 from matplotlib.transforms import ScaledTranslation
 
 from verification import decode_metric
+
+LOG = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -307,18 +310,30 @@ def _filter_diff(diff: xr.Dataset, cfg: dict) -> xr.Dataset:
             )
         result = result.sel(step=keep)
 
-    keep = [
-        var
-        for var_name, var_metrics in cfg["variables"].items()
-        for metric in (var_metrics or all_metrics)
-        for var in _resolve_metric(var_name, metric, result.data_vars)
-    ]
-    result = result[keep]
+    # Requested rows in config order; rows without data are kept as NaN.
+    rows: list[str] = []
+    missing: list[str] = []
+    for var_name, var_metrics in cfg["variables"].items():
+        for metric in var_metrics or all_metrics:
+            found = _resolve_metric(var_name, metric, result.data_vars)
+            if not found:
+                missing.append(f"{var_name}.{metric}")
+                found = [f"{var_name}.{metric}"]
+            rows += found
 
-    if not result.data_vars:
+    available = [r for r in rows if r in result.data_vars]
+    if not available:
         raise ValueError("No variables left after filtering.")
+    if missing:
+        LOG.warning("No data for %s; shown as empty rows", missing)
 
-    return result
+    template = result[available[0]]
+    return xr.Dataset(
+        {
+            r: result[r] if r in result.data_vars else xr.full_like(template, np.nan)
+            for r in rows
+        }
+    )
 
 
 # ── Rendering helpers ─────────────────────────────────────────────────────────
@@ -780,7 +795,7 @@ def _render_scorecard(diff: xr.Dataset, cfg: dict, outfn: Path):
 
     outfn.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(outfn, bbox_inches="tight")
-    print(f"saved: {outfn}")
+    LOG.info("Saved %s", outfn)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -795,6 +810,10 @@ def main(args):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
     parser = ArgumentParser(description="Render a verification scorecard PNG.")
     parser.add_argument(
         "--verif_run",

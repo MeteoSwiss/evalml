@@ -78,6 +78,16 @@ def _select_best_sources(dfs: list[xr.Dataset]) -> list[xr.Dataset]:
     return out
 
 
+def _concat_sources(dfs: list[xr.Dataset]) -> xr.Dataset:
+    """Concatenate the verification datasets of all participants along 'source'.
+
+    Leftover '<param>.threshold' coordinates are dropped first: they exist only for
+    participants that provide the parameter and would make the concatenation fail.
+    """
+    dfs = [d.drop_vars([c for c in d.coords if c.endswith(".threshold")]) for d in dfs]
+    return xr.concat(dfs, dim="source", join="outer", coords="minimal")
+
+
 def subset_df(df, **kwargs):
     mask = pd.Series([True] * len(df))
     for key, value in kwargs.items():
@@ -100,7 +110,7 @@ def main(args: Namespace) -> None:
     # 2) For sources present in multiple datasets, keep the one with most lead_times
     dfs = _select_best_sources(dfs)
     # 3) Concatenate by source; outer join to keep the union of lead_times
-    ds = xr.concat(dfs, dim="source", join="outer", coords="minimal")
+    ds = _concat_sources(dfs)
 
     # extract only  non-spatial variables to pd.DataFrame
     nonspatial_vars = [d for d in ds.data_vars if "spatial" not in d]

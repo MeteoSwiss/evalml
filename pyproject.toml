@@ -61,7 +61,9 @@ markers = [
 packages = [
   "src/evalml",
   "src/verification",
-  "src/data_input"
+  "src/data_input",
+  "src/spectra",
+  "src/regrid"
 ]
 
 [tool.uv.sources]

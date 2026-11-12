@@ -22,6 +22,7 @@ include: "rules/verification.smk"
 include: "rules/report.smk"
 include: "rules/plot.smk"
 include: "rules/verif_obs.smk"
+include: "rules/spectra.smk"
 
 
 # about workflow
@@ -156,9 +157,22 @@ SCOREMAPS_CONFIGS = EXPERIMENT_CONFIG.get("scoremaps") or {}
 SAL_CONFIGS = EXPERIMENT_CONFIG.get("sal") or {}
 
 
+rule experiment_config:
+    """Copy the config into the results directory, so the results are self-describing
+and registerable into the experiment store (`evalml register`)."""
+    input:
+        CONFIG_FILE,
+    output:
+        RESULTS_DIR / "config.yaml",
+    localrule: True
+    shell:
+        "cp {input} {output}"
+
+
 rule experiment_all:
     """Target rule for experiment workflow."""
     input:
+        rules.experiment_config.output,
         expand(
             rules.report_experiment_dashboard.output,
             experiment=EXPERIMENT_NAME,
@@ -215,6 +229,11 @@ rule experiment_all:
             if SCOREMAPS_CONFIGS.get("enabled", False)
             else []
         ),
+        (
+            expand(rules.spectra_plot.output, experiment=EXPERIMENT_NAME)
+            if SPECTRA.get("enabled", False)
+            else []
+        ),
         # SAL precipitation scores (compute-only: the CSVs themselves are the
         # targets.
         (
@@ -264,6 +283,17 @@ rule showcase_all:
                 showcase=EXPERIMENT_NAME,
             )
             if config["showcase"]["meteograms"]["enabled"]
+            else []
+        ),
+        (
+            expand(
+                rules.plot_forecast_comparison.output,
+                init_time=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
+                param=SHOWCASE_CONFIG["params"],
+                leadtime=COMPARISONS_CONFIG["lead_times"],
+                showcase=EXPERIMENT_NAME,
+            )
+            if COMPARISONS_CONFIG["enabled"]
             else []
         ),
 

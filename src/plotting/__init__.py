@@ -14,7 +14,7 @@ import numpy as np
 
 State = dict[str, np.ndarray | dict[str, np.ndarray]]
 
-_LAZY_VIZ_NAMES = ("DOMAINS", "get_projection", "StatePlotter")
+_LAZY_VIZ_NAMES = ("DOMAINS", "get_projection", "StatePlotter", "resolve_region")
 
 
 def __getattr__(name):

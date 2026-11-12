@@ -1,3 +1,4 @@
+import re
 from math import isfinite
 from pathlib import Path
 from typing import Dict, List, Any, ClassVar, FrozenSet, Literal, Optional, Union
@@ -5,6 +6,9 @@ from typing import Dict, List, Any, ClassVar, FrozenSet, Literal, Optional, Unio
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
+
+MODEL_REGISTRY_ROOT = Path("/store_new/mch/msopr/ml/models")
+REGISTERED_MODEL_PATTERN = re.compile(r"^[a-z]+-[a-z]+$")
 
 PREDEFINED_REGIONS: Dict[str, List[float]] = {
     "global": [-180, 180, -90, 90],
@@ -81,7 +85,9 @@ class RunConfig(BaseModel):
     )
     checkpoint: str = Field(
         ...,
-        description="The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
+        description="The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, "
+        "a local checkpoint path, or a registered model name (e.g. 'amber-ridge') resolved "
+        f"against {MODEL_REGISTRY_ROOT}.",
     )
     label: str | None = Field(
         None,
@@ -137,6 +143,23 @@ class RunConfig(BaseModel):
                 "directory); set output: fdb or remove root."
             )
         return self
+
+    @field_validator("checkpoint")
+    def resolve_registered_model(cls, v: str) -> str:
+        """Resolve a registered model name (e.g. 'amber-ridge') to its checkpoint path."""
+        if not REGISTERED_MODEL_PATTERN.match(v):
+            return v
+        model_dir = MODEL_REGISTRY_ROOT / v
+        if not model_dir.is_dir():
+            raise ValueError(
+                f"Registered model '{v}' not found in the model registry: {model_dir}"
+            )
+        checkpoint = model_dir / "inference-last.ckpt"
+        if not checkpoint.exists():
+            raise ValueError(
+                f"Registered model '{v}' has no 'inference-last.ckpt' in {model_dir}"
+            )
+        return str(checkpoint)
 
     @field_validator("steps")
     def validate_steps(cls, v: str) -> str:
@@ -237,7 +260,11 @@ class TruthConfig(BaseModel):
     root: str = Field(
         ...,
         min_length=1,
-        description="Path to the root of the dataset.",
+        description=(
+            "Truth source: an anemoi '.zarr' analysis (e.g. KENDA), the INCA-CH "
+            "archive (a path with an 'INCA' directory), or 'jretrievedwh:<selector>' "
+            "for DWH station observations."
+        ),
     )
 
 
@@ -265,7 +292,10 @@ class ScoreMapsConfig(BaseModel):
         description=(
             "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
             "PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 "
-            "(period-accumulated precipitation, period encoded in the name)."
+            "(period-accumulated precipitation, period encoded in the name), and the "
+            "derive-diagnostic fields DD_10M, RELHUM_2M, TW_2M (derived from their "
+            "components when a source lacks them), HZEROCL, SNOWLMT, CAPE_ML, CIN_ML, "
+            "CAPE_MU, CIN_MU, TOT_SNOW1/6/24."
         ),
     )
     leadtimes: List[int] = Field(
@@ -444,6 +474,55 @@ class AnimationsConfig(BaseModel):
     )
 
 
+class ComparisonsConfig(BaseModel):
+    """Configuration for side-by-side map comparisons of truth, runs and baselines."""
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Whether to generate side-by-side maps: one figure per init time, lead "
+            "time, parameter and domain, with a panel for the truth (if gridded), "
+            "each run and each selected baseline."
+        ),
+    )
+    truth: bool = Field(
+        default=True,
+        description=(
+            "Whether to include a truth panel. Ignored for station truth "
+            "(jretrievedwh), which cannot be drawn as a map."
+        ),
+    )
+    baselines: List[str] = Field(
+        default_factory=list,
+        description="Labels of the baselines to add as panels.",
+    )
+    domains: List[str | DomainConfig] = Field(
+        default=["alps"],
+        description=(
+            "Domains to plot. Same format as `animations.domains`: a named domain "
+            "defined in plotting.DOMAINS or a custom domain dict."
+        ),
+    )
+    lead_times: List[int] = Field(
+        default=[24],
+        description=(
+            "Lead times (hours) to plot. A run or baseline without data at a lead "
+            "time is shown as an empty panel."
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _enabled_requires_a_reference(self):
+        if self.enabled and not (self.truth or self.baselines):
+            raise ValueError(
+                "comparisons need something to compare the runs with: enable "
+                "`truth` or list `baselines`."
+            )
+        return self
+
+
 class ScorecardConfig(BaseModel):
     """Configuration for a single named scorecard."""
 
@@ -468,7 +547,8 @@ class ScorecardConfig(BaseModel):
             "Variables and metrics as scorecard rows (VAR:M1,M2 format). "
             "An empty list [] is accepted by the schema but falls back to a "
             "hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). "
-            "Omit ':...' after a variable name to include all available metrics for it."
+            "Omit ':...' after a variable name to include all available metrics for it. "
+            "Variables without data are shown as empty rows."
         ),
     )
 
@@ -490,6 +570,57 @@ class ExperimentScorecardConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class SpectraConfig(BaseModel):
+    """Configuration for power-spectra QC plots in the experiment pipeline."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to compute and plot power spectra.",
+    )
+    method: Literal["dct", "fft"] = Field(
+        default="dct",
+        description="Spectral method: 'dct' (default, recommended for LAM) or 'fft'.",
+    )
+    lead_times: List[int] = Field(
+        default_factory=list,
+        description="Representative lead times (hours) at which to compute spectra.",
+    )
+    variables: List[str] = Field(
+        default=["T_2M", "WIND_KE", "TOT_PREC1"],
+        description=(
+            "Spectra variables: any parameter the forecast and truth loaders provide "
+            "(e.g. T_2M, SP_10M, TOT_PREC1), plus WIND_KE, the kinetic energy from "
+            "U_10M and V_10M. TOT_PREC1 needs hourly output steps: runs with coarser "
+            "steps (e.g. 6h) must use TOT_PREC6 instead."
+        ),
+    )
+    init_hours: Optional[List[int]] = Field(
+        default=None,
+        min_length=1,
+        description="Optional subset of init hours to average over. None = all.",
+    )
+
+    @field_validator("variables")
+    @classmethod
+    def validate_variables(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError(
+                "`variables` must list at least one variable when spectra is configured."
+            )
+        return v
+
+    @model_validator(mode="after")
+    def check_enabled_requirements(self):
+        if self.enabled and not self.lead_times:
+            raise ValueError(
+                "experiment.spectra.enabled is true but `lead_times` is empty; "
+                "specify at least one lead time (hours)."
+            )
+        return self
+
+    model_config = {"extra": "forbid"}
+
+
 class ShowcaseConfig(BaseModel):
     """Configuration for the showcase workflow."""
 
@@ -504,6 +635,10 @@ class ShowcaseConfig(BaseModel):
     animations: AnimationsConfig = Field(
         default_factory=AnimationsConfig,
         description="Configuration for animation generation.",
+    )
+    comparisons: ComparisonsConfig = Field(
+        default_factory=ComparisonsConfig,
+        description="Configuration for side-by-side map comparisons.",
     )
 
 
@@ -574,7 +709,10 @@ class ExperimentConfig(BaseModel):
     )
     params: List[str] = Field(
         default=["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"],
-        description="List of parameters to compute verification metrics for.",
+        description=(
+            "List of parameters to compute verification metrics for. With INCA truth, "
+            "parameters INCA does not provide are skipped."
+        ),
     )
     thresholds: Dict[str, Dict[str, List[float]]] = Field(
         default_factory=dict,
@@ -597,6 +735,16 @@ class ExperimentConfig(BaseModel):
             "whose config references that file."
         ),
     )
+    score_on_common_points: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Parameters scored only at the points where every participant has a "
+            "value, per reference time and lead time (e.g. HZEROCL, SNOWLMT and "
+            "CIN_MU, which ICON leaves undefined at part of the domain). All "
+            "participants and the truth are then scored on the same points. The "
+            "scores of these parameters depend on the set of participants."
+        ),
+    )
     scorecards: Optional[ExperimentScorecardConfig] = Field(
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
@@ -604,6 +752,14 @@ class ExperimentConfig(BaseModel):
     scoremaps: Optional[ScoreMapsConfig] = Field(
         default=None,
         description="Score map plot configuration. Omit or set enabled: false to disable.",
+    )
+    spectra: SpectraConfig = Field(
+        default_factory=SpectraConfig,
+        description=(
+            "Power-spectra QC configuration. Disabled by default. Spectra need every "
+            "participant and the truth on the ICON-CH1 or ICON-CH2 native grid: INCA "
+            "baselines, INCA truth and station (jretrievedwh) truth are not supported."
+        ),
     )
     sal: Optional[SalConfig] = Field(
         default=None,
@@ -621,6 +777,15 @@ class ExperimentConfig(BaseModel):
         if duplicates:
             raise ValueError(f"station_holdout has duplicate stations: {duplicates}")
         return v
+
+    @model_validator(mode="after")
+    def validate_score_on_common_points(self) -> "ExperimentConfig":
+        unknown = sorted(set(self.score_on_common_points) - set(self.params))
+        if unknown:
+            raise ValueError(
+                f"score_on_common_points parameters {unknown} are not in experiment.params."
+            )
+        return self
 
     @field_validator("thresholds")
     @classmethod
@@ -837,24 +1002,94 @@ class ConfigModel(BaseModel):
 
     @model_validator(mode="after")
     def validate_leadtimes_producible(self) -> "ConfigModel":
-        """Reject scoremaps/sal lead times not produced by every participant."""
+        """Reject scoremaps/sal/spectra lead times not produced by every participant."""
         if self.experiment is None:
             return self
-        for label, cfg in (
-            ("scoremaps", self.experiment.scoremaps),
-            ("sal", self.experiment.sal),
+        # (section, config, name of its lead-time field)
+        for label, cfg, field in (
+            ("scoremaps", self.experiment.scoremaps, "leadtimes"),
+            ("sal", self.experiment.sal, "leadtimes"),
+            ("spectra", self.experiment.spectra, "lead_times"),
         ):
             if cfg is None or not cfg.enabled:
                 continue
             for item in self.runs:
                 steps = getattr(item, next(iter(type(item).model_fields))).steps
                 start, end, step = map(int, steps.split("/"))
-                unsupported = set(cfg.leadtimes) - set(range(start, end + 1, step))
+                leadtimes = getattr(cfg, field)
+                unsupported = set(leadtimes) - set(range(start, end + 1, step))
                 if unsupported:
                     raise ValueError(
-                        f"{label}.leadtimes contains {sorted(unsupported)} h which are not "
+                        f"{label}.{field} contains {sorted(unsupported)} h which are not "
                         f"produced by participant with steps '{steps}'."
                     )
+        return self
+
+    @model_validator(mode="after")
+    def validate_spectra_sources(self) -> "ConfigModel":
+        """Reject spectra participants or truth that are not on an ICON native grid.
+
+        The detection mirrors ``data_input.is_inca_archive`` and
+        ``data_input.truth_type``, which are not imported here to keep the config
+        module light.
+        """
+        if self.experiment is None or not self.experiment.spectra.enabled:
+            return self
+        unsupported = []
+        for item in self.runs:
+            if (
+                isinstance(item, BaselineItem)
+                and "INCA" in Path(item.baseline.root).parts
+            ):
+                unsupported.append(f"baseline {item.baseline.label!r} (INCA)")
+        if self.truth is not None:
+            root = self.truth.root
+            if Path(root).suffix != ".zarr":
+                if "jretrieve" in root:
+                    unsupported.append(
+                        f"truth {self.truth.label!r} (station observations)"
+                    )
+                elif "INCA" in Path(root).parts:
+                    unsupported.append(f"truth {self.truth.label!r} (INCA)")
+        if unsupported:
+            raise ValueError(
+                "experiment.spectra needs every participant and the truth on the "
+                "ICON-CH1 or ICON-CH2 native grid; not supported: "
+                + ", ".join(unsupported)
+                + ". Disable spectra or remove these sources."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_labels(self) -> "ConfigModel":
+        """Reject a label shared by different runs or baselines.
+
+        Results are keyed by label, so a repeated label would merge or overwrite
+        participants. The inline forecaster of a temporal downscaler is included;
+        an entry repeated with the same configuration is the same run and is
+        allowed.
+        """
+        configs_by_label: dict[str, list[dict]] = {}
+        for item in self.runs:
+            cfg = getattr(item, next(iter(type(item).model_fields)))
+            entries = [cfg]
+            if isinstance(cfg, TemporalDownscalerConfig) and cfg.forecaster:
+                entries.append(cfg.forecaster)
+            for entry in entries:
+                if entry.label is None:
+                    continue
+                configs = configs_by_label.setdefault(entry.label, [])
+                dump = entry.model_dump()
+                if dump not in configs:
+                    configs.append(dump)
+        duplicates = sorted(
+            label for label, configs in configs_by_label.items() if len(configs) > 1
+        )
+        if duplicates:
+            raise ValueError(
+                f"Labels must be unique across `runs`; used by several runs or "
+                f"baselines: {duplicates}"
+            )
         return self
 
     @model_validator(mode="after")
@@ -877,6 +1112,19 @@ class ConfigModel(BaseModel):
                     f"scorecards.sections.{name}.baseline {section.baseline!r} is "
                     f"ambiguous: several entries in `runs` use this label."
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_comparison_baselines(self) -> "ConfigModel":
+        labels = [
+            item.baseline.label for item in self.runs if isinstance(item, BaselineItem)
+        ]
+        unknown = [b for b in self.showcase.comparisons.baselines if b not in labels]
+        if unknown:
+            raise ValueError(
+                f"showcase.comparisons.baselines {unknown} do not match the label of "
+                f"any baseline in `runs`: {labels}"
+            )
         return self
 
     model_config = {

@@ -10,6 +10,84 @@ import pandas as pd
 include: "common.smk"
 
 
+def valid_masks_flag(wildcards, input):
+    if not input.valid_masks:
+        return ""
+    return "--valid_masks " + " ".join(input.valid_masks)
+
+
+# Where a participant has a value for the experiment.score_on_common_points parameters.
+# The verification of every participant uses the masks of all participants.
+rule verification_valid_mask_baseline:
+    input:
+        "src/verification/valid_mask.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/verification_valid_mask.py",
+        forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
+        truth_dep=truth_file_dep,
+    output:
+        OUT_ROOT
+        / f"data/baselines/{{baseline_id}}/{{init_time}}/valid_mask_{VALID_MASK_HASH}.nc",
+    log:
+        OUT_ROOT / "logs/verification_valid_mask_baseline/{baseline_id}-{init_time}.log",
+    resources:
+        cpus_per_task=balfrin_cpus(40_000, actual_cpus=8),
+        mem_mb=40_000,
+        runtime="30m",
+    params:
+        baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
+        member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
+        truth=config["truth"]["root"],
+        mask_params=",".join(COMMON_POINTS_PARAMS),
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run {input.script} \
+            --forecast {input.forecast} \
+            --truth "{params.truth}" \
+            --reftime {wildcards.init_time} \
+            --steps "{params.baseline_steps}" \
+            --params "{params.mask_params}" \
+            --member "{params.member}" \
+            --output {output} >{log} 2>&1
+        """
+
+
+rule verification_valid_mask:
+    input:
+        "src/verification/valid_mask.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/verification_valid_mask.py",
+        inference_okfile=rules.inference_execute.output.okfile,
+        truth_dep=truth_file_dep,
+    output:
+        OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/valid_mask_{VALID_MASK_HASH}.nc",
+    log:
+        OUT_ROOT / "logs/verification_valid_mask/{run_id}-{init_time}.log",
+    resources:
+        cpus_per_task=balfrin_cpus(40_000, actual_cpus=8),
+        mem_mb=40_000,
+        runtime="30m",
+    params:
+        fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
+        truth=config["truth"]["root"],
+        grib_out_dir=lambda wc: (
+            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
+        ).resolve(),
+        mask_params=",".join(COMMON_POINTS_PARAMS),
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run {input.script} \
+            --forecast {params.grib_out_dir} \
+            --truth "{params.truth}" \
+            --reftime {wildcards.init_time} \
+            --steps "{params.fcst_steps}" \
+            --params "{params.mask_params}" \
+            --output {output} >{log} 2>&1
+        """
+
+
 rule verification_metrics_baseline:
     input:
         "src/verification/__init__.py",
@@ -19,6 +97,7 @@ rule verification_metrics_baseline:
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
         truth_dep=truth_file_dep,
         holdout=holdout_dep,
+        valid_masks=participant_valid_mask_files,
     output:
         OUT_ROOT / f"data/baselines/{{baseline_id}}/{{init_time}}/verif_{VERIF_HASH}.nc",
     log:
@@ -43,6 +122,7 @@ rule verification_metrics_baseline:
             if config.get("lapse_rate_correction", True)
             else ""
         ),
+        valid_masks_flag=valid_masks_flag,
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
@@ -59,6 +139,7 @@ rule verification_metrics_baseline:
             {params.holdout_flag} \
             --member "{params.member}" \
             {params.lapse_rate_flag} \
+            {params.valid_masks_flag} \
             --output {output} >{log} 2>&1
         """
 
@@ -79,6 +160,7 @@ rule verification_metrics:
         inference_okfile=_get_inference_okfile,
         truth_dep=truth_file_dep,
         holdout=holdout_dep,
+        valid_masks=participant_valid_mask_files,
     output:
         OUT_ROOT / f"data/runs/{{run_id}}/{{init_time}}/verif_{VERIF_HASH}.nc",
     log:
@@ -114,6 +196,7 @@ rule verification_metrics:
             if RUN_CONFIGS[wc.run_id]["output"] == "fdb"
             else ""
         ),
+        valid_masks_flag=valid_masks_flag,
     shell:
         """
         set -euo pipefail
@@ -142,6 +225,7 @@ rule verification_metrics:
             --threshold_dict {params.threshold_dict:q}
             {params.holdout_flag}
             {params.lapse_rate_flag}
+            {params.valid_masks_flag}
             --output {output:q}
         )
 
@@ -207,7 +291,7 @@ rule verification_metrics_plot:
     resources:
         cpus_per_task=balfrin_cpus(50_000, actual_cpus=16),
         mem_mb=50_000,
-        runtime="20m",
+        runtime="1h",
     params:
         label_map=",".join(
             "{}:{}".format(
@@ -238,7 +322,7 @@ rule verification_scoremaps:
             _get_inference_okfile(SimpleNamespace(run_id=wc.run_id, init_time=it))
             for it in _restrict_reftimes_to_hours(REFTIMES)
         ],
-        truth=(config.get("truth") or {}).get("root", ""),
+        truth_dep=truth_file_dep,
     output:
         OUT_ROOT
         / f"data/runs/{{run_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
@@ -255,7 +339,8 @@ rule verification_scoremaps:
     params:
         fcst_label=lambda wc: RUN_CONFIGS[wc.run_id].get("label"),
         fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
-        truth_label=(config.get("truth") or {}).get("label", ""),
+        truth=config["truth"]["root"],
+        truth_label=config["truth"]["label"],
         reftimes=[t.strftime("%Y%m%d%H%M") for t in REFTIMES],
         run_root=lambda wc: (Path(OUT_ROOT) / f"data/runs/{wc.run_id}").resolve(),
         fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
@@ -291,7 +376,7 @@ rule verification_scoremaps:
         CMD_ARGS=(
             --run_root {params.run_root:q}
             --reftimes "${{REFTIMES_ARR[@]}}"
-            --truth {input.truth:q}
+            --truth {params.truth:q}
             --step {wildcards.leadtime:q}
             --steps {params.fcst_steps:q}
             --param {wildcards.param:q}
@@ -311,7 +396,7 @@ rule verification_scoremaps_baseline:
         "src/data_input/__init__.py",
         script="workflow/scripts/verification_scoremaps.py",
         forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
-        truth=(config.get("truth") or {}).get("root", ""),
+        truth_dep=truth_file_dep,
     output:
         OUT_ROOT
         / f"data/baselines/{{baseline_id}}/scoremaps/{{param}}_{{leadtime}}_{TRUTH_HASH}.nc",
@@ -326,13 +411,14 @@ rule verification_scoremaps_baseline:
         baseline_steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
         member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
         reftimes=" ".join(t.strftime("%Y%m%d%H%M") for t in REFTIMES),
+        truth=config["truth"]["root"],
     shell:
         """
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
         uv run {input.script} \
             --baseline_root {input.forecast} \
             --reftimes {params.reftimes} \
-            --truth "{input.truth}" \
+            --truth "{params.truth}" \
             --step {wildcards.leadtime} \
             --steps "{params.baseline_steps}" \
             --param {wildcards.param} \
@@ -345,7 +431,7 @@ rule verification_scoremaps_baseline:
 # the validated config, which fills in the SalConfig defaults. Absent when there
 # is no sal block at all, in which case these rules never fire and the script's
 # own defaults would apply anyway.
-_SAL_CONFIG = config.get("experiment", {}).get("sal") or {}
+_SAL_CONFIG = EXPERIMENT_CONFIG.get("sal") or {}
 _SAL_ARGS = (
     f"--grid-extent {' '.join(str(x) for x in _SAL_CONFIG['grid_extent'])} "
     f"--grid-step-lat {_SAL_CONFIG['grid_step_lat']} "

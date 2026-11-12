@@ -22,4 +22,6 @@ Derived from the `icon-ch1-*.grib` templates with the following changes:
 | `varda-shortName=TOT_PREC.grib` | sfc | 8 | Total precipitation (temporal accumulation) |
 | `varda-shortName=CLCH.grib` | pl | 0 | High cloud cover |
 | `varda-shortName=CLCM.grib` | pl | 0 | Medium cloud cover |
-| `varda-shortName=CLCL.grib` | unknown | 0 | Low cloud cover |
+
+Low cloud cover (CLCL) uses `icon-ch1-shortName=CLCL.grib` (not a `varda-*` variant) --
+merged in from main's own template batch, kept for consistency with its siblings there.

@@ -88,6 +88,63 @@
       "title": "BaselineItem",
       "type": "object"
     },
+    "ComparisonsConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for side-by-side map comparisons of truth, runs and baselines.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to generate side-by-side maps: one figure per init time, lead time, parameter and domain, with a panel for the truth (if gridded), each run and each selected baseline.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "truth": {
+          "default": true,
+          "description": "Whether to include a truth panel. Ignored for station truth (jretrievedwh), which cannot be drawn as a map.",
+          "title": "Truth",
+          "type": "boolean"
+        },
+        "baselines": {
+          "description": "Labels of the baselines to add as panels.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Baselines",
+          "type": "array"
+        },
+        "domains": {
+          "default": [
+            "alps"
+          ],
+          "description": "Domains to plot. Same format as `animations.domains`: a named domain defined in plotting.DOMAINS or a custom domain dict.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/DomainConfig"
+              }
+            ]
+          },
+          "title": "Domains",
+          "type": "array"
+        },
+        "lead_times": {
+          "default": [
+            24
+          ],
+          "description": "Lead times (hours) to plot. A run or baseline without data at a lead time is shown as an empty panel.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Lead Times",
+          "type": "array"
+        }
+      },
+      "title": "ComparisonsConfig",
+      "type": "object"
+    },
     "Dashboard": {
       "description": "Settings for the dashboard",
       "properties": {
@@ -271,7 +328,7 @@
             "PMSL",
             "TOT_PREC6"
           ],
-          "description": "List of parameters to compute verification metrics for.",
+          "description": "List of parameters to compute verification metrics for. With INCA truth, parameters INCA does not provide are skipped.",
           "items": {
             "type": "string"
           },
@@ -312,6 +369,14 @@
           "description": "List of holdout station nat_abbr. When set, adds a 'station_group' dimension (all/holdout/holdin) to verification metrics for all models and baselines. The workflow writes the list to a CSV file and stages it as holdout_stations.csv in the working directory of every inference run whose config references that file.",
           "title": "Station Holdout"
         },
+        "score_on_common_points": {
+          "description": "Parameters scored only at the points where every participant has a value, per reference time and lead time (e.g. HZEROCL, SNOWLMT and CIN_MU, which ICON leaves undefined at part of the domain). All participants and the truth are then scored on the same points. The scores of these parameters depend on the set of participants.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Score On Common Points",
+          "type": "array"
+        },
         "scorecards": {
           "anyOf": [
             {
@@ -335,6 +400,10 @@
           ],
           "default": null,
           "description": "Score map plot configuration. Omit or set enabled: false to disable."
+        },
+        "spectra": {
+          "$ref": "#/$defs/SpectraConfig",
+          "description": "Power-spectra QC configuration. Disabled by default. Spectra need every participant and the truth on the ICON-CH1 or ICON-CH2 native grid: INCA baselines, INCA truth and station (jretrievedwh) truth are not supported."
         },
         "sal": {
           "anyOf": [
@@ -461,7 +530,7 @@
       "description": "Single training run stored in MLflow.",
       "properties": {
         "checkpoint": {
-          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
+          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, a local checkpoint path, or a registered model name (e.g. 'amber-ridge') resolved against /store_new/mch/msopr/ml/models.",
           "title": "Checkpoint",
           "type": "string"
         },
@@ -868,7 +937,7 @@
           "default": [
             "T_2M"
           ],
-          "description": "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 (period-accumulated precipitation, period encoded in the name).",
+          "description": "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 (period-accumulated precipitation, period encoded in the name), and the derive-diagnostic fields DD_10M, RELHUM_2M, TW_2M (derived from their components when a source lacks them), HZEROCL, SNOWLMT, CAPE_ML, CIN_ML, CAPE_MU, CIN_MU, TOT_SNOW1/6/24.",
           "items": {
             "type": "string"
           },
@@ -955,7 +1024,7 @@
           "type": "string"
         },
         "variables": {
-          "description": "Variables and metrics as scorecard rows (VAR:M1,M2 format). An empty list [] is accepted by the schema but falls back to a hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). Omit ':...' after a variable name to include all available metrics for it.",
+          "description": "Variables and metrics as scorecard rows (VAR:M1,M2 format). An empty list [] is accepted by the schema but falls back to a hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). Omit ':...' after a variable name to include all available metrics for it. Variables without data are shown as empty rows.",
           "items": {
             "type": "string"
           },
@@ -992,9 +1061,75 @@
         },
         "animations": {
           "$ref": "#/$defs/AnimationsConfig"
+        },
+        "comparisons": {
+          "$ref": "#/$defs/ComparisonsConfig",
+          "description": "Configuration for side-by-side map comparisons."
         }
       },
       "title": "ShowcaseConfig",
+      "type": "object"
+    },
+    "SpectraConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for power-spectra QC plots in the experiment pipeline.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether to compute and plot power spectra.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "method": {
+          "default": "dct",
+          "description": "Spectral method: 'dct' (default, recommended for LAM) or 'fft'.",
+          "enum": [
+            "dct",
+            "fft"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "lead_times": {
+          "description": "Representative lead times (hours) at which to compute spectra.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Lead Times",
+          "type": "array"
+        },
+        "variables": {
+          "default": [
+            "T_2M",
+            "WIND_KE",
+            "TOT_PREC1"
+          ],
+          "description": "Spectra variables: any parameter the forecast and truth loaders provide (e.g. T_2M, SP_10M, TOT_PREC1), plus WIND_KE, the kinetic energy from U_10M and V_10M. TOT_PREC1 needs hourly output steps: runs with coarser steps (e.g. 6h) must use TOT_PREC6 instead.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Variables",
+          "type": "array"
+        },
+        "init_hours": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional subset of init hours to average over. None = all.",
+          "title": "Init Hours"
+        }
+      },
+      "title": "SpectraConfig",
       "type": "object"
     },
     "Stratification": {
@@ -1043,7 +1178,7 @@
       "description": "Single training run stored in MLflow.",
       "properties": {
         "checkpoint": {
-          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
+          "description": "The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, a local checkpoint path, or a registered model name (e.g. 'amber-ridge') resolved against /store_new/mch/msopr/ml/models.",
           "title": "Checkpoint",
           "type": "string"
         },
@@ -1157,7 +1292,7 @@
           "type": "string"
         },
         "root": {
-          "description": "Path to the root of the dataset.",
+          "description": "Truth source: an anemoi '.zarr' analysis (e.g. KENDA), the INCA-CH archive (a path with an 'INCA' directory), or 'jretrievedwh:<selector>' for DWH station observations.",
           "minLength": 1,
           "title": "Root",
           "type": "string"
