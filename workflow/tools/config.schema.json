@@ -560,23 +560,34 @@
           "title": "Extra Requirements",
           "type": "array"
         },
-        "inference_resources": {
+        "disable_local_eccodes_definitions": {
+          "default": false,
+          "description": "If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
+          "title": "Disable Local Eccodes Definitions",
+          "type": "boolean"
+        },
+        "output": {
+          "default": "grib",
+          "description": "Where this run's forecast output is stored, and therefore where downstream reads (verification, meteograms, frames, scoremaps) should look for it. Must match what the referenced inference `config`'s own output.tee actually writes to (an 'fdb' tee block requires output: fdb here, and vice versa) -- this is the single declared source of truth for backend routing; nothing probes for data presence or parses the inference config to guess it.",
+          "enum": [
+            "grib",
+            "fdb"
+          ],
+          "title": "Output",
+          "type": "string"
+        },
+        "root": {
           "anyOf": [
             {
-              "$ref": "#/$defs/InferenceResources"
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "Resource requirements for inference jobs (optional; defaults handled externally)."
-        },
-        "disable_local_eccodes_definitions": {
-          "default": false,
-          "description": "If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
-          "title": "Disable Local Eccodes Definitions",
-          "type": "boolean"
+          "description": "Only meaningful when output: fdb. Root directory of a shared/global FDB store this run reads from and writes into, used as-is (same pattern as baseline.root) -- the caller is responsible for pointing different checkpoints at different roots if they shouldn't share one. When unset (the default), this run's FDB output lives in a local per-checkpoint directory under the output root.",
+          "title": "Root"
         },
         "config": {
           "anyOf": [
@@ -706,6 +717,19 @@
           "default": null,
           "description": "Number of tasks per submission.",
           "title": "Tasks"
+        },
+        "srun_prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional command to prepend to the srun invocation, e.g. 'uenv run --view=realtime fdb/5.19:v2 --'.",
+          "title": "Srun Prefix"
         }
       },
       "title": "InferenceResources",
@@ -788,6 +812,18 @@
           "description": "Job executor, e.g. 'slurm'.",
           "title": "Executor",
           "type": "string"
+        },
+        "fdb": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InferenceResources"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "FDB and inference resource settings (optional; overrides defaults for all inference jobs)."
         },
         "global_resources": {
           "$ref": "#/$defs/GlobalResources"
@@ -1172,23 +1208,34 @@
           "title": "Extra Requirements",
           "type": "array"
         },
-        "inference_resources": {
+        "disable_local_eccodes_definitions": {
+          "default": false,
+          "description": "If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
+          "title": "Disable Local Eccodes Definitions",
+          "type": "boolean"
+        },
+        "output": {
+          "default": "grib",
+          "description": "Where this run's forecast output is stored, and therefore where downstream reads (verification, meteograms, frames, scoremaps) should look for it. Must match what the referenced inference `config`'s own output.tee actually writes to (an 'fdb' tee block requires output: fdb here, and vice versa) -- this is the single declared source of truth for backend routing; nothing probes for data presence or parses the inference config to guess it.",
+          "enum": [
+            "grib",
+            "fdb"
+          ],
+          "title": "Output",
+          "type": "string"
+        },
+        "root": {
           "anyOf": [
             {
-              "$ref": "#/$defs/InferenceResources"
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "Resource requirements for inference jobs (optional; defaults handled externally)."
-        },
-        "disable_local_eccodes_definitions": {
-          "default": false,
-          "description": "If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
-          "title": "Disable Local Eccodes Definitions",
-          "type": "boolean"
+          "description": "Only meaningful when output: fdb. Root directory of a shared/global FDB store this run reads from and writes into, used as-is (same pattern as baseline.root) -- the caller is responsible for pointing different checkpoints at different roots if they shouldn't share one. When unset (the default), this run's FDB output lives in a local per-checkpoint directory under the output root.",
+          "title": "Root"
         },
         "config": {
           "anyOf": [
@@ -1213,7 +1260,7 @@
             }
           ],
           "default": null,
-          "description": "Configuration for the forecaster run that this temporal downscaler is based on."
+          "description": "Configuration for the forecaster run that this temporal downscaler is based on. If the forecaster declares output: fdb, the downscaler reads its output directly from FDB (inference_prepare.py's _convert_cutout_to_fdb) instead of the local grib symlink."
         }
       },
       "required": [
@@ -1317,7 +1364,8 @@
         {
           "type": "null"
         }
-      ]
+      ],
+      "default": null
     },
     "lapse_rate_correction": {
       "default": true,
@@ -1376,7 +1424,6 @@
     "description",
     "dates",
     "runs",
-    "truth",
     "locations",
     "profile"
   ],

@@ -72,9 +72,134 @@ def rename_ifs_to_icon(ds: xr.Dataset, mapping: dict[str, str]) -> xr.Dataset:
     return ds
 
 
+# FDB schema shared by archival (workflow/rules/inference.smk) and reads (this module).
+# Root marker prefix: load_forecast_data(root=...) treats an "fdb:<path>" string the
+# same way it already treats "jretrievedwh:..." for truth data -- a marker selecting a
+# non-filesystem source, here an FDB root, rather than a real local directory.
+_FDB_SCHEMA = (
+    Path(__file__).resolve().parents[2] / "resources/fdb/realtime-varda.schema"
+)
+_FDB_ROOT_MARKER = "fdb:"
+# VARDA-SINGLE archives two grids under distinct `model` values: "varda-single"
+# (ICON-origin, regional/LAM domain) and "varda-single-g" (IFS-origin, global
+# domain) -- they have different point counts and can't be merged into one
+# dataset via xarray. _collect_ml_grib_files' local-file equivalent only ever
+# reads the regional grid (its "20*.grib" glob excludes the "ifs-"-prefixed
+# global files), so load_forecast_data's FDB path filters to the same model for
+# parity. plotting.compat.load_state_from_fdb uses both (see _FDB_GLOBAL_MODEL),
+# mirroring load_state_from_grib's local ifs-*.grib companion-file merge, since
+# that one works with flat point lists rather than an aligned xarray grid.
+_FDB_MODEL = "varda-single"
+_FDB_GLOBAL_MODEL = "varda-single-g"
+
+# Numeric FDB "param" codes for VARDA-SINGLE's custom MARS namespace (GPI=180
+# local table, eccodes-cosmo-mars's local.215.def). FDB's retrieve() `param`
+# key takes these numeric codes, not GRIB shortNames -- there's no lookup
+# table for this shipped anywhere, so these were discovered empirically by
+# decoding real archived messages under the correct ECCODES_DEFINITION_PATH
+# (eccodes-cosmo-mars/definitions) and reading each field's `paramId`. To add
+# a new one: fetch any archived field for that param, print
+# `eccodes.codes_get(gid, "paramId")` with that definitions path active.
+_FDB_PARAM_IDS: dict[str, str] = {
+    # levtype=sfc
+    "PS": "500000",
+    "PMSL": "500002",
+    "T_2M": "500011",
+    "TD_2M": "500017",
+    "U_10M": "500027",
+    "V_10M": "500029",
+    "TOT_PREC": "500041",
+    # levtype=pl
+    "FI": "500006",
+    "T": "500014",
+    "U": "500028",
+    "V": "500030",
+    "QV": "500035",
+}
+_FDB_PL_PARAMS = {"FI", "T", "U", "V", "QV"}
+
+# The schema's `timespan` key defaults to "none" when omitted from a request
+# -- fine for instantaneous fields, but accumulated-from-start fields like
+# TOT_PREC are archived with timespan="fs" and simply don't match (retrieve()
+# silently returns nothing at all, for any step) if timespan isn't set
+# explicitly. Confirmed empirically: TOT_PREC values this dict doesn't list
+# default to "none".
+_FDB_PARAM_TIMESPAN: dict[str, str] = {
+    "TOT_PREC": "fs",
+}
+
+# _FDB_GLOBAL_MODEL ("varda-single-g", IFS-origin global grid) is archived
+# under standard WMO/ECMWF param ids, not VARDA's custom local table -- see
+# the `modifiers.patches` block in
+# resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml,
+# which explicitly pairs each ICON name with its archived (param, shortName).
+# Pressure-level ids (T/U/V/QV/FI/OMEGA) match that same file's regex patches
+# (e.g. "^t_(\\d+)$" -> param 130) -- needed when the downscaler's own model
+# input reads the global grid's pressure levels directly from FDB (see
+# inference_prepare.py's _convert_cutout_to_fdb), not just this module's own
+# _fetch_fdb_fieldlist reads (which so far have only ever requested surface
+# params from the global grid).
+_FDB_GLOBAL_PARAM_IDS: dict[str, str] = {
+    "PS": "134",
+    "PMSL": "151",
+    "T_2M": "167",
+    "TD_2M": "168",
+    "U_10M": "165",
+    "V_10M": "166",
+    "TOT_PREC": "228",
+    "FR_LAND": "172",
+    "T": "130",
+    "U": "131",
+    "V": "132",
+    "QV": "133",
+    "FI": "129",
+    "OMEGA": "135",
+}
+_FDB_GLOBAL_PL_PARAMS: set[str] = set()
+_FDB_GLOBAL_PARAM_TIMESPAN: dict[str, str] = {
+    "TOT_PREC": "fs",
+}
+
+# MARS identity (class/stream/type/expver) that a GPI=180 archive resolves to for
+# each model -- confirmed empirically by decoding a real archived message's `mars`
+# namespace under the correct ECCODES_DEFINITION_PATH (eccodes-cosmo-mars's
+# local.215.def maps GPI=180 to class=ai for the local/ICON table; local.98.def has
+# no such concept for the ECMWF/IFS table, so the global grid stays class=od and
+# needs marsStream/marsType set natively in its own output encoding -- see
+# resources/inference/configs/sgm-temporal-downscaler-global_trimedge_multi.yaml).
+# Used both when archiving (inference.smk's fdb5_config.yaml) and when a
+# downstream run reads another run's FDB output directly as its own model input
+# (inference_prepare.py's _convert_cutout_to_fdb).
+_FDB_IDENTITY: dict[str, dict[str, str]] = {
+    _FDB_MODEL: {
+        "class": "ai",
+        "stream": "oper",
+        "type": "fc",
+        "expver": "0001",
+        "model": _FDB_MODEL,
+    },
+    _FDB_GLOBAL_MODEL: {
+        "class": "od",
+        "stream": "enfo",
+        "type": "fc",
+        "expver": "0001",
+        "model": _FDB_GLOBAL_MODEL,
+    },
+}
+
+# Per-model (param_ids, pl_params, param_timespan) registries, keyed by the
+# `model` value used in _fetch_fdb_fieldlist's requests.
+_FDB_MODEL_REGISTRY: dict[str, tuple[dict[str, str], set[str], dict[str, str]]] = {
+    _FDB_MODEL: (_FDB_PARAM_IDS, _FDB_PL_PARAMS, _FDB_PARAM_TIMESPAN),
+    _FDB_GLOBAL_MODEL: (
+        _FDB_GLOBAL_PARAM_IDS,
+        _FDB_GLOBAL_PL_PARAMS,
+        _FDB_GLOBAL_PARAM_TIMESPAN,
+    ),
+}
+
 XARRAY_ENGINE_PROFILE = {
     "ensure_dims": ["z", "number", "step", "forecast_reference_time"],
-    "add_valid_time_coord": True,
     "global_attrs": [{"institution": "MeteoSwiss"}, {"Conventions": "CF-1.8"}],
 }
 
@@ -601,7 +726,11 @@ def _discover_icon_member_ids(
     )
 
 
-def load_from_grib_file(file: str | list[str], sel_kwargs):
+def load_fieldlist_from_grib_file(file: str | list[str], sel_kwargs):
+    """Load an earthkit FieldList from one or more local GRIB files, filtered
+    by `sel_kwargs` -- the part of :func:`load_from_grib_file` that's reusable
+    by callers (e.g. plotting.compat) that need the fieldlist itself rather
+    than an already-decoded xarray Dataset."""
     # Coerce Path objects to str: earthkit-data unwraps a single-element list
     # into one File source without converting, and then fails on non-str paths.
     if isinstance(file, (list, tuple)):
@@ -609,14 +738,22 @@ def load_from_grib_file(file: str | list[str], sel_kwargs):
     else:
         file = str(file)
     fieldlist = ekd.from_source("file", file, lazily=True).to_fieldlist()
-    return fieldlist_to_xarray(fieldlist.sel(**sel_kwargs))
+    return fieldlist.sel(**sel_kwargs)
+
+
+def load_from_grib_file(file: str | list[str], sel_kwargs):
+    return fieldlist_to_xarray(load_fieldlist_from_grib_file(file, sel_kwargs))
 
 
 def variable_name_profile(
     level_type: Literal[
-        "height_above_ground_level",
-        "mean_sea",
+        "heightAboveGround",
+        "meanSea",
         "surface",
+        "isobaricInhPa",
+        "atmosphere",
+        "isobaricLayer",
+        "unknown",
         "pressure",
         "entire_atmosphere",
         "isothermZero",
@@ -625,11 +762,29 @@ def variable_name_profile(
         "pressure_layer",
     ],
 ) -> dict[str, Any]:
-    """Resolve variable name profile based on the level type."""
+    """Resolve variable name profile based on the raw GRIB `typeOfLevel` value.
+
+    Note: earlier versions of this profile used earthkit-data's composite
+    "vertical.level_type"/"parameter.variable" metadata keys (semantic names
+    like "pressure", template "{parameter.variable}_{vertical.level}"). Those
+    keys don't resolve at all with the currently pinned earthkit-data (they
+    raise KeyError / silently match nothing) -- this now uses the raw,
+    always-available `typeOfLevel`/`shortName`/`levelist` GRIB keys instead.
+
+    "isobaricLayer" is the raw-key equivalent of the semantic "pressure_layer"
+    level type (CLCH/CLCM: a pressure layer between two isobaric surfaces).
+    "unknown" covers CLCL specifically: ICON-CH1 defines its low-cloud layer
+    with an unset second fixed surface, so eccodes can't name a typeOfLevel
+    for it at all -- confirmed on the real GRIB template, not just a loading
+    gap (see resources/inference/templates/templates.md).
+    """
     if level_type in [
-        "height_above_ground_level",
-        "mean_sea",
+        "heightAboveGround",
+        "meanSea",
         "surface",
+        "atmosphere",
+        "isobaricLayer",
+        "unknown",
         "entire_atmosphere",
         # single-level ICON fields: HZEROCL, SNOWLMT, CAPE_*, CIN_*
         "isothermZero",
@@ -638,10 +793,10 @@ def variable_name_profile(
         "pressure_layer",
     ]:
         return {}
-    elif level_type == "pressure":
+    elif level_type == "isobaricInhPa":
         return {
             "variable_key": "p_l",
-            "remapping": {"p_l": "{parameter.variable}_{vertical.level}"},
+            "remapping": {"p_l": "{shortName}_{levelist}"},
         }
     else:
         raise ValueError(f"Unsupported level type: {level_type}")
@@ -651,11 +806,27 @@ def fieldlist_to_xarray(fieldlist) -> xr.Dataset:
     ds = xr.Dataset()
     if len(fieldlist) == 0:
         return ds
-    for level_type_group in fieldlist.group_by("vertical.level_type"):
-        # earthkit-data should return the group key...TODO: open issue?
-        level_type = level_type_group.get("vertical.level_type")[0]
+    # FieldList.group_by("typeOfLevel") is broken on the pinned earthkit-data
+    # (>=1.0,<1.1): it always yields a single group containing every field,
+    # regardless of how many distinct typeOfLevel values are actually present
+    # (reproduced in BUG_REPORT.md). Group by hand instead, using per-field
+    # .metadata() reads (reliable) rather than .group_by()/.sel() with the raw
+    # key (also unreliable on this version -- only the composite semantic keys
+    # like "parameter.variable" work via .sel()).
+    fields_by_level_type: dict[str, list] = {}
+    for fld in fieldlist:
+        fields_by_level_type.setdefault(fld.metadata("typeOfLevel"), []).append(fld)
+    for level_type, fields in fields_by_level_type.items():
+        level_type_group = ekd.FieldList.from_fields(fields)
         profile = XARRAY_ENGINE_PROFILE | variable_name_profile(level_type)
         _ds = level_type_group.to_xarray(**profile, allow_holes=True)
+        # add_valid_time_coord=True (earthkit's own convenience for this) isn't
+        # supported together with allow_holes=True on the currently pinned
+        # earthkit-data (raises NotImplementedError) -- compute it by hand instead.
+        if "forecast_reference_time" in _ds.coords and "step" in _ds.coords:
+            _ds = _ds.assign_coords(
+                valid_time=_ds["forecast_reference_time"] + _ds["step"]
+            )
         ds = ds.merge(
             _ds, compat="no_conflicts", combine_attrs="drop_conflicts", join="outer"
         )
@@ -757,6 +928,149 @@ def _mask_icon_missing_values(ds: xr.Dataset) -> xr.Dataset:
         if p in ds.data_vars:
             ds[p] = ds[p].where(ds[p] > threshold)
     return ds
+
+
+def _fdb_config(fdb_root: str) -> dict:
+    return {
+        "type": "local",
+        "engine": "toc",
+        "schema": str(_FDB_SCHEMA.resolve()),
+        "spaces": [{"handler": "Default", "roots": [{"path": fdb_root}]}],
+    }
+
+
+_fdb_identity_cache: dict[tuple, dict[str, tuple]] = {}
+
+
+def _discover_fdb_identity(
+    fdb_root: str, model: str, date: str, time_: str
+) -> dict[str, tuple]:
+    """Return ``{levtype: (class, stream, type, expver)}`` actually archived
+    for this date/time/model -- these four keys vary by experiment/deployment
+    (e.g. class=od for a real operational archive vs ai/rd here), unlike
+    param/step, which callers always specify explicitly and so never need
+    discovering. `list()` is metadata-only (no data transfer) and fast, but
+    this is still cached per (fdb_root, model, date, time) since a single
+    `load_forecast_data` call looks it up twice (the caller's own params, then
+    the elevation fallback's FIS/FI lookup).
+    """
+    import pyfdb
+
+    cache_key = (fdb_root, model, date, time_)
+    if cache_key in _fdb_identity_cache:
+        return _fdb_identity_cache[cache_key]
+
+    with pyfdb.FDB(_fdb_config(fdb_root)) as fdb:
+        entries = list(fdb.list({"date": date, "time": time_, "model": model}, level=2))
+    identities = {}
+    for entry in entries:
+        key = entry.combined_key()
+        identities[key["levtype"]] = (
+            key["class"],
+            key["stream"],
+            key["type"],
+            key["expver"],
+        )
+    _fdb_identity_cache[cache_key] = identities
+    return identities
+
+
+def _fetch_fdb_fieldlist(
+    fdb_root: str,
+    reftime: datetime,
+    steps: list[int],
+    params: list[str],
+    model: str = _FDB_MODEL,
+):
+    """Fetch exactly the requested fields from FDB -- one `retrieve()` per
+    (levtype, timespan) group, each requesting exactly the caller's params via
+    FDB's own `param` request key (mapped through `_FDB_MODEL_REGISTRY`),
+    never "every param this block happens to have" discovered via `list()`
+    first.
+
+    Uses earthkit-data's native `"fdb"` source (`stream=False`, which
+    retrieves via pyfdb and caches the result to a local temp file) rather
+    than calling pyfdb directly and hand-rolling our own tempfile/byte
+    concatenation -- earthkit already does exactly that, correctly (verified
+    directly against this archive; an earlier version of this function
+    claimed earthkit's `"fdb"` source was buggy, which doesn't reproduce on
+    the currently pinned earthkit-data).
+
+    Returns `None` if nothing is archived for this date/time/model at all.
+    Raises `ValueError` for any param without a known FDB code rather than
+    silently fetching nothing for it, or for an unregistered `model` --
+    see `_FDB_MODEL_REGISTRY`.
+    """
+    if model not in _FDB_MODEL_REGISTRY:
+        raise ValueError(
+            f"No FDB param registry for model={model!r} -- add one to _FDB_MODEL_REGISTRY."
+        )
+    param_ids_table, pl_params, timespan_table = _FDB_MODEL_REGISTRY[model]
+
+    unknown = [p for p in params if p not in param_ids_table]
+    if unknown:
+        raise ValueError(
+            f"No known FDB param id for {unknown} (model={model!r}) -- add it "
+            "to the relevant table in _FDB_MODEL_REGISTRY."
+        )
+
+    date = reftime.strftime("%Y%m%d")
+    time_ = reftime.strftime("%H%M")
+    identities = _discover_fdb_identity(fdb_root, model, date, time_)
+    if not identities:
+        return None
+
+    by_group: dict[tuple[str, str], list[str]] = {}
+    for p in params:
+        levtype = "pl" if p in pl_params else "sfc"
+        timespan = timespan_table.get(p, "none")
+        by_group.setdefault((levtype, timespan), []).append(param_ids_table[p])
+
+    config = _fdb_config(fdb_root)
+    fields = []
+    for (levtype, timespan), param_ids in by_group.items():
+        if levtype not in identities:
+            continue
+        cls_, stream, type_, expver = identities[levtype]
+        request = {
+            "class": cls_,
+            "stream": stream,
+            "type": type_,
+            "expver": expver,
+            "model": model,
+            "date": date,
+            "time": time_,
+            "levtype": levtype,
+            "step": [str(s) for s in steps],
+            "param": sorted(set(param_ids)),
+            "timespan": timespan,
+        }
+        src = ekd.from_source("fdb", request, config=config, stream=False)
+        fl = src.to_fieldlist() if hasattr(src, "to_fieldlist") else src
+        fields.extend(fl)
+
+    return ekd.FieldList.from_fields(fields) if fields else None
+
+
+def _load_forecast_data_from_fdb(
+    fdb_root: str, reftime: datetime, steps: list[int], params: list[str]
+) -> xr.Dataset:
+    """Load forecast data directly from an FDB store (no local GRIB files).
+
+    External callers should use :func:`load_forecast_data` (root prefixed with
+    ``"fdb:"``), which handles param expansion, step expansion, IC synthesis,
+    and disaggregation, same as the GRIB-file path. Restricted to `_FDB_MODEL`
+    (the regional grid, which uses VARDA's own ICON-convention param names
+    directly -- no IFS-alias expansion needed here, unlike the local-grib
+    path, which also has to handle the global forecaster's IFS-native output).
+    """
+    fieldlist = _fetch_fdb_fieldlist(fdb_root, reftime, steps, params, model=_FDB_MODEL)
+    if fieldlist is None:
+        raise FileNotFoundError(
+            f"No FDB data found for date={reftime:%Y%m%d} time={reftime:%H%M} "
+            f"model={_FDB_MODEL} in {fdb_root}"
+        )
+    return fieldlist_to_xarray(fieldlist)
 
 
 def _jretrieve_df_to_xarray(df, short_names, catalog) -> xr.Dataset:
@@ -1556,14 +1870,45 @@ def load_forecast_data(
     - Plain ``TOT_PREC`` is returned as cumulative-from-start without disaggregation
 
     Routing (in order):
-    1. ``*.grib`` files present in *root* → :func:`_load_forecast_data_from_grib`
+    1. ``root`` starts with ``"fdb:"`` → :func:`_load_forecast_data_from_fdb`
+       (inference output archived directly to FDB, no local GRIB at all)
+    2. ``*.grib`` files present in *root* → :func:`_load_forecast_data_from_grib`
        (ML inference output)
-    2. ``INCA`` in path parts → :func:`_load_INCA_baseline_from_netcdf`
-    3. Otherwise → ICON operational archive (via :func:`_load_icon_baseline_from_grib`)
+    3. ``INCA`` in path parts → :func:`_load_INCA_baseline_from_netcdf`
+    4. Otherwise → ICON operational archive (via :func:`_load_icon_baseline_from_grib`)
     """
+    # FDB-backed runs only ever archive the narrower get_base_params set (see
+    # _FDB_PARAM_IDS/_FDB_GLOBAL_PARAM_IDS) -- the derive-diagnostic post-processor's
+    # extra fields (SP_10M, DD_10M, ...) aren't in those tables, so the richer
+    # get_grib_load_params set is only applied below, for the grib/icon-archive
+    # branches main's own routing never shared with the (main-unaware) FDB branch.
+    load_params = get_base_params(params)
+    load_steps = get_steps(steps, params)
+    if str(root).startswith(_FDB_ROOT_MARKER):
+        LOG.info("Loading forecasts from FDB...")
+        fdb_root = str(root)[len(_FDB_ROOT_MARKER) :]
+        ds = _load_forecast_data_from_fdb(fdb_root, reftime, load_steps, load_params)
+        # Try to derive elevation from surface geopotential (FIS/z at step 0)
+        # before falling back to ICON grid constants lookup.
+        try:
+            fis_ds = _load_forecast_data_from_fdb(fdb_root, reftime, [0], ["FIS"])
+        except (FileNotFoundError, ValueError):
+            # ValueError: "FIS" (surface geopotential) has no known FDB param
+            # id -- it's simply never archived for this model, confirmed by
+            # direct inspection; this probe is expected to come up empty here
+            # and fall through to the ICON-constants lookup below.
+            fis_ds = None
+        if fis_ds is not None and "FIS" in fis_ds:
+            elevation = ekdv.geopotential_height_from_geopotential(
+                fis_ds["FIS"].isel(step=0, drop=True).squeeze(drop=True)
+            )
+            ds = ds.assign_coords(elevation=elevation)
+        if "elevation" not in ds.coords:
+            ds = _try_assign_elevation(ds)
+        return _disaggregated_and_derived_params(ds, steps, params)
+
     root = Path(root)
     load_params = get_grib_load_params(params)
-    load_steps = get_steps(steps, params)
     if any(root.glob("*.grib")):
         LOG.info("Loading forecasts from GRIB files...")
         ds = _load_forecast_data_from_grib(
