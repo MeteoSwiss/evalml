@@ -9,7 +9,7 @@ include: "common.smk"
 
 def make_header_text():
     dates = config["dates"]
-    truth = config["truth"]["label"]
+    truth = (config.get("truth") or {}).get("label", "")
     if isinstance(dates, list):
         return f"Explicit initializations from {len(dates)} runs have been used."
     text = f"Verification against {truth} with initializations from {dates.get('start')} to {dates.get('end')} by {dates.get('frequency')}"
@@ -53,7 +53,9 @@ rule report_experiment_dashboard:
             )
             for sid in EXPERIMENT_PARTICIPANTS
         )
-        + ",truth-{}:{}".format(TRUTH_HASH, config["truth"]["label"]),
+        + ",truth-{}:{}".format(
+            TRUTH_HASH, (config.get("truth") or {}).get("label", "")
+        ),
     shell:
         """
         python {input.script} \

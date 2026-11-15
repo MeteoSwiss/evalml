@@ -57,3 +57,6 @@ uv.lock
 
 # evalml
 .evalml_snakemake_cmd.txt
+
+# Core dumps
+core_*

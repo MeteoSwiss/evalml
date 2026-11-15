@@ -27,7 +27,7 @@ ENV_HASH_FIELDS = {
     "disable_local_eccodes_definitions",
 }
 # Fields excluded from ALL hashing (display/resource metadata only).
-RUN_HASH_EXCLUDE = {"label", "inference_resources", "_is_candidate", "model_type"}
+RUN_HASH_EXCLUDE = {"label", "_is_candidate", "model_type", "fdb_root"}
 # Fields excluded from baseline hashing (display metadata only).
 BASELINE_HASH_EXCLUDE = {"label"}
 TRUTH_HASH_EXCLUDE = {"label"}
@@ -398,11 +398,17 @@ def run_specific_hash(run_config: dict, model_type: str) -> str:
     Changes to these fields create a new run_id (new outputs) but reuse the environment:
     - steps (lead times)
     - config YAML file contents (inference parameters)
+    - output (grib/fdb), only when non-default -- see below
     - For temporal downscalers: the forecaster's run_id (which run's outputs to read)
     """
     configs_to_hash = [{"steps": run_config["steps"]}]
     with open(run_config["config"], "r") as f:
         configs_to_hash.append(yaml.safe_load(f))
+    # Hashed only when set to the non-default "fdb": hashing it unconditionally would
+    # change run_id (and thus the output directory) for every existing run in the repo
+    # the moment this field shipped, making every already-computed grib run look stale.
+    if run_config.get("output", "grib") != "grib":
+        configs_to_hash.append({"output": run_config["output"]})
     if model_type == "temporal_downscaler" and run_config.get("forecaster"):
         # run output depends on which forecaster RUN was used (not just the env)
         configs_to_hash.append(run_config["forecaster"].get("run_id"))
@@ -428,8 +434,10 @@ def master_hash() -> str:
     return generate_json_hash(configs_to_hash)
 
 
-def truth_hash(truth_config: dict) -> str:
+def truth_hash(truth_config: dict | None) -> str:
     """Generate a short hash of the configs for the truth data."""
+    if truth_config is None:
+        return generate_json_hash({})
     cfg = {k: v for k, v in truth_config.items() if k not in TRUTH_HASH_EXCLUDE}
     return generate_json_hash(cfg)
 
@@ -442,9 +450,11 @@ def verif_hash(full_config: dict) -> str:
     changing the station_holdout selection) produces new output
     paths and unconditionally triggers a rerun.
     """
-    truth_cfg = {
-        k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE
-    }
+    truth_cfg = (
+        {k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE}
+        if full_config.get("truth") is not None
+        else {}
+    )
     experiment_verif_cfg = {
         "lapse_rate_correction": full_config.get("lapse_rate_correction", True),
         "station_holdout": HOLDOUT_STATIONS,
@@ -515,7 +525,7 @@ elif TRUTH_TYPE == "inca":
     inca.check_prerequisites(config["truth"]["root"])
 
 
-TRUTH_HASH = truth_hash(config["truth"])
+TRUTH_HASH = truth_hash(config.get("truth"))
 HOLDOUT_STATIONS = sorted(EXPERIMENT_CONFIG.get("station_holdout") or [])
 HOLDOUT_FILE = (
     OUT_ROOT / f"data/station_holdout/{generate_json_hash(HOLDOUT_STATIONS)}.csv"

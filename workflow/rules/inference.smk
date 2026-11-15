@@ -5,6 +5,7 @@
 import os
 from pathlib import Path
 from datetime import datetime
+from types import SimpleNamespace
 
 
 rule inference_get_checkpoint:
@@ -83,8 +84,11 @@ rule inference_extract_requirements:
 
 # Prepare the inference environment for a specific checkpoint. The venv is built
 # in /dev/shm (RAM) to avoid heavy IO on the parallel filesystem, then squashed
-# to a .squashfs image tracked directly as the rule output.
-# See https://docs.cscs.ch/guides/storage/#python-virtual-environments-with-uenv.
+# to a .squashfs image tracked directly as the rule output. FDB native libraries
+# are bundled straight into this image via pip (pyfdb pulls in fdb5lib/
+# eccodeslib/eckitlib/metkitlib, all manylinux wheels with vendored .so's) --
+# no separate FDB uenv squashfs needs mounting at run time, matching how the
+# main evalml venv already reads FDB in verification.smk/plot.smk.
 rule inference_prepare_env:
     input:
         metadata=OUT_ROOT / "data/runs/{env_id}/anemoi.json",
@@ -94,6 +98,8 @@ rule inference_prepare_env:
     log:
         OUT_ROOT / "logs/inference_prepare_env/{env_id}.log",
     localrule: True
+    params:
+        needs_fdb=lambda wc: _env_needs_fdb(wc.env_id),
     shell:
         """
         (
@@ -108,6 +114,35 @@ rule inference_prepare_env:
 
             echo "[$(date)] Installing requirements from {input.requirements}..."
             uv pip install -r {input.requirements}
+
+            # pyfdb's own wheel dependencies (fdb5lib etc.) bundle the native FDB
+            # stack, so this is just another pip install -- no uenv involved.
+            if [ "{params.needs_fdb}" = "True" ]; then
+                echo "[$(date)] Installing pyfdb (pure-Python FDB binding)..."
+                uv pip install pyfdb
+
+                echo "[$(date)] Cloning eccodes-cosmo-mars (varda-ext branch) for MARS definitions..."
+                mkdir -p "$VENV/data/share"
+                # Pinned to d043635 (pre "add a grid Name") rather than a bare
+                # --depth 1 branch clone: f9b4603 adds a mars.gridName concept
+                # that the current realtime-varda.schema doesn't account for,
+                # breaking FDB archival with a "Keywords not used" error.
+                # Un-pin once the schema is updated to match.
+                git clone --branch varda-ext \
+                    git@github.com:meteoswiss/eccodes-cosmo-mars.git \
+                    "$VENV/data/share/eccodes-cosmo-mars"
+                git -C "$VENV/data/share/eccodes-cosmo-mars" checkout d04363540bb24b1fd432dce2b1e65ba0f27ba591
+                echo "[$(date)] Cloned eccodes-cosmo-mars definitions (pinned to d043635)"
+
+                # metkitlib (pulled in by pyfdb) ships its own language.yaml, used to
+                # validate fdb.retrieve() requests. Our custom `model` values (added
+                # purely for archival, via eccodes-cosmo-mars's marsModel concepts)
+                # were never registered there, so retrieve() rejects them even though
+                # they're valid archived keys -- fdb.list() has no such validation, so
+                # this only bites downstream reads, not archival or completeness checks.
+                echo "[$(date)] Patching metkitlib's language.yaml for custom FDB model names..."
+                python resources/fdb/patch_metkit_language.py "$VENV"
+            fi
 
             echo "[$(date)] Compiling Python bytecode..."
             python -m compileall -j 8 -o 0 -o 1 -o 2 $VENV/lib/python*/site-packages
@@ -155,14 +190,179 @@ rule inference_create_sandbox:
 
 
 def get_resource(wc, field: str, default):
-    """Fetch a resource field from the run config, or return the default."""
-    rc = RUN_CONFIGS[wc.run_id]
-    if rc["inference_resources"] is None:
-        return default
-    if isinstance(rc["inference_resources"], dict):
-        return rc["inference_resources"].get(field, default) or default
+    """Fetch a resource field from profile.fdb, or return the default."""
+    fdb = (config.get("profile") or {}).get("fdb") or {}
+    if isinstance(fdb, dict):
+        return fdb.get(field, default) or default
     else:
-        return getattr(rc["inference_resources"], field) or default
+        return getattr(fdb, field, default) or default
+
+
+def _env_needs_fdb(env_id):
+    """Whether any run sharing this env_id declares output: fdb -- i.e. whether
+    this shared venv needs the FDB native stack installed. pyfdb bundles its own
+    native libraries (fdb5lib/eccodeslib/eckitlib/metkitlib wheels), so this is
+    a plain pip install -- no uenv/squashfs mount of a separate native image
+    needed."""
+    return any(
+        run_cfg["env_id"] == env_id and run_cfg.get("output") == "fdb"
+        for run_cfg in RUN_CONFIGS.values()
+    )
+
+
+def _count_fdb_blocks(run_id):
+    """Count how many output.tee targets this run will write into FDB.
+
+    Zero whenever this run doesn't declare output: fdb -- regardless of what
+    its config's output.tee contains, a grib-output run never writes to FDB.
+
+    For output: fdb runs, inference configs are maintained once, in grib: form,
+    as the single source of truth for both backends -- inference_prepare.py's
+    _convert_tee_to_fdb rewrites every 'grib:' tee entry to 'fdb:' at
+    config-prep time (see resources/inference/configs/
+    sgm-temporal-downscaler-global_trimedge_multi.yaml). So each on-disk
+    'grib:' entry becomes one FDB target; a literal 'fdb:' entry (a config
+    authored directly in fdb: form, bypassing the conversion) is also counted,
+    for robustness.
+
+    A single init_time can write several output blocks (e.g. an ICON-grid target
+    and an IFS-grid target) into the same env_id-keyed root; the check needs to
+    know how many to expect so a run that silently dropped one entirely doesn't
+    read as complete just because the other is.
+    """
+    if RUN_CONFIGS[run_id]["output"] != "fdb":
+        return 0
+    with open(RUN_CONFIGS[run_id]["config"]) as f:
+        run_cfg = yaml.safe_load(f)
+    tee = ((run_cfg.get("output") or {}).get("tee")) or []
+    return sum(
+        1
+        for entry in tee
+        if isinstance(entry, dict) and ({"fdb", "grib"} & entry.keys())
+    )
+
+
+checkpoint inference_check_fdb:
+    """Check whether (run_id, init_time) output already exists, complete, in FDB.
+
+Checks this run's one configured FDB root (see _resolve_fdb_root_for_run --
+the run's own `root:` field if set, otherwise its local per-checkpoint
+directory). A 'hit' requires every requested lead time to be present in
+that root -- see inference_check_fdb.py for why no further MARS-key
+disambiguation (class/expver/model) is needed. Writes 'hit\\t<root>' or
+'miss\\t' to the status file. Runs inside the squashfs venv so that pyfdb (and
+the native FDB C library it bundles) is available. Skipped entirely (writes
+'miss') unless this run's own config declares `output: fdb`.
+"""
+    input:
+        image=lambda wc: OUT_ROOT
+        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
+        script="workflow/scripts/inference_check_fdb.py",
+    output:
+        status=OUT_ROOT / "logs/inference_check_fdb/{run_id}-{init_time}.status",
+    log:
+        OUT_ROOT / "logs/inference_check_fdb/{run_id}-{init_time}.log",
+    localrule: True
+    params:
+        image_path=lambda wc, input: str(Path(input.image).resolve()),
+        fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
+        fdb_root=lambda wc: _resolve_fdb_root_for_run(wc.run_id),
+        fdb_schema=str(Path("resources/fdb/realtime-varda.schema").resolve()),
+        date=lambda wc: datetime.strptime(wc.init_time, "%Y%m%d%H%M").strftime("%Y%m%d"),
+        time=lambda wc: datetime.strptime(wc.init_time, "%Y%m%d%H%M").strftime("%H%M"),
+        steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
+        expected_blocks=lambda wc: _count_fdb_blocks(wc.run_id),
+    # fmt: off
+    shell:
+        """
+        (
+            set -euo pipefail
+            if [ "{params.fdb_configured}" != "True" ]; then
+                printf 'miss\t' >{output.status}
+                echo "FDB check skipped: FDB not configured for this environment"
+            else
+                # Mount just the venv -- pyfdb bundles its own native FDB libraries
+                # (fdb5lib etc.), no separate uenv image needed.
+                VENV_MOUNT=$(mktemp -d)
+                trap "rmdir '$VENV_MOUNT' 2>/dev/null || true" EXIT
+                squashfs-mount -s "{params.image_path}:$VENV_MOUNT" -- bash -c '
+                    source '"$VENV_MOUNT"'/bin/activate
+                    python {input.script} \
+                        --fdb-root {params.fdb_root} \
+                        --fdb-schema {params.fdb_schema} \
+                        --date {params.date} \
+                        --time {params.time} \
+                        --steps {params.steps} \
+                        --expected-blocks {params.expected_blocks} \
+                        --output {output.status}
+                '
+            fi
+        ) >{log} 2>&1
+        """
+# fmt: on
+
+
+def _resolve_fdb_root_for_run(run_id):
+    """This run's one FDB root: its own `root:` config value if set (a
+    shared/global store, used as-is -- same pattern as baseline.root),
+    otherwise a local directory dedicated to this checkpoint (env_id-keyed)
+    under the output root."""
+    custom_root = RUN_CONFIGS[run_id].get("root")
+    if custom_root:
+        return custom_root
+    env_id = RUN_CONFIGS[run_id]["env_id"]
+    return str((OUT_ROOT / f"data/fdb/{env_id}").resolve())
+
+
+def _get_inference_status(wc):
+    """Return (okfile_path, fdb_root_or_None) for (run_id, init_time).
+
+    fdb_root is non-None whenever this run's own config writes to FDB at all
+    (its output.tee has fdb: targets) -- whether the data was already there
+    (a check 'hit') or is about to be freshly written by inference_execute
+    (a 'miss', or FDB-check not configured but still an FDB-writing run).
+    It's None only when this run's config has no FDB targets at all (plain
+    local-grib output), in which case downstream code reads local grib as
+    before.
+
+    For output: fdb runs that actually execute (a 'miss'), the returned okfile
+    is inference_check_fdb_duplicates's own -- not inference_execute's --
+    so nothing downstream (verification, plotting, a chained downscaler's
+    forecaster input) consumes this run's FDB data until it's confirmed free
+    of MARS-key collisions. A cache 'hit' skips this: that data was already
+    checked when it was first produced.
+    """
+    if RUN_CONFIGS[wc.run_id]["output"] == "fdb":
+        status_file = checkpoints.inference_check_fdb.get(
+            run_id=wc.run_id, init_time=wc.init_time
+        ).output.status
+        status, _, root = Path(status_file).read_text().strip().partition("\t")
+        if status == "hit":
+            return str(status_file), root
+        okfile = str(
+            OUT_ROOT
+            / f"logs/inference_check_fdb_duplicates/{wc.run_id}-{wc.init_time}.ok"
+        )
+    else:
+        okfile = str(OUT_ROOT / f"logs/inference_execute/{wc.run_id}-{wc.init_time}.ok")
+    fdb_root = (
+        _resolve_fdb_root_for_run(wc.run_id)
+        if _count_fdb_blocks(wc.run_id) > 0
+        else None
+    )
+    return okfile, fdb_root
+
+
+def _get_inference_okfile(wc):
+    """Dependency file marking (run_id, init_time) data as ready, whether freshly
+    executed or already complete in FDB."""
+    return _get_inference_status(wc)[0]
+
+
+def _get_inference_fdb_root(wc):
+    """FDB root already holding this (run_id, init_time)'s data (a check 'hit'),
+    or None if the data is local grib / about to be freshly executed."""
+    return _get_inference_status(wc)[1]
 
 
 def get_leadtime(wc):
@@ -193,6 +393,7 @@ rule inference_prepare_forecaster:
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
+        output_backend=lambda wc: RUN_CONFIGS[wc.run_id]["output"],
     script:
         "../scripts/inference_prepare.py"
 
@@ -200,6 +401,22 @@ rule inference_prepare_forecaster:
 def _get_forecaster_run_id(run_id):
     """Get the forecaster run ID from the RUN_CONFIGS."""
     return RUN_CONFIGS[run_id]["forecaster"]["run_id"]
+
+
+def _resolve_forecaster_fdb_root(run_id):
+    """FDB root to read this run's forecaster output from, or None.
+
+    None whenever there's no forecaster, or the forecaster writes local grib
+    (the default) -- in which case the existing local-grib-symlink input
+    chaining applies instead. inference_prepare.py's _convert_cutout_to_fdb
+    only runs when this is non-None.
+    """
+    if RUN_CONFIGS[run_id].get("forecaster") is None:
+        return None
+    fct_run_id = _get_forecaster_run_id(run_id)
+    if RUN_CONFIGS[fct_run_id]["output"] != "fdb":
+        return None
+    return _resolve_fdb_root_for_run(fct_run_id)
 
 
 # Prepare temporal downscaler for a specific run ID
@@ -211,8 +428,12 @@ rule inference_prepare_temporal_downscaler:
         holdout=lambda wc: holdout_dep(wc) if run_uses_holdout(wc.run_id) else [],
         forecasts=lambda wc: (
             [
-                OUT_ROOT
-                / f"logs/inference_execute/{_get_forecaster_run_id(wc.run_id)}-{wc.init_time}.ok"
+                _get_inference_okfile(
+                    SimpleNamespace(
+                        run_id=_get_forecaster_run_id(wc.run_id),
+                        init_time=wc.init_time,
+                    )
+                )
             ]
             if RUN_CONFIGS[wc.run_id].get("forecaster") is not None
             else []
@@ -220,7 +441,6 @@ rule inference_prepare_temporal_downscaler:
     output:
         config=Path(OUT_ROOT / "data/runs/{run_id}/{init_time}/config.yaml"),
         resources=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/resources"),
-        grib_out_dir=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/grib"),
         forecaster=directory(OUT_ROOT / "data/runs/{run_id}/{init_time}/forecaster"),
         okfile=touch(
             OUT_ROOT
@@ -242,6 +462,8 @@ rule inference_prepare_temporal_downscaler:
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None
             else _get_forecaster_run_id(wc.run_id)
         ),
+        forecaster_fdb_root=lambda wc: _resolve_forecaster_fdb_root(wc.run_id),
+        output_backend=lambda wc: RUN_CONFIGS[wc.run_id]["output"],
     script:
         "../scripts/inference_prepare.py"
 
@@ -288,6 +510,10 @@ rule inference_execute:
         disable_local_definitions=lambda wc: RUN_CONFIGS[wc.run_id].get(
             "disable_local_eccodes_definitions", False
         ),
+        srun_prefix=lambda wc: get_resource(wc, "srun_prefix", "") or "",
+        fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
+        fdb_root=lambda wc: _resolve_fdb_root_for_run(wc.run_id),
+        fdb_schema=str(Path("resources/fdb/realtime-varda.schema").resolve()),
         account_flag=lambda wc: (
             f"--account={config['profile']['default_resources']['slurm_account']}"
             if config["profile"]["default_resources"].get("slurm_account")
@@ -301,8 +527,29 @@ rule inference_execute:
 
             cd {params.workdir}
 
+            # Write into this run's one FDB root (see _resolve_fdb_root_for_run): its
+            # own `root:` config value if set, otherwise its local per-checkpoint root.
+            # Exported so _run_inference (executed by squashfs-mount in a fresh bash) can see it.
+            export FDB5_CONFIG_OVERRIDE=""
+            if [ "{params.fdb_configured}" = "True" ]; then
+                mkdir -p "{params.fdb_root}"
+                # Use a patched schema that strips 'domain' (present in IFS GRIB MARS
+                # namespace via mars_labeling.def but absent from MeteoSwiss FDB schema).
+                cat > fdb5_config.yaml <<FDBEOF
+---
+type: local
+engine: toc
+schema: {params.fdb_schema}
+spaces:
+- handler: Default
+  roots:
+  - path: {params.fdb_root}
+FDBEOF
+                FDB5_CONFIG_OVERRIDE="$(pwd)/fdb5_config.yaml"
+            fi
+
             _run_inference() {{
-                local VENV=/user-environment
+                local VENV=$1
                 source "$VENV/bin/activate"
 
                 if [ "{params.disable_local_definitions}" = "False" ]; then
@@ -315,6 +562,17 @@ rule inference_execute:
                 # bits from the datasets, so anemoi-inference fails to combine the input states.
                 unset ECCODES_ECKIT_GEO
 
+                # pyfdb bundles its own native FDB libraries -- no uenv mount, no
+                # LD_LIBRARY_PATH needed. Just point it at this run's FDB config/schema.
+                if [ "{params.fdb_configured}" = "True" ]; then
+                    export FDB5_CONFIG_FILE="$FDB5_CONFIG_OVERRIDE"
+                    # Prepend eccodes-cosmo-mars definitions so MARS namespace concepts
+                    # (marsModel, marsStream, marsClass, etc.) resolve correctly for MeteoSwiss GRIBs.
+                    # Must be set in ECCODES_DEFINITION_PATH (not just GRIB_DEFINITION_PATH) because
+                    # the FDB C library uses eccodes internally to resolve MARS namespace keys.
+                    export ECCODES_DEFINITION_PATH="$VENV/data/share/eccodes-cosmo-mars/definitions${{ECCODES_DEFINITION_PATH:+:$ECCODES_DEFINITION_PATH}}"
+                fi
+
                 CMD_ARGS=()
 
                 # is GPU > 1, add parallel flag to CMD_ARGS and override automatic cluster detection
@@ -322,17 +580,56 @@ rule inference_execute:
                     CMD_ARGS+=(runner.parallel.cluster=slurm)
                 fi
 
+                set +e
                 # Equivalent to `anemoi-inference run`, but imports pyproj before eccodes:
                 # the eckitlib wheel bundles its own PROJ, which aborts at exit (double free)
                 # if loaded before pyproj. See https://github.com/ecmwf/eckit/issues/354
                 python -c 'import sys, importlib.util; importlib.util.find_spec("pyproj") and __import__("pyproj"); from anemoi.inference.__main__ import main; sys.argv[0] = "anemoi-inference"; sys.exit(main())' \
-                    run config.yaml "${{CMD_ARGS[@]}}"
+                    run config.yaml "${{CMD_ARGS[@]}}" 2>&1 | tee inference_stdout.log
+                local rc=${{PIPESTATUS[0]}}
+                set -e
+                if [ "$rc" -ne 0 ]; then
+                    # anemoi-inference, when using the copy-prognostic-from-forecaster
+                    # post-processor (anemoi-plugins-meteoswiss), is known to crash
+                    # during native library teardown strictly AFTER all forecast windows
+                    # have been computed and written out (free(): invalid pointer,
+                    # munmap_chunk(): invalid pointer, or similar glibc heap-corruption
+                    # diagnostics observed across runs -- likely an eccodes/earthkit-data
+                    # handle cleanup ordering bug tied to
+                    # that filter's cached forecaster GRIB index being garbage-collected
+                    # at interpreter shutdown). The exact signal raised depends on memory
+                    # layout at the time: observed as both SIGABRT (134) and SIGBUS (135)
+                    # across otherwise-identical runs. Verified empirically (including
+                    # "Flushing FDB" x2 immediately preceding the crash, for FDB-backed
+                    # runs): all expected output steps are present and bit-correct on
+                    # disk/FDB despite the abort. Treat this exact signature as success
+                    # instead of discarding valid output and re-running (expensive) GPU
+                    # inference for nothing.
+                    local last_window
+                    last_window=$(grep -oE 'window [0-9]+/[0-9]+' inference_stdout.log | tail -1 | awk '{{print $2}}')
+                    local win_num=${{last_window%%/*}}
+                    local win_total=${{last_window##*/}}
+                    if [ "$rc" = "134" -o "$rc" = "135" ] \
+                        && grep -q -e "free(): invalid pointer" -e "munmap_chunk(): invalid pointer" -e "double free or corruption" inference_stdout.log \
+                        && ! grep -q "Traceback (most recent call last)" inference_stdout.log \
+                        && [ -n "$win_num" ] && [ "$win_num" = "$win_total" ]; then
+                        echo "WARNING: anemoi-inference aborted during process teardown (exit $rc) after completing all $win_total forecast windows -- known benign native cleanup crash (see copy-prognostic-from-forecaster + eccodes handle GC), treating as success." >&2
+                    else
+                        return "$rc"
+                    fi
+                fi
             }}
             export -f _run_inference
 
-            srun \
+            # squashfs-mount needs the mountpoint dir to already exist, and -- since srun
+            # may dispatch to a different physical node -- it must be on the shared
+            # filesystem, not /tmp (node-local).
+            VENV_MOUNT="{params.workdir}/.venv-mount"
+            mkdir -p "$VENV_MOUNT"
+            trap "rmdir '$VENV_MOUNT' 2>/dev/null || true" EXIT
+
+            {params.srun_prefix} srun \
                 --job-name=anemoi-inference \
-                --uenv={params.env_path}:/user-environment \
                 --unbuffered \
                 {params.account_flag} \
                 --partition={resources.slurm_partition} \
@@ -341,8 +638,74 @@ rule inference_execute:
                 --time={resources.runtime} \
                 --gres={resources.gres} \
                 --ntasks={resources.ntasks} \
-                bash -c '_run_inference'
-        ) >{log} 2>&1
-        touch {output.okfile}
+                squashfs-mount -s "{params.env_path}:$VENV_MOUNT" -- bash -c "_run_inference $VENV_MOUNT"
+        ) >{log} 2>&1 && touch {output.okfile}
         """
 # fmt: on
+
+
+rule inference_check_fdb_duplicates:
+    """Fail if this run's own FDB archival collided with an already-present
+    record -- i.e. a MARS key with more than one entry (live + masked) in
+    FDB's toc index for this init time (see inference_check_fdb_duplicates.py
+    for why this can only be caught by inspecting the archive after the fact,
+    not at write time). Only runs for output: fdb runs, right after
+    inference_execute actually writes -- not on a cache hit (status == "hit"
+    in _get_inference_status), whose data was already checked when it was
+    first produced.
+    """
+    input:
+        image=lambda wc: OUT_ROOT
+        / f"data/runs/{RUN_CONFIGS[wc.run_id]['env_id']}/venv.squashfs",
+        okfile=OUT_ROOT / "logs/inference_execute/{run_id}-{init_time}.ok",
+        script="workflow/scripts/inference_check_fdb_duplicates.py",
+    output:
+        okfile=OUT_ROOT / "logs/inference_check_fdb_duplicates/{run_id}-{init_time}.ok",
+    log:
+        OUT_ROOT / "logs/inference_check_fdb_duplicates/{run_id}-{init_time}.log",
+    localrule: True
+    params:
+        image_path=lambda wc, input: str(Path(input.image).resolve()),
+        fdb_root=lambda wc: _resolve_fdb_root_for_run(wc.run_id),
+        fdb_schema=str(Path("resources/fdb/realtime-varda.schema").resolve()),
+        date=lambda wc: datetime.strptime(wc.init_time, "%Y%m%d%H%M").strftime("%Y%m%d"),
+        time=lambda wc: datetime.strptime(wc.init_time, "%Y%m%d%H%M").strftime("%H%M"),
+    # fmt: off
+    shell:
+        """
+        (
+            set -euo pipefail
+            VENV_MOUNT=$(mktemp -d)
+            trap "rmdir '$VENV_MOUNT' 2>/dev/null || true" EXIT
+            squashfs-mount -s "{params.image_path}:$VENV_MOUNT" -- bash -c '
+                source '"$VENV_MOUNT"'/bin/activate
+                python {input.script} \
+                    --fdb-root {params.fdb_root} \
+                    --fdb-schema {params.fdb_schema} \
+                    --date {params.date} \
+                    --time {params.time} \
+                    --output {output.okfile}
+            '
+        ) >{log} 2>&1
+        """
+# fmt: on
+
+
+# Fail fast: a run declaring `output: fdb` is relying on its own referenced
+# inference config to actually deliver FDB output -- catch the one way that
+# silently doesn't happen, at workflow-build time, before any (expensive)
+# inference job runs:
+# - the referenced inference config has zero `fdb:` output.tee blocks ->
+#   inference_check_fdb.py's completeness check is vacuously true when
+#   expected_blocks == 0 (0 complete blocks found >= 0 expected), reporting a false
+#   "hit" against whatever (possibly unrelated, possibly empty) data already sits in
+#   that FDB root.
+for _run_id, _run_cfg in RUN_CONFIGS.items():
+    if _run_cfg.get("output") != "fdb":
+        continue
+    if _count_fdb_blocks(_run_id) == 0:
+        raise ValueError(
+            f"Run '{_run_id}' declares output: fdb but its inference config "
+            f"({_run_cfg['config']}) has no 'fdb:' blocks under output.tee -- either "
+            "add one, or set output: grib to match what it actually writes."
+        )

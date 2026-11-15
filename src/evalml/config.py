@@ -71,6 +71,10 @@ class InferenceResources(BaseModel):
         None,
         description="Number of tasks per submission.",
     )
+    srun_prefix: str | None = Field(
+        None,
+        description="Optional command to prepend to the srun invocation, e.g. 'uenv run --view=realtime fdb/5.19:v2 --'.",
+    )
 
 
 class RunConfig(BaseModel):
@@ -104,18 +108,41 @@ class RunConfig(BaseModel):
         description="List of extra dependencies to install for this model. "
         "These will be added to the requirements.txt file in the run directory.",
     )
-    inference_resources: InferenceResources | None = Field(
-        None,
-        description="Resource requirements for inference jobs (optional; defaults handled externally).",
-    )
 
     disable_local_eccodes_definitions: bool = Field(
         False,
         description="If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
     )
+    output: Literal["grib", "fdb"] = Field(
+        "grib",
+        description="Where this run's forecast output is stored, and therefore where "
+        "downstream reads (verification, meteograms, frames, scoremaps) should look for "
+        "it. Must match what the referenced inference `config`'s own output.tee actually "
+        "writes to (an 'fdb' tee block requires output: fdb here, and vice versa) -- this "
+        "is the single declared source of truth for backend routing; nothing probes for "
+        "data presence or parses the inference config to guess it.",
+    )
+    root: str | None = Field(
+        None,
+        description="Only meaningful when output: fdb. Root directory of a shared/global "
+        "FDB store this run reads from and writes into, used as-is (same pattern as "
+        "baseline.root) -- the caller is responsible for pointing different checkpoints "
+        "at different roots if they shouldn't share one. When unset (the default), this "
+        "run's FDB output lives in a local per-checkpoint directory under the output root.",
+    )
     config: Dict[str, Any] | str
 
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _root_requires_fdb_output(self) -> "RunConfig":
+        if self.root and self.output != "fdb":
+            raise ValueError(
+                "root is set but output is not 'fdb' -- a custom root only applies to "
+                "FDB-backed runs (grib output always lives under the local run "
+                "directory); set output: fdb or remove root."
+            )
+        return self
 
     @field_validator("checkpoint")
     def resolve_registered_model(cls, v: str) -> str:
@@ -185,7 +212,9 @@ class TemporalDownscalerConfig(RunConfig):
 
     forecaster: ForecasterConfig | None = Field(
         None,
-        description="Configuration for the forecaster run that this temporal downscaler is based on.",
+        description="Configuration for the forecaster run that this temporal downscaler is based on. "
+        "If the forecaster declares output: fdb, the downscaler reads its output directly from FDB "
+        "(inference_prepare.py's _convert_cutout_to_fdb) instead of the local grib symlink.",
     )
 
 
@@ -822,6 +851,10 @@ class Profile(BaseModel):
     """Workflow execution profile."""
 
     executor: str = Field(..., description="Job executor, e.g. 'slurm'.")
+    fdb: InferenceResources | None = Field(
+        None,
+        description="FDB and inference resource settings (optional; overrides defaults for all inference jobs).",
+    )
     global_resources: GlobalResources
     default_resources: DefaultResources
     jobs: int = Field(..., ge=1, description="Maximum number of parallel jobs.")
@@ -943,7 +976,7 @@ class ConfigModel(BaseModel):
         ...,
         description="List of experiment participants, including forecaster/temporal downscaler ML runs and baselines.",
     )
-    truth: TruthConfig | None
+    truth: TruthConfig | None = None
     lapse_rate_correction: bool = Field(
         default=True,
         description="Apply lapse-rate correction to T_2M (0.0065 K/m) and PS (11.5 Pa/m).",

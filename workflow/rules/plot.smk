@@ -28,7 +28,7 @@ def _get_available_baselines(wc) -> list[dict[str, str]]:
 rule plot_meteogram:
     input:
         script="workflow/scripts/plot_meteogram.py",
-        inference_okfile=rules.inference_execute.output.okfile,
+        inference_okfile=_get_inference_okfile,
         truth_dep=truth_file_dep,
     output:
         expand(
@@ -44,7 +44,7 @@ rule plot_meteogram:
         runtime="60m",
     params:
         ana_label=lambda wc: config["truth"]["label"],
-        truth_root=config["truth"]["root"],
+        truth_root=(config.get("truth") or {}).get("root", ""),
         fcst_grib=lambda wc: (
             Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
         ).resolve(),
@@ -64,17 +64,38 @@ rule plot_meteogram:
             if config.get("lapse_rate_correction", True)
             else ""
         ),
+        fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
+        fdb_forecast=lambda wc: (
+            "fdb:" + _resolve_fdb_root_for_run(wc.run_id)
+            if RUN_CONFIGS[wc.run_id]["output"] == "fdb"
+            else ""
+        ),
     shell:
         """
         set -euo pipefail
-        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
 
         BASELINE_ROOTS=({params.baseline_roots:q})
         BASELINE_STEPS=({params.baseline_steps:q})
         BASELINE_LABELS=({params.baseline_labels:q})
 
+        # If this run declares output: fdb, its forecast output lives there
+        # (never in local grib -- see workflow/rules/inference.smk), so always
+        # prefer the FDB source over the (nonexistent) local grib dir.
+        # Reading from FDB needs pyfdb (an evalml dependency, see pyproject.toml)
+        # and eccodes-cosmo-mars's MARS-namespace GRIB concepts (a repo-level
+        # clone, resources/fdb/patch_metkit_language.py's docstring has details)
+        # -- no squashfs-mount of the per-checkpoint venv/FDB uenv needed, unlike
+        # inference_execute: pyfdb bundles its own native FDB libraries.
+        FORECAST_SRC={params.fcst_grib:q}
+        if [ "{params.fdb_configured}" = "True" ]; then
+            FORECAST_SRC={params.fdb_forecast:q}
+            export ECCODES_DEFINITION_PATH="$(realpath eccodes-cosmo-mars/definitions):$(realpath .venv/share/eccodes-cosmo-resources/definitions)"
+        else
+            export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        fi
+
         CMD_ARGS=(
-            --forecast {params.fcst_grib:q}
+            --forecast "$FORECAST_SRC"
             --forecast_steps {params.fcst_steps:q}
             --forecast_label {params.fcst_label:q}
             --analysis {params.truth_root:q}
@@ -99,7 +120,7 @@ rule plot_meteogram:
 rule plot_forecast_frame:
     input:
         script="workflow/scripts/plot_forecast_frame.py",
-        inference_okfile=rules.inference_execute.output.okfile,
+        inference_okfile=_get_inference_okfile,
     output:
         expand(
             OUT_ROOT
@@ -114,7 +135,11 @@ rule plot_forecast_frame:
     resources:
         slurm_partition="postproc",
         cpus_per_task=4,
-        runtime="20m",
+        # Bumped from 20m: under heavy concurrent load on the shared postproc
+        # partition (many plot_forecast_frame jobs at once), a single region's
+        # render has been observed taking ~16m vs ~1.5m uncontended -- 20m was
+        # killing otherwise-healthy jobs via TIMEOUT, not a correctness bug.
+        runtime="45m",
     params:
         grib_out_dir=lambda wc: str(
             (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib").resolve()
@@ -124,15 +149,36 @@ rule plot_forecast_frame:
             (Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/frames").resolve()
         ),
         accu=lambda wc: int(RUN_CONFIGS[wc.run_id]["steps"].split("/")[2]),
+        fdb_configured=lambda wc: RUN_CONFIGS[wc.run_id]["output"] == "fdb",
+        fdb_forecast=lambda wc: (
+            "fdb:" + _resolve_fdb_root_for_run(wc.run_id)
+            if RUN_CONFIGS[wc.run_id]["output"] == "fdb"
+            else ""
+        ),
     shell:
         """
-        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
-        python {input.script} \
-            --input {params.grib_out_dir:q} --date {wildcards.init_time:q} \
-            --param {wildcards.param:q} --leadtime {wildcards.leadtime:q} \
-            --regions_json {params.regions_json:q} \
-            --outdir {params.outdir:q} \
-            --accu {params.accu} >{log} 2>&1
+        set -euo pipefail
+
+        # See plot_meteogram for why this always wins over the (nonexistent)
+        # local grib dir when the run declares output: fdb, and why no
+        # squashfs-mount is needed to read it (pyfdb bundles its own native libs).
+        INPUT_SRC={params.grib_out_dir:q}
+        if [ "{params.fdb_configured}" = "True" ]; then
+            INPUT_SRC={params.fdb_forecast:q}
+            export ECCODES_DEFINITION_PATH="$(realpath eccodes-cosmo-mars/definitions):$(realpath .venv/share/eccodes-cosmo-resources/definitions)"
+        else
+            export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        fi
+
+        CMD_ARGS=(
+            --input "$INPUT_SRC" --date {wildcards.init_time:q}
+            --param {wildcards.param:q} --leadtime {wildcards.leadtime:q}
+            --regions_json {params.regions_json:q}
+            --outdir {params.outdir:q}
+            --accu {params.accu}
+        )
+
+        python {input.script} "${{CMD_ARGS[@]}}" >{log} 2>&1
         """
 
 
