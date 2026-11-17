@@ -1,0 +1,128 @@
+description: |
+  Learning curve of the CERRA-v3 -> KENDA-CH1 transfer learning (varda-forecaster-det-sgm-cerra,
+  1_tl_kendach1, run e567ca48): step 0 (CERRA-v3 weights on the KENDA-CH1 grid and mesh, no
+  fine-tuning; written by configs/training/0_step0.yaml), 500, 1000 and 1500. Steps 2500/5000 are
+  in cerra-tl-det-step2500-5000-son2025.
+
+  warm-mesa (Varda-single stage 4) is not rerun: it is compared through the stored scores of
+  rc-cloud-skt-eval-2025-04-2026-03 (season SON, forecaster-07f6-6e42), so everything that sets
+  the score is copied from that experiment: its 42 h init grid (2025-04-01T00 + n*42h, here the
+  52 inits in SON), steps 0/120/6, the KENDA-CH1 v2.0 truth, the regions and the thresholds. SON
+  2025 is outside both models' training data (warm-mesa: to 2025-03-31; this run: to 2025-06-30,
+  validated on 2025-07..09).
+
+config_label: cerra-tl-det-learning-curve-son2025
+
+dates:
+  start: 2025-09-02T00:00
+  end: 2025-11-30T06:00
+  frequency: 42h
+
+runs:
+  - forecaster:
+      label: CERRA-TL-step0
+      checkpoint: /scratch/mch/mbosch/devml/varda-forecaster-det-sgm-cerra/data/checkpoint/51d9735c-2acd-4cb5-aa9f-cfee0133c81e/inference-anemoi-by_step-epoch_000-step_000001.ckpt
+      config: resources/inference/configs/sgm-multidataset-forecaster-cerra-tl.yaml
+      steps: 0/120/6
+      inference_resources:
+        slurm_partition: normal
+        gpu: 1
+        runtime: 45m
+      # anemoi-inference 0.11.1, as for the AMSE runs: from 0.11.2 on, forward_transform_filter
+      # renames fields by MARS param and the ICON-CH1 GRIB output breaks. anemoi-core and
+      # anemoi-datasets come from the checkpoint's provenance (upstream releases).
+      extra_requirements:
+        - anemoi-inference==0.11.1
+  - forecaster:
+      label: CERRA-TL-step500
+      checkpoint: /scratch/mch/mbosch/devml/varda-forecaster-det-sgm-cerra/data/checkpoint/e567ca48effd4e23af41e016fe9e1415/inference-anemoi-by_step-epoch_000-step_000500.ckpt
+      config: resources/inference/configs/sgm-multidataset-forecaster-cerra-tl.yaml
+      steps: 0/120/6
+      inference_resources:
+        slurm_partition: normal
+        gpu: 1
+        runtime: 45m
+      # anemoi-inference 0.11.1, as for the AMSE runs: from 0.11.2 on, forward_transform_filter
+      # renames fields by MARS param and the ICON-CH1 GRIB output breaks. anemoi-core and
+      # anemoi-datasets come from the checkpoint's provenance (upstream releases).
+      extra_requirements:
+        - anemoi-inference==0.11.1
+  - forecaster:
+      label: CERRA-TL-step1000
+      checkpoint: /scratch/mch/mbosch/devml/varda-forecaster-det-sgm-cerra/data/checkpoint/e567ca48effd4e23af41e016fe9e1415/inference-anemoi-by_step-epoch_001-step_001000.ckpt
+      config: resources/inference/configs/sgm-multidataset-forecaster-cerra-tl.yaml
+      steps: 0/120/6
+      inference_resources:
+        slurm_partition: normal
+        gpu: 1
+        runtime: 45m
+      # anemoi-inference 0.11.1, as for the AMSE runs: from 0.11.2 on, forward_transform_filter
+      # renames fields by MARS param and the ICON-CH1 GRIB output breaks. anemoi-core and
+      # anemoi-datasets come from the checkpoint's provenance (upstream releases).
+      extra_requirements:
+        - anemoi-inference==0.11.1
+  - forecaster:
+      label: CERRA-TL-KENDA-CH1-step1500
+      checkpoint: /scratch/mch/mbosch/devml/varda-forecaster-det-sgm-cerra/data/checkpoint/e567ca48effd4e23af41e016fe9e1415/inference-anemoi-by_step-epoch_002-step_001500.ckpt
+      config: resources/inference/configs/sgm-multidataset-forecaster-cerra-tl.yaml
+      steps: 0/120/6
+      inference_resources:
+        slurm_partition: normal
+        gpu: 1
+        runtime: 45m
+      # anemoi-inference 0.11.1, as for the AMSE runs: from 0.11.2 on, forward_transform_filter
+      # renames fields by MARS param and the ICON-CH1 GRIB output breaks. anemoi-core and
+      # anemoi-datasets come from the checkpoint's provenance (upstream releases).
+      extra_requirements:
+        - anemoi-inference==0.11.1
+
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2026-1h-pl13-v2.0.zarr
+
+experiment:
+  params:
+    - T_2M
+    - TD_2M
+    - SP_10M
+    - PMSL
+    - TOT_PREC6
+  stratification:
+    regions:
+      - icon
+      - mittelland
+      - berge
+      - alpensuedseite
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    TOT_PREC6:
+      gt: [0.1, 5, 20, 50]
+    SP_10M:
+      gt: [5.0, 10.0, 15.0, 20]
+    T_2M:
+      lt: [263.15, 268.15, 273.15]
+      gt: [298.15, 303.15, 308.15]
+  dashboard:
+    stratification:
+      - season
+      - region
+  scorecards:
+    enabled: false
+  scoremaps:
+    enabled: false
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 8
+  default_resources:
+    slurm_partition: postproc
+    slurm_account: s83
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 30

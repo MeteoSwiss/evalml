@@ -4,7 +4,7 @@ description: |
   run 97db726c) at step 5000 of 5000, hard-linked to data/checkpoint/kept/. 10 members,
   as ICON-CH1-EPS has, on the evalml ensemble stack (#286 -> #287 -> #289).
 
-  Same dates, truth, regions and thresholds as cerra-tl-vs-warm-mesa-son2025 (the 52 inits
+  Same dates, truth, regions and thresholds as cerra-tl-det-learning-curve-son2025 (the 52 inits
   of SON 2025 on the 42 h grid, 0/120/6, KENDA-CH1 v2.0), so the ensemble mean joins the
   deterministic runs' dashboard. SON 2025: September is the validation period, Oct-Nov the
   test period; nothing here was trained on.

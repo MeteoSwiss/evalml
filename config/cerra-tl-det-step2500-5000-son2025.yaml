@@ -2,7 +2,7 @@
 description: |
   CERRA-v3 -> KENDA-CH1 transfer learning, deterministic (varda-forecaster-det-sgm-cerra,
   run e567ca48) at steps 2500 and 5000, completing the learning curve of
-  cerra-tl-learning-curve-son2025 (steps 0/500/1000/1500) and cerra-tl-step4000-son2025.
+  cerra-tl-det-learning-curve-son2025 (steps 0/500/1000/1500).
   Same dates, truth, regions, thresholds and ICON baselines as cerra-tl-ens-step5000-son2025.
 
 config_label: cerra-tl-det-step2500-5000-son2025
