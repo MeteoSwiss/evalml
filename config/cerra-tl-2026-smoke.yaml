@@ -1,0 +1,91 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  Smoke test of the 2025-26 evaluation inputs (one init, to +24 h): a CERRA-TL checkpoint
+  (KNN-12 det, run c568dbc9, step 5000) on cerra-tl-kendach1-2026-patch.yaml, and warm-mesa
+  on sgm-multidataset-ich1-oper-2026-patch.yaml. 2026-07-15T00 reads the v4 global zarr
+  (from 2026-05-06 on) and the eval LAM built from the KENDA-CH1 v2.0 extension to Oct 2026,
+  which is also the truth.
+
+config_label: cerra-tl-2026-smoke
+
+dates:
+  - 2026-07-15T00:00
+
+runs:
+  - forecaster:
+      label: CERRA-TL-KNN12-step5000
+      checkpoint: /scratch/mch/mbosch/devml/varda-forecaster-det-sgm-cerra/data/checkpoint/kept/c568dbc9-inference-step_005000.ckpt
+      config: resources/inference/configs/sgm-multidataset-forecaster-cerra-tl-2026.yaml
+      steps: 0/24/6
+      inference_resources:
+        slurm_partition: normal
+        gpu: 1
+        runtime: 45m
+      extra_requirements:
+        - anemoi-inference==0.11.1
+
+  - forecaster:
+      label: warm-mesa
+      checkpoint: /store_new/mch/msopr/ml/models/warm-mesa/inference-last.ckpt
+      config: resources/inference/configs/sgm-multidataset-forecaster-global-ich1-oper-2026.yaml
+      steps: 0/24/6
+      inference_resources:
+        slurm_partition: normal
+        gpu: 1
+        runtime: 45m
+      # As in rc-cloud-skt-eval-2025-04-2026-03 and mdm-stage3-vs-warm-mesa.
+      extra_requirements:
+        - earthkit-utils<0.2.0
+        - earthkit-data<0.19.0
+        - anemoi-inference==0.11.1
+
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-102026-1h-pl13-v2.0.zarr
+
+experiment:
+  params:
+    - T_2M
+    - TD_2M
+    - SP_10M
+    - PMSL
+    - TOT_PREC6
+  stratification:
+    regions:
+      - icon
+      - mittelland
+      - berge
+      - alpensuedseite
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    TOT_PREC6:
+      gt: [0.1, 5, 20, 50]
+    SP_10M:
+      gt: [5.0, 10.0, 15.0, 20]
+    T_2M:
+      lt: [263.15, 268.15, 273.15]
+      gt: [298.15, 303.15, 308.15]
+  dashboard:
+    stratification:
+      - season
+      - region
+  scorecards:
+    enabled: false
+  scoremaps:
+    enabled: false
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 2
+  default_resources:
+    slurm_partition: postproc
+    slurm_account: s83
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 10

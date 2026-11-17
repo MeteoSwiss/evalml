@@ -1,0 +1,386 @@
+# Metadata patch for the CERRA-v3 -> KENDA-CH1 transfer-learning checkpoints, for the
+# 2025-26 evaluation (inits in Oct 2025, Jan, Apr and Jul 2026). As cerra-tl-kendach1-patch.yaml,
+# with other inputs:
+# - LAM: kendach1-1km-202509-202608-6h-cerrav3-eval.zarr, built by the det-sgm-cerra Snakefile
+#   (`eval_datasets`) from the KENDA-CH1 v2.0 extension to Oct 2026, as the training LAM was.
+# - Global: the od/0001 zarr the models were trained on, up to its last date (2026-05-05T18),
+#   then the v4 zarr (od/0001 again from 2026-05-12; 0080 on 05-06..05-11, before any July
+#   input). Concatenated back to back: no gap, no overlap. The two zarrs carry different
+#   variable sets, so each part selects the model's 72 before they are joined.
+#
+# The previous patch's notes on cutout selects and variables_metadata apply unchanged.
+config:
+  dataloader:
+    test:
+      datasets:
+        data:
+          dataset_config:
+            dataset:
+              cutout:
+              - dataset: /scratch/mch/mbosch/devml/varda-forecaster-det-sgm-cerra/data/datasets/kendach1-1km-202509-202608-6h-cerrav3-eval.zarr
+                select:
+                - 100u
+                - 100v
+                - 10u
+                - 10v
+                - 2d
+                - 2t
+                - cos_julian_day
+                - cos_latitude
+                - cos_local_time
+                - cos_longitude
+                - hcc
+                - insolation
+                - lcc
+                - lsm
+                - mcc
+                - msl
+                - q_100
+                - q_1000
+                - q_200
+                - q_300
+                - q_400
+                - q_500
+                - q_700
+                - q_850
+                - q_925
+                - sin_julian_day
+                - sin_latitude
+                - sin_local_time
+                - sin_longitude
+                - skt
+                - sp
+                - ssrd
+                - strd
+                - t_100
+                - t_1000
+                - t_200
+                - t_300
+                - t_400
+                - t_500
+                - t_700
+                - t_850
+                - t_925
+                - tcc
+                - tp
+                - u_100
+                - u_1000
+                - u_200
+                - u_300
+                - u_400
+                - u_500
+                - u_700
+                - u_850
+                - u_925
+                - v_100
+                - v_1000
+                - v_200
+                - v_300
+                - v_400
+                - v_500
+                - v_700
+                - v_850
+                - v_925
+                - z
+                - z_100
+                - z_1000
+                - z_200
+                - z_300
+                - z_400
+                - z_500
+                - z_700
+                - z_850
+                - z_925
+              - dataset:
+                  concat:
+                  - dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2025-6h-v1-combined-land.zarr
+                    start: "2025-09-29T00:00:00"
+                    end: "2026-05-05T18:00:00"
+                    # Concat checks variables before the outer select: each part selects too.
+                    select:
+                    - 100u
+                    - 100v
+                    - 10u
+                    - 10v
+                    - 2d
+                    - 2t
+                    - cos_julian_day
+                    - cos_latitude
+                    - cos_local_time
+                    - cos_longitude
+                    - hcc
+                    - insolation
+                    - lcc
+                    - lsm
+                    - mcc
+                    - msl
+                    - q_100
+                    - q_1000
+                    - q_200
+                    - q_300
+                    - q_400
+                    - q_500
+                    - q_700
+                    - q_850
+                    - q_925
+                    - sin_julian_day
+                    - sin_latitude
+                    - sin_local_time
+                    - sin_longitude
+                    - skt
+                    - sp
+                    - ssrd
+                    - strd
+                    - t_100
+                    - t_1000
+                    - t_200
+                    - t_300
+                    - t_400
+                    - t_500
+                    - t_700
+                    - t_850
+                    - t_925
+                    - tcc
+                    - tp
+                    - u_100
+                    - u_1000
+                    - u_200
+                    - u_300
+                    - u_400
+                    - u_500
+                    - u_700
+                    - u_850
+                    - u_925
+                    - v_100
+                    - v_1000
+                    - v_200
+                    - v_300
+                    - v_400
+                    - v_500
+                    - v_700
+                    - v_850
+                    - v_925
+                    - z
+                    - z_100
+                    - z_1000
+                    - z_200
+                    - z_300
+                    - z_400
+                    - z_500
+                    - z_700
+                    - z_850
+                    - z_925
+                  - dataset: /capstor/store/cscs/director2/d_weather/ai-ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2026-6h-v4-for-single-v3.zarr
+                    start: "2026-05-06T00:00:00"
+                    end: "2026-08-06T18:00:00"
+                    select:
+                    - 100u
+                    - 100v
+                    - 10u
+                    - 10v
+                    - 2d
+                    - 2t
+                    - cos_julian_day
+                    - cos_latitude
+                    - cos_local_time
+                    - cos_longitude
+                    - hcc
+                    - insolation
+                    - lcc
+                    - lsm
+                    - mcc
+                    - msl
+                    - q_100
+                    - q_1000
+                    - q_200
+                    - q_300
+                    - q_400
+                    - q_500
+                    - q_700
+                    - q_850
+                    - q_925
+                    - sin_julian_day
+                    - sin_latitude
+                    - sin_local_time
+                    - sin_longitude
+                    - skt
+                    - sp
+                    - ssrd
+                    - strd
+                    - t_100
+                    - t_1000
+                    - t_200
+                    - t_300
+                    - t_400
+                    - t_500
+                    - t_700
+                    - t_850
+                    - t_925
+                    - tcc
+                    - tp
+                    - u_100
+                    - u_1000
+                    - u_200
+                    - u_300
+                    - u_400
+                    - u_500
+                    - u_700
+                    - u_850
+                    - u_925
+                    - v_100
+                    - v_1000
+                    - v_200
+                    - v_300
+                    - v_400
+                    - v_500
+                    - v_700
+                    - v_850
+                    - v_925
+                    - z
+                    - z_100
+                    - z_1000
+                    - z_200
+                    - z_300
+                    - z_400
+                    - z_500
+                    - z_700
+                    - z_850
+                    - z_925
+                select:
+                - 100u
+                - 100v
+                - 10u
+                - 10v
+                - 2d
+                - 2t
+                - cos_julian_day
+                - cos_latitude
+                - cos_local_time
+                - cos_longitude
+                - hcc
+                - insolation
+                - lcc
+                - lsm
+                - mcc
+                - msl
+                - q_100
+                - q_1000
+                - q_200
+                - q_300
+                - q_400
+                - q_500
+                - q_700
+                - q_850
+                - q_925
+                - sin_julian_day
+                - sin_latitude
+                - sin_local_time
+                - sin_longitude
+                - skt
+                - sp
+                - ssrd
+                - strd
+                - t_100
+                - t_1000
+                - t_200
+                - t_300
+                - t_400
+                - t_500
+                - t_700
+                - t_850
+                - t_925
+                - tcc
+                - tp
+                - u_100
+                - u_1000
+                - u_200
+                - u_300
+                - u_400
+                - u_500
+                - u_700
+                - u_850
+                - u_925
+                - v_100
+                - v_1000
+                - v_200
+                - v_300
+                - v_400
+                - v_500
+                - v_700
+                - v_850
+                - v_925
+                - z
+                - z_100
+                - z_1000
+                - z_200
+                - z_300
+                - z_400
+                - z_500
+                - z_700
+                - z_850
+                - z_925
+          start: null
+          end: null
+dataset:
+  data:
+    variables_metadata:
+      10u:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: U_10M
+          step: 12
+          time: 0
+      10v:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: V_10M
+          step: 12
+          time: 0
+      2d:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: TD_2M
+          step: 12
+          time: 0
+      2t:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: T_2M
+          step: 12
+          time: 0
+      msl:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: PMSL
+          step: 12
+          time: 0
+      sp:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: PS
+          step: 12
+          time: 0
+      lsm:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: FR_LAND
+          step: 0
+          time: 12
+      tp:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: TOT_PREC
+          step: 12
+          time: 0
+        period:
+        - 6h
+        - 12h
+        process: accumulation

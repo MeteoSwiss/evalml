@@ -1,0 +1,180 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  CERRA-v3 -> KENDA-CH1 transfer learning, ensemble (10 members, as ICON-CH1-EPS), 2025-26
+  evaluation: both encoders at step 5000 (0.7 cut-off, run 97db726c; KNN-12, run 3a7be252).
+  Inits: 18 per month on the 42 h grid from the 1st 00 UTC of Oct 2025, Jan, Apr and Jul 2026
+  (72), steps 0/120/6; none in any model's training or validation period. Inputs: the eval LAM
+  built by det-sgm-cerra's Snakefile (`eval_datasets`, bit-identical to the training LAM on
+  Sep-Dec 2025) and the od/0001 global zarr of training to 2026-05-05T18, then the v4 zarr
+  (od/0001 from 2026-05-12), via cerra-tl-kendach1-2026-patch.yaml. Truth: the KENDA-CH1 v2.0
+  extension to Oct 2026. Regions, thresholds and ICON baselines as the SON 2025 configs.
+
+config_label: cerra-tl-ens-2025-26
+
+dates:
+  - 2025-10-01T00:00
+  - 2025-10-02T18:00
+  - 2025-10-04T12:00
+  - 2025-10-06T06:00
+  - 2025-10-08T00:00
+  - 2025-10-09T18:00
+  - 2025-10-11T12:00
+  - 2025-10-13T06:00
+  - 2025-10-15T00:00
+  - 2025-10-16T18:00
+  - 2025-10-18T12:00
+  - 2025-10-20T06:00
+  - 2025-10-22T00:00
+  - 2025-10-23T18:00
+  - 2025-10-25T12:00
+  - 2025-10-27T06:00
+  - 2025-10-29T00:00
+  - 2025-10-30T18:00
+  - 2026-01-01T00:00
+  - 2026-01-02T18:00
+  - 2026-01-04T12:00
+  - 2026-01-06T06:00
+  - 2026-01-08T00:00
+  - 2026-01-09T18:00
+  - 2026-01-11T12:00
+  - 2026-01-13T06:00
+  - 2026-01-15T00:00
+  - 2026-01-16T18:00
+  - 2026-01-18T12:00
+  - 2026-01-20T06:00
+  - 2026-01-22T00:00
+  - 2026-01-23T18:00
+  - 2026-01-25T12:00
+  - 2026-01-27T06:00
+  - 2026-01-29T00:00
+  - 2026-01-30T18:00
+  - 2026-04-01T00:00
+  - 2026-04-02T18:00
+  - 2026-04-04T12:00
+  - 2026-04-06T06:00
+  - 2026-04-08T00:00
+  - 2026-04-09T18:00
+  - 2026-04-11T12:00
+  - 2026-04-13T06:00
+  - 2026-04-15T00:00
+  - 2026-04-16T18:00
+  - 2026-04-18T12:00
+  - 2026-04-20T06:00
+  - 2026-04-22T00:00
+  - 2026-04-23T18:00
+  - 2026-04-25T12:00
+  - 2026-04-27T06:00
+  - 2026-04-29T00:00
+  - 2026-04-30T18:00
+  - 2026-07-01T00:00
+  - 2026-07-02T18:00
+  - 2026-07-04T12:00
+  - 2026-07-06T06:00
+  - 2026-07-08T00:00
+  - 2026-07-09T18:00
+  - 2026-07-11T12:00
+  - 2026-07-13T06:00
+  - 2026-07-15T00:00
+  - 2026-07-16T18:00
+  - 2026-07-18T12:00
+  - 2026-07-20T06:00
+  - 2026-07-22T00:00
+  - 2026-07-23T18:00
+  - 2026-07-25T12:00
+  - 2026-07-27T06:00
+  - 2026-07-29T00:00
+  - 2026-07-30T18:00
+
+runs:
+  - forecaster:
+      label: CERRA-TL-ENS-step5000
+      checkpoint: /scratch/mch/mbosch/devml/varda-forecaster-ens-sgm-cerra/data/checkpoint/kept/97db726c-inference-step_005000.ckpt
+      config: resources/inference/configs/sgm-multidataset-forecaster-cerra-tl-2026.yaml
+      steps: 0/120/6
+      ensemble:
+        members: 10
+        seed: 0
+      output_variables: [2t, 2d, 10u, 10v, msl, tp]
+      inference_resources:
+        slurm_partition: normal
+        gpu: 4
+      extra_requirements:
+        - anemoi-inference==0.11.1
+
+  - forecaster:
+      label: CERRA-TL-ENS-KNN12-step5000
+      checkpoint: /scratch/mch/mbosch/devml/varda-forecaster-ens-sgm-cerra/data/checkpoint/kept/3a7be252-inference-step_005000.ckpt
+      config: resources/inference/configs/sgm-multidataset-forecaster-cerra-tl-2026.yaml
+      steps: 0/120/6
+      ensemble:
+        members: 10
+        seed: 0
+      output_variables: [2t, 2d, 10u, 10v, msl, tp]
+      inference_resources:
+        slurm_partition: normal
+        gpu: 4
+      extra_requirements:
+        - anemoi-inference==0.11.1
+
+  # ICON control members: baselines are read one member at a time on this branch, so they
+  # are deterministic participants (their CRPS is their MAE). ICON-CH1-EPS runs to +33 h.
+  - baseline:
+      label: ICON-CH1-ctrl
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/33/6
+
+  - baseline:
+      label: ICON-CH2-ctrl
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/6
+
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-102026-1h-pl13-v2.0.zarr
+
+experiment:
+  params:
+    - T_2M
+    - TD_2M
+    - SP_10M
+    - PMSL
+    - TOT_PREC6
+  stratification:
+    regions:
+      - icon
+      - mittelland
+      - berge
+      - alpensuedseite
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    TOT_PREC6:
+      gt: [0.1, 5, 20, 50]
+    SP_10M:
+      gt: [5.0, 10.0, 15.0, 20]
+    T_2M:
+      lt: [263.15, 268.15, 273.15]
+      gt: [298.15, 303.15, 308.15]
+  dashboard:
+    stratification:
+      - season
+      - region
+  scorecards:
+    enabled: false
+  scoremaps:
+    enabled: false
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 8
+  default_resources:
+    slurm_partition: postproc
+    slurm_account: s83
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 30
