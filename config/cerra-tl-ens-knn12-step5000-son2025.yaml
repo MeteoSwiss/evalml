@@ -1,0 +1,96 @@
+# yaml-language-server: $schema=../workflow/tools/config.schema.json
+description: |
+  CERRA-v3 -> KENDA-CH1 transfer learning, ensemble, with KNMI's KNN-12 encoder edges instead
+  of the 0.7 cut-off (varda-forecaster-ens-sgm-cerra, run 3a7be252, config
+  2_tl_kendach1_knn12) at step 5000, hard-linked to data/checkpoint/kept/. Otherwise as
+  cerra-tl-ens-step5000-son2025, which has the cut-off run. SON 2025: September is the
+  validation period, Oct-Nov the test period; nothing here was trained on.
+
+config_label: cerra-tl-ens-knn12-step5000-son2025
+
+dates:
+  start: 2025-09-02T00:00
+  end: 2025-11-30T06:00
+  frequency: 42h
+
+runs:
+  - forecaster:
+      label: CERRA-TL-ENS-KNN12-step5000
+      checkpoint: /scratch/mch/mbosch/devml/varda-forecaster-ens-sgm-cerra/data/checkpoint/kept/3a7be252-inference-step_005000.ckpt
+      config: resources/inference/configs/sgm-multidataset-forecaster-cerra-tl.yaml
+      steps: 0/120/6
+      ensemble:
+        members: 10
+        seed: 0
+      output_variables: [2t, 2d, 10u, 10v, msl, tp]
+      inference_resources:
+        slurm_partition: normal
+        gpu: 4
+      # anemoi-inference 0.11.1, as for the deterministic runs: from 0.11.2 on,
+      # forward_transform_filter renames fields by MARS param and the ICON-CH1 GRIB output
+      # breaks.
+      extra_requirements:
+        - anemoi-inference==0.11.1
+
+  # ICON control members: baselines are read one member at a time on this branch, so they
+  # are deterministic participants (their CRPS is their MAE). ICON-CH1-EPS runs to +33 h.
+  - baseline:
+      label: ICON-CH1-ctrl
+      root: /store_new/mch/msopr/osm/ICON-CH1-EPS
+      steps: 0/33/6
+
+  - baseline:
+      label: ICON-CH2-ctrl
+      root: /store_new/mch/msopr/osm/ICON-CH2-EPS
+      steps: 0/120/6
+
+truth:
+  label: KENDA-CH1
+  root: /store_new/mch/msopr/ml/datasets/mch-ich1-1km-2024-2026-1h-pl13-v2.0.zarr
+
+experiment:
+  params:
+    - T_2M
+    - TD_2M
+    - SP_10M
+    - PMSL
+    - TOT_PREC6
+  stratification:
+    regions:
+      - icon
+      - mittelland
+      - berge
+      - alpensuedseite
+    root: /store_new/mch/msopr/ml/regions/Prognoseregionen_LV95_20220517
+  thresholds:
+    TOT_PREC6:
+      gt: [0.1, 5, 20, 50]
+    SP_10M:
+      gt: [5.0, 10.0, 15.0, 20]
+    T_2M:
+      lt: [263.15, 268.15, 273.15]
+      gt: [298.15, 303.15, 308.15]
+  dashboard:
+    stratification:
+      - season
+      - region
+  scorecards:
+    enabled: false
+  scoremaps:
+    enabled: false
+
+locations:
+  output_root: output/
+
+profile:
+  executor: slurm
+  global_resources:
+    gpus: 16
+  default_resources:
+    slurm_partition: postproc
+    slurm_account: s83
+    cpus_per_task: 1
+    mem_mb_per_cpu: 1800
+    runtime: "1h"
+    gpus: 0
+  jobs: 30

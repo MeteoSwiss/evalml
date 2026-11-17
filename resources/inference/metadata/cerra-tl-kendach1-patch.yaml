@@ -1,0 +1,230 @@
+# Metadata patch for the CERRA-v3 -> KENDA-CH1 transfer-learning checkpoints
+# (varda-forecaster-det-sgm-cerra, 1_tl_kendach1).
+#
+# - Input: the checkpoint's own test datasets, with the LAM zarr's workspace-relative path
+#   made absolute and the test period lifted (start/end null). The cutout list is replaced
+#   wholesale by the patch, so each entry keeps its `select` list from the checkpoint.
+# - variables_metadata: the checkpoint names variables by GRIB shortName only; the ICON-CH1
+#   GRIB templates are keyed by MARS param (T_2M, ...). The mars blocks are copied from
+#   sgm-multidataset-ich1-oper-patch.yaml for the surface fields the verification reads.
+config:
+  dataloader:
+    test:
+      datasets:
+        data:
+          dataset_config:
+            dataset:
+              cutout:
+              - dataset: /scratch/mch/mbosch/varda-forecaster-det-sgm-cerra/datasets/kendach1-1km-2024-2025-6h-cerrav3.zarr
+                select:
+                - 100u
+                - 100v
+                - 10u
+                - 10v
+                - 2d
+                - 2t
+                - cos_julian_day
+                - cos_latitude
+                - cos_local_time
+                - cos_longitude
+                - hcc
+                - insolation
+                - lcc
+                - lsm
+                - mcc
+                - msl
+                - q_100
+                - q_1000
+                - q_200
+                - q_300
+                - q_400
+                - q_500
+                - q_700
+                - q_850
+                - q_925
+                - sin_julian_day
+                - sin_latitude
+                - sin_local_time
+                - sin_longitude
+                - skt
+                - sp
+                - ssrd
+                - strd
+                - t_100
+                - t_1000
+                - t_200
+                - t_300
+                - t_400
+                - t_500
+                - t_700
+                - t_850
+                - t_925
+                - tcc
+                - tp
+                - u_100
+                - u_1000
+                - u_200
+                - u_300
+                - u_400
+                - u_500
+                - u_700
+                - u_850
+                - u_925
+                - v_100
+                - v_1000
+                - v_200
+                - v_300
+                - v_400
+                - v_500
+                - v_700
+                - v_850
+                - v_925
+                - z
+                - z_100
+                - z_1000
+                - z_200
+                - z_300
+                - z_400
+                - z_500
+                - z_700
+                - z_850
+                - z_925
+              - dataset: /store_new/mch/msopr/ml/datasets/aifs-od-an-oper-0001-mars-n320-2016-2025-6h-v1-combined-land.zarr
+                select:
+                - 100u
+                - 100v
+                - 10u
+                - 10v
+                - 2d
+                - 2t
+                - cos_julian_day
+                - cos_latitude
+                - cos_local_time
+                - cos_longitude
+                - hcc
+                - insolation
+                - lcc
+                - lsm
+                - mcc
+                - msl
+                - q_100
+                - q_1000
+                - q_200
+                - q_300
+                - q_400
+                - q_500
+                - q_700
+                - q_850
+                - q_925
+                - sin_julian_day
+                - sin_latitude
+                - sin_local_time
+                - sin_longitude
+                - skt
+                - sp
+                - ssrd
+                - strd
+                - t_100
+                - t_1000
+                - t_200
+                - t_300
+                - t_400
+                - t_500
+                - t_700
+                - t_850
+                - t_925
+                - tcc
+                - tp
+                - u_100
+                - u_1000
+                - u_200
+                - u_300
+                - u_400
+                - u_500
+                - u_700
+                - u_850
+                - u_925
+                - v_100
+                - v_1000
+                - v_200
+                - v_300
+                - v_400
+                - v_500
+                - v_700
+                - v_850
+                - v_925
+                - z
+                - z_100
+                - z_1000
+                - z_200
+                - z_300
+                - z_400
+                - z_500
+                - z_700
+                - z_850
+                - z_925
+          start: null
+          end: null
+dataset:
+  data:
+    variables_metadata:
+      10u:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: U_10M
+          step: 12
+          time: 0
+      10v:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: V_10M
+          step: 12
+          time: 0
+      2d:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: TD_2M
+          step: 12
+          time: 0
+      2t:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: T_2M
+          step: 12
+          time: 0
+      msl:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: PMSL
+          step: 12
+          time: 0
+      sp:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: PS
+          step: 12
+          time: 0
+      lsm:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: FR_LAND
+          step: 0
+          time: 12
+      tp:
+        mars:
+          date: 20050101
+          levtype: sfc
+          param: TOT_PREC
+          step: 12
+          time: 0
+        period:
+        - 6h
+        - 12h
+        process: accumulation
