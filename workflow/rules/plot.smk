@@ -26,18 +26,26 @@ def _get_available_baselines(wc) -> list[dict[str, str]]:
 
 
 rule plot_meteogram:
+    """One meteogram per station and param with all candidate runs overlaid."""
     input:
         script="workflow/scripts/plot_meteogram.py",
-        inference_okfile=rules.inference_execute.output.okfile,
+        inference_okfiles=lambda wc: expand(
+            rules.inference_execute.output.okfile,
+            run_id=CANDIDATES,
+            init_time=wc.init_time,
+        ),
         truth_dep=truth_file_dep,
     output:
         expand(
             OUT_ROOT
-            / "results/{{showcase}}/{{run_id}}/{{init_time}}/{{init_time}}_{{param}}_{sta}.png",
+            / "results/{{showcase}}/{{init_time}}/meteograms/{{init_time}}_{{param}}_{sta}.png",
             sta=config["showcase"]["meteograms"]["stations"],
         ),
     log:
-        OUT_ROOT / "logs/{showcase}/{run_id}/{init_time}/plot_meteogram_{param}.log",
+        OUT_ROOT / "logs/{showcase}/meteograms/{init_time}/plot_meteogram_{param}.log",
+    wildcard_constraints:
+        showcase=r"[^/]+",
+        init_time=r"\d{12}",
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
@@ -45,15 +53,17 @@ rule plot_meteogram:
     params:
         ana_label=lambda wc: config["truth"]["label"],
         truth_root=config["truth"]["root"],
-        fcst_grib=lambda wc: run_grib_dir(wc.run_id, wc.init_time).resolve(),
-        fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
-        fcst_label=lambda wc: RUN_CONFIGS[wc.run_id]["label"],
+        fcst_gribs=lambda wc: [
+            str(run_grib_dir(run_id, wc.init_time).resolve()) for run_id in CANDIDATES
+        ],
+        fcst_steps=lambda wc: [RUN_CONFIGS[run_id]["steps"] for run_id in CANDIDATES],
+        fcst_labels=lambda wc: [RUN_CONFIGS[run_id]["label"] for run_id in CANDIDATES],
         baseline_roots=lambda wc: [x["root"] for x in _get_available_baselines(wc)],
         baseline_steps=lambda wc: [x["steps"] for x in _get_available_baselines(wc)],
         baseline_labels=lambda wc: [x["label"] for x in _get_available_baselines(wc)],
         outdir=lambda wc: str(
             (
-                Path(OUT_ROOT) / f"results/{wc.showcase}/{wc.run_id}/{wc.init_time}"
+                Path(OUT_ROOT) / f"results/{wc.showcase}/{wc.init_time}/meteograms"
             ).resolve()
         ),
         stations=config["showcase"]["meteograms"]["stations"],
@@ -67,14 +77,14 @@ rule plot_meteogram:
         set -euo pipefail
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
 
+        FCST_GRIBS=({params.fcst_gribs:q})
+        FCST_STEPS=({params.fcst_steps:q})
+        FCST_LABELS=({params.fcst_labels:q})
         BASELINE_ROOTS=({params.baseline_roots:q})
         BASELINE_STEPS=({params.baseline_steps:q})
         BASELINE_LABELS=({params.baseline_labels:q})
 
         CMD_ARGS=(
-            --forecast {params.fcst_grib:q}
-            --forecast_steps {params.fcst_steps:q}
-            --forecast_label {params.fcst_label:q}
             --analysis {params.truth_root:q}
             --analysis_label {params.ana_label:q}
             --date {wildcards.init_time:q}
@@ -83,6 +93,12 @@ rule plot_meteogram:
             --stations {params.stations:q}
             {params.lapse_rate_flag}
         )
+
+        for i in "${{!FCST_GRIBS[@]}}"; do
+            CMD_ARGS+=(--forecast "${{FCST_GRIBS[$i]}}")
+            CMD_ARGS+=(--forecast_steps "${{FCST_STEPS[$i]}}")
+            CMD_ARGS+=(--forecast_label "${{FCST_LABELS[$i]}}")
+        done
 
         for i in "${{!BASELINE_ROOTS[@]}}"; do
             CMD_ARGS+=(--baseline "${{BASELINE_ROOTS[$i]}}")

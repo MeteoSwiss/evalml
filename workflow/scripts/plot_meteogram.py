@@ -4,17 +4,48 @@ from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import xarray as xr
 
 from data_input import (
-    parse_steps,
     load_forecast_data,
     load_truth_data,
+    parse_steps,
 )
-from verification import apply_lapse_rate_correction_inplace
+from verification import CIRCULAR_PARAMS, apply_lapse_rate_correction_inplace
 from verification.spatial import map_forecast_to_truth
 
 LOG = logging.getLogger(__name__)
+
+# Colours as in the meteograms of the Varda-single paper (Figs. 8 and 9).
+OBS_COLOR = "mediumseagreen"
+# One colour per forecast run, in config order (first run red as Varda-single in the paper).
+FORECAST_COLORS = ["tab:red", "black", "tab:orange", "tab:purple", "tab:brown"]
+BASELINE_COLORS = {
+    "ICON-CH1": "deepskyblue",
+    "ICON-CH2": "navy",
+}
+
+
+KELVIN_PARAMS = {"T_2M", "TD_2M"}
+ZERO_CELSIUS_IN_KELVIN = 273.15
+
+
+def _lead_hours(times, init_time: datetime) -> np.ndarray:
+    """Hours between each valid time and the forecast initialisation time."""
+    return (np.asarray(times, dtype="datetime64[ns]") - np.datetime64(init_time)) / (
+        np.timedelta64(1, "h")
+    )
+
+
+def _baseline_color(label: str, default: str) -> str:
+    """Paper colour for ICON-CH1/CH2 baselines (matched on the label), else default."""
+    for key, color in BASELINE_COLORS.items():
+        if key in label.upper():
+            return color
+    return default
+
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -24,19 +55,28 @@ logging.basicConfig(
 def main():
     parser = ArgumentParser()
     parser.add_argument(
-        "--forecast", type=str, default=None, help="Directory to forecast grib data"
+        "--forecast",
+        action="append",
+        type=str,
+        default=[],
+        help="Directory with forecast grib data (repeatable, one per run).",
     )
     parser.add_argument(
         "--forecast_steps",
+        action="append",
         type=parse_steps,
-        default="0/120/6",
-        help="Forecast steps in the format 'start/stop/step' (default: 0/120/6).",
+        default=[],
+        help=(
+            "Forecast steps in the format 'start/stop/step' for each forecast "
+            "(repeatable, must match --forecast count)."
+        ),
     )
     parser.add_argument(
         "--forecast_label",
+        action="append",
         type=str,
-        default="forecast",
-        help="Label for forecast line in plot legend.",
+        default=[],
+        help="Label for each forecast line in plot legend (repeatable).",
     )
     parser.add_argument(
         "--baseline",
@@ -84,9 +124,21 @@ def main():
 
     args = parser.parse_args()
 
-    forecast_grib_dir = Path(args.forecast)
-    forecast_steps = args.forecast_steps
-    forecast_label = args.forecast_label
+    forecast_grib_dirs = [Path(path) for path in args.forecast]
+    forecast_steps_list = args.forecast_steps
+    forecast_labels = args.forecast_label
+    if not forecast_grib_dirs:
+        raise ValueError("At least one --forecast is required.")
+    if not (
+        len(forecast_grib_dirs) == len(forecast_steps_list) == len(forecast_labels)
+    ):
+        raise ValueError(
+            "Mismatched forecast arguments: --forecast, --forecast_steps and "
+            "--forecast_label must be provided the same number of times."
+        )
+    # Observations at every valid time any forecast or baseline covers (e.g. hourly
+    # when ICON is hourly and the ML runs 6-hourly).
+    obs_steps = sorted(set().union(*forecast_steps_list, *args.baseline_steps))
     analysis_root = Path(args.analysis)
     analysis_label = args.analysis_label
     baseline_roots = [Path(path) for path in args.baseline]
@@ -117,7 +169,7 @@ def main():
 
     LOG.info("Loading analysis data from %s", analysis_root)
     analysis_ds = load_truth_data(
-        analysis_root, init_time, forecast_steps, [param]
+        analysis_root, init_time, obs_steps, [param]
     ).squeeze()
 
     # Build station coordinate lookup from the loaded analysis dataset so that
@@ -142,10 +194,15 @@ def main():
         catalog_lookup = {}
 
     # Load gridded data once — shared across all station plots
-    LOG.info("Loading forecast data from %s", forecast_grib_dir)
-    forecast_ds = load_forecast_data(
-        forecast_grib_dir, init_time, forecast_steps, [param]
-    ).squeeze()
+    forecast_ds_list = []
+    for grib_dir, steps, label in zip(
+        forecast_grib_dirs, forecast_steps_list, forecast_labels
+    ):
+        LOG.info("Loading forecast '%s' from %s", label, grib_dir)
+        forecast_ds_list.append(
+            load_forecast_data(grib_dir, init_time, steps, [param]).squeeze()
+        )
+    forecast_ds = forecast_ds_list[0]
 
     baseline_ds_list = []
     for root, step, label in zip(baseline_roots, baseline_steps, baseline_labels):
@@ -198,47 +255,65 @@ def main():
             }
         )
 
-        forecast_station_ds = map_forecast_to_truth(forecast_ds, station_ds)
+        forecast_station_ds_list = [
+            map_forecast_to_truth(ds, station_ds) for ds in forecast_ds_list
+        ]
         analysis_station_ds = map_forecast_to_truth(analysis_ds, station_ds)
         baseline_station_ds_list = [
             map_forecast_to_truth(ds, station_ds) for ds in baseline_ds_list
         ]
 
         if args.lapse_rate_correction:
-            apply_lapse_rate_correction_inplace(
-                forecast_station_ds, station_ds, [param]
-            )
-            for ds in baseline_station_ds_list:
+            for ds in forecast_station_ds_list + baseline_station_ds_list:
                 apply_lapse_rate_correction_inplace(ds, station_ds, [param])
 
         fig, ax = plt.subplots()
 
+        # Wind direction wraps at 0/360 deg, so lines would jump across the plot:
+        # draw it as dots instead.
+        line_style = (
+            {"ls": "none", "marker": "o", "ms": 3} if param in CIRCULAR_PARAMS else {}
+        )
+
+        # Temperatures in degrees Celsius, as in the paper.
+        offset = ZERO_CELSIUS_IN_KELVIN if param in KELVIN_PARAMS else 0.0
+        plot_units = "°C" if param in KELVIN_PARAMS else units
+
         ax.plot(
-            analysis_station_ds["time"].values,
-            analysis_station_ds[param].values,
-            color="k",
-            ls="--",
+            _lead_hours(analysis_station_ds["time"].values, init_time),
+            analysis_station_ds[param].values - offset,
+            color=OBS_COLOR,
             label=analysis_label,
+            **line_style,
         )
         for i, (baseline_label, baseline_station_ds) in enumerate(
             zip(baseline_labels, baseline_station_ds_list), start=1
         ):
             ax.plot(
-                baseline_station_ds["valid_time"].values,
-                baseline_station_ds[param].values,
-                color=f"C{i}",
+                _lead_hours(baseline_station_ds["valid_time"].values, init_time),
+                baseline_station_ds[param].values - offset,
+                color=_baseline_color(baseline_label, default=f"C{i}"),
                 label=baseline_label,
+                # Baselines dashed, as the ICON lines in the paper's Fig. 8.
+                **(line_style or {"ls": "--"}),
             )
-        ax.plot(
-            forecast_station_ds["valid_time"].values,
-            forecast_station_ds[param].values,
-            color="C0",
-            label=forecast_label,
-        )
+        for i, (forecast_label, forecast_station_ds) in enumerate(
+            zip(forecast_labels, forecast_station_ds_list)
+        ):
+            ax.plot(
+                _lead_hours(forecast_station_ds["valid_time"].values, init_time),
+                forecast_station_ds[param].values - offset,
+                color=FORECAST_COLORS[i % len(FORECAST_COLORS)],
+                label=forecast_label,
+                **line_style,
+            )
 
         ax.legend()
-        ax.set_ylabel(f"{short} ({units})" if short or units else "")
-        ax.set_title(f"{init_time} {name} at {station}")
+        ylabel = short or param
+        ax.set_ylabel(f"{ylabel} ({plot_units})" if plot_units else ylabel)
+        ax.set_xlabel(f"Lead time from {init_time:%Y-%m-%d %H:%M} (h)")
+        ax.grid(alpha=0.3)
+        ax.set_title(f"{name or param} at {station}")
 
         outfn = outdir / f"{init_time.strftime('%Y%m%d%H%M')}_{param}_{station}.png"
         plt.savefig(outfn)
