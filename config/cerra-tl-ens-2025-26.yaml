@@ -169,7 +169,7 @@ locations:
 profile:
   executor: slurm
   global_resources:
-    gpus: 8
+    gpus: 16
   default_resources:
     slurm_partition: postproc
     slurm_account: s83
