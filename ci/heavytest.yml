@@ -1,0 +1,13 @@
+# heavytest — full end-to-end suite incl. real inference, run weekly (CI cron).
+# Trigger:  PR comment `cscs-ci run heavytest`  or locally via
+#           `tests/run-integration-coverage.sh heavytest tests/integration`.
+include:
+  - ci/cscs.yml
+
+heavytest:
+  extends: [.evalml-job]
+  script:
+    - bash tests/run-integration-coverage.sh heavytest tests/integration
+  variables:
+    # Explicitly request more time from Slurm, so that the heavy tests can complete.
+    SLURM_TIMELIMIT: "10:00:00"
