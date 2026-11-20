@@ -327,7 +327,7 @@ def test_load_obs_relative_humidity_and_wet_bulb(monkeypatch):
             coords={"time": times, "values": stations},
         )
 
-    monkeypatch.setattr(jr, "parse_selection", lambda root: (None, "prod", None, 40))
+    monkeypatch.setattr(jr, "parse_selection", lambda root: (None, "prod", None, 40, None))
     monkeypatch.setattr(jr, "check_prerequisites", lambda stage: None)
     monkeypatch.setattr(jr, "fetch_meta", lambda **kwargs: None)
     monkeypatch.setattr(
