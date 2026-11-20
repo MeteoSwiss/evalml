@@ -1,9 +1,14 @@
+import re
+from math import isfinite
 from pathlib import Path
-from typing import Dict, List, Any, ClassVar, FrozenSet, Optional, Union
+from typing import Dict, List, Any, ClassVar, FrozenSet, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 PROJECT_ROOT = Path(__file__).parents[2]
+
+MODEL_REGISTRY_ROOT = Path("/store_new/mch/msopr/ml/models")
+REGISTERED_MODEL_PATTERN = re.compile(r"^[a-z]+-[a-z]+$")
 
 PREDEFINED_REGIONS: Dict[str, List[float]] = {
     "global": [-180, 180, -90, 90],
@@ -76,7 +81,9 @@ class RunConfig(BaseModel):
     )
     checkpoint: str = Field(
         ...,
-        description="The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, or a local checkpoint path.",
+        description="The model checkpoint to use. Can be an MLflow run URL, a Hugging Face `.ckpt` URL, "
+        "a local checkpoint path, or a registered model name (e.g. 'amber-ridge') resolved "
+        f"against {MODEL_REGISTRY_ROOT}.",
     )
     label: str | None = Field(
         None,
@@ -109,6 +116,23 @@ class RunConfig(BaseModel):
     config: Dict[str, Any] | str
 
     model_config = {"extra": "forbid"}
+
+    @field_validator("checkpoint")
+    def resolve_registered_model(cls, v: str) -> str:
+        """Resolve a registered model name (e.g. 'amber-ridge') to its checkpoint path."""
+        if not REGISTERED_MODEL_PATTERN.match(v):
+            return v
+        model_dir = MODEL_REGISTRY_ROOT / v
+        if not model_dir.is_dir():
+            raise ValueError(
+                f"Registered model '{v}' not found in the model registry: {model_dir}"
+            )
+        checkpoint = model_dir / "inference-last.ckpt"
+        if not checkpoint.exists():
+            raise ValueError(
+                f"Registered model '{v}' has no 'inference-last.ckpt' in {model_dir}"
+            )
+        return str(checkpoint)
 
     @field_validator("steps")
     def validate_steps(cls, v: str) -> str:
@@ -207,7 +231,11 @@ class TruthConfig(BaseModel):
     root: str = Field(
         ...,
         min_length=1,
-        description="Path to the root of the dataset.",
+        description=(
+            "Truth source: an anemoi '.zarr' analysis (e.g. KENDA), the INCA-CH "
+            "archive (a path with an 'INCA' directory), or 'jretrievedwh:<selector>' "
+            "for DWH station observations."
+        ),
     )
 
 
@@ -235,7 +263,10 @@ class ScoreMapsConfig(BaseModel):
         description=(
             "List of parameters to plot. Supported values: T_2M, TD_2M, U_10M, V_10M, "
             "PS, PMSL, SP_10M (derived from U_10M/V_10M), TOT_PREC1, TOT_PREC6, TOT_PREC24 "
-            "(period-accumulated precipitation, period encoded in the name)."
+            "(period-accumulated precipitation, period encoded in the name), and the "
+            "derive-diagnostic fields DD_10M, RELHUM_2M, TW_2M (derived from their "
+            "components when a source lacks them), HZEROCL, SNOWLMT, CAPE_ML, CIN_ML, "
+            "CAPE_MU, CIN_MU, TOT_SNOW1/6/24."
         ),
     )
     leadtimes: List[int] = Field(
@@ -261,6 +292,83 @@ class ScoreMapsConfig(BaseModel):
             "view, or zero-padded hour strings like '00', '06', '12', '18'."
         ),
     )
+
+    model_config = {"extra": "forbid"}
+
+
+class SalConfig(BaseModel):
+    """SAL (Structure–Amplitude–Location; Wernli et al. 2008) per-init precip
+    scores, computed for every run and baseline when enabled and written to
+    per-participant CSVs."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to compute SAL scores.",
+    )
+    params: List[str] = Field(
+        default=["TOT_PREC6"],
+        description="Accumulated precip params to score, period encoded in the name (e.g. TOT_PREC6).",
+    )
+    leadtimes: List[int] = Field(
+        default=[6, 12, 18, 24, 30],
+        description="List of lead times (hours) to score.",
+    )
+    grid_extent: List[float] = Field(
+        default=[-1.0, 18.0, 42.0, 50.5],
+        description=(
+            "SAL raster extent [lon_min, lon_max, lat_min, lat_max] in degrees "
+            "(PlateCarree). Both forecast and truth are remapped onto this "
+            "raster. The default is the ICON-CH1 analysis bounding box; keep it "
+            "close to the truth's footprint, since cells outside it only repeat "
+            "the nearest border value."
+        ),
+    )
+    grid_step_lat: float = Field(
+        default=0.01,
+        gt=0,
+        description="SAL raster latitude spacing in degrees.",
+    )
+    grid_step_lon: float = Field(
+        default=0.0145,
+        gt=0,
+        description=(
+            "SAL raster longitude spacing in degrees. Choose grid_step_lat and "
+            "grid_step_lon so cells are metrically near-square at the extent's "
+            "central latitude (pysteps' Location term assumes square pixels)."
+        ),
+    )
+
+    @field_validator("grid_extent")
+    @classmethod
+    def validate_grid_extent(cls, v: List[float]) -> List[float]:
+        if len(v) != 4:
+            raise ValueError(
+                f"sal.grid_extent must be [lon_min, lon_max, lat_min, lat_max]; got {v}."
+            )
+        lon_min, lon_max, lat_min, lat_max = v
+        if not (
+            all(isfinite(x) for x in v)
+            and -180.0 <= lon_min < lon_max <= 180.0
+            and -90.0 <= lat_min < lat_max <= 90.0
+        ):
+            raise ValueError(
+                "sal.grid_extent needs finite, increasing bounds with lon in "
+                f"[-180, 180] and lat in [-90, 90]; got {v}."
+            )
+        return v
+
+    @field_validator("params")
+    @classmethod
+    def validate_params_are_precip(cls, v: List[str]) -> List[str]:
+        bad = [p for p in v if not p.startswith("TOT_PREC")]
+        if bad:
+            raise ValueError(
+                "sal.params must be precipitation parameters starting with "
+                "'TOT_PREC' (e.g. TOT_PREC1, TOT_PREC6, or bare TOT_PREC for "
+                "cumulative-from-start); SAL is defined for precipitation only. "
+                f"Invalid: {bad}."
+            )
+        return v
 
     model_config = {"extra": "forbid"}
 
@@ -337,12 +445,64 @@ class AnimationsConfig(BaseModel):
     )
 
 
+class ComparisonsConfig(BaseModel):
+    """Configuration for side-by-side map comparisons of truth, runs and baselines."""
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Whether to generate side-by-side maps: one figure per init time, lead "
+            "time, parameter and domain, with a panel for the truth (if gridded), "
+            "each run and each selected baseline."
+        ),
+    )
+    truth: bool = Field(
+        default=True,
+        description=(
+            "Whether to include a truth panel. Ignored for station truth "
+            "(jretrievedwh), which cannot be drawn as a map."
+        ),
+    )
+    baselines: List[str] = Field(
+        default_factory=list,
+        description="Labels of the baselines to add as panels.",
+    )
+    domains: List[str | DomainConfig] = Field(
+        default=["alps"],
+        description=(
+            "Domains to plot. Same format as `animations.domains`: a named domain "
+            "defined in plotting.DOMAINS or a custom domain dict."
+        ),
+    )
+    lead_times: List[int] = Field(
+        default=[24],
+        description=(
+            "Lead times (hours) to plot. A run or baseline without data at a lead "
+            "time is shown as an empty panel."
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _enabled_requires_a_reference(self):
+        if self.enabled and not (self.truth or self.baselines):
+            raise ValueError(
+                "comparisons need something to compare the runs with: enable "
+                "`truth` or list `baselines`."
+            )
+        return self
+
+
 class ScorecardConfig(BaseModel):
     """Configuration for a single named scorecard."""
 
     baseline: str = Field(
         ...,
-        description="Baseline label to compare against (must match the `label` field of a baseline entry in `runs`).",
+        description=(
+            "Label of the reference to compare against: a baseline or a forecaster/"
+            "temporal downscaler run in `runs`. A run is not scored against itself."
+        ),
     )
     lead_times: str = Field(
         ...,
@@ -358,7 +518,8 @@ class ScorecardConfig(BaseModel):
             "Variables and metrics as scorecard rows (VAR:M1,M2 format). "
             "An empty list [] is accepted by the schema but falls back to a "
             "hard-coded RMSE-only set (U_10M, V_10M, T_2M, PMSL, TD_2M, TOT_PREC). "
-            "Omit ':...' after a variable name to include all available metrics for it."
+            "Omit ':...' after a variable name to include all available metrics for it. "
+            "Variables without data are shown as empty rows."
         ),
     )
 
@@ -380,6 +541,57 @@ class ExperimentScorecardConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class SpectraConfig(BaseModel):
+    """Configuration for power-spectra QC plots in the experiment pipeline."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Whether to compute and plot power spectra.",
+    )
+    method: Literal["dct", "fft"] = Field(
+        default="dct",
+        description="Spectral method: 'dct' (default, recommended for LAM) or 'fft'.",
+    )
+    lead_times: List[int] = Field(
+        default_factory=list,
+        description="Representative lead times (hours) at which to compute spectra.",
+    )
+    variables: List[str] = Field(
+        default=["T_2M", "WIND_KE", "TOT_PREC1"],
+        description=(
+            "Spectra variables: any parameter the forecast and truth loaders provide "
+            "(e.g. T_2M, SP_10M, TOT_PREC1), plus WIND_KE, the kinetic energy from "
+            "U_10M and V_10M. TOT_PREC1 needs hourly output steps: runs with coarser "
+            "steps (e.g. 6h) must use TOT_PREC6 instead."
+        ),
+    )
+    init_hours: Optional[List[int]] = Field(
+        default=None,
+        min_length=1,
+        description="Optional subset of init hours to average over. None = all.",
+    )
+
+    @field_validator("variables")
+    @classmethod
+    def validate_variables(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError(
+                "`variables` must list at least one variable when spectra is configured."
+            )
+        return v
+
+    @model_validator(mode="after")
+    def check_enabled_requirements(self):
+        if self.enabled and not self.lead_times:
+            raise ValueError(
+                "experiment.spectra.enabled is true but `lead_times` is empty; "
+                "specify at least one lead time (hours)."
+            )
+        return self
+
+    model_config = {"extra": "forbid"}
+
+
 class ShowcaseConfig(BaseModel):
     """Configuration for the showcase workflow."""
 
@@ -394,6 +606,10 @@ class ShowcaseConfig(BaseModel):
     animations: AnimationsConfig = Field(
         default_factory=AnimationsConfig,
         description="Configuration for animation generation.",
+    )
+    comparisons: ComparisonsConfig = Field(
+        default_factory=ComparisonsConfig,
+        description="Configuration for side-by-side map comparisons.",
     )
 
 
@@ -464,7 +680,10 @@ class ExperimentConfig(BaseModel):
     )
     params: List[str] = Field(
         default=["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"],
-        description="List of parameters to compute verification metrics for.",
+        description=(
+            "List of parameters to compute verification metrics for. With INCA truth, "
+            "parameters INCA does not provide are skipped."
+        ),
     )
     thresholds: Dict[str, Dict[str, List[float]]] = Field(
         default_factory=dict,
@@ -487,6 +706,16 @@ class ExperimentConfig(BaseModel):
             "whose config references that file."
         ),
     )
+    score_on_common_points: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Parameters scored only at the points where every participant has a "
+            "value, per reference time and lead time (e.g. HZEROCL, SNOWLMT and "
+            "CIN_MU, which ICON leaves undefined at part of the domain). All "
+            "participants and the truth are then scored on the same points. The "
+            "scores of these parameters depend on the set of participants."
+        ),
+    )
     scorecards: Optional[ExperimentScorecardConfig] = Field(
         default=None,
         description="Scorecard generation configuration. Omit or set enabled: false to disable.",
@@ -494,6 +723,18 @@ class ExperimentConfig(BaseModel):
     scoremaps: Optional[ScoreMapsConfig] = Field(
         default=None,
         description="Score map plot configuration. Omit or set enabled: false to disable.",
+    )
+    spectra: SpectraConfig = Field(
+        default_factory=SpectraConfig,
+        description=(
+            "Power-spectra QC configuration. Disabled by default. Spectra need every "
+            "participant and the truth on the ICON-CH1 or ICON-CH2 native grid: INCA "
+            "baselines, INCA truth and station (jretrievedwh) truth are not supported."
+        ),
+    )
+    sal: Optional[SalConfig] = Field(
+        default=None,
+        description="SAL precipitation verification. Omit or set enabled: false to disable.",
     )
 
     @field_validator("station_holdout")
@@ -507,6 +748,15 @@ class ExperimentConfig(BaseModel):
         if duplicates:
             raise ValueError(f"station_holdout has duplicate stations: {duplicates}")
         return v
+
+    @model_validator(mode="after")
+    def validate_score_on_common_points(self) -> "ExperimentConfig":
+        unknown = sorted(set(self.score_on_common_points) - set(self.params))
+        if unknown:
+            raise ValueError(
+                f"score_on_common_points parameters {unknown} are not in experiment.params."
+            )
+        return self
 
     @field_validator("thresholds")
     @classmethod
@@ -718,21 +968,130 @@ class ConfigModel(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_scoremap_leadtimes(self) -> "ConfigModel":
-        sm = self.experiment.scoremaps if self.experiment else None
-        if sm is None or not sm.enabled:
+    def validate_leadtimes_producible(self) -> "ConfigModel":
+        """Reject scoremaps/sal/spectra lead times not produced by every participant."""
+        if self.experiment is None:
             return self
-        requested = set(sm.leadtimes)
+        # (section, config, name of its lead-time field)
+        for label, cfg, field in (
+            ("scoremaps", self.experiment.scoremaps, "leadtimes"),
+            ("sal", self.experiment.sal, "leadtimes"),
+            ("spectra", self.experiment.spectra, "lead_times"),
+        ):
+            if cfg is None or not cfg.enabled:
+                continue
+            for item in self.runs:
+                steps = getattr(item, next(iter(type(item).model_fields))).steps
+                start, end, step = map(int, steps.split("/"))
+                leadtimes = getattr(cfg, field)
+                unsupported = set(leadtimes) - set(range(start, end + 1, step))
+                if unsupported:
+                    raise ValueError(
+                        f"{label}.{field} contains {sorted(unsupported)} h which are not "
+                        f"produced by participant with steps '{steps}'."
+                    )
+        return self
+
+    @model_validator(mode="after")
+    def validate_spectra_sources(self) -> "ConfigModel":
+        """Reject spectra participants or truth that are not on an ICON native grid.
+
+        The detection mirrors ``data_input.is_inca_archive`` and
+        ``data_input.truth_type``, which are not imported here to keep the config
+        module light.
+        """
+        if self.experiment is None or not self.experiment.spectra.enabled:
+            return self
+        unsupported = []
         for item in self.runs:
-            steps = getattr(item, next(iter(item.model_fields))).steps
-            start, end, step = map(int, steps.split("/"))
-            producible = set(range(start, end + 1, step))
-            unsupported = requested - producible
-            if unsupported:
+            if (
+                isinstance(item, BaselineItem)
+                and "INCA" in Path(item.baseline.root).parts
+            ):
+                unsupported.append(f"baseline {item.baseline.label!r} (INCA)")
+        if self.truth is not None:
+            root = self.truth.root
+            if Path(root).suffix != ".zarr":
+                if "jretrieve" in root:
+                    unsupported.append(
+                        f"truth {self.truth.label!r} (station observations)"
+                    )
+                elif "INCA" in Path(root).parts:
+                    unsupported.append(f"truth {self.truth.label!r} (INCA)")
+        if unsupported:
+            raise ValueError(
+                "experiment.spectra needs every participant and the truth on the "
+                "ICON-CH1 or ICON-CH2 native grid; not supported: "
+                + ", ".join(unsupported)
+                + ". Disable spectra or remove these sources."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_labels(self) -> "ConfigModel":
+        """Reject a label shared by different runs or baselines.
+
+        Results are keyed by label, so a repeated label would merge or overwrite
+        participants. The inline forecaster of a temporal downscaler is included;
+        an entry repeated with the same configuration is the same run and is
+        allowed.
+        """
+        configs_by_label: dict[str, list[dict]] = {}
+        for item in self.runs:
+            cfg = getattr(item, next(iter(type(item).model_fields)))
+            entries = [cfg]
+            if isinstance(cfg, TemporalDownscalerConfig) and cfg.forecaster:
+                entries.append(cfg.forecaster)
+            for entry in entries:
+                if entry.label is None:
+                    continue
+                configs = configs_by_label.setdefault(entry.label, [])
+                dump = entry.model_dump()
+                if dump not in configs:
+                    configs.append(dump)
+        duplicates = sorted(
+            label for label, configs in configs_by_label.items() if len(configs) > 1
+        )
+        if duplicates:
+            raise ValueError(
+                f"Labels must be unique across `runs`; used by several runs or "
+                f"baselines: {duplicates}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_scorecard_references(self) -> "ConfigModel":
+        sc = self.experiment.scorecards if self.experiment else None
+        if sc is None or not sc.enabled:
+            return self
+        labels = [
+            getattr(item, next(iter(type(item).model_fields))).label
+            for item in self.runs
+        ]
+        for name, section in sc.sections.items():
+            if section.baseline not in labels:
                 raise ValueError(
-                    f"scoremaps.leadtimes contains {sorted(unsupported)} h which are not "
-                    f"produced by participant with steps '{steps}'."
+                    f"scorecards.sections.{name}.baseline {section.baseline!r} does "
+                    f"not match the label of any entry in `runs`: {labels}"
                 )
+            if labels.count(section.baseline) > 1:
+                raise ValueError(
+                    f"scorecards.sections.{name}.baseline {section.baseline!r} is "
+                    f"ambiguous: several entries in `runs` use this label."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_comparison_baselines(self) -> "ConfigModel":
+        labels = [
+            item.baseline.label for item in self.runs if isinstance(item, BaselineItem)
+        ]
+        unknown = [b for b in self.showcase.comparisons.baselines if b not in labels]
+        if unknown:
+            raise ValueError(
+                f"showcase.comparisons.baselines {unknown} do not match the label of "
+                f"any baseline in `runs`: {labels}"
+            )
         return self
 
     model_config = {

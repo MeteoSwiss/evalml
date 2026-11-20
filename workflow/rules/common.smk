@@ -6,10 +6,16 @@ import hashlib
 import json
 from urllib.parse import urlparse
 
+from evalml.config import MODEL_REGISTRY_ROOT
+from data_input import inca, truth_type
+from evalml.leadtimes import resolve_leadtimes
+
 CONFIG_ROOT = Path("config").resolve()
 OUT_ROOT = Path(config["locations"]["output_root"])
 # the experiment block is optional (e.g. for showcase/sandbox configs)
 EXPERIMENT_CONFIG = config.get("experiment") or {}
+# "anemoi_dataset", "jretrieve" or "inca"
+TRUTH_TYPE = truth_type(config["truth"]["root"])
 
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M"
 HASH_LENGTH = 4
@@ -118,8 +124,10 @@ def parse_regions():
     return json.dumps(result)
 
 
-def parse_showcase_regions():
+def parse_showcase_regions(domains=None):
     """Parse showcase domains from config.
+
+    ``domains`` defaults to ``showcase.animations.domains``.
 
     Returns a dict mapping domain name -> {extent, projection, rotate, hours_per_revolution}.
     Named domains (strings) have extent=None and projection=None,
@@ -128,12 +136,10 @@ def parse_showcase_regions():
     rotate/hours_per_revolution only take effect when extent is None
     (full-globe domains).
     """
+    if domains is None:
+        domains = config["showcase"]["animations"]["domains"]
     result = {}
-    for r in (
-        config.get("showcase", {})
-        .get("animations", {})
-        .get("domains", ["globe", "europe", "switzerland"])
-    ):
+    for r in domains:
         if isinstance(r, str):
             result[r] = {
                 "extent": None,
@@ -143,10 +149,10 @@ def parse_showcase_regions():
             }
         else:
             result[r["name"]] = {
-                "extent": r.get("extent"),
-                "projection": r.get("projection", "orthographic"),
-                "rotate": r.get("rotate", False),
-                "hours_per_revolution": r.get("hours_per_revolution", 96.0),
+                "extent": r["extent"],
+                "projection": r["projection"],
+                "rotate": r["rotate"],
+                "hours_per_revolution": r["hours_per_revolution"],
             }
     return result
 
@@ -193,7 +199,12 @@ def model_id(checkpoint_uri: str) -> str:
     elif ckpt_type == "huggingface":
         return checkpoint_uri.split("/")[-1].split(".")[0]
     elif ckpt_type == "local":
-        return checkpoint_uri.split("/")[-2][:HASH_LENGTH]
+        # A checkpoint resolved from the model registry keeps its registered name as
+        # the id, so output paths and dashboards say "amber-ridge", not "ambe".
+        try:
+            return Path(checkpoint_uri).relative_to(MODEL_REGISTRY_ROOT).parts[0]
+        except ValueError:
+            return checkpoint_uri.split("/")[-2][:HASH_LENGTH]
 
 
 def register_run(model_type, run_config, as_candidate=True):
@@ -301,35 +312,62 @@ def collect_all_baselines():
     return baselines
 
 
-def resolve_baseline_id(label: str) -> str:
-    """Resolve a baseline label to its hash-based ID.
+def resolve_reference_id(label: str) -> str:
+    """Resolve a scorecard reference label to its participant ID.
 
-    Scorecard configs reference baselines by human-readable label (e.g. 'IFS').
-    This finds the matching baseline_id in BASELINE_CONFIGS.
-    Raises ValueError if the label doesn't match any registered baseline.
+    The reference can be a baseline (hash-based ID) or a candidate run
+    ('env_id/config_hash'). Labels are unique across `runs` (config validation).
     """
     for baseline_id, cfg in BASELINE_CONFIGS.items():
         if cfg.get("label") == label:
             return baseline_id
-    available = [cfg.get("label") for cfg in BASELINE_CONFIGS.values()]
+    for run_id, cfg in RUN_CONFIGS.items():
+        if cfg.get("_is_candidate", False) and cfg.get("label") == label:
+            return run_id
+    available = [cfg.get("label") for cfg in BASELINE_CONFIGS.values()] + [
+        cfg.get("label")
+        for cfg in RUN_CONFIGS.values()
+        if cfg.get("_is_candidate", False)
+    ]
     raise ValueError(
-        f"No baseline with label {label!r} found. "
-        f"Available baseline labels: {available}"
+        f"No baseline or candidate run with label {label!r} found. "
+        f"Available labels: {available}"
     )
 
 
+def experiment_participant_ids() -> list[str]:
+    """Baseline ids and candidate run ids: the forecasts compared in the experiment."""
+    return list(BASELINE_CONFIGS) + [
+        run_id
+        for run_id, run_config in RUN_CONFIGS.items()
+        if run_config.get("_is_candidate", False)
+    ]
+
+
+def participant_data_dir(participant_id: str) -> Path:
+    if participant_id in BASELINE_CONFIGS:
+        return OUT_ROOT / f"data/baselines/{participant_id}"
+    return OUT_ROOT / f"data/runs/{participant_id}"
+
+
 def collect_experiment_participants():
-    participants = {}
-    for base in BASELINE_CONFIGS.keys():
-        participants[base] = (
-            OUT_ROOT / f"data/baselines/{base}/verif_aggregated_{VERIF_HASH}.nc"
-        )
-    for exp in RUN_CONFIGS.keys():
-        if RUN_CONFIGS[exp].get("_is_candidate", False):
-            participants[exp] = (
-                OUT_ROOT / f"data/runs/{exp}/verif_aggregated_{VERIF_HASH}.nc"
-            )
-    return participants
+    return {
+        pid: participant_data_dir(pid) / f"verif_aggregated_{VERIF_HASH}.nc"
+        for pid in experiment_participant_ids()
+    }
+
+
+def participant_valid_mask_files(wildcards) -> list[Path]:
+    """Valid masks of all participants for one reference time (rule
+    verification_valid_mask*), or none when experiment.score_on_common_points is
+    unset."""
+    if not COMMON_POINTS_PARAMS:
+        return []
+    return [
+        participant_data_dir(pid)
+        / f"{wildcards.init_time}/valid_mask_{VALID_MASK_HASH}.nc"
+        for pid in experiment_participant_ids()
+    ]
 
 
 # -----------------------------------------------
@@ -411,7 +449,25 @@ def verif_hash(full_config: dict) -> str:
         "lapse_rate_correction": full_config.get("lapse_rate_correction", True),
         "station_holdout": HOLDOUT_STATIONS,
     }
+    # Scoring on common points makes the scores depend on the other participants.
+    # Added only when set, so that existing outputs keep their paths.
+    if COMMON_POINTS_PARAMS:
+        experiment_verif_cfg["score_on_common_points"] = {
+            "params": sorted(COMMON_POINTS_PARAMS),
+            "participants": sorted(experiment_participant_ids()),
+        }
     return generate_json_hash({"truth": truth_cfg, "verif": experiment_verif_cfg})
+
+
+def valid_mask_hash(full_config: dict) -> str:
+    """Hash of the settings that determine a participant's valid mask: the truth
+    points it is mapped to and the masked parameters."""
+    truth_cfg = {
+        k: v for k, v in full_config["truth"].items() if k not in TRUTH_HASH_EXCLUDE
+    }
+    return generate_json_hash(
+        {"truth": truth_cfg, "params": sorted(COMMON_POINTS_PARAMS)}
+    )
 
 
 def holdout_dep(_):
@@ -432,20 +488,31 @@ def run_uses_holdout(run_id: str) -> bool:
 
 
 def truth_file_dep(_):
-    """Truth file dependency: a real path for zarr, but a live-query
-    marker (no input file) for jretrieve."""
+    """Truth file dependency tracked by Snakemake.
+
+    - anemoi dataset: the dataset itself
+    - INCA: the static topography file; the archive directory is not tracked
+      because its modification time changes whenever new runs are archived
+    - jretrieve: none (live query)
+    """
     root = config["truth"]["root"]
-    return [] if "jretrieve" in str(root) else [root]
+    if TRUTH_TYPE == "anemoi_dataset":
+        return [root]
+    if TRUTH_TYPE == "inca":
+        return [str(inca.topography_file(root))]
+    return []
 
 
-# Fail fast: when the truth source is the live DWH (jretrievedwh), verify its
-# prerequisites at workflow-build time so a misconfigured environment is caught
-# at launch, before any (expensive) inference job runs.
-if "jretrieve" in str(config["truth"]["root"]):
+# Fail fast: verify the prerequisites of the truth source at workflow-build time
+# so a misconfigured environment is caught at launch, before any (expensive)
+# inference job runs.
+if TRUTH_TYPE == "jretrieve":
     from data_input.jretrieve import check_prerequisites, parse_selection
 
     _, _jretrieve_stage, _, _, _ = parse_selection(config["truth"]["root"])
     check_prerequisites(_jretrieve_stage)
+elif TRUTH_TYPE == "inca":
+    inca.check_prerequisites(config["truth"]["root"])
 
 
 TRUTH_HASH = truth_hash(config["truth"])
@@ -455,12 +522,20 @@ HOLDOUT_FILE = (
 )
 HOLDOUT_WORKDIR_NAME = "holdout_stations.csv"
 REGIONS = parse_regions()
-VERIF_HASH = verif_hash(config)
-_showcase = config.get("showcase", {})
+_showcase = config["showcase"]
 SHOWCASE_CONFIG = {
     "regions": parse_showcase_regions(),
-    "params": _showcase.get("params", ["T_2M", "SP_10M"]),
-    "fps": _showcase.get("animations", {}).get("frames_per_second", 2.0),
+    "params": _showcase["params"],
+    "fps": _showcase["animations"]["frames_per_second"],
+}
+_comparisons = _showcase["comparisons"]
+COMPARISONS_CONFIG = {
+    "enabled": _comparisons["enabled"],
+    "regions": parse_showcase_regions(_comparisons["domains"]),
+    "baselines": _comparisons["baselines"],
+    "lead_times": _comparisons["lead_times"],
+    # station truth (jretrievedwh) cannot be drawn as a map
+    "truth": _comparisons["truth"] and TRUTH_TYPE != "jretrieve",
 }
 EXPERIMENT_PARAMS = EXPERIMENT_CONFIG.get(
     "params", ["T_2M", "TD_2M", "SP_10M", "PS", "PMSL", "TOT_PREC6"]
@@ -469,6 +544,11 @@ REFTIMES = parse_reference_times()
 RUN_CONFIGS = collect_all_runs()
 ENV_CONFIGS = collect_all_envs()
 BASELINE_CONFIGS = collect_all_baselines()
+COMMON_POINTS_PARAMS = EXPERIMENT_CONFIG.get("score_on_common_points") or []
+# After RUN_CONFIGS and BASELINE_CONFIGS: the hash includes the participants
+# when experiment.score_on_common_points is set.
+VERIF_HASH = verif_hash(config)
+VALID_MASK_HASH = valid_mask_hash(config)
 EXPERIMENT_PARTICIPANTS = collect_experiment_participants()
 # Fail fast: an inference config that consumes the holdout station file needs
 # experiment.station_holdout to be set.
@@ -484,31 +564,6 @@ _scorecard = EXPERIMENT_CONFIG.get("scorecards") or {}
 SCORECARD_CONFIGS = (
     _scorecard.get("sections", {}) if _scorecard.get("enabled", True) else {}
 )
-
-
-# Params with no value at lead time 0. Two distinct reasons land here:
-# - period-accumulated params (TOT_PREC/tp) verify a [lead - period, lead]
-#   window, so they have no value at lead times shorter than one step spacing
-#   (e.g. no 0h precip map).
-# - diagnostic params (e.g. CLCT/tcc in AIFS) aren't part of the model's input state,
-#   so they're simply absent from the initial-state GRIB file written at step 0.
-#   Cloud cover is prognostic in some models (Varda-single RC); listing it here
-#   only drops their 0h animation frame.
-# Short and canonical names both appear across the workflow (showcases vs maps).
-PARAMS_WITHOUT_STEP_ZERO_VALUE = {
-    "TOT_PREC",
-    "tp",
-    "CLCT",
-    "tcc",
-    "CLCL",
-    "lcc",
-    "CLCM",
-    "mcc",
-    "CLCH",
-    "hcc",
-    "SSRD",
-    "ssrd",
-}
 
 
 def balfrin_cpus(mem_mb, actual_cpus=1, node_mem_mb=512_000, node_cpus=256):
@@ -527,31 +582,15 @@ def balfrin_cpus(mem_mb, actual_cpus=1, node_mem_mb=512_000, node_cpus=256):
     return max(actual_cpus, mem_cpus)
 
 
-def resolve_leadtimes(steps_spec, requested="all", param=None):
-    """Lead times to compute for a single participant.
+def scoremap_runtime(wc):
+    """SLURM runtime (minutes) for a scoremap job, which loops over all reference
+    times. Accumulated parameters (TOT_PREC*) re-accumulate hourly analysis
+    fields up to the lead time, so they scale with it. Per-reftime costs measured
+    on Balfrin (MRB-980, REA-L-CH1 truth): ~4 s, plus ~0.3 s per lead hour for
+    accumulated parameters; 1.5x headroom, at least 60 min."""
+    import math
 
-    A run or baseline produces only the lead times in its own ``steps`` spec
-    (``start/stop/step``, hours). This returns those of the ``requested``
-    selection that the participant actually produces — the literal ``"all"``
-    (every produced lead time) or an explicit list of ints — so a 36h lead is
-    never requested of an ICON-CH1 baseline (steps ``0/33/6``), nor a >120h
-    lead of ICON-CH2. Explicitly requested lead times the participant cannot
-    produce are skipped with a warning. For accumulated ``param``s, lead times
-    shorter than one step spacing are dropped (no accumulation window).
-    """
-    start, end, step = map(int, steps_spec.split("/"))
-    supported = set(range(start, end + 1, step))
-    wanted = supported if requested == "all" else set(requested)
-
-    unsupported = sorted(wanted - supported)
-    if unsupported:
-        logging.getLogger("snakemake").warning(
-            "Skipping lead time(s) %sh: not produced by forecast steps '%s'.",
-            unsupported,
-            steps_spec,
-        )
-
-    valid = wanted & supported
-    if param in PARAMS_WITHOUT_STEP_ZERO_VALUE:
-        valid = {lt for lt in valid if lt >= step}
-    return sorted(valid)
+    seconds = 4.0
+    if wc.param.startswith("TOT_PREC"):
+        seconds += 0.3 * int(wc.leadtime)
+    return max(60, math.ceil(1.5 * len(REFTIMES) * seconds / 60))

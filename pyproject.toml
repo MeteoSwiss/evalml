@@ -32,6 +32,8 @@ dependencies = [
     "earthkit-meteo>=1.0,<1.1",
     "earthkit-geo>=1.0,<1.1",
     "titanlib==0.3.4.dev4",
+    "pysteps>=1.12",
+    "scikit-image>=0.22",
 ]
 
 [project.scripts]
@@ -59,7 +61,9 @@ markers = [
 packages = [
   "src/evalml",
   "src/verification",
-  "src/data_input"
+  "src/data_input",
+  "src/spectra",
+  "src/regrid"
 ]
 
 [tool.uv.sources]

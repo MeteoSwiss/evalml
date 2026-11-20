@@ -60,6 +60,32 @@ DOMAINS = {
 }
 
 
+def resolve_region(
+    region_name: str, region_cfg: dict, lead_time: int = 0
+) -> tuple["ccrs.Projection", list[float] | None]:
+    """Return (projection, extent) for a showcase region.
+
+    ``region_cfg`` is one entry of the dict built by ``parse_showcase_regions``.
+    A custom ``extent`` takes precedence; otherwise the named domain in
+    ``DOMAINS`` is used, rotated by ``lead_time`` when ``rotate`` is set.
+    """
+    if region_cfg.get("extent") is not None:
+        projection = get_projection(region_cfg.get("projection") or "orthographic")
+        return projection, region_cfg["extent"]
+    domain = DOMAINS[region_name]
+    if region_cfg.get("rotate"):
+        base = domain["projection"].proj4_params
+        central_longitude = (
+            base["lon_0"] + 360.0 * lead_time / region_cfg["hours_per_revolution"]
+        ) % 360
+        #  central_longitude=central_longitude, central_latitude=0.0 for zero-centered
+        projection = ccrs.Orthographic(
+            central_longitude=central_longitude, central_latitude=base["lat_0"]
+        )
+        return projection, domain["extent"]
+    return domain["projection"], domain["extent"]
+
+
 class StatePlotter:
     """A class to plot state fields on various DOMAINS."""
 
@@ -208,16 +234,19 @@ class StatePlotter:
         # Normalize style and color-related kwargs
         style_to_use, plot_kwargs = self._prepare_plot_kwargs(style, kwargs)
 
-        # Temporarily suppress earthkit-plots internal source-based kwargs
-        with self._temporary_plot_kwargs_override(subplot):
-            subplot.tricontourf(
-                x=x[finite],
-                y=y[finite],
-                z=field[finite],
-                style=style_to_use,
-                transform=proj,
-                **plot_kwargs,
-            )  # for earthkit.plots to work properly cmap and norm are needed here
+        # An all-NaN field (e.g. accumulations at lead 0) leaves nothing to
+        # contour: only the map layers below are drawn.
+        if finite.any():
+            # Temporarily suppress earthkit-plots internal source-based kwargs
+            with self._temporary_plot_kwargs_override(subplot):
+                subplot.tricontourf(
+                    x=x[finite],
+                    y=y[finite],
+                    z=field[finite],
+                    style=style_to_use,
+                    transform=proj,
+                    **plot_kwargs,
+                )  # for earthkit.plots to work properly cmap and norm are needed here
         # TODO: gridlines etc would be nicer to have in the init, but I didn't get
         # them to overlay the plot layer
 

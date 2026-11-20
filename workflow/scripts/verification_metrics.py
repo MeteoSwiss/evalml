@@ -10,10 +10,12 @@ import xarray as xr
 
 from verification import verify, apply_lapse_rate_correction_inplace  # noqa: E402
 from verification.spatial import map_forecast_to_truth  # noqa: E402
+from verification.valid_mask import apply_valid_mask, combine_valid_masks  # noqa: E402
 from data_input import (
     parse_steps,
     load_forecast_data,
     load_truth_data,
+    truth_type,
 )  # noqa: E402
 
 LOG = logging.getLogger(__name__)
@@ -48,11 +50,7 @@ def select_holdout_stations(
     also have a ``values`` dimension (unstructured grids), so the truth source
     is checked instead. Stations missing from the truth are dropped.
     """
-    # Same criterion as load_truth_data(): a .zarr is gridded, a jretrieve marker is stations.
-    truth_is_station_data = Path(truth_root).suffix != ".zarr" and "jretrieve" in str(
-        truth_root
-    )
-    if not truth_is_station_data:
+    if truth_type(truth_root) != "jretrieve":
         LOG.warning(
             "Holdout stations given, but the truth is gridded data, not station "
             "observations; station_group stratification skipped."
@@ -90,14 +88,15 @@ def program_summary_log(args):
     LOG.info("=" * 80)
 
 
-def main(args: ScriptConfig):
-    """Main function to verify baseline forecast data."""
+def load_aligned_data(args, params: list[str]) -> tuple[xr.Dataset, xr.Dataset]:
+    """Load forecast and truth for ``params``, with the forecast mapped to the truth
+    points and the truth selected at the forecast valid times."""
 
     # get baseline forecast data
     now = datetime.now()
 
     fcst = load_forecast_data(
-        args.forecast, args.reftime, args.steps, args.params, member=args.member
+        args.forecast, args.reftime, args.steps, params, member=args.member
     )
 
     LOG.info(
@@ -108,7 +107,7 @@ def main(args: ScriptConfig):
 
     # get truth data
     now = datetime.now()
-    truth = load_truth_data(args.truth, args.reftime, args.steps, args.params)
+    truth = load_truth_data(args.truth, args.reftime, args.steps, params)
     LOG.info(
         "Loaded truth data in %s seconds: \n%s",
         (datetime.now() - now).total_seconds(),
@@ -128,6 +127,19 @@ def main(args: ScriptConfig):
         "Aligned forecast and truth in %s seconds",
         (datetime.now() - now).total_seconds(),
     )
+    return fcst, truth
+
+
+def main(args: ScriptConfig):
+    """Main function to verify baseline forecast data."""
+
+    fcst, truth = load_aligned_data(args, args.params)
+
+    if args.valid_masks:
+        common_mask = combine_valid_masks(
+            [xr.open_dataset(f) for f in args.valid_masks]
+        )
+        fcst, truth = apply_valid_mask(fcst, truth, common_mask)
 
     if args.lapse_rate_correction:
         apply_lapse_rate_correction_inplace(fcst, truth, args.params)
@@ -255,6 +267,17 @@ if __name__ == "__main__":
         type=str,
         default="000",
         help="Ensemble member to load: '000' for control, 'median' for the pre-computed median, 'mean' to average all members, or any 3-digit member ID.",
+    )
+    parser.add_argument(
+        "--valid_masks",
+        type=Path,
+        nargs="*",
+        default=[],
+        help=(
+            "Valid-mask files (verification_valid_mask.py) of all experiment "
+            "participants for this reference time. The parameters they hold are "
+            "scored only where every participant has a value."
+        ),
     )
     parser.add_argument(
         "--output",

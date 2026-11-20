@@ -1,0 +1,221 @@
+# ----------------------------------------------------- #
+# POWER SPECTRA WORKFLOW                                 #
+# ----------------------------------------------------- #
+
+
+include: "common.smk"
+
+
+SPECTRA = EXPERIMENT_CONFIG.get("spectra") or {}
+SPECTRA_LEAD_TIMES = ",".join(str(s) for s in SPECTRA.get("lead_times", []))
+SPECTRA_VARIABLES = ",".join(SPECTRA.get("variables", ["T_2M", "WIND_KE", "TOT_PREC1"]))
+SPECTRA_METHOD = SPECTRA.get("method", "dct")
+
+
+def _spectra_reftimes():
+    hours = SPECTRA.get("init_hours")
+    if hours is None:
+        return [t.strftime("%Y%m%d%H%M") for t in REFTIMES]
+    return [t.strftime("%Y%m%d%H%M") for t in REFTIMES if t.hour in hours]
+
+
+if SPECTRA.get("enabled", False) and not _spectra_reftimes():
+    raise ValueError(
+        f"experiment.spectra.init_hours {SPECTRA.get('init_hours')} matches none of "
+        f"the experiment dates (init hours {sorted({t.hour for t in REFTIMES})}); "
+        "adjust init_hours or remove it to use all dates."
+    )
+
+
+def _spectra_truth_steps():
+    candidates = list(collect_all_candidates())
+    if candidates:
+        return RUN_CONFIGS[candidates[0]]["steps"]
+    # no candidate runs (baseline-only experiment): fall back to any baseline's steps
+    if BASELINE_CONFIGS:
+        return next(iter(BASELINE_CONFIGS.values()))["steps"]
+    return "0/120/6"
+
+
+SPECTRA_PARTICIPANTS = {
+    pid: participant_data_dir(pid) / "spectra_aggregated.nc"
+    for pid in experiment_participant_ids()
+}
+
+
+rule spectra_compute:
+    input:
+        "src/spectra/__init__.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/spectra_compute.py",
+        inference_okfile=rules.inference_execute.output.okfile,
+    output:
+        OUT_ROOT / "data/runs/{run_id}/{init_time}/spectra.nc",
+    log:
+        OUT_ROOT / "logs/spectra_compute/{run_id}-{init_time}.log",
+    wildcard_constraints:
+        run_id=r"[^/]+/[^/]+",
+        init_time=r"\d+",
+    resources:
+        cpus_per_task=balfrin_cpus(50_000, actual_cpus=8),
+        mem_mb=50_000,
+        runtime="30m",
+    params:
+        grib=lambda wc: (
+            Path(OUT_ROOT) / f"data/runs/{wc.run_id}/{wc.init_time}/grib"
+        ).resolve(),
+        steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
+        label=lambda wc: RUN_CONFIGS[wc.run_id].get("label") or wc.run_id,
+        lead_times=SPECTRA_LEAD_TIMES,
+        variables=SPECTRA_VARIABLES,
+        method=SPECTRA_METHOD,
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run {input.script} \
+            --forecast {params.grib} --reftime {wildcards.init_time} \
+            --steps "{params.steps}" --lead_times "{params.lead_times}" \
+            --variables "{params.variables}" --method "{params.method}" \
+            --label "{params.label}" --output {output} >{log} 2>&1
+        """
+
+
+rule spectra_compute_baseline:
+    input:
+        "src/spectra/__init__.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/spectra_compute.py",
+        forecast=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["root"],
+    output:
+        OUT_ROOT / "data/baselines/{baseline_id}/{init_time}/spectra.nc",
+    log:
+        OUT_ROOT / "logs/spectra_compute_baseline/{baseline_id}-{init_time}.log",
+    resources:
+        cpus_per_task=balfrin_cpus(50_000, actual_cpus=8),
+        mem_mb=50_000,
+        runtime="30m",
+    params:
+        steps=lambda wc: BASELINE_CONFIGS[wc.baseline_id]["steps"],
+        label=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("label", wc.baseline_id),
+        member=lambda wc: BASELINE_CONFIGS[wc.baseline_id].get("member", "000"),
+        lead_times=SPECTRA_LEAD_TIMES,
+        variables=SPECTRA_VARIABLES,
+        method=SPECTRA_METHOD,
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run {input.script} \
+            --forecast {input.forecast} --reftime {wildcards.init_time} \
+            --member "{params.member}" \
+            --steps "{params.steps}" --lead_times "{params.lead_times}" \
+            --variables "{params.variables}" --method "{params.method}" \
+            --label "{params.label}" --output {output} >{log} 2>&1
+        """
+
+
+rule spectra_compute_truth:
+    input:
+        "src/spectra/__init__.py",
+        "src/data_input/__init__.py",
+        script="workflow/scripts/spectra_compute.py",
+        truth=config["truth"]["root"],
+    output:
+        OUT_ROOT / "data/truth/{init_time}/spectra.nc",
+    log:
+        OUT_ROOT / "logs/spectra_truth/{init_time}.log",
+    resources:
+        cpus_per_task=balfrin_cpus(50_000, actual_cpus=8),
+        mem_mb=50_000,
+        runtime="30m",
+    params:
+        steps=_spectra_truth_steps(),
+        label=config["truth"]["label"],
+        lead_times=SPECTRA_LEAD_TIMES,
+        variables=SPECTRA_VARIABLES,
+        method=SPECTRA_METHOD,
+    shell:
+        """
+        export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
+        uv run {input.script} \
+            --truth {input.truth} --reftime {wildcards.init_time} \
+            --steps "{params.steps}" --lead_times "{params.lead_times}" \
+            --variables "{params.variables}" --method "{params.method}" \
+            --label "{params.label}" --output {output} >{log} 2>&1
+        """
+
+
+rule spectra_aggregate:
+    input:
+        script="workflow/scripts/spectra_aggregate.py",
+        spectra_nc=lambda wc: expand(
+            rules.spectra_compute.output,
+            init_time=_spectra_reftimes(),
+            allow_missing=True,
+        ),
+    output:
+        OUT_ROOT / "data/runs/{run_id}/spectra_aggregated.nc",
+    log:
+        OUT_ROOT / "logs/spectra_aggregate/{run_id}.log",
+    wildcard_constraints:
+        run_id=r"[^/]+/[^/]+",
+    localrule: True
+    resources:
+        cpus_per_task=2,
+        mem_mb=20_000,
+        runtime="20m",
+    shell:
+        "uv run {input.script} {input.spectra_nc} --output {output} >{log} 2>&1"
+
+
+use rule spectra_aggregate as spectra_aggregate_baseline with:
+    input:
+        script="workflow/scripts/spectra_aggregate.py",
+        spectra_nc=lambda wc: expand(
+            rules.spectra_compute_baseline.output,
+            init_time=_spectra_reftimes(),
+            allow_missing=True,
+        ),
+    output:
+        OUT_ROOT / "data/baselines/{baseline_id}/spectra_aggregated.nc",
+    log:
+        OUT_ROOT / "logs/spectra_aggregate_baseline/{baseline_id}.log",
+    localrule: True
+
+
+use rule spectra_aggregate as spectra_aggregate_truth with:
+    input:
+        script="workflow/scripts/spectra_aggregate.py",
+        spectra_nc=expand(
+            rules.spectra_compute_truth.output,
+            init_time=_spectra_reftimes(),
+        ),
+    output:
+        OUT_ROOT / "data/truth/spectra_aggregated.nc",
+    log:
+        OUT_ROOT / "logs/spectra_aggregate_truth/truth.log",
+    localrule: True
+
+
+rule spectra_plot:
+    input:
+        script="workflow/scripts/spectra_plot.py",
+        truth=OUT_ROOT / "data/truth/spectra_aggregated.nc",
+        participants=list(SPECTRA_PARTICIPANTS.values()),
+    output:
+        report(
+            directory(OUT_ROOT / "results/{experiment}/spectra"),
+            patterns=["{name}.png"],
+        ),
+    log:
+        OUT_ROOT / "logs/spectra_plot/{experiment}.log",
+    resources:
+        cpus_per_task=balfrin_cpus(20_000, actual_cpus=2),
+        mem_mb=20_000,
+        runtime="20m",
+    shell:
+        """
+        uv run {input.script} \
+            --truth {input.truth} --participants {input.participants} \
+            --variables "{SPECTRA_VARIABLES}" --lead_times "{SPECTRA_LEAD_TIMES}" \
+            --output_dir {output} >{log} 2>&1
+        """
