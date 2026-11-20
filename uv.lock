@@ -4894,6 +4894,9 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/96/f2/b15fd377c971066ba04376bf2c5183d8b0080abae4536e2dcbaf417ec7d8/titanlib-0.3.4.dev4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:9da1f681493b117a18360941313bd292085dfcb0d561ae83f07bf3a83f76da1f", size = 13030424, upload-time = "2026-03-03T09:00:30.017Z" },
     { url = "https://files.pythonhosted.org/packages/a4/14/dcdcd22a32c4302a9752efae7cc0825d8487bf1b740aa133a9648e0cdf2b/titanlib-0.3.4.dev4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:a993b79cb1cd10df406baca547c78a87ceb7fec32f2946b5a1f8745cd4bf1e89", size = 13029834, upload-time = "2026-03-04T09:36:21.282Z" },
     { url = "https://files.pythonhosted.org/packages/b4/45/9f6c3b53b8e17aec5ec981c54b221ff5581f944305d757fbe54d3421f88a/titanlib-0.3.4.dev4-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:70231e0b0ea35fb9db88ffe666319b1d8a44158c10afad5da5e98326cd9d9e59", size = 13024877, upload-time = "2026-03-04T09:36:24.23Z" },
+]
+
+[[package]]
 name = "tifffile"
 version = "2026.3.3"
 source = { registry = "https://pypi.org/simple" }
