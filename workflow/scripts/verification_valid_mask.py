@@ -26,6 +26,10 @@ logging.basicConfig(
 def main(args):
     # Loaded exactly as for verification, so the mask matches the scored points.
     fcst, _ = load_aligned_data(args, args.params)
+    if "member" in fcst.dims:
+        # An ensemble has a value where every member has one: the ensemble mean
+        # (scored by verification_metrics.py) is missing where any member is.
+        fcst = fcst.mean("member", skipna=False)
     mask = forecast_valid_mask(fcst, args.params)
     LOG.info("Valid mask for %s: \n%s", args.params, mask)
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -65,6 +69,15 @@ if __name__ == "__main__":
         type=str,
         default="000",
         help="Ensemble member to load (see verification_metrics.py).",
+    )
+    parser.add_argument(
+        "--members",
+        type=int,
+        default=None,
+        help=(
+            "Number of members of an ensemble run (--forecast is then its grib/ "
+            "directory): the mask is where every member has a value."
+        ),
     )
     parser.add_argument("--output", type=Path, required=True, help="Output NetCDF.")
     main(parser.parse_args())
