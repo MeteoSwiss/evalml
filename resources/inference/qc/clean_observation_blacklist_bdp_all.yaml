@@ -1,0 +1,643 @@
+# Merged seasonal blacklist from: winter, spring, summer, fall
+# Source: residuals_kenda_*.parquet
+# Metric: BDP  (SMN stations excluded)
+# A station is blacklisted here if it failed in any season.
+hard_blacklist:
+  1: {station: AGAAR, paras: [SP_10M, T_2M]}
+  2: {station: AGBBA, paras: [T_2M]}
+  3: {station: AXPKLO, paras: [T_2M]}
+  4: {station: AXPLIM, paras: [T_2M]}
+  5: {station: AXPMAT, paras: [T_2M]}
+  6: {station: AXPNAL, paras: [T_2M]}
+  7: {station: AXPPAN, paras: [T_2M]}
+  8: {station: AXPTAV, paras: [T_2M]}
+  9: {station: AXPZER, paras: [T_2M]}
+  10: {station: BEBUD, paras: [T_2M]}
+  11: {station: BEGWA, paras: [T_2M]}
+  12: {station: BEHAK, paras: [T_2M]}
+  13: {station: BEINS, paras: [T_2M]}
+  14: {station: BEKSE, paras: [T_2M]}
+  15: {station: BELUA, paras: [T_2M]}
+  16: {station: BEMBE, paras: [T_2M]}
+  17: {station: CZBRN, paras: [PMSL]}
+  18: {station: CZCES, paras: [PMSL]}
+  19: {station: CZCHE, paras: [PMSL]}
+  20: {station: CZCHU, paras: [VMAX10M]}
+  21: {station: CZDYJ, paras: [SP_10M]}
+  22: {station: CZHOJ, paras: [SP_10M, VMAX10M]}
+  23: {station: CZKOB, paras: [SP_10M]}
+  24: {station: CZKOC, paras: [PMSL]}
+  25: {station: CZKOM, paras: [PMSL]}
+  26: {station: CZKUC, paras: [PMSL]}
+  27: {station: CZLUK, paras: [PMSL]}
+  28: {station: CZMAR, paras: [SP_10M, VMAX10M]}
+  29: {station: CZPAR, paras: [PMSL]}
+  30: {station: CZPIM, paras: [VMAX10M]}
+  31: {station: CZPIY, paras: [PMSL]}
+  32: {station: CZPLZ, paras: [PMSL]}
+  33: {station: CZPRL, paras: [PMSL]}
+  34: {station: CZSTA, paras: [T_2M]}
+  35: {station: CZSTR, paras: [SP_10M]}
+  36: {station: CZTEM, paras: [PMSL]}
+  37: {station: DLDRE, paras: [PMSL, SP_10M, TD_2M, T_2M, T_G, VMAX10M]}
+  38: {station: DLDUE, paras: [PMSL, PS, SP_10M, TD_2M, T_2M, T_G, VMAX10M]}
+  39: {station: DLEMM, paras: [T_G]}
+  40: {station: DLERF, paras: [PS, SP_10M, TD_2M, T_2M, T_G, VMAX10M]}
+  41: {station: DLFEB, paras: [SP_10M]}
+  42: {station: DLGRO, paras: [PS, SP_10M, VMAX10M]}
+  43: {station: DLHAN, paras: [PS, SP_10M, TD_2M, T_2M, T_G, VMAX10M]}
+  44: {station: DLKLE, paras: [VMAX10M]}
+  45: {station: DLKOE, paras: [PMSL, PS, SP_10M, TD_2M, T_2M, T_G, VMAX10M]}
+  46: {station: DLLEI, paras: [PS, SP_10M, T_2M, T_G, VMAX10M]}
+  47: {station: DLMUO, paras: [PS, SP_10M, TD_2M, T_2M, T_G, VMAX10M]}
+  48: {station: DLSTU, paras: [PMSL]}
+  49: {station: DLWEB, paras: [SP_10M]}
+  50: {station: DLZUG, paras: [PS, TD_2M, T_2M]}
+  51: {station: FLTRL, paras: [TD_2M, T_2M]}
+  52: {station: FRABB, paras: [PMSL]}
+  53: {station: FRAIR, paras: [TD_2M]}
+  54: {station: FRALL, paras: [SP_10M, T_2M]}
+  55: {station: FRAVI, paras: [PMSL]}
+  56: {station: FRBDS, paras: [VMAX10M]}
+  57: {station: FRBEM, paras: [VMAX10M]}
+  58: {station: FRBON, paras: [TD_2M, T_2M]}
+  59: {station: FRCAR, paras: [SP_10M]}
+  60: {station: FRCCH, paras: [SP_10M, VMAX10M]}
+  61: {station: FRCRV, paras: [PMSL]}
+  62: {station: FREVI, paras: [VMAX10M]}
+  63: {station: FRHUE, paras: [T_2M]}
+  64: {station: FRLAN, paras: [SP_10M]}
+  65: {station: FRLAS, paras: [PMSL]}
+  66: {station: FRLBL, paras: [VMAX10M]}
+  67: {station: FRLCV, paras: [SP_10M, T_2M]}
+  68: {station: FRLMA, paras: [PMSL]}
+  69: {station: FRMAH, paras: [SP_10M]}
+  70: {station: FRMAI, paras: [SP_10M]}
+  71: {station: FRMIL, paras: [PMSL]}
+  72: {station: FRMPR, paras: [PMSL]}
+  73: {station: FROCT, paras: [PMSL]}
+  74: {station: FRODE, paras: [VMAX10M]}
+  75: {station: FRPER, paras: [PMSL]}
+  76: {station: FRROC, paras: [SP_10M, VMAX10M]}
+  77: {station: FRROM, paras: [PMSL]}
+  78: {station: FRSDI, paras: [PMSL]}
+  79: {station: FRSGB, paras: [PMSL]}
+  80: {station: FRTAL, paras: [PMSL]}
+  81: {station: FRTAR, paras: [PS, SP_10M, TD_2M, T_2M, VMAX10M]}
+  82: {station: FRTIG, paras: [T_2M]}
+  83: {station: FRTON, paras: [SP_10M]}
+  84: {station: FRVAP, paras: [SP_10M, T_2M, VMAX10M]}
+  85: {station: HRBJE, paras: [SP_10M, TD_2M]}
+  86: {station: HRGOS, paras: [TD_2M]}
+  87: {station: HRZAD, paras: [PMSL]}
+  88: {station: INNEBI, paras: [PMSL]}
+  89: {station: INNESF, paras: [PMSL, VMAX10M]}
+  90: {station: INNLUZ, paras: [PMSL, T_2M]}
+  91: {station: INNSWZ, paras: [PMSL]}
+  92: {station: INNZUG, paras: [T_2M]}
+  93: {station: IYABT, paras: [PS, T_2M]}
+  94: {station: IYALD, paras: [PMSL]}
+  95: {station: IYALE, paras: [PMSL]}
+  96: {station: IYAMO, paras: [SP_10M, VMAX10M]}
+  97: {station: IYAND, paras: [VMAX10M]}
+  98: {station: IYANT, paras: [PS, TD_2M, T_2M]}
+  99: {station: IYAPR, paras: [TD_2M, T_2M]}
+  100: {station: IYAST, paras: [PMSL]}
+  101: {station: IYAVI, paras: [PMSL]}
+  102: {station: IYAVM, paras: [T_2M]}
+  103: {station: IYAYC, paras: [TD_2M]}
+  104: {station: IYBAD, paras: [T_2M]}
+  105: {station: IYBAR, paras: [PS]}
+  106: {station: IYBDI, paras: [PMSL, VMAX10M]}
+  107: {station: IYBEA, paras: [T_2M]}
+  108: {station: IYBIE, paras: [T_2M]}
+  109: {station: IYBLV, paras: [SP_10M, T_2M, VMAX10M]}
+  110: {station: IYBRC, paras: [PMSL, T_2M]}
+  111: {station: IYBRI, paras: [PMSL]}
+  112: {station: IYBRU, paras: [TD_2M]}
+  113: {station: IYBRZ, paras: [PMSL]}
+  114: {station: IYCAA, paras: [T_2M]}
+  115: {station: IYCAI, paras: [PS, TD_2M]}
+  116: {station: IYCAM, paras: [PMSL, TD_2M]}
+  117: {station: IYCAR, paras: [PMSL]}
+  118: {station: IYCAX, paras: [PMSL, PS, T_2M]}
+  119: {station: IYCDA, paras: [TD_2M]}
+  120: {station: IYCEM, paras: [T_2M]}
+  121: {station: IYCGC, paras: [VMAX10M]}
+  122: {station: IYCHI, paras: [VMAX10M]}
+  123: {station: IYCMA, paras: [PS, T_2M, VMAX10M]}
+  124: {station: IYCMO, paras: [PMSL]}
+  125: {station: IYCOC, paras: [PMSL, PS]}
+  126: {station: IYCOD, paras: [PS, TD_2M]}
+  127: {station: IYCON, paras: [T_2M]}
+  128: {station: IYCOS, paras: [PS]}
+  129: {station: IYCRM, paras: [PMSL]}
+  130: {station: IYCSB, paras: [SP_10M]}
+  131: {station: IYCUM, paras: [PMSL]}
+  132: {station: IYDAP, paras: [T_2M]}
+  133: {station: IYDEO, paras: [SP_10M, T_2M, VMAX10M]}
+  134: {station: IYDEU, paras: [T_2M]}
+  135: {station: IYDOD, paras: [PMSL]}
+  136: {station: IYEDP, paras: [PS, SP_10M]}
+  137: {station: IYFOB, paras: [TD_2M]}
+  138: {station: IYFOC, paras: [SP_10M]}
+  139: {station: IYFOS, paras: [PMSL]}
+  140: {station: IYFRA, paras: [PS, T_2M]}
+  141: {station: IYFRN, paras: [T_2M]}
+  142: {station: IYGAR, paras: [T_2M]}
+  143: {station: IYGCF, paras: [T_2M]}
+  144: {station: IYGDG, paras: [T_2M]}
+  145: {station: IYGER, paras: [T_2M]}
+  146: {station: IYGOR, paras: [VMAX10M]}
+  147: {station: IYGRB, paras: [TD_2M]}
+  148: {station: IYGRE, paras: [PS, TD_2M, T_2M]}
+  149: {station: IYGRP, paras: [SP_10M, VMAX10M]}
+  150: {station: IYGRS, paras: [SP_10M, TD_2M, T_2M, VMAX10M]}
+  151: {station: IYGSP, paras: [VMAX10M]}
+  152: {station: IYGYW, paras: [SP_10M, T_2M, VMAX10M]}
+  153: {station: IYHIN, paras: [PS, TD_2M]}
+  154: {station: IYISA, paras: [PMSL]}
+  155: {station: IYJEN, paras: [SP_10M, VMAX10M]}
+  156: {station: IYKRE, paras: [VMAX10M]}
+  157: {station: IYLAA, paras: [TD_2M]}
+  158: {station: IYLAD, paras: [SP_10M, VMAX10M]}
+  159: {station: IYLEV, paras: [PMSL]}
+  160: {station: IYLPA, paras: [SP_10M, T_2M]}
+  161: {station: IYLPT, paras: [PMSL]}
+  162: {station: IYLTG, paras: [PS, TD_2M]}
+  163: {station: IYLUN, paras: [PMSL]}
+  164: {station: IYLVA, paras: [T_2M, VMAX10M]}
+  165: {station: IYMAS, paras: [PMSL]}
+  166: {station: IYMAZ, paras: [TD_2M]}
+  167: {station: IYMDL, paras: [TD_2M, T_2M]}
+  168: {station: IYMEL, paras: [SP_10M, VMAX10M]}
+  169: {station: IYMGG, paras: [T_2M]}
+  170: {station: IYMIL, paras: [TD_2M, T_2M]}
+  171: {station: IYMMR, paras: [PS, T_2M]}
+  172: {station: IYMOE, paras: [VMAX10M]}
+  173: {station: IYMOL, paras: [PMSL]}
+  174: {station: IYMOV, paras: [PS, T_2M]}
+  175: {station: IYMUW, paras: [PS, TD_2M]}
+  176: {station: IYMVJ, paras: [PMSL, T_2M]}
+  177: {station: IYMZO, paras: [PS]}
+  178: {station: IYNAT, paras: [T_2M]}
+  179: {station: IYNOV, paras: [PMSL]}
+  180: {station: IYOBV, paras: [PS]}
+  181: {station: IYOGA, paras: [T_2M, VMAX10M]}
+  182: {station: IYOSI, paras: [PMSL, TD_2M]}
+  183: {station: IYOSN, paras: [PMSL]}
+  184: {station: IYPAM, paras: [PMSL]}
+  185: {station: IYPAZ, paras: [PMSL]}
+  186: {station: IYPDL, paras: [TD_2M, T_2M]}
+  187: {station: IYPEL, paras: [PS]}
+  188: {station: IYPEN, paras: [PS, TD_2M]}
+  189: {station: IYPER, paras: [PMSL]}
+  190: {station: IYPET, paras: [T_2M]}
+  191: {station: IYPFD, paras: [PS, SP_10M, VMAX10M]}
+  192: {station: IYPFG, paras: [SP_10M, T_2M, VMAX10M]}
+  193: {station: IYPFI, paras: [SP_10M, T_2M]}
+  194: {station: IYPFL, paras: [PS]}
+  195: {station: IYPFR, paras: [T_2M, VMAX10M]}
+  196: {station: IYPFS, paras: [SP_10M, T_2M, VMAX10M]}
+  197: {station: IYPFU, paras: [PS, T_2M]}
+  198: {station: IYPIE, paras: [T_2M]}
+  199: {station: IYPLI, paras: [SP_10M, VMAX10M]}
+  200: {station: IYPLR, paras: [SP_10M, VMAX10M]}
+  201: {station: IYPRL, paras: [T_2M, VMAX10M]}
+  202: {station: IYPRM, paras: [SP_10M, T_2M]}
+  203: {station: IYPRR, paras: [T_2M]}
+  204: {station: IYPRU, paras: [TD_2M]}
+  205: {station: IYPSD, paras: [VMAX10M]}
+  206: {station: IYRAD, paras: [SP_10M, VMAX10M]}
+  207: {station: IYRAT, paras: [VMAX10M]}
+  208: {station: IYRDA, paras: [PS, T_2M]}
+  209: {station: IYREI, paras: [PS, TD_2M]}
+  210: {station: IYRHE, paras: [SP_10M, TD_2M, VMAX10M]}
+  211: {station: IYRIS, paras: [VMAX10M]}
+  212: {station: IYROV, paras: [PMSL]}
+  213: {station: IYRUM, paras: [T_2M]}
+  214: {station: IYSAO, paras: [T_2M]}
+  215: {station: IYSCA, paras: [PMSL]}
+  216: {station: IYSCH, paras: [TD_2M]}
+  217: {station: IYSDE, paras: [PS, T_2M]}
+  218: {station: IYSEI, paras: [T_2M]}
+  219: {station: IYSEX, paras: [PS]}
+  220: {station: IYSGI, paras: [T_2M]}
+  221: {station: IYSGR, paras: [T_2M, VMAX10M]}
+  222: {station: IYSKL, paras: [VMAX10M]}
+  223: {station: IYSMA, paras: [T_2M]}
+  224: {station: IYSMG, paras: [PS]}
+  225: {station: IYSMP, paras: [PS, TD_2M]}
+  226: {station: IYSMT, paras: [PS, TD_2M]}
+  227: {station: IYSMV, paras: [PS, TD_2M]}
+  228: {station: IYSNO, paras: [PMSL]}
+  229: {station: IYSRB, paras: [T_2M]}
+  230: {station: IYSTG, paras: [T_2M]}
+  231: {station: IYSTZ, paras: [TD_2M]}
+  232: {station: IYSUA, paras: [VMAX10M]}
+  233: {station: IYSUL, paras: [PS, TD_2M]}
+  234: {station: IYSUM, paras: [T_2M, VMAX10M]}
+  235: {station: IYSUS, paras: [T_2M]}
+  236: {station: IYSVE, paras: [PS, TD_2M]}
+  237: {station: IYSVP, paras: [PS]}
+  238: {station: IYSWA, paras: [TD_2M]}
+  239: {station: IYTAN, paras: [SP_10M]}
+  240: {station: IYTER, paras: [T_2M]}
+  241: {station: IYTIO, paras: [PMSL]}
+  242: {station: IYTOH, paras: [PS, T_2M]}
+  243: {station: IYTRC, paras: [T_2M]}
+  244: {station: IYTRE, paras: [PMSL]}
+  245: {station: IYTRT, paras: [PMSL]}
+  246: {station: IYULW, paras: [VMAX10M]}
+  247: {station: IYVAL, paras: [TD_2M]}
+  248: {station: IYVAZ, paras: [T_2M]}
+  249: {station: IYVBD, paras: [PS, TD_2M, T_2M]}
+  250: {station: IYVEM, paras: [PMSL]}
+  251: {station: IYVET, paras: [SP_10M, VMAX10M]}
+  252: {station: IYVIP, paras: [T_2M]}
+  253: {station: IYVMC, paras: [SP_10M]}
+  254: {station: IYVPC, paras: [T_2M]}
+  255: {station: IYVPF, paras: [PS, SP_10M, VMAX10M]}
+  256: {station: IYVRS, paras: [PMSL]}
+  257: {station: IYVSP, paras: [PS, T_2M]}
+  258: {station: IYVTB, paras: [SP_10M]}
+  259: {station: IYWEI, paras: [T_2M, VMAX10M]}
+  260: {station: IYWEN, paras: [PS]}
+  261: {station: IYWOL, paras: [PS, TD_2M, T_2M]}
+  262: {station: IYZCA, paras: [SP_10M]}
+  263: {station: KSHIG, paras: [T_2M]}
+  264: {station: KSSGS, paras: [TD_2M, T_2M]}
+  265: {station: LUVIT, paras: [T_2M]}
+  266: {station: MMAIR, paras: [SP_10M, TD_2M]}
+  267: {station: MMALL, paras: [TD_2M, T_2M, VMAX10M]}
+  268: {station: MMAPL, paras: [TD_2M]}
+  269: {station: MMARA, paras: [SP_10M, TD_2M, VMAX10M]}
+  270: {station: MMATZ, paras: [TD_2M]}
+  271: {station: MMBAL, paras: [TD_2M]}
+  272: {station: MMBAS, paras: [T_2M]}
+  273: {station: MMBAT, paras: [VMAX10M]}
+  274: {station: MMBEK, paras: [SP_10M]}
+  275: {station: MMBFE, paras: [TD_2M]}
+  276: {station: MMBGA, paras: [TD_2M]}
+  277: {station: MMBGN, paras: [TD_2M]}
+  278: {station: MMBGS, paras: [TD_2M]}
+  279: {station: MMBIG, paras: [TD_2M, T_2M]}
+  280: {station: MMBIN, paras: [TD_2M]}
+  281: {station: MMBIR, paras: [T_2M]}
+  282: {station: MMBIS, paras: [TD_2M, T_2M]}
+  283: {station: MMBKP, paras: [TD_2M]}
+  284: {station: MMBLI, paras: [SP_10M, TD_2M]}
+  285: {station: MMBLT, paras: [TD_2M, VMAX10M]}
+  286: {station: MMBLZ, paras: [SP_10M, TD_2M, VMAX10M]}
+  287: {station: MMBNZ, paras: [SP_10M, T_2M]}
+  288: {station: MMBOR, paras: [TD_2M]}
+  289: {station: MMBOS, paras: [SP_10M, TD_2M, VMAX10M]}
+  290: {station: MMBTE, paras: [SP_10M, TD_2M, VMAX10M]}
+  291: {station: MMBTT, paras: [SP_10M, VMAX10M]}
+  292: {station: MMCAG, paras: [TD_2M]}
+  293: {station: MMCBL, paras: [TD_2M]}
+  294: {station: MMCBM, paras: [T_2M]}
+  295: {station: MMCBZ, paras: [TD_2M]}
+  296: {station: MMCDG, paras: [SP_10M, VMAX10M]}
+  297: {station: MMCOY, paras: [SP_10M, TD_2M, VMAX10M]}
+  298: {station: MMCRO, paras: [SP_10M, TD_2M]}
+  299: {station: MMDAS, paras: [TD_2M, T_2M]}
+  300: {station: MMDIC, paras: [SP_10M, TD_2M]}
+  301: {station: MMDID, paras: [TD_2M]}
+  302: {station: MMDIK, paras: [TD_2M]}
+  303: {station: MMDIL, paras: [SP_10M, T_2M, VMAX10M]}
+  304: {station: MMECH, paras: [TD_2M, T_2M]}
+  305: {station: MMEFD, paras: [TD_2M]}
+  306: {station: MMEGG, paras: [VMAX10M]}
+  307: {station: MMEIN, paras: [SP_10M]}
+  308: {station: MMEIS, paras: [SP_10M, TD_2M, VMAX10M]}
+  309: {station: MMELG, paras: [TD_2M]}
+  310: {station: MMERZ, paras: [SP_10M, TD_2M]}
+  311: {station: MMETZ, paras: [TD_2M, T_2M]}
+  312: {station: MMFAI, paras: [TD_2M]}
+  313: {station: MMFIS, paras: [T_2M]}
+  314: {station: MMFLS, paras: [TD_2M]}
+  315: {station: MMFLU, paras: [TD_2M]}
+  316: {station: MMFRG, paras: [SP_10M]}
+  317: {station: MMFRL, paras: [SP_10M]}
+  318: {station: MMFRS, paras: [TD_2M]}
+  319: {station: MMFRU, paras: [TD_2M]}
+  320: {station: MMGAF, paras: [TD_2M]}
+  321: {station: MMGEM, paras: [T_2M]}
+  322: {station: MMGLT, paras: [SP_10M]}
+  323: {station: MMGND, paras: [T_2M]}
+  324: {station: MMGRE, paras: [SP_10M, TD_2M, VMAX10M]}
+  325: {station: MMGRU, paras: [SP_10M, TD_2M, T_2M, VMAX10M]}
+  326: {station: MMGRY, paras: [TD_2M]}
+  327: {station: MMGSS, paras: [T_2M]}
+  328: {station: MMGTT, paras: [TD_2M]}
+  329: {station: MMGUM, paras: [TD_2M]}
+  330: {station: MMGWA, paras: [SP_10M]}
+  331: {station: MMHAN, paras: [SP_10M, T_2M]}
+  332: {station: MMHAU, paras: [SP_10M, TD_2M, VMAX10M]}
+  333: {station: MMHDW, paras: [TD_2M]}
+  334: {station: MMHES, paras: [VMAX10M]}
+  335: {station: MMHIW, paras: [SP_10M, TD_2M, VMAX10M]}
+  336: {station: MMHKP, paras: [TD_2M]}
+  337: {station: MMHOK, paras: [TD_2M, T_2M]}
+  338: {station: MMHON, paras: [TD_2M, T_2M]}
+  339: {station: MMHSM, paras: [VMAX10M]}
+  340: {station: MMHTZ, paras: [SP_10M, TD_2M]}
+  341: {station: MMHWL, paras: [SP_10M, VMAX10M]}
+  342: {station: MMIAR, paras: [SP_10M, VMAX10M]}
+  343: {station: MMIBG, paras: [T_2M]}
+  344: {station: MMIKR, paras: [TD_2M]}
+  345: {station: MMING, paras: [TD_2M]}
+  346: {station: MMINN, paras: [TD_2M]}
+  347: {station: MMJUL, paras: [TD_2M]}
+  348: {station: MMKAN, paras: [TD_2M, T_2M]}
+  349: {station: MMKAR, paras: [SP_10M]}
+  350: {station: MMKEB, paras: [TD_2M]}
+  351: {station: MMKLE, paras: [VMAX10M]}
+  352: {station: MMKLM, paras: [T_2M]}
+  353: {station: MMKOB, paras: [SP_10M, TD_2M, VMAX10M]}
+  354: {station: MMKPL, paras: [TD_2M]}
+  355: {station: MMLAB, paras: [SP_10M, TD_2M, T_2M, VMAX10M]}
+  356: {station: MMLAF, paras: [TD_2M]}
+  357: {station: MMLAN, paras: [SP_10M, VMAX10M]}
+  358: {station: MMLAP, paras: [TD_2M]}
+  359: {station: MMLBB, paras: [TD_2M]}
+  360: {station: MMLEN, paras: [T_2M]}
+  361: {station: MMLEY, paras: [TD_2M]}
+  362: {station: MMLFL, paras: [TD_2M]}
+  363: {station: MMLFY, paras: [TD_2M]}
+  364: {station: MMLIN, paras: [SP_10M, TD_2M, T_2M]}
+  365: {station: MMLLU, paras: [TD_2M]}
+  366: {station: MMLOH, paras: [TD_2M]}
+  367: {station: MMLOP, paras: [SP_10M, VMAX10M]}
+  368: {station: MMLRI, paras: [T_2M]}
+  369: {station: MMLUT, paras: [TD_2M]}
+  370: {station: MMMAL, paras: [TD_2M]}
+  371: {station: MMMAR, paras: [TD_2M, VMAX10M]}
+  372: {station: MMMAT, paras: [SP_10M]}
+  373: {station: MMMEH, paras: [TD_2M]}
+  374: {station: MMMEL, paras: [TD_2M]}
+  375: {station: MMMER, paras: [TD_2M, VMAX10M]}
+  376: {station: MMMIT, paras: [SP_10M]}
+  377: {station: MMMLN, paras: [TD_2M]}
+  378: {station: MMMLT, paras: [SP_10M]}
+  379: {station: MMMOH, paras: [SP_10M]}
+  380: {station: MMMON, paras: [TD_2M]}
+  381: {station: MMMOU, paras: [SP_10M]}
+  382: {station: MMMOZ, paras: [TD_2M, T_2M]}
+  383: {station: MMMSG, paras: [TD_2M, T_2M]}
+  384: {station: MMMUG, paras: [TD_2M, VMAX10M]}
+  385: {station: MMMUM, paras: [TD_2M]}
+  386: {station: MMMUO, paras: [TD_2M]}
+  387: {station: MMNAF, paras: [TD_2M]}
+  388: {station: MMNAX, paras: [VMAX10M]}
+  389: {station: MMNEN, paras: [T_2M, VMAX10M]}
+  390: {station: MMNEU, paras: [TD_2M, VMAX10M]}
+  391: {station: MMNIZ, paras: [TD_2M]}
+  392: {station: MMNSK, paras: [T_2M]}
+  393: {station: MMOBH, paras: [TD_2M, T_2M, VMAX10M]}
+  394: {station: MMOBO, paras: [SP_10M, TD_2M, VMAX10M]}
+  395: {station: MMOBS, paras: [TD_2M, T_2M]}
+  396: {station: MMOBW, paras: [SP_10M, VMAX10M]}
+  397: {station: MMOEN, paras: [SP_10M]}
+  398: {station: MMOET, paras: [SP_10M, TD_2M]}
+  399: {station: MMONF, paras: [SP_10M]}
+  400: {station: MMORS, paras: [TD_2M]}
+  401: {station: MMOVR, paras: [SP_10M, TD_2M, VMAX10M]}
+  402: {station: MMPFA, paras: [SP_10M, VMAX10M]}
+  403: {station: MMRAF, paras: [T_2M]}
+  404: {station: MMRAT, paras: [T_2M, VMAX10M]}
+  405: {station: MMREC, paras: [SP_10M, TD_2M]}
+  406: {station: MMRGL, paras: [SP_10M, TD_2M, VMAX10M]}
+  407: {station: MMRIC, paras: [TD_2M]}
+  408: {station: MMRIG, paras: [SP_10M, VMAX10M]}
+  409: {station: MMRJO, paras: [SP_10M]}
+  410: {station: MMRKU, paras: [T_2M, VMAX10M]}
+  411: {station: MMROG, paras: [SP_10M]}
+  412: {station: MMROS, paras: [SP_10M, TD_2M]}
+  413: {station: MMROW, paras: [SP_10M, VMAX10M]}
+  414: {station: MMRSA, paras: [TD_2M, T_2M]}
+  415: {station: MMRYH, paras: [TD_2M]}
+  416: {station: MMSAA, paras: [TD_2M, T_2M]}
+  417: {station: MMSAF, paras: [TD_2M]}
+  418: {station: MMSAN, paras: [TD_2M, T_2M]}
+  419: {station: MMSAP, paras: [SP_10M]}
+  420: {station: MMSAS, paras: [TD_2M]}
+  421: {station: MMSAV, paras: [SP_10M]}
+  422: {station: MMSAX, paras: [SP_10M, TD_2M]}
+  423: {station: MMSED, paras: [SP_10M, TD_2M]}
+  424: {station: MMSET, paras: [SP_10M]}
+  425: {station: MMSIE, paras: [TD_2M]}
+  426: {station: MMSIR, paras: [SP_10M]}
+  427: {station: MMSKO, paras: [SP_10M, VMAX10M]}
+  428: {station: MMSKT, paras: [SP_10M, TD_2M]}
+  429: {station: MMSMC, paras: [TD_2M]}
+  430: {station: MMSNW, paras: [SP_10M, VMAX10M]}
+  431: {station: MMSPA, paras: [T_2M]}
+  432: {station: MMSPF, paras: [TD_2M, T_2M]}
+  433: {station: MMSRE, paras: [TD_2M]}
+  434: {station: MMSRH, paras: [SP_10M, TD_2M, VMAX10M]}
+  435: {station: MMSSE, paras: [TD_2M]}
+  436: {station: MMSTG, paras: [TD_2M]}
+  437: {station: MMSTL, paras: [TD_2M]}
+  438: {station: MMSUN, paras: [TD_2M]}
+  439: {station: MMSUS, paras: [SP_10M, TD_2M, VMAX10M]}
+  440: {station: MMSVG, paras: [SP_10M]}
+  441: {station: MMSXO, paras: [TD_2M]}
+  442: {station: MMSXT, paras: [TD_2M]}
+  443: {station: MMSZA, paras: [TD_2M]}
+  444: {station: MMTDO, paras: [TD_2M]}
+  445: {station: MMTFD, paras: [SP_10M, TD_2M, VMAX10M]}
+  446: {station: MMTHA, paras: [SP_10M, VMAX10M]}
+  447: {station: MMTIT, paras: [SP_10M, TD_2M, T_2M, VMAX10M]}
+  448: {station: MMTRA, paras: [TD_2M]}
+  449: {station: MMTRI, paras: [SP_10M, T_2M, VMAX10M]}
+  450: {station: MMUEK, paras: [SP_10M]}
+  451: {station: MMUIE, paras: [TD_2M, T_2M]}
+  452: {station: MMUNS, paras: [TD_2M]}
+  453: {station: MMUNT, paras: [TD_2M, T_2M]}
+  454: {station: MMVES, paras: [SP_10M, TD_2M]}
+  455: {station: MMVIL, paras: [SP_10M, TD_2M, VMAX10M]}
+  456: {station: MMVLP, paras: [TD_2M]}
+  457: {station: MMVOR, paras: [SP_10M]}
+  458: {station: MMVRZ, paras: [TD_2M]}
+  459: {station: MMVTM, paras: [SP_10M, TD_2M, VMAX10M]}
+  460: {station: MMWAA, paras: [TD_2M]}
+  461: {station: MMWAW, paras: [SP_10M, VMAX10M]}
+  462: {station: MMWBW, paras: [SP_10M, TD_2M, VMAX10M]}
+  463: {station: MMWEK, paras: [SP_10M, TD_2M, T_2M]}
+  464: {station: MMWET, paras: [TD_2M]}
+  465: {station: MMWGK, paras: [TD_2M]}
+  466: {station: MMWID, paras: [T_2M]}
+  467: {station: MMWIL, paras: [SP_10M, TD_2M, T_2M]}
+  468: {station: MMWLR, paras: [TD_2M, T_2M]}
+  469: {station: MMWOL, paras: [SP_10M]}
+  470: {station: MMWSB, paras: [VMAX10M]}
+  471: {station: MMWSI, paras: [SP_10M, TD_2M, VMAX10M]}
+  472: {station: MMWSN, paras: [SP_10M, TD_2M, T_2M]}
+  473: {station: MMWSS, paras: [TD_2M]}
+  474: {station: MMWTH, paras: [SP_10M, TD_2M, VMAX10M]}
+  475: {station: MMWYN, paras: [TD_2M]}
+  476: {station: MMZIM, paras: [SP_10M, TD_2M, VMAX10M]}
+  477: {station: MMZOZ, paras: [T_2M]}
+  478: {station: MMZRM, paras: [TD_2M]}
+  479: {station: MMZWE, paras: [TD_2M]}
+  480: {station: MMZWI, paras: [TD_2M, T_2M]}
+  481: {station: NABBER, paras: [PMSL, T_2M]}
+  482: {station: NABHAE, paras: [T_2M]}
+  483: {station: NABLAU, paras: [PMSL, SP_10M, VMAX10M]}
+  484: {station: NABRIG, paras: [VMAX10M]}
+  485: {station: NABZUE, paras: [T_2M]}
+  486: {station: NECER, paras: [SP_10M]}
+  487: {station: NECOU, paras: [TD_2M]}
+  488: {station: NELOC, paras: [SP_10M, VMAX10M]}
+  489: {station: OSANT, paras: [T_G]}
+  490: {station: OSBAE, paras: [VMAX10M]}
+  491: {station: OSBGL, paras: [PS]}
+  492: {station: OSBIS, paras: [T_G]}
+  493: {station: OSBLU, paras: [T_G]}
+  494: {station: OSBRM, paras: [T_G]}
+  495: {station: OSBRN, paras: [PS]}
+  496: {station: OSBRU, paras: [PS]}
+  497: {station: OSDAM, paras: [T_2M]}
+  498: {station: OSDOR, paras: [PMSL]}
+  499: {station: OSEBN, paras: [T_2M]}
+  500: {station: OSEHR, paras: [PS, T_G]}
+  501: {station: OSFAS, paras: [T_2M]}
+  502: {station: OSFEI, paras: [PMSL]}
+  503: {station: OSFEK, paras: [PMSL, T_G]}
+  504: {station: OSFIK, paras: [T_G]}
+  505: {station: OSFOR, paras: [T_2M]}
+  506: {station: OSFRX, paras: [T_G, VMAX10M]}
+  507: {station: OSGAL, paras: [T_G]}
+  508: {station: OSGUT, paras: [T_G, VMAX10M]}
+  509: {station: OSHOL, paras: [T_2M]}
+  510: {station: OSINN, paras: [VMAX10M]}
+  511: {station: OSKAL, paras: [PS, T_G]}
+  512: {station: OSKAT, paras: [SP_10M]}
+  513: {station: OSKLE, paras: [SP_10M]}
+  514: {station: OSLAA, paras: [PS, T_2M]}
+  515: {station: OSLAG, paras: [T_2M]}
+  516: {station: OSLAN, paras: [T_G, VMAX10M]}
+  517: {station: OSLAS, paras: [T_G]}
+  518: {station: OSLEI, paras: [SP_10M, T_G, VMAX10M]}
+  519: {station: OSLEO, paras: [PS, SP_10M, TD_2M, VMAX10M]}
+  520: {station: OSLIS, paras: [T_G]}
+  521: {station: OSLIT, paras: [SP_10M, VMAX10M]}
+  522: {station: OSLOA, paras: [T_2M]}
+  523: {station: OSLUN, paras: [T_2M]}
+  524: {station: OSLUT, paras: [SP_10M, T_G]}
+  525: {station: OSLUZ, paras: [T_2M]}
+  526: {station: OSMIS, paras: [SP_10M]}
+  527: {station: OSNAS, paras: [SP_10M]}
+  528: {station: OSNEU, paras: [T_G]}
+  529: {station: OSPAR, paras: [T_2M]}
+  530: {station: OSPAT, paras: [PS, SP_10M, TD_2M, T_2M]}
+  531: {station: OSPIT, paras: [SP_10M]}
+  532: {station: OSPRE, paras: [T_G]}
+  533: {station: OSRAM, paras: [SP_10M]}
+  534: {station: OSRAN, paras: [T_G]}
+  535: {station: OSRAS, paras: [T_2M]}
+  536: {station: OSRAX, paras: [VMAX10M]}
+  537: {station: OSREI, paras: [T_G]}
+  538: {station: OSRET, paras: [T_G]}
+  539: {station: OSRIE, paras: [SP_10M]}
+  540: {station: OSRIN, paras: [T_G]}
+  541: {station: OSROH, paras: [T_G]}
+  542: {station: OSSAA, paras: [T_G]}
+  543: {station: OSSAL, paras: [VMAX10M]}
+  544: {station: OSSCP, paras: [T_2M]}
+  545: {station: OSSOK, paras: [PS, VMAX10M]}
+  546: {station: OSSPI, paras: [PMSL]}
+  547: {station: OSSTO, paras: [PMSL]}
+  548: {station: OSSTR, paras: [T_G]}
+  549: {station: OSSTV, paras: [T_G]}
+  550: {station: OSSTZ, paras: [SP_10M, T_G]}
+  551: {station: OSTSG, paras: [T_2M]}
+  552: {station: OSVAL, paras: [T_2M]}
+  553: {station: OSVER, paras: [T_2M]}
+  554: {station: OSVIA, paras: [PS, SP_10M]}
+  555: {station: OSVIR, paras: [T_2M, T_G]}
+  556: {station: PERLAP, paras: [SP_10M, T_2M, VMAX10M]}
+  557: {station: PERRIT, paras: [SP_10M, T_2M, VMAX10M]}
+  558: {station: PERSTO, paras: [T_2M]}
+  559: {station: RGBER, paras: [TD_2M, T_2M, VMAX10M]}
+  560: {station: RGFRG, paras: [TD_2M, T_2M, VMAX10M]}
+  561: {station: SIKUM, paras: [VMAX10M]}
+  562: {station: SILIS, paras: [PS]}
+  563: {station: SILJU, paras: [PMSL]}
+  564: {station: SIMAG, paras: [SP_10M]}
+  565: {station: SINAN, paras: [SP_10M, VMAX10M]}
+  566: {station: SIPAS, paras: [SP_10M, VMAX10M]}
+  567: {station: SIROG, paras: [VMAX10M]}
+  568: {station: SISLA, paras: [SP_10M]}
+  569: {station: SIVOG, paras: [SP_10M, VMAX10M]}
+  570: {station: SIZGO, paras: [VMAX10M]}
+  571: {station: SNPVTR, paras: [SP_10M, T_2M]}
+  572: {station: TGAMR, paras: [SP_10M, TD_2M]}
+  573: {station: TGARE, paras: [SP_10M, VMAX10M]}
+  574: {station: TGBOH, paras: [SP_10M, VMAX10M]}
+  575: {station: TGDUS, paras: [SP_10M, VMAX10M]}
+  576: {station: TGERM, paras: [SP_10M, TD_2M, T_2M]}
+  577: {station: TGFRA, paras: [SP_10M]}
+  578: {station: TGILL, paras: [SP_10M, TD_2M, T_2M]}
+  579: {station: TGKRE, paras: [SP_10M, TD_2M, VMAX10M]}
+  580: {station: TGLAN, paras: [SP_10M]}
+  581: {station: TGNUS, paras: [TD_2M]}
+  582: {station: TGOTT, paras: [TD_2M]}
+  583: {station: TGUSH, paras: [TD_2M, T_2M]}
+  584: {station: TIAIR, paras: [TD_2M]}
+  585: {station: TIBIG, paras: [TD_2M]}
+  586: {station: TICAM, paras: [PMSL, TD_2M, T_2M]}
+  587: {station: TICAR, paras: [T_2M]}
+  588: {station: TICIA, paras: [TD_2M]}
+  589: {station: TIGNO, paras: [T_2M]}
+  590: {station: TILAV, paras: [TD_2M]}
+  591: {station: TIMOL, paras: [TD_2M]}
+  592: {station: TIOLV, paras: [T_2M]}
+  593: {station: TIPAR, paras: [T_2M]}
+  594: {station: URBUE, paras: [T_2M]}
+  595: {station: URREE, paras: [T_2M]}
+  596: {station: URRET, paras: [T_2M]}
+  597: {station: VSBAS, paras: [T_2M]}
+  598: {station: VSCHA, paras: [T_2M]}
+  599: {station: VSCHC, paras: [T_2M]}
+  600: {station: VSCHO, paras: [T_2M]}
+  601: {station: VSCHY, paras: [T_2M]}
+  602: {station: VSCLU, paras: [T_2M]}
+  603: {station: VSERG, paras: [T_2M]}
+  604: {station: VSMAC, paras: [SP_10M, TD_2M, T_2M, VMAX10M]}
+  605: {station: VSMAD, paras: [TD_2M]}
+  606: {station: VSRBR, paras: [VMAX10M]}
+  607: {station: VSSIE, paras: [T_2M]}
+  608: {station: VSVIS, paras: [T_2M]}
+  609: {station: VSVOL, paras: [T_2M]}
+  610: {station: VSZER, paras: [TD_2M, T_2M]}
+  611: {station: WSLALB, paras: [SP_10M, VMAX10M]}
+  612: {station: WSLBAB, paras: [SP_10M, VMAX10M]}
+  613: {station: WSLBAF, paras: [T_2M, VMAX10M]}
+  614: {station: WSLBTB, paras: [SP_10M, VMAX10M]}
+  615: {station: WSLBTF, paras: [SP_10M, VMAX10M]}
+  616: {station: WSLCIB, paras: [SP_10M, T_2M, VMAX10M]}
+  617: {station: WSLCIF, paras: [SP_10M, VMAX10M]}
+  618: {station: WSLHOB, paras: [SP_10M, TD_2M, VMAX10M]}
+  619: {station: WSLJUB, paras: [SP_10M, T_2M, VMAX10M]}
+  620: {station: WSLJUF, paras: [SP_10M, VMAX10M]}
+  621: {station: WSLLAB, paras: [SP_10M, VMAX10M]}
+  622: {station: WSLLAE, paras: [SP_10M, VMAX10M]}
+  623: {station: WSLLAF, paras: [SP_10M, VMAX10M]}
+  624: {station: WSLNAB, paras: [SP_10M]}
+  625: {station: WSLNAF, paras: [SP_10M]}
+  626: {station: WSLNEB, paras: [SP_10M, VMAX10M]}
+  627: {station: WSLNEF, paras: [SP_10M, T_2M, VMAX10M]}
+  628: {station: WSLNOB, paras: [SP_10M, TD_2M, T_2M, VMAX10M]}
+  629: {station: WSLNOF, paras: [SP_10M, TD_2M, VMAX10M]}
+  630: {station: WSLOTB, paras: [SP_10M, TD_2M, VMAX10M]}
+  631: {station: WSLOTF, paras: [SP_10M, VMAX10M]}
+  632: {station: WSLSCB, paras: [SP_10M, TD_2M, VMAX10M]}
+  633: {station: WSLSCF, paras: [SP_10M, TD_2M, T_2M, VMAX10M]}
+  634: {station: WSLUIB, paras: [SP_10M, TD_2M, VMAX10M]}
+  635: {station: WSLUIF, paras: [SP_10M, VMAX10M]}
+  636: {station: WSLVOB, paras: [SP_10M, VMAX10M]}
+  637: {station: WSLVOF, paras: [SP_10M, TD_2M, VMAX10M]}
+  638: {station: WSLVSB, paras: [SP_10M, VMAX10M]}

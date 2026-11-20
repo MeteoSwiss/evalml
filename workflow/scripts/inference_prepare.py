@@ -58,6 +58,9 @@ def prepare_workdir(workdir: Path, resources_root: Path):
     shutil.copytree(
         resources_root / "metadata", workdir / "resources", dirs_exist_ok=True
     )
+    qc_src = resources_root / "qc"
+    if qc_src.exists():
+        shutil.copytree(qc_src, workdir / "resources" / "qc", dirs_exist_ok=True)
 
 
 def stage_holdout_stations(smk, workdir: Path, LOG: logging.Logger):

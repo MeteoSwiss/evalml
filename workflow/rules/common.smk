@@ -509,7 +509,7 @@ def truth_file_dep(_):
 if TRUTH_TYPE == "jretrieve":
     from data_input.jretrieve import check_prerequisites, parse_selection
 
-    _, _jretrieve_stage, _, _ = parse_selection(config["truth"]["root"])
+    _, _jretrieve_stage, _, _, _ = parse_selection(config["truth"]["root"])
     check_prerequisites(_jretrieve_stage)
 elif TRUTH_TYPE == "inca":
     inca.check_prerequisites(config["truth"]["root"])
