@@ -193,6 +193,8 @@ rule inference_prepare_forecaster:
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
+        output_variables=lambda wc: RUN_CONFIGS[wc.run_id].get("output_variables"),
+        is_candidate=lambda wc: RUN_CONFIGS[wc.run_id].get("_is_candidate", False),
     script:
         "../scripts/inference_prepare.py"
 
@@ -237,6 +239,8 @@ rule inference_prepare_temporal_downscaler:
         reftime_to_iso=lambda wc: datetime.strptime(
             wc.init_time, "%Y%m%d%H%M"
         ).strftime("%Y-%m-%dT%H:%M"),
+        output_variables=lambda wc: RUN_CONFIGS[wc.run_id].get("output_variables"),
+        is_candidate=lambda wc: RUN_CONFIGS[wc.run_id].get("_is_candidate", False),
         forecaster_run_id=lambda wc: (
             "null"
             if RUN_CONFIGS[wc.run_id].get("forecaster") is None

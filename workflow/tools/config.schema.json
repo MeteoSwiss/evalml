@@ -578,6 +578,23 @@
           "title": "Disable Local Eccodes Definitions",
           "type": "boolean"
         },
+        "output_variables": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "List of variables written to the GRIB output files of the inference run. Names are those of the fields that reach the GRIB output: the checkpoint's variable names as listed by `anemoi-inference metadata` (e.g. 2t, tp, t_850), unless a post-processor renames them. Before inference, the list is checked against the checkpoint and the verified parameters. Shell-style globs (e.g. '*_850') need anemoi-inference >= 0.13.0; older versions match names literally. The list is written to every GRIB output of the inference config. If omitted, all variables are written. Keep z (written as FIS): the model orography is read from it for the lapse-rate correction.",
+          "title": "Output Variables"
+        },
         "config": {
           "anyOf": [
             {
@@ -1189,6 +1206,23 @@
           "description": "If true, the ECCODES_DEFINITION_PATH environment variable will not be set to the COSMO local definitions.",
           "title": "Disable Local Eccodes Definitions",
           "type": "boolean"
+        },
+        "output_variables": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "List of variables written to the GRIB output files of the inference run. Names are those of the fields that reach the GRIB output: the checkpoint's variable names as listed by `anemoi-inference metadata` (e.g. 2t, tp, t_850), unless a post-processor renames them. Before inference, the list is checked against the checkpoint and the verified parameters. Shell-style globs (e.g. '*_850') need anemoi-inference >= 0.13.0; older versions match names literally. The list is written to every GRIB output of the inference config. If omitted, all variables are written. Keep z (written as FIS): the model orography is read from it for the lapse-rate correction.",
+          "title": "Output Variables"
         },
         "config": {
           "anyOf": [
