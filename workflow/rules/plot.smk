@@ -25,8 +25,26 @@ def _get_available_baselines(wc) -> list[dict[str, str]]:
     return baselines
 
 
+def _meteogram_outputs() -> list[str]:
+    """One meteogram per param and station, plus the assembled panel if enabled."""
+    meteograms = config["showcase"]["meteograms"]
+    outdir = OUT_ROOT / "results/{showcase}/{init_time}/meteograms"
+    outputs = [
+        str(outdir / f"{{init_time}}_{param}_{sta}.png")
+        for param in SHOWCASE_CONFIG["params"]
+        for sta in meteograms["stations"]
+    ]
+    if meteograms.get("panel", True):
+        outputs.append(str(outdir / "{init_time}_meteogram_panel.png"))
+    return outputs
+
+
 rule plot_meteogram:
-    """One meteogram per station and param with all candidate runs overlaid."""
+    """Meteograms of all candidate runs overlaid, one per param and station.
+
+With ``showcase.meteograms.panel`` the same meteograms are also assembled in one
+figure (rows: params, columns: stations).
+"""
     input:
         script="workflow/scripts/plot_meteogram.py",
         inference_okfiles=lambda wc: expand(
@@ -36,13 +54,9 @@ rule plot_meteogram:
         ),
         truth_dep=truth_file_dep,
     output:
-        expand(
-            OUT_ROOT
-            / "results/{{showcase}}/{{init_time}}/meteograms/{{init_time}}_{{param}}_{sta}.png",
-            sta=config["showcase"]["meteograms"]["stations"],
-        ),
+        _meteogram_outputs(),
     log:
-        OUT_ROOT / "logs/{showcase}/meteograms/{init_time}/plot_meteogram_{param}.log",
+        OUT_ROOT / "logs/{showcase}/meteograms/{init_time}/plot_meteogram.log",
     wildcard_constraints:
         showcase=r"[^/]+",
         init_time=r"\d{12}",
@@ -69,6 +83,12 @@ rule plot_meteogram:
             ).resolve()
         ),
         stations=config["showcase"]["meteograms"]["stations"],
+        params=SHOWCASE_CONFIG["params"],
+        panel_flag=lambda wc, output: (
+            f"--panel {output[-1]}"
+            if config["showcase"]["meteograms"].get("panel", True)
+            else ""
+        ),
         lapse_rate_flag=(
             "--lapse_rate_correction"
             if config.get("lapse_rate_correction", True)
@@ -92,9 +112,10 @@ rule plot_meteogram:
             --analysis_label {params.ana_label:q}
             --date {wildcards.init_time:q}
             --outdir {params.outdir:q}
-            --param {wildcards.param:q}
+            --param {params.params:q}
             --stations {params.stations:q}
             {params.lapse_rate_flag}
+            {params.panel_flag}
         )
 
         for i in "${{!FCST_GRIBS[@]}}"; do

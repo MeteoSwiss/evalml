@@ -385,8 +385,10 @@ runs:
   the missing members.
 - Verification scores the ensemble (see below). Showcase meteograms show all members:
   their min-max range as a shaded band and the ensemble mean (dashed), together with
-  the other runs of the config (wind direction: members as dots). Other plots, SAL,
-  score maps and MEC use member 001 only, with a warning.
+  the other runs of the config (wind direction: members as dots). With
+  `showcase.meteograms.panel` (default `true`) they are also assembled in one figure,
+  `<init_time>_meteogram_panel.png` (rows: params, columns: stations). Other plots,
+  SAL, score maps and MEC use member 001 only, with a warning.
 - Not allowed on the inline `forecaster` of a `temporal_downscaler`.
 - Changing `members` or `seed` gives the run a new `run_id`; the inference environment
   is reused.

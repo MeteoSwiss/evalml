@@ -481,6 +481,13 @@ class MeteogramConfig(BaseModel):
         default=["GVE", "KLO", "LUG"],
         description="List of PeakWeather station IDs to generate meteograms for.",
     )
+    panel: bool = Field(
+        default=True,
+        description=(
+            "Whether to also assemble all meteograms in one figure "
+            "(rows: params, columns: stations)."
+        ),
+    )
 
 
 class AnimationsConfig(BaseModel):
