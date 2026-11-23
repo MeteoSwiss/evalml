@@ -383,8 +383,10 @@ runs:
 - A member that finished keeps a `.ok` file under
   `logs/inference_execute/{run_id}-{init_time}/`, so a rerun after a failure only runs
   the missing members.
-- Verification scores the ensemble (see below); plots, SAL, score maps and MEC use
-  member 001 only, with a warning.
+- Verification scores the ensemble (see below). Showcase meteograms show all members:
+  their min-max range as a shaded band and the ensemble mean (dashed), together with
+  the other runs of the config (wind direction: members as dots). Other plots, SAL,
+  score maps and MEC use member 001 only, with a warning.
 - Not allowed on the inline `forecaster` of a `temporal_downscaler`.
 - Changing `members` or `seed` gives the run a new `run_id`; the inference environment
   is reused.
