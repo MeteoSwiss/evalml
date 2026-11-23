@@ -481,6 +481,21 @@ class MeteogramConfig(BaseModel):
         default=["GVE", "KLO", "LUG"],
         description="List of PeakWeather station IDs to generate meteograms for.",
     )
+    panel: bool = Field(
+        default=True,
+        description=(
+            "Whether to also assemble all meteograms in one figure "
+            "(rows: params, columns: stations)."
+        ),
+    )
+    reference: Optional[TruthConfig] = Field(
+        default=None,
+        description=(
+            "Optional gridded reference (anemoi '.zarr', e.g. the REA-L-CH1 "
+            "reanalysis) drawn as a dashed line at each station, to check whether "
+            "observed features are present in it."
+        ),
+    )
 
 
 class AnimationsConfig(BaseModel):

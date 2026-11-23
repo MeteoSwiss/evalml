@@ -6,6 +6,8 @@
 include: "common.smk"
 
 
+import shlex
+
 import pandas as pd
 
 
@@ -25,19 +27,41 @@ def _get_available_baselines(wc) -> list[dict[str, str]]:
     return baselines
 
 
+def _meteogram_outputs() -> list[str]:
+    """One meteogram per param and station, plus the assembled panel if enabled."""
+    meteograms = config["showcase"]["meteograms"]
+    outdir = OUT_ROOT / "results/{showcase}/{init_time}/meteograms"
+    outputs = [
+        str(outdir / f"{{init_time}}_{param}_{sta}.png")
+        for param in SHOWCASE_CONFIG["params"]
+        for sta in meteograms["stations"]
+    ]
+    if meteograms.get("panel", True):
+        outputs.append(str(outdir / "{init_time}_meteogram_panel.png"))
+    return outputs
+
+
 rule plot_meteogram:
+    """Meteograms of all candidate runs overlaid, one per param and station.
+
+With ``showcase.meteograms.panel`` the same meteograms are also assembled in one
+figure (rows: params, columns: stations).
+"""
     input:
         script="workflow/scripts/plot_meteogram.py",
-        inference_okfile=rules.inference_execute.output.okfile,
+        inference_okfiles=lambda wc: expand(
+            rules.inference_execute.output.okfile,
+            run_id=CANDIDATES,
+            init_time=wc.init_time,
+        ),
         truth_dep=truth_file_dep,
     output:
-        expand(
-            OUT_ROOT
-            / "results/{{showcase}}/{{run_id}}/{{init_time}}/{{init_time}}_{{param}}_{sta}.png",
-            sta=config["showcase"]["meteograms"]["stations"],
-        ),
+        _meteogram_outputs(),
     log:
-        OUT_ROOT / "logs/{showcase}/{run_id}/{init_time}/plot_meteogram_{param}.log",
+        OUT_ROOT / "logs/{showcase}/meteograms/{init_time}/plot_meteogram.log",
+    wildcard_constraints:
+        showcase=r"[^/]+",
+        init_time=r"\d{12}",
     resources:
         slurm_partition="postproc",
         cpus_per_task=1,
@@ -45,18 +69,34 @@ rule plot_meteogram:
     params:
         ana_label=lambda wc: config["truth"]["label"],
         truth_root=config["truth"]["root"],
-        fcst_grib=lambda wc: run_grib_dir(wc.run_id, wc.init_time).resolve(),
-        fcst_steps=lambda wc: RUN_CONFIGS[wc.run_id]["steps"],
-        fcst_label=lambda wc: RUN_CONFIGS[wc.run_id]["label"],
+        # Ensembles: the grib/ root with one sub-directory per member (all plotted).
+        fcst_gribs=lambda wc: [
+            str(run_grib_root(run_id, wc.init_time).resolve()) for run_id in CANDIDATES
+        ],
+        fcst_members=lambda wc: [ensemble_members(run_id) or 0 for run_id in CANDIDATES],
+        fcst_steps=lambda wc: [RUN_CONFIGS[run_id]["steps"] for run_id in CANDIDATES],
+        fcst_labels=lambda wc: [RUN_CONFIGS[run_id]["label"] for run_id in CANDIDATES],
         baseline_roots=lambda wc: [x["root"] for x in _get_available_baselines(wc)],
         baseline_steps=lambda wc: [x["steps"] for x in _get_available_baselines(wc)],
         baseline_labels=lambda wc: [x["label"] for x in _get_available_baselines(wc)],
         outdir=lambda wc: str(
             (
-                Path(OUT_ROOT) / f"results/{wc.showcase}/{wc.run_id}/{wc.init_time}"
+                Path(OUT_ROOT) / f"results/{wc.showcase}/{wc.init_time}/meteograms"
             ).resolve()
         ),
         stations=config["showcase"]["meteograms"]["stations"],
+        params=SHOWCASE_CONFIG["params"],
+        reference_flag=lambda wc: (
+            f"--reference {shlex.quote(ref['root'])} "
+            f"--reference_label {shlex.quote(ref['label'])}"
+            if (ref := config["showcase"]["meteograms"].get("reference"))
+            else ""
+        ),
+        panel_flag=lambda wc, output: (
+            f"--panel {output[-1]}"
+            if config["showcase"]["meteograms"].get("panel", True)
+            else ""
+        ),
         lapse_rate_flag=(
             "--lapse_rate_correction"
             if config.get("lapse_rate_correction", True)
@@ -67,22 +107,32 @@ rule plot_meteogram:
         set -euo pipefail
         export ECCODES_DEFINITION_PATH=$(realpath .venv/share/eccodes-cosmo-resources/definitions)
 
+        FCST_GRIBS=({params.fcst_gribs:q})
+        FCST_STEPS=({params.fcst_steps:q})
+        FCST_LABELS=({params.fcst_labels:q})
+        FCST_MEMBERS=({params.fcst_members:q})
         BASELINE_ROOTS=({params.baseline_roots:q})
         BASELINE_STEPS=({params.baseline_steps:q})
         BASELINE_LABELS=({params.baseline_labels:q})
 
         CMD_ARGS=(
-            --forecast {params.fcst_grib:q}
-            --forecast_steps {params.fcst_steps:q}
-            --forecast_label {params.fcst_label:q}
             --analysis {params.truth_root:q}
             --analysis_label {params.ana_label:q}
             --date {wildcards.init_time:q}
             --outdir {params.outdir:q}
-            --param {wildcards.param:q}
+            --param {params.params:q}
             --stations {params.stations:q}
             {params.lapse_rate_flag}
+            {params.panel_flag}
+            {params.reference_flag}
         )
+
+        for i in "${{!FCST_GRIBS[@]}}"; do
+            CMD_ARGS+=(--forecast "${{FCST_GRIBS[$i]}}")
+            CMD_ARGS+=(--forecast_steps "${{FCST_STEPS[$i]}}")
+            CMD_ARGS+=(--forecast_label "${{FCST_LABELS[$i]}}")
+            CMD_ARGS+=(--forecast_members "${{FCST_MEMBERS[$i]}}")
+        done
 
         for i in "${{!BASELINE_ROOTS[@]}}"; do
             CMD_ARGS+=(--baseline "${{BASELINE_ROOTS[$i]}}")
