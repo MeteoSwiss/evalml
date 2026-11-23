@@ -11,6 +11,7 @@ from data_input import (
     load_forecast_data,
     load_truth_data,
     parse_steps,
+    truth_type,
 )
 from verification import CIRCULAR_PARAMS, apply_lapse_rate_correction_inplace
 from verification.spatial import map_forecast_to_truth
@@ -79,6 +80,18 @@ def main():
         help="Label for each forecast line in plot legend (repeatable).",
     )
     parser.add_argument(
+        "--forecast_members",
+        action="append",
+        type=int,
+        default=[],
+        help=(
+            "Number of ensemble members for each forecast (repeatable, 0 for a "
+            "deterministic run). For an ensemble, --forecast is the grib/ directory "
+            "holding one sub-directory per member (001, 002, ...); the plot shows the "
+            "min-max range of the members and their mean. Defaults to 0 for all."
+        ),
+    )
+    parser.add_argument(
         "--baseline",
         action="append",
         type=str,
@@ -127,18 +140,26 @@ def main():
     forecast_grib_dirs = [Path(path) for path in args.forecast]
     forecast_steps_list = args.forecast_steps
     forecast_labels = args.forecast_label
+    forecast_members = args.forecast_members or [0] * len(forecast_grib_dirs)
     if not forecast_grib_dirs:
         raise ValueError("At least one --forecast is required.")
     if not (
-        len(forecast_grib_dirs) == len(forecast_steps_list) == len(forecast_labels)
+        len(forecast_grib_dirs)
+        == len(forecast_steps_list)
+        == len(forecast_labels)
+        == len(forecast_members)
     ):
         raise ValueError(
-            "Mismatched forecast arguments: --forecast, --forecast_steps and "
-            "--forecast_label must be provided the same number of times."
+            "Mismatched forecast arguments: --forecast, --forecast_steps, "
+            "--forecast_label and --forecast_members (if given) must be provided "
+            "the same number of times."
         )
     # Observations at every valid time any forecast or baseline covers (e.g. hourly
-    # when ICON is hourly and the ML runs 6-hourly).
+    # when ICON is hourly and the ML runs 6-hourly); station observations always
+    # hourly over the full forecast range.
     obs_steps = sorted(set().union(*forecast_steps_list, *args.baseline_steps))
+    if truth_type(args.analysis) == "jretrieve":
+        obs_steps = list(range(max(obs_steps) + 1))
     analysis_root = Path(args.analysis)
     analysis_label = args.analysis_label
     baseline_roots = [Path(path) for path in args.baseline]
@@ -193,16 +214,30 @@ def main():
         )
         catalog_lookup = {}
 
-    # Load gridded data once — shared across all station plots
+    # Load gridded data once — shared across all station plots. Each forecast is a
+    # list of member datasets: one for a deterministic run, N for an ensemble.
     forecast_ds_list = []
-    for grib_dir, steps, label in zip(
-        forecast_grib_dirs, forecast_steps_list, forecast_labels
+    for grib_dir, steps, label, members in zip(
+        forecast_grib_dirs, forecast_steps_list, forecast_labels, forecast_members
     ):
-        LOG.info("Loading forecast '%s' from %s", label, grib_dir)
-        forecast_ds_list.append(
-            load_forecast_data(grib_dir, init_time, steps, [param]).squeeze()
+        member_dirs = (
+            [grib_dir / f"{m:03d}" for m in range(1, members + 1)]
+            if members
+            else [grib_dir]
         )
-    forecast_ds = forecast_ds_list[0]
+        LOG.info(
+            "Loading forecast '%s' from %s (%s)",
+            label,
+            grib_dir,
+            f"{members} members" if members else "deterministic",
+        )
+        forecast_ds_list.append(
+            [
+                load_forecast_data(d, init_time, steps, [param]).squeeze()
+                for d in member_dirs
+            ]
+        )
+    forecast_ds = forecast_ds_list[0][0]
 
     baseline_ds_list = []
     for root, step, label in zip(baseline_roots, baseline_steps, baseline_labels):
@@ -256,7 +291,8 @@ def main():
         )
 
         forecast_station_ds_list = [
-            map_forecast_to_truth(ds, station_ds) for ds in forecast_ds_list
+            [map_forecast_to_truth(ds, station_ds) for ds in member_ds]
+            for member_ds in forecast_ds_list
         ]
         analysis_station_ds = map_forecast_to_truth(analysis_ds, station_ds)
         baseline_station_ds_list = [
@@ -264,7 +300,8 @@ def main():
         ]
 
         if args.lapse_rate_correction:
-            for ds in forecast_station_ds_list + baseline_station_ds_list:
+            member_station_ds = [ds for m in forecast_station_ds_list for ds in m]
+            for ds in member_station_ds + baseline_station_ds_list:
                 apply_lapse_rate_correction_inplace(ds, station_ds, [param])
 
         fig, ax = plt.subplots()
@@ -297,16 +334,46 @@ def main():
                 # Baselines dashed, as the ICON lines in the paper's Fig. 8.
                 **(line_style or {"ls": "--"}),
             )
-        for i, (forecast_label, forecast_station_ds) in enumerate(
-            zip(forecast_labels, forecast_station_ds_list)
+        for i, (forecast_label, members, member_station_ds) in enumerate(
+            zip(forecast_labels, forecast_members, forecast_station_ds_list)
         ):
-            ax.plot(
-                _lead_hours(forecast_station_ds["valid_time"].values, init_time),
-                forecast_station_ds[param].values - offset,
-                color=FORECAST_COLORS[i % len(FORECAST_COLORS)],
-                label=forecast_label,
-                **line_style,
+            color = FORECAST_COLORS[i % len(FORECAST_COLORS)]
+            x = _lead_hours(member_station_ds[0]["valid_time"].values, init_time)
+            curves = np.stack(
+                [ds[param].values.ravel() - offset for ds in member_station_ds]
             )
+            if not members:
+                ax.plot(x, curves[0], color=color, label=forecast_label, **line_style)
+            elif param in CIRCULAR_PARAMS:
+                # A min-max band or plain mean wraps wrongly at 0/360 deg: dots.
+                for k, y in enumerate(curves):
+                    ax.plot(
+                        x,
+                        y,
+                        color=color,
+                        alpha=0.5,
+                        label=f"{forecast_label} ({members} members)"
+                        if k == 0
+                        else None,
+                        **line_style,
+                    )
+            else:
+                ax.fill_between(
+                    x,
+                    curves.min(axis=0),
+                    curves.max(axis=0),
+                    color=color,
+                    alpha=0.2,
+                    lw=0,
+                    label=f"{forecast_label} min-max ({members} members)",
+                )
+                ax.plot(
+                    x,
+                    curves.mean(axis=0),
+                    color=color,
+                    ls="--",
+                    label=f"{forecast_label} mean",
+                )
 
         ax.legend()
         ylabel = short or param

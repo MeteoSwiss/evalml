@@ -53,9 +53,11 @@ rule plot_meteogram:
     params:
         ana_label=lambda wc: config["truth"]["label"],
         truth_root=config["truth"]["root"],
+        # Ensembles: the grib/ root with one sub-directory per member (all plotted).
         fcst_gribs=lambda wc: [
-            str(run_grib_dir(run_id, wc.init_time).resolve()) for run_id in CANDIDATES
+            str(run_grib_root(run_id, wc.init_time).resolve()) for run_id in CANDIDATES
         ],
+        fcst_members=lambda wc: [ensemble_members(run_id) or 0 for run_id in CANDIDATES],
         fcst_steps=lambda wc: [RUN_CONFIGS[run_id]["steps"] for run_id in CANDIDATES],
         fcst_labels=lambda wc: [RUN_CONFIGS[run_id]["label"] for run_id in CANDIDATES],
         baseline_roots=lambda wc: [x["root"] for x in _get_available_baselines(wc)],
@@ -80,6 +82,7 @@ rule plot_meteogram:
         FCST_GRIBS=({params.fcst_gribs:q})
         FCST_STEPS=({params.fcst_steps:q})
         FCST_LABELS=({params.fcst_labels:q})
+        FCST_MEMBERS=({params.fcst_members:q})
         BASELINE_ROOTS=({params.baseline_roots:q})
         BASELINE_STEPS=({params.baseline_steps:q})
         BASELINE_LABELS=({params.baseline_labels:q})
@@ -98,6 +101,7 @@ rule plot_meteogram:
             CMD_ARGS+=(--forecast "${{FCST_GRIBS[$i]}}")
             CMD_ARGS+=(--forecast_steps "${{FCST_STEPS[$i]}}")
             CMD_ARGS+=(--forecast_label "${{FCST_LABELS[$i]}}")
+            CMD_ARGS+=(--forecast_members "${{FCST_MEMBERS[$i]}}")
         done
 
         for i in "${{!BASELINE_ROOTS[@]}}"; do
