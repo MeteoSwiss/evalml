@@ -6,6 +6,8 @@
 include: "common.smk"
 
 
+import shlex
+
 import pandas as pd
 
 
@@ -84,6 +86,12 @@ figure (rows: params, columns: stations).
         ),
         stations=config["showcase"]["meteograms"]["stations"],
         params=SHOWCASE_CONFIG["params"],
+        reference_flag=lambda wc: (
+            f"--reference {shlex.quote(ref['root'])} "
+            f"--reference_label {shlex.quote(ref['label'])}"
+            if (ref := config["showcase"]["meteograms"].get("reference"))
+            else ""
+        ),
         panel_flag=lambda wc, output: (
             f"--panel {output[-1]}"
             if config["showcase"]["meteograms"].get("panel", True)
@@ -116,6 +124,7 @@ figure (rows: params, columns: stations).
             --stations {params.stations:q}
             {params.lapse_rate_flag}
             {params.panel_flag}
+            {params.reference_flag}
         )
 
         for i in "${{!FCST_GRIBS[@]}}"; do

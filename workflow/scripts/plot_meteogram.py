@@ -21,6 +21,8 @@ LOG = logging.getLogger(__name__)
 
 # Colours as in the meteograms of the Varda-single paper (Figs. 8 and 9).
 OBS_COLOR = "mediumseagreen"
+# Optional gridded reference (e.g. a reanalysis), dashed.
+REFERENCE_COLOR = "tab:purple"
 # One colour per forecast run, in config order (first run red as Varda-single in the paper).
 FORECAST_COLORS = ["tab:red", "black", "tab:orange", "tab:purple", "tab:brown"]
 BASELINE_COLORS = {
@@ -64,12 +66,13 @@ def _draw_meteogram(
     param: str,
     init_time: datetime,
     analysis: tuple[str, xr.Dataset],
+    references: list[tuple[str, xr.Dataset]],
     baselines: list[tuple[str, xr.Dataset]],
     forecasts: list[tuple[str, int, list[xr.Dataset]]],
 ) -> None:
     """Draw the meteogram of one param at one station (all inputs mapped to it).
 
-    Observations green, baselines dashed (paper colours for ICON-CH1/CH2), runs in
+    Observations green, a reference (e.g. a reanalysis) dashed purple, baselines dashed (paper colours for ICON-CH1/CH2), runs in
     FORECAST_COLORS order; ensembles as min-max band plus dashed mean. Wind direction
     wraps at 0/360 deg, so it is drawn as dots (ensemble: every member).
     """
@@ -87,6 +90,14 @@ def _draw_meteogram(
         label=analysis_label,
         **line_style,
     )
+    for label, ds in references:
+        ax.plot(
+            _lead_hours(ds["time"].values, init_time),
+            ds[param].values.ravel() - offset,
+            color=REFERENCE_COLOR,
+            label=label,
+            **(line_style or {"ls": "--"}),
+        )
     for i, (label, ds) in enumerate(baselines, start=1):
         ax.plot(
             _lead_hours(ds["valid_time"].values, init_time),
@@ -201,6 +212,21 @@ def main():
         default="truth",
         help="Label for analysis line in plot legend.",
     )
+    parser.add_argument(
+        "--reference",
+        type=str,
+        default=None,
+        help=(
+            "Optional gridded reference (anemoi .zarr, e.g. a reanalysis), drawn "
+            "dashed at the station's grid point, at the observation times."
+        ),
+    )
+    parser.add_argument(
+        "--reference_label",
+        type=str,
+        default="reference",
+        help="Label for the reference line in the plot legend.",
+    )
     parser.add_argument("--date", type=str, default=None, help="reference datetime")
     parser.add_argument("--outdir", type=str, help="output directory")
     parser.add_argument(
@@ -304,6 +330,13 @@ def main():
         )
         catalog_lookup = {}
 
+    reference_ds = None
+    if args.reference:
+        LOG.info("Loading reference '%s' from %s", args.reference_label, args.reference)
+        reference_ds = load_truth_data(
+            Path(args.reference), init_time, obs_steps, params
+        ).squeeze()
+
     # Load gridded data once — shared across all station plots. Each forecast is a
     # list of member datasets: one for a deterministic run, N for an ensemble.
     forecast_ds_list = []
@@ -391,15 +424,23 @@ def main():
         baseline_station_ds_list = [
             map_forecast_to_truth(ds, station_ds) for ds in baseline_ds_list
         ]
+        reference_station_ds_list = (
+            [map_forecast_to_truth(reference_ds, station_ds)]
+            if reference_ds is not None
+            else []
+        )
 
         if args.lapse_rate_correction:
             member_station_ds = [ds for m in forecast_station_ds_list for ds in m]
-            for ds in member_station_ds + baseline_station_ds_list:
+            for ds in (
+                member_station_ds + baseline_station_ds_list + reference_station_ds_list
+            ):
                 apply_lapse_rate_correction_inplace(ds, station_ds, params)
 
         draw_args = dict(
             init_time=init_time,
             analysis=(analysis_label, analysis_station_ds),
+            references=[(args.reference_label, ds) for ds in reference_station_ds_list],
             baselines=list(zip(baseline_labels, baseline_station_ds_list)),
             forecasts=list(
                 zip(forecast_labels, forecast_members, forecast_station_ds_list)

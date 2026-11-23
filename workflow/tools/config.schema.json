@@ -777,6 +777,18 @@
           "description": "Whether to also assemble all meteograms in one figure (rows: params, columns: stations).",
           "title": "Panel",
           "type": "boolean"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TruthConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional gridded reference (anemoi '.zarr', e.g. the REA-L-CH1 reanalysis) drawn as a dashed line at each station, to check whether observed features are present in it."
         }
       },
       "title": "MeteogramConfig",
