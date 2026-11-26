@@ -63,6 +63,18 @@ def main():
         help="Label for each baseline line in plot legend (repeatable).",
     )
     parser.add_argument(
+        "--forecaster_support",
+        type=str,
+        default=None,
+        help="Directory to forecaster grib data, shown as dots.",
+    )
+    parser.add_argument(
+        "--forecaster_support_label",
+        type=str,
+        default="forecaster support",
+        help="Label for the forecaster support dots in plot legend.",
+    )
+    parser.add_argument(
         "--analysis", type=str, default=None, help="Path to analysis data root"
     )
     parser.add_argument(
@@ -154,6 +166,13 @@ def main():
             load_forecast_data(root, init_time, step, [param]).squeeze()
         )
 
+    forecaster_support_ds = None
+    if args.forecaster_support:
+        LOG.info("Loading forecaster support from %s", args.forecaster_support)
+        forecaster_support_ds = load_forecast_data(
+            Path(args.forecaster_support), init_time, None, [param]
+        ).squeeze()
+
     param2plot = forecast_ds[param].attrs.get("parameter", {})
     short = param2plot.get("shortName", "")
     units = param2plot.get("units", "")
@@ -203,6 +222,11 @@ def main():
         baseline_station_ds_list = [
             map_forecast_to_truth(ds, station_ds) for ds in baseline_ds_list
         ]
+        forecaster_support_station_ds = (
+            map_forecast_to_truth(forecaster_support_ds, station_ds)
+            if forecaster_support_ds is not None
+            else None
+        )
 
         if args.lapse_rate_correction:
             apply_lapse_rate_correction_inplace(
@@ -235,6 +259,15 @@ def main():
             color="C0",
             label=forecast_label,
         )
+        if forecaster_support_station_ds is not None:
+            ax.plot(
+                forecaster_support_station_ds["valid_time"].values,
+                forecaster_support_station_ds[param].values,
+                color="C0",
+                ls="none",
+                marker="o",
+                label=args.forecaster_support_label,
+            )
 
         ax.legend()
         ax.set_ylabel(f"{short} ({units})" if short or units else "")
